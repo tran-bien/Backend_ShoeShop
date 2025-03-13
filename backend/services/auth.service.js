@@ -149,51 +149,83 @@ const authService = {
    * @returns {Object} - Token mới
    */
   refreshToken: async (refreshToken, req) => {
-    if (!refreshToken) {
-      throw new Error("Không tìm thấy refresh token");
-    }
-
-    // Tìm phiên với refresh token
+    // Kiểm tra refresh token
     const session = await Session.findOne({ refreshToken, isActive: true });
     if (!session) {
-      throw new Error("Phiên không hợp lệ hoặc đã hết hạn");
-    }
-
-    try {
-      // Xác thực refresh token
-      const decoded = jwt.verify(
-        refreshToken,
-        process.env.REFRESH_TOKEN_SECRET
-      );
-
-      // Kiểm tra người dùng
-      const user = await User.findById(decoded.id);
-      if (!user) {
-        throw new Error("Không tìm thấy người dùng");
-      }
-
-      // Tạo token mới
-      const newToken = authService.generateToken(user._id);
-
-      // Cập nhật token trong phiên
-      session.token = newToken;
-      await session.save();
-
-      return { token: newToken };
-    } catch (error) {
-      // Vô hiệu hóa phiên nếu có lỗi
-      session.isActive = false;
-      await session.save();
-
       throw new Error("Refresh token không hợp lệ hoặc đã hết hạn");
     }
+
+    // Kiểm tra người dùng
+    const user = await User.findById(session.user);
+    if (!user) {
+      throw new Error("Người dùng không tồn tại");
+    }
+
+    // Tạo token mới
+    const newToken = authService.generateToken(user._id);
+
+    // Cập nhật session
+    session.token = newToken;
+    session.lastActive = Date.now();
+    await session.save();
+
+    return { token: newToken };
+  },
+
+  /**
+   * Xác thực OTP
+   * @param {Object} data - Dữ liệu xác thực (userId hoặc email và OTP)
+   * @returns {Object} - Thông tin người dùng và token
+   */
+  verifyOTP: async (data) => {
+    const { userId, email, otp } = data;
+
+    let user;
+
+    // Tìm user bằng userId hoặc email
+    if (userId) {
+      user = await User.findById(userId);
+    } else if (email) {
+      user = await User.findOne({ email });
+    } else {
+      throw new Error("Vui lòng cung cấp userId hoặc email");
+    }
+
+    if (!user) {
+      throw new Error("Người dùng không tồn tại");
+    }
+
+    // Kiểm tra OTP
+    if (!user.otp || user.otp.code !== otp) {
+      throw new Error("Mã OTP không hợp lệ");
+    }
+
+    // Kiểm tra thời hạn OTP
+    if (new Date() > new Date(user.otp.expiredAt)) {
+      throw new Error("Mã OTP đã hết hạn");
+    }
+
+    // Xác nhận người dùng
+    user.isVerified = true;
+    user.otp = undefined;
+    await user.save();
+
+    // Tạo token
+    const token = authService.generateToken(user._id);
+    const refreshToken = authService.generateRefreshToken(user._id);
+
+    return {
+      user,
+      token,
+      refreshToken,
+    };
   },
 
   /**
    * Đăng xuất
    * @param {String} userId - ID người dùng
    * @param {String} token - JWT token
-   * @returns {Boolean} - Kết quả đăng xuất
+   * @returns {Object} - Kết quả đăng xuất
    */
   logout: async (userId, token) => {
     // Vô hiệu hóa phiên hiện tại
@@ -322,6 +354,58 @@ const authService = {
     );
 
     return true;
+  },
+
+  /**
+   * Lấy danh sách phiên đăng nhập hiện tại
+   * @param {String} userId - ID người dùng
+   * @param {String} currentSessionId - ID phiên hiện tại
+   * @returns {Array} - Danh sách phiên đăng nhập
+   */
+  getCurrentSessions: async (userId, currentSessionId) => {
+    const sessions = await Session.find({
+      user: userId,
+      isActive: true,
+      expiresAt: { $gt: new Date() },
+    }).sort({ lastActive: -1 });
+
+    // Đánh dấu phiên hiện tại
+    const sessionsWithCurrentFlag = sessions.map((session) => {
+      const sessionObj = session.toObject();
+      sessionObj.isCurrentSession =
+        session._id.toString() === currentSessionId.toString();
+      return sessionObj;
+    });
+
+    return sessionsWithCurrentFlag;
+  },
+
+  /**
+   * Đăng xuất khỏi phiên cụ thể
+   * @param {String} sessionId - ID phiên đăng nhập
+   * @param {String} userId - ID người dùng
+   * @returns {Object} - Kết quả đăng xuất
+   */
+  logoutSession: async (sessionId, userId) => {
+    // Kiểm tra phiên tồn tại
+    const session = await Session.findById(sessionId);
+    if (!session) {
+      throw new Error("Phiên đăng nhập không tồn tại");
+    }
+
+    // Kiểm tra quyền (chỉ có thể đăng xuất khỏi phiên của chính mình)
+    if (session.user.toString() !== userId.toString()) {
+      throw new Error("Bạn không có quyền đăng xuất khỏi phiên này");
+    }
+
+    // Đánh dấu phiên là không còn hoạt động
+    session.isActive = false;
+    await session.save();
+
+    return {
+      isCurrentSession: false,
+      message: "Đã đăng xuất khỏi phiên này",
+    };
   },
 };
 

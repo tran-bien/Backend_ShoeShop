@@ -5,6 +5,7 @@ const querystring = require("qs");
 const Order = require("../models/order.model");
 const Notification = require("../models/notification.model");
 const mongoose = require("mongoose");
+const paymentService = require("../services/payment.service");
 
 const vnp_TmnCode = process.env.VNP_TMN_CODE;
 const vnp_HashSecret = process.env.VNP_HASH_SECRET;
@@ -14,124 +15,79 @@ const vnp_IpnUrl = process.env.VNP_IPN_URL;
 
 // Tạo URL thanh toán VNPAY
 exports.createPaymentUrl = asyncHandler(async (req, res) => {
-  const { orderId, amount, bankCode, language } = req.body;
-
-  // Validation rõ ràng hơn
-  if (!orderId) {
-    return res.status(400).json({
-      success: false,
-      message: "Vui lòng cung cấp mã đơn hàng",
-    });
-  }
-
-  if (!mongoose.Types.ObjectId.isValid(orderId)) {
-    return res.status(400).json({
-      success: false,
-      message: "Mã đơn hàng không hợp lệ",
-    });
-  }
-
-  // Kiểm tra đơn hàng có tồn tại không và thuộc về người dùng hiện tại
-  const order = await Order.findById(orderId);
-
-  if (!order) {
-    return res.status(404).json({
-      success: false,
-      message: "Không tìm thấy đơn hàng",
-    });
-  }
-
-  // Kiểm tra đơn hàng có thuộc về người dùng hiện tại không
-  if (order.userId.toString() !== req.user._id.toString()) {
-    return res.status(403).json({
-      success: false,
-      message: "Bạn không có quyền thanh toán đơn hàng này",
-    });
-  }
-
-  // Kiểm tra trạng thái đơn hàng, chỉ cho phép thanh toán đơn hàng ở trạng thái chờ thanh toán
-  if (order.status !== "pending") {
-    return res.status(400).json({
-      success: false,
-      message: "Đơn hàng không ở trạng thái chờ thanh toán",
-    });
-  }
-
-  // Kiểm tra số tiền thanh toán có khớp với tổng tiền đơn hàng không
-  if (Number(amount) !== Number(order.totalAmount)) {
-    return res.status(400).json({
-      success: false,
-      message: "Số tiền thanh toán không khớp với tổng tiền đơn hàng",
-    });
-  }
-
-  // Tiếp tục logic tạo URL thanh toán...
-
   try {
-    const date = new Date();
-    const createDate = moment(date).format("YYYYMMDDHHmmss");
+    const { orderId, amount, bankCode, language } = req.body;
 
-    const ipAddr = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-
-    const tmnCode = vnp_TmnCode;
-    const secretKey = vnp_HashSecret;
-    let vnpUrl = vnp_Url;
-    const returnUrl = vnp_ReturnUrl;
-    const ipnUrl = vnp_IpnUrl;
-
-    // Tạo mã giao dịch với format "ORDER_ID_DDHHmmss"
-    // Thêm order._id để đảm bảo không bị trùng lặp
-    const vnpOrderId = `${order._id.toString().slice(-8)}_${moment(date).format(
-      "DDHHmmss"
-    )}`;
-
-    const amount = order.totalAmount;
-    const bankCode = req.body.bankCode || "";
-    const locale = req.body.language || "vn";
-
-    const currCode = "VND";
-    let vnp_Params = {};
-    vnp_Params["vnp_Version"] = "2.1.0";
-    vnp_Params["vnp_Command"] = "pay";
-    vnp_Params["vnp_TmnCode"] = tmnCode;
-    vnp_Params["vnp_Locale"] = locale;
-    vnp_Params["vnp_CurrCode"] = currCode;
-    vnp_Params["vnp_TxnRef"] = vnpOrderId;
-    vnp_Params["vnp_OrderInfo"] = `Thanh toan don hang: ${order._id}`;
-    vnp_Params["vnp_OrderType"] = "other";
-    vnp_Params["vnp_Amount"] = amount * 100;
-    vnp_Params["vnp_ReturnUrl"] = returnUrl;
-    vnp_Params["vnp_IpAddr"] = ipAddr;
-    vnp_Params["vnp_CreateDate"] = createDate;
-    vnp_Params["vnp_IpnUrl"] = ipnUrl;
-
-    if (bankCode !== null && bankCode !== "") {
-      vnp_Params["vnp_BankCode"] = bankCode;
+    // Validation rõ ràng hơn
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp mã đơn hàng",
+      });
     }
 
-    vnp_Params = sortObject(vnp_Params);
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Mã đơn hàng không hợp lệ",
+      });
+    }
 
-    const signData = querystring.stringify(vnp_Params, { encode: false });
-    const hmac = crypto.createHmac("sha512", secretKey);
-    // Sử dụng Buffer.from thay vì Buffer()
-    const signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
-    vnp_Params["vnp_SecureHash"] = signed;
-    vnpUrl += "?" + querystring.stringify(vnp_Params, { encode: false });
+    // Kiểm tra đơn hàng có tồn tại không và thuộc về người dùng hiện tại
+    const order = await Order.findById(orderId);
 
-    // Lưu mã giao dịch vào đơn hàng
-    order.paymentCode = vnpOrderId;
-    await order.save();
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy đơn hàng",
+      });
+    }
+
+    // Kiểm tra đơn hàng có thuộc về người dùng hiện tại không
+    if (order.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không có quyền thanh toán đơn hàng này",
+      });
+    }
+
+    // Kiểm tra trạng thái đơn hàng, chỉ cho phép thanh toán đơn hàng ở trạng thái chờ thanh toán
+    if (order.status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: "Đơn hàng không ở trạng thái chờ thanh toán",
+      });
+    }
+
+    // Kiểm tra số tiền thanh toán có khớp với tổng tiền đơn hàng không
+    if (Number(amount) !== Number(order.totalAmount)) {
+      return res.status(400).json({
+        success: false,
+        message: "Số tiền thanh toán không khớp với tổng tiền đơn hàng",
+      });
+    }
+
+    // Sử dụng paymentService để tạo URL thanh toán
+    const orderInfo = `Thanh toan don hang ${order.orderCode}`;
+    const result = await paymentService.createVnpayPaymentUrl(
+      {
+        orderId: order._id,
+        amount: order.totalAmount,
+        orderInfo,
+        bankCode,
+        language,
+      },
+      req
+    );
 
     res.json({
       success: true,
-      paymentUrl: vnpUrl,
+      data: result,
     });
   } catch (error) {
-    console.error("Lỗi khi tạo URL thanh toán:", error);
     res.status(500).json({
       success: false,
-      message: "Có lỗi xảy ra khi tạo URL thanh toán",
-      error: error.message,
+      message: error.message || "Lỗi khi tạo URL thanh toán",
     });
   }
 });
@@ -139,83 +95,20 @@ exports.createPaymentUrl = asyncHandler(async (req, res) => {
 // Xử lý kết quả thanh toán từ VNPAY (cho frontend)
 exports.vnpayReturn = asyncHandler(async (req, res) => {
   try {
-    let vnp_Params = req.query;
-    const secureHash = vnp_Params["vnp_SecureHash"];
+    // Sử dụng paymentService để xác thực thanh toán
+    const result = await paymentService.verifyVnpayPayment(req.query);
 
-    delete vnp_Params["vnp_SecureHash"];
-    delete vnp_Params["vnp_SecureHashType"];
-
-    vnp_Params = sortObject(vnp_Params);
-
-    const signData = querystring.stringify(vnp_Params, { encode: false });
-    const hmac = crypto.createHmac("sha512", vnp_HashSecret);
-    // Sử dụng Buffer.from thay vì Buffer()
-    const signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
-
-    if (secureHash === signed) {
-      const orderId = vnp_Params["vnp_TxnRef"];
-      const rspCode = vnp_Params["vnp_ResponseCode"];
-
-      // Cập nhật trạng thái đơn hàng
-      if (rspCode === "00") {
-        // Thanh toán thành công
-        const order = await Order.findOneAndUpdate(
-          { paymentCode: orderId },
-          {
-            paymentStatus: "paid",
-            vnpayTransactionData: vnp_Params,
-          },
-          { new: true }
-        );
-
-        if (!order) {
-          return res.status(404).json({
-            success: false,
-            message: "Không tìm thấy đơn hàng tương ứng",
-          });
-        }
-
-        res.json({
-          success: true,
-          message: "Thanh toán thành công",
-          order,
-        });
-      } else {
-        // Thanh toán thất bại
-        const order = await Order.findOneAndUpdate(
-          { paymentCode: orderId },
-          {
-            paymentStatus: "failed",
-            vnpayTransactionData: vnp_Params,
-          },
-          { new: true }
-        );
-
-        if (!order) {
-          return res.status(404).json({
-            success: false,
-            message: "Không tìm thấy đơn hàng tương ứng",
-          });
-        }
-
-        res.json({
-          success: false,
-          message: "Thanh toán thất bại",
-          order,
-        });
-      }
-    } else {
-      res.status(400).json({
-        success: false,
-        message: "Chữ ký không hợp lệ",
-      });
-    }
+    // Trả về kết quả
+    res.json({
+      success: result.success,
+      message: result.message,
+      payment: result.payment,
+      order: result.payment.order,
+    });
   } catch (error) {
-    console.error("Lỗi khi xử lý kết quả thanh toán:", error);
     res.status(500).json({
       success: false,
-      message: "Có lỗi xảy ra khi xử lý kết quả thanh toán",
-      error: error.message,
+      message: error.message || "Lỗi khi xử lý kết quả thanh toán",
     });
   }
 });
