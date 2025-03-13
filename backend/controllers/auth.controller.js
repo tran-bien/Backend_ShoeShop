@@ -1,9 +1,11 @@
 const asyncHandler = require("express-async-handler");
-const LoginHistory = require("../models/login.history.model");
 const emailUtils = require("../utils/email");
 const authService = require("../services/auth.service");
 const User = require("../models/user.model");
 const { isValidEmail } = require("../utils/validators");
+const jwt = require("jsonwebtoken");
+const LoginHistory = require("../models/login.history.model");
+const Session = require("../models/session.model");
 
 // Đăng ký người dùng
 exports.register = asyncHandler(async (req, res) => {
@@ -71,8 +73,8 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Sử dụng authService để xác thực OTP
-    const result = await authService.verifyOTP({ userId, email, otp });
+    // Sử dụng authService để xác thực OTP, truyền thêm req để tạo session
+    const result = await authService.verifyOTP({ userId, email, otp }, req);
 
     // Nếu xác thực thành công, trả về token và thông tin người dùng
     res.status(200).json({
@@ -130,15 +132,17 @@ exports.login = asyncHandler(async (req, res) => {
 
   // Kiểm tra định dạng email
   if (!isValidEmail(email)) {
-    // Lưu lịch sử đăng nhập thất bại
+    // Không ghi login history nếu không được import đúng
     try {
-      await LoginHistory.create({
-        userId: null,
-        status: "failed",
-        reason: "Email không đúng định dạng",
-        ipAddress: req.ip || "Unknown",
-        userAgent: req.headers["user-agent"] || "Unknown",
-      });
+      if (LoginHistory) {
+        await LoginHistory.create({
+          userId: null,
+          status: "failed",
+          reason: "Email không đúng định dạng",
+          ipAddress: req.ip || "Unknown",
+          userAgent: req.headers["user-agent"] || "Unknown",
+        });
+      }
     } catch (error) {
       console.error("Lỗi khi lưu lịch sử đăng nhập:", error.message);
     }
@@ -182,15 +186,17 @@ exports.login = asyncHandler(async (req, res) => {
       },
     });
   } catch (error) {
-    // Lưu lịch sử đăng nhập thất bại
+    // Không ghi login history nếu không được import đúng
     try {
-      await LoginHistory.create({
-        userId: null,
-        status: "failed",
-        reason: error.message,
-        ipAddress: req.ip || "Unknown",
-        userAgent: req.headers["user-agent"] || "Unknown",
-      });
+      if (LoginHistory) {
+        await LoginHistory.create({
+          userId: null,
+          status: "failed",
+          reason: error.message,
+          ipAddress: req.ip || "Unknown",
+          userAgent: req.headers["user-agent"] || "Unknown",
+        });
+      }
     } catch (historyError) {
       console.error("Lỗi khi lưu lịch sử đăng nhập:", historyError.message);
     }
@@ -244,6 +250,9 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
     // Sử dụng authService để xử lý quên mật khẩu
     const result = await authService.forgotPassword(email);
 
+    // Log token reset được tạo ra
+    console.log(`Token đặt lại mật khẩu được tạo: ${result.resetToken}`);
+
     // Gửi email đặt lại mật khẩu
     await emailUtils.sendPasswordResetEmail(
       result.user.email,
@@ -270,10 +279,11 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
 // Đặt lại mật khẩu
 exports.resetPassword = asyncHandler(async (req, res) => {
   try {
-    const { token, password, confirmPassword } = req.body;
+    const { token, resetToken, password, confirmPassword } = req.body;
+    const actualToken = resetToken || token;
 
     // Kiểm tra đầu vào
-    if (!token || !password) {
+    if (!actualToken || !password) {
       return res.status(400).json({
         success: false,
         message: "Vui lòng cung cấp token và mật khẩu mới",
@@ -288,8 +298,33 @@ exports.resetPassword = asyncHandler(async (req, res) => {
       });
     }
 
+    // Lấy thông tin người dùng từ token
+    const user = await User.findOne({
+      passwordResetToken: actualToken,
+      passwordResetExpires: { $gt: Date.now() }, // Kiểm tra xem token có hết hạn không
+    });
+
+    if (!user) {
+      console.log(`Không tìm thấy người dùng với token: ${actualToken}`);
+      return res.status(400).json({
+        success: false,
+        message: "Token không hợp lệ hoặc đã hết hạn",
+      });
+    }
+
+    // Kiểm tra xem mật khẩu mới có trùng với mật khẩu hiện tại không
+    const isSamePassword = await user.matchPassword(password);
+    if (isSamePassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Mật khẩu mới không được trùng với mật khẩu hiện tại",
+      });
+    }
+
+    console.log(`Đang đặt lại mật khẩu với token: ${actualToken}`);
+
     // Sử dụng authService để đặt lại mật khẩu
-    await authService.resetPassword(token, password);
+    await authService.resetPassword(actualToken, password);
 
     res.status(200).json({
       success: true,
@@ -299,7 +334,7 @@ exports.resetPassword = asyncHandler(async (req, res) => {
     console.error(`Lỗi đặt lại mật khẩu: ${error.message}`);
     res.status(400).json({
       success: false,
-      message: "Token không hợp lệ hoặc đã hết hạn",
+      message: error.message || "Token không hợp lệ hoặc đã hết hạn",
     });
   }
 });
@@ -322,6 +357,23 @@ exports.changePassword = asyncHandler(async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Mật khẩu mới và xác nhận mật khẩu không khớp",
+      });
+    }
+
+    // Kiểm tra mật khẩu hiện tại
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Người dùng không tồn tại",
+      });
+    }
+
+    const isPasswordMatch = await user.matchPassword(currentPassword);
+    if (!isPasswordMatch) {
+      return res.status(400).json({
+        success: false,
+        message: "Mật khẩu hiện tại không đúng, không thể thay đổi mật khẩu",
       });
     }
 
@@ -352,10 +404,31 @@ exports.changePassword = asyncHandler(async (req, res) => {
 // Lấy danh sách phiên đăng nhập hiện tại
 exports.getCurrentSessions = asyncHandler(async (req, res) => {
   try {
-    const sessions = await authService.getCurrentSessions(
-      req.user._id,
-      req.session._id
-    );
+    // Kiểm tra xem req.user có tồn tại không
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({
+        success: false,
+        message: "Không thể xác thực người dùng",
+      });
+    }
+
+    // Lấy token hiện tại từ đối tượng req
+    const token =
+      req.token ||
+      (req.headers.authorization &&
+      req.headers.authorization.startsWith("Bearer")
+        ? req.headers.authorization.split(" ")[1]
+        : null);
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Không có token, không thể xác định phiên hiện tại",
+      });
+    }
+
+    // Sử dụng authService để lấy danh sách phiên
+    const sessions = await authService.getCurrentSessions(req.user._id, token);
 
     res.json({
       success: true,
@@ -383,8 +456,33 @@ exports.logoutSession = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Sử dụng authService để đăng xuất khỏi phiên
-    const result = await authService.logoutSession(sessionId, req.user._id);
+    // Kiểm tra xem req.user có tồn tại không
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({
+        success: false,
+        message: "Không thể xác thực người dùng",
+      });
+    }
+
+    // Lấy token hiện tại từ middleware hoặc headers
+    const currentToken =
+      req.token ||
+      (req.headers.authorization &&
+      req.headers.authorization.startsWith("Bearer")
+        ? req.headers.authorization.split(" ")[1]
+        : null);
+
+    // Sử dụng authService để đăng xuất khỏi phiên, truyền thêm token hiện tại
+    const result = await authService.logoutSession(
+      sessionId,
+      req.user._id,
+      currentToken
+    );
+
+    // Nếu đăng xuất khỏi phiên hiện tại, cần xóa cookie nếu có
+    if (result.isCurrentSession && req.cookies && req.cookies.token) {
+      res.clearCookie("token");
+    }
 
     res.json({
       success: true,
@@ -402,12 +500,38 @@ exports.logoutSession = asyncHandler(async (req, res) => {
 // Đăng xuất khỏi tất cả phiên trừ phiên hiện tại
 exports.logoutAllOtherSessions = asyncHandler(async (req, res) => {
   try {
+    // Kiểm tra xem req.user có tồn tại không
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({
+        success: false,
+        message: "Không thể xác thực người dùng",
+      });
+    }
+
+    // Lấy token hiện tại
+    const currentToken =
+      req.token ||
+      (req.headers.authorization &&
+      req.headers.authorization.startsWith("Bearer")
+        ? req.headers.authorization.split(" ")[1]
+        : null);
+
+    if (!currentToken) {
+      return res.status(401).json({
+        success: false,
+        message: "Không có token, không thể đăng xuất",
+      });
+    }
+
     // Sử dụng authService để đăng xuất khỏi tất cả phiên khác
-    await authService.logoutAll(req.user._id);
+    const count = await authService.logoutAllOtherSessions(
+      req.user._id,
+      currentToken
+    );
 
     res.json({
       success: true,
-      message: "Đã đăng xuất khỏi tất cả các thiết bị khác",
+      message: `Đã đăng xuất khỏi ${count} phiên trên các thiết bị khác`,
     });
   } catch (error) {
     res.status(500).json({
@@ -421,14 +545,21 @@ exports.logoutAllOtherSessions = asyncHandler(async (req, res) => {
 // Đăng xuất
 exports.logout = asyncHandler(async (req, res) => {
   try {
-    // Lấy token từ header
-    let token;
-    if (
-      req.headers.authorization &&
-      req.headers.authorization.startsWith("Bearer")
-    ) {
-      token = req.headers.authorization.split(" ")[1];
+    // Kiểm tra xem req.user có tồn tại không từ middleware protect
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({
+        success: false,
+        message: "Không thể xác thực người dùng",
+      });
     }
+
+    // Lấy token từ request hoặc từ middleware protect
+    const token =
+      req.token ||
+      (req.headers.authorization &&
+      req.headers.authorization.startsWith("Bearer")
+        ? req.headers.authorization.split(" ")[1]
+        : null);
 
     if (!token) {
       return res.status(401).json({
@@ -437,18 +568,55 @@ exports.logout = asyncHandler(async (req, res) => {
       });
     }
 
-    // Sử dụng authService để đăng xuất
-    await authService.logout(req.user._id, token);
+    // Gọi service để đăng xuất
+    const result = await authService.logout(req.user._id, token);
 
-    res.status(200).json({
+    // Xóa cookie nếu có
+    if (req.cookies && req.cookies.token) {
+      res.clearCookie("token");
+    }
+
+    return res.status(200).json({
       success: true,
-      message: "Đăng xuất thành công",
+      message: result.message || "Đăng xuất thành công",
     });
   } catch (error) {
     console.error(`Lỗi đăng xuất: ${error.message}`);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Lỗi khi đăng xuất",
+    });
+  }
+});
+
+// Đăng xuất khỏi tất cả các thiết bị
+exports.logoutAll = asyncHandler(async (req, res) => {
+  try {
+    // Kiểm tra xem req.user có tồn tại không
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({
+        success: false,
+        message: "Không thể xác thực người dùng",
+      });
+    }
+
+    // Gọi service để đăng xuất khỏi tất cả thiết bị
+    const count = await authService.logoutAll(req.user._id);
+
+    // Xóa cookie nếu có
+    if (req.cookies && req.cookies.token) {
+      res.clearCookie("token");
+    }
+
+    res.json({
+      success: true,
+      message: `Đã đăng xuất thành công khỏi tất cả thiết bị (${count} phiên)`,
+    });
+  } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Lỗi khi đăng xuất",
+      message: "Lỗi khi đăng xuất khỏi tất cả thiết bị",
+      error: error.message,
     });
   }
 });

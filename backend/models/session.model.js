@@ -47,8 +47,6 @@ const SessionSchema = new mongoose.Schema(
 
 // Index để tìm kiếm nhanh
 SessionSchema.index({ token: 1 });
-// Index để tìm kiếm nhanh
-SessionSchema.index({ token: 1 });
 SessionSchema.index({ userId: 1 });
 SessionSchema.index({ expiresAt: 1 });
 SessionSchema.index({ isActive: 1 });

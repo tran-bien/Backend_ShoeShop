@@ -11,6 +11,7 @@ const {
   getCurrentSessions,
   logoutSession,
   logoutAllOtherSessions,
+  logoutAll,
 } = require("../controllers/auth.controller");
 const {
   validateRegisterInput,
@@ -25,7 +26,7 @@ const router = express.Router();
 router.post("/register", validateRegisterInput, validatePassword, register);
 router.post("/verify-otp", verifyOTP);
 router.post("/login", login);
-router.post("/logout", logout);
+router.delete("/logout", protect, logout);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", validateResetPassword, resetPassword);
 
@@ -41,5 +42,6 @@ router.post(
 router.get("/sessions", protect, getCurrentSessions);
 router.delete("/sessions/:sessionId", protect, logoutSession);
 router.delete("/sessions", protect, logoutAllOtherSessions);
+router.delete("/logout-all", protect, logoutAll);
 
 module.exports = router;

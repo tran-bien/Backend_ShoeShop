@@ -7,60 +7,39 @@ const asyncHandler = require("express-async-handler");
 exports.protect = asyncHandler(async (req, res, next) => {
   let token;
 
-  // Debug logs
-  console.log("Authorization header:", req.headers.authorization);
-
-  // Lấy token từ Authorization header hoặc từ cookie
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith("Bearer")
   ) {
-    // Token từ Authorization header
     token = req.headers.authorization.split(" ")[1];
-    console.log("Extracted token from header:", token);
   } else if (req.cookies && req.cookies.token) {
-    // Token từ cookie
     token = req.cookies.token;
-    console.log("Extracted token from cookie:", token);
   }
 
   if (!token) {
-    console.log("No token found in request");
     return res.status(401).json({
       success: false,
-      message: "Vui lòng đăng nhập để truy cập",
+      message: "Không có token, không thể xác thực",
     });
   }
 
   try {
-    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("Decoded token:", decoded);
+    req.user = await User.findById(decoded.id).select("-password");
 
-    // Lấy thông tin user
-    const user = await User.findById(decoded.id);
-
-    if (!user) {
-      console.log("User not found for id:", decoded.id);
+    if (!req.user || !req.user.isActive) {
       return res.status(401).json({
         success: false,
-        message: "Người dùng không tồn tại. Vui lòng đăng nhập lại.",
+        message: "Tài khoản của bạn đã bị vô hiệu hóa.",
       });
     }
 
-    // Kiểm tra tài khoản có hoạt động không
-    if (!user.isActive) {
-      console.log("User account is inactive:", decoded.id);
-      return res.status(401).json({
-        success: false,
-        message:
-          "Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ với quản trị viên.",
-      });
-    }
+    // Đặt token hiện tại
+    req.token = token;
 
     // Tìm session hiện tại
     const session = await Session.findOne({
-      userId: user._id,
+      user: req.user._id, // Sử dụng trường user (ObjectId) thay vì userId
       token: token,
       isActive: true,
       expiresAt: { $gt: new Date() },
@@ -71,7 +50,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
 
       // Kiểm tra xem có phải session đã hết hạn
       const expiredSession = await Session.findOne({
-        userId: user._id,
+        user: req.user._id, // Sử dụng trường user thay vì userId
         token: token,
       });
 
@@ -100,17 +79,15 @@ exports.protect = asyncHandler(async (req, res, next) => {
     session.lastActive = new Date();
     await session.save();
 
-    // Gắn thông tin user vào request
-    req.user = user;
     req.session = session;
-    console.log("User authenticated:", user.email);
+    console.log("User authenticated:", req.user.email);
 
     next();
   } catch (error) {
-    console.error("Error in auth middleware:", error.message);
+    console.error(error);
     return res.status(401).json({
       success: false,
-      message: "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
+      message: "Token không hợp lệ hoặc đã hết hạn",
     });
   }
 });
@@ -121,7 +98,7 @@ exports.authorize = (...roles) => {
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        message: "Bạn không có quyền truy cập vào tài nguyên này",
+        message: "Bạn không có quyền truy cập",
       });
     }
     next();
@@ -171,7 +148,7 @@ exports.optionalAuth = asyncHandler(async (req, res, next) => {
     }
 
     const session = await Session.findOne({
-      userId: user._id,
+      user: user._id, // Sử dụng trường user thay vì userId
       token: token,
       isActive: true,
       expiresAt: { $gt: new Date() },

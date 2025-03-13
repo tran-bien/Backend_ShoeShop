@@ -1,41 +1,31 @@
 const mongoose = require("mongoose");
 
-const LoginHistorySchema = new mongoose.Schema(
+const loginHistorySchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: false,
-    },
-    userAgent: {
-      type: String,
-    },
-    ipAddress: {
-      type: String,
-    },
-    device: {
-      type: String,
-    },
-    browser: {
-      type: String,
-    },
-    location: {
-      type: String,
+      required: true,
     },
     status: {
       type: String,
-      enum: ["success", "failed"],
       required: true,
     },
     reason: {
       type: String,
+      required: true,
+    },
+    ipAddress: {
+      type: String,
+      required: true,
+    },
+    userAgent: {
+      type: String,
+      required: true,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-const LoginHistory = mongoose.model("LoginHistory", LoginHistorySchema);
-
+const LoginHistory = mongoose.model("LoginHistory", loginHistorySchema);
 module.exports = LoginHistory;
