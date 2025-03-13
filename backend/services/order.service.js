@@ -4,7 +4,7 @@ const Coupon = require("../models/coupon.model");
 const mongoose = require("mongoose");
 const paginationService = require("./pagination.service");
 const Notification = require("../models/notification.model");
-const OrderCancellation = require("../models/orderCancellation.model");
+const CancelRequestModel = require("../models/cancel.request.model");
 
 const orderService = {
   /**
@@ -136,8 +136,8 @@ const orderService = {
       }
 
       // Kiểm tra đã có yêu cầu hủy đơn nào chưa
-      const existingRequest = await OrderCancellation.findOne({
-        orderId,
+      const existingRequest = await CancelRequestModel.findOne({
+        orderId: order._id,
         status: "pending",
       }).session(session);
 
@@ -146,12 +146,12 @@ const orderService = {
       }
 
       // Tạo yêu cầu hủy đơn
-      const cancelRequest = await OrderCancellation.create(
+      const cancelRequest = await CancelRequestModel.create(
         [
           {
-            orderId,
-            userId,
-            reason,
+            orderId: order._id,
+            userId: userId,
+            reason: reason,
             status: "pending",
           },
         ],
@@ -322,7 +322,7 @@ const orderService = {
 
         // Cập nhật trạng thái yêu cầu hủy đơn nếu có
         if (order.cancelRequest) {
-          await OrderCancellation.findByIdAndUpdate(
+          await CancelRequestModel.findByIdAndUpdate(
             order.cancelRequest,
             {
               status: "approved",

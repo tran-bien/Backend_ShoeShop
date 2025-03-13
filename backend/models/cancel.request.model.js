@@ -27,10 +27,10 @@ const CancelRequestSchema = new mongoose.Schema(
     resolvedAt: {
       type: Date,
     },
-    attachments: {
-      type: [String],
-      default: [],
-    },
+    // attachments: {
+    //   type: [String],
+    //   default: [],
+    // },
   },
   {
     timestamps: true,

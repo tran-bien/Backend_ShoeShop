@@ -9,6 +9,7 @@
     "seed": "node seeders/index.js"
   },
   "dependencies": {
+    "axios": "^1.8.3",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^1.41.3",
     "cors": "^2.8.5",

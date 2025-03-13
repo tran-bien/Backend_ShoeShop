@@ -34,7 +34,7 @@ exports.createPaymentUrl = asyncHandler(async (req, res) => {
     }
 
     // Kiểm tra đơn hàng có thuộc về người dùng hiện tại không
-    if (order.userId.toString() !== req.user._id.toString()) {
+    if (order.user.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: "Bạn không có quyền thanh toán đơn hàng này",
@@ -86,19 +86,14 @@ exports.createPaymentUrl = asyncHandler(async (req, res) => {
 exports.vnpayReturn = asyncHandler(async (req, res) => {
   try {
     // Sử dụng paymentService để xác thực thanh toán
-    const result = await paymentService.processVnpayPayment(
-      req.query,
-      false,
-      req.app.get("notificationService")
-    );
+    const result = await paymentService.verifyVnpayPayment(req.query);
 
     // Trả về kết quả
     res.json({
       success: result.success,
       message: result.message,
-      payment: result.payment,
       order: result.order,
-      redirectUrl: result.redirectUrl,
+      paymentStatus: result.paymentStatus,
     });
   } catch (error) {
     res.status(500).json({
@@ -108,12 +103,19 @@ exports.vnpayReturn = asyncHandler(async (req, res) => {
   }
 });
 
-// Xử lý thông báo tức thời IPN từ VNPAY (cho backend - không yêu cầu xác thực)
+// Xử lý thông báo tức thời IPN từ VNPAY
 exports.vnpayIpn = asyncHandler(async (req, res) => {
   try {
-    // Sử dụng paymentService để xử lý IPN
-    const result = await paymentService.processVnpayPayment(req.query, true);
-    return res.status(200).json(result);
+    // Sử dụng paymentService để xác thực thanh toán
+    const result = await paymentService.verifyVnpayPayment(req.query);
+
+    if (result.success) {
+      return res
+        .status(200)
+        .json({ RspCode: "00", Message: "Confirm Success" });
+    } else {
+      return res.status(200).json({ RspCode: "99", Message: result.message });
+    }
   } catch (error) {
     console.error("Lỗi khi xử lý IPN từ VNPay:", error);
     return res.status(200).json({ RspCode: "99", Message: "Unknown error" });
@@ -123,15 +125,27 @@ exports.vnpayIpn = asyncHandler(async (req, res) => {
 // Cải thiện xử lý thanh toán thất bại
 exports.paymentCallback = asyncHandler(async (req, res) => {
   try {
-    // Sử dụng paymentService để xử lý callback thanh toán
-    const NotificationService = require("../services/notification.service");
-    const result = await paymentService.handlePaymentCallback(
-      req.query,
-      NotificationService
-    );
+    // Lấy thông tin từ query parameters
+    const { vnp_TxnRef: paymentCode, vnp_ResponseCode: responseCode } =
+      req.query;
+
+    // Tìm đơn hàng bằng paymentCode
+    const order = await Order.findOne({ paymentCode });
+
+    if (!order) {
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/payment/failed?error=order_not_found`
+      );
+    }
+
+    // Xác định URL chuyển hướng dựa trên kết quả thanh toán
+    const redirectUrl =
+      responseCode === "00"
+        ? `${process.env.FRONTEND_URL}/payment/success?orderId=${order._id}`
+        : `${process.env.FRONTEND_URL}/payment/failed?orderId=${order._id}&code=${responseCode}`;
 
     // Chuyển hướng đến URL thích hợp
-    return res.redirect(result.redirectUrl);
+    return res.redirect(redirectUrl);
   } catch (error) {
     console.error("Lỗi khi xử lý callback thanh toán:", error);
     return res.redirect(
@@ -174,17 +188,23 @@ exports.retryPayment = asyncHandler(async (req, res) => {
     }
 
     // Kiểm tra đơn hàng có thuộc về người dùng hiện tại không
-    if (order.userId.toString() !== req.user._id.toString()) {
+    if (order.user.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: "Bạn không có quyền thanh toán đơn hàng này",
       });
     }
 
-    // Sử dụng paymentService để thử lại thanh toán
-    const result = await paymentService.retryPayment(
-      orderId,
-      { bankCode, language },
+    // Sử dụng paymentService để tạo lại URL thanh toán
+    const orderInfo = `Thanh toan lai don hang ${order.orderCode}`;
+    const result = await paymentService.createVnpayPaymentUrl(
+      {
+        orderId: order._id,
+        amount: order.totalAmount,
+        orderInfo,
+        bankCode,
+        language,
+      },
       req
     );
 

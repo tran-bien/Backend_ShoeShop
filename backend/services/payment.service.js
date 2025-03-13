@@ -1,5 +1,4 @@
 const Order = require("../models/order.model");
-const Payment = require("../models/payment.model");
 const crypto = require("crypto");
 const axios = require("axios");
 const querystring = require("querystring");
@@ -56,61 +55,75 @@ const paymentService = {
     // Tạo mã thanh toán
     const paymentCode = paymentService.generatePaymentCode();
 
-    // Tạo đối tượng thanh toán mới
-    const payment = await Payment.create({
+    // Cập nhật thông tin thanh toán trong đơn hàng
+    order.paymentMethod = method;
+    order.paymentStatus = status;
+    order.paymentCode = paymentCode;
+    order.paymentInfo = details;
+    await order.save();
+
+    return {
+      _id: order._id,
       order: orderId,
       amount,
       method,
       status,
       paymentCode,
       details,
-    });
-
-    // Cập nhật thông tin thanh toán trong đơn hàng
-    order.payment = payment._id;
-    order.paymentMethod = method;
-    order.paymentStatus = status;
-    await order.save();
-
-    return payment;
+    };
   },
 
   /**
    * Cập nhật trạng thái thanh toán
-   * @param {String} paymentId - ID thanh toán
+   * @param {String} orderId - ID đơn hàng
    * @param {String} status - Trạng thái mới
    * @param {Object} details - Thông tin chi tiết bổ sung
    * @returns {Object} - Thông tin thanh toán đã cập nhật
    */
-  updatePaymentStatus: async (paymentId, status, details = {}) => {
-    const payment = await Payment.findById(paymentId);
-    if (!payment) {
-      throw new Error("Không tìm thấy thanh toán");
+  updatePaymentStatus: async (orderId, status, details = {}) => {
+    const order = await Order.findById(orderId);
+    if (!order) {
+      throw new Error("Không tìm thấy đơn hàng");
     }
 
     // Cập nhật trạng thái thanh toán
-    payment.status = status;
+    order.paymentStatus = status;
 
     // Thêm thông tin chi tiết nếu có
     if (Object.keys(details).length > 0) {
-      payment.details = { ...payment.details, ...details };
+      order.paymentInfo = { ...order.paymentInfo, ...details };
     }
 
     // Ghi nhận thời gian hoàn thành nếu thanh toán thành công
-    if (status === "completed") {
-      payment.completedAt = new Date();
+    if (status === "completed" || status === "paid") {
+      if (!order.paymentHistory) {
+        order.paymentHistory = [];
+      }
+
+      order.paymentHistory.push({
+        status: "paid",
+        timestamp: new Date(),
+        note: "Thanh toán thành công qua cổng thanh toán",
+      });
+
+      // Cập nhật trạng thái đơn hàng nếu đang ở trạng thái pending
+      if (order.status === "pending") {
+        order.status = "confirmed";
+        order.statusHistory.push({
+          status: "confirmed",
+          timestamp: new Date(),
+          note: "Tự động cập nhật sau khi thanh toán thành công",
+        });
+      }
     }
 
-    await payment.save();
+    await order.save();
 
-    // Cập nhật trạng thái thanh toán trong đơn hàng
-    const order = await Order.findById(payment.order);
-    if (order) {
-      order.paymentStatus = status;
-      await order.save();
-    }
-
-    return payment;
+    return {
+      order: orderId,
+      status: order.paymentStatus,
+      details: order.paymentInfo,
+    };
   },
 
   /**
@@ -131,7 +144,7 @@ const paymentService = {
     const payment = await paymentService.createPayment({
       orderId,
       amount,
-      method: "vnpay",
+      method: "VNPAY",
       status: "pending",
       details: { orderInfo },
     });
@@ -195,7 +208,7 @@ const paymentService = {
     return {
       paymentUrl,
       paymentCode: payment.paymentCode,
-      paymentId: payment._id,
+      orderId: payment.order,
     };
   },
 
@@ -216,8 +229,8 @@ const paymentService = {
     } = vnpResponse;
 
     // Lấy thông tin thanh toán từ database
-    const payment = await Payment.findOne({ paymentCode });
-    if (!payment) {
+    const order = await Order.findOne({ paymentCode });
+    if (!order) {
       throw new Error("Không tìm thấy thông tin thanh toán");
     }
 
@@ -236,568 +249,52 @@ const paymentService = {
     }
 
     // Kiểm tra mã giao dịch
-    if (Number(amount) !== Number(payment.amount) * 100) {
+    if (Number(amount) !== Number(order.totalAmount) * 100) {
       throw new Error("Số tiền không khớp");
     }
 
     // Xác định trạng thái thanh toán
     const isSuccess = responseCode === "00" && transactionStatus === "00";
-    const newStatus = isSuccess ? "completed" : "failed";
+    const newStatus = isSuccess ? "paid" : "failed";
 
     // Cập nhật trạng thái thanh toán
     const updatedPayment = await paymentService.updatePaymentStatus(
-      payment._id,
+      order._id,
       newStatus,
       {
         vnpResponse: vnpResponse,
-        verifiedAt: new Date(),
+        vnpResponseCode: responseCode,
+        vnpTransactionStatus: transactionStatus,
       }
     );
 
     return {
       success: isSuccess,
-      payment: updatedPayment,
       message: isSuccess ? "Thanh toán thành công" : "Thanh toán thất bại",
+      order: order,
+      paymentStatus: newStatus,
     };
   },
 
   /**
-   * Lấy thông tin thanh toán
-   * @param {String} paymentId - ID thanh toán
+   * Lấy thông tin thanh toán theo mã
+   * @param {String} paymentCode - Mã thanh toán
    * @returns {Object} - Thông tin thanh toán
    */
-  getPaymentById: async (paymentId) => {
-    const payment = await Payment.findById(paymentId).populate({
-      path: "order",
-      select: "orderCode totalAmount user",
-      populate: {
-        path: "user",
-        select: "name email phone",
-      },
-    });
-
-    if (!payment) {
-      throw new Error("Không tìm thấy thanh toán");
-    }
-
-    return payment;
-  },
-
-  /**
-   * Lấy danh sách thanh toán
-   * @param {Object} queryOptions - Các tùy chọn truy vấn
-   * @returns {Object} - Danh sách thanh toán và thông tin phân trang
-   */
-  getPayments: async (queryOptions = {}) => {
-    const { page = 1, limit = 10, status, method, search } = queryOptions;
-
-    // Xây dựng điều kiện truy vấn
-    const query = {};
-    if (status) query.status = status;
-    if (method) query.method = method;
-    if (search) {
-      query.$or = [
-        { paymentCode: { $regex: search, $options: "i" } },
-        { "details.orderInfo": { $regex: search, $options: "i" } },
-      ];
-    }
-
-    // Thực hiện truy vấn với phân trang
-    const total = await Payment.countDocuments(query);
-    const payments = await Payment.find(query)
-      .populate({
-        path: "order",
-        select: "orderCode totalAmount user",
-        populate: {
-          path: "user",
-          select: "name email",
-        },
-      })
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
-
-    // Trả về kết quả với thông tin phân trang
-    return {
-      payments,
-      pagination: {
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        totalPages: Math.ceil(total / Number(limit)),
-      },
-    };
-  },
-
-  /**
-   * Xử lý thông báo tức thời (IPN) từ VNPay
-   * @param {Object} vnpParams - Tham số từ VNPay
-   * @returns {Object} - Kết quả xử lý IPN
-   */
-  handleVnpayIpn: async (vnpParams) => {
-    const secureHash = vnpParams["vnp_SecureHash"];
-
-    // Xóa các trường không cần thiết
-    delete vnpParams["vnp_SecureHash"];
-    delete vnpParams["vnp_SecureHashType"];
-
-    // Sắp xếp đúng thứ tự
-    const sortedParams = paymentService.sortObject(vnpParams);
-
-    // Tạo chữ ký để xác thực
-    const secretKey = process.env.VNP_HASH_SECRET;
-    const signData = querystring.stringify(sortedParams, { encode: false });
-    const hmac = crypto.createHmac("sha512", secretKey);
-    const signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
-
-    // Kiểm tra chữ ký
-    if (secureHash !== signed) {
-      return {
-        RspCode: "97",
-        Message: "Invalid Signature",
-      };
-    }
-
-    const orderId = vnpParams["vnp_TxnRef"];
-    const rspCode = vnpParams["vnp_ResponseCode"];
-
-    // Tìm thanh toán theo mã giao dịch
-    const payment = await Payment.findOne({ paymentCode: orderId });
-    if (!payment) {
-      return {
-        RspCode: "01",
-        Message: "Payment not found",
-      };
-    }
-
-    // Tìm đơn hàng liên quan
-    const order = await Order.findById(payment.order);
+  getPaymentByCode: async (paymentCode) => {
+    const order = await Order.findOne({ paymentCode });
     if (!order) {
-      return {
-        RspCode: "01",
-        Message: "Order not found",
-      };
+      return null;
     }
-
-    // Kiểm tra số tiền thanh toán
-    const vnpAmount = vnpParams["vnp_Amount"] / 100; // VNPay trả về số tiền * 100
-    if (vnpAmount !== order.totalAmount) {
-      return {
-        RspCode: "04",
-        Message: "Invalid amount",
-      };
-    }
-
-    // Nếu thanh toán đã được xử lý trước đó, không xử lý lại
-    if (payment.details.vnpTransactionNo === vnpParams["vnp_TransactionNo"]) {
-      return {
-        RspCode: "02",
-        Message: "Payment already confirmed",
-      };
-    }
-
-    // Cập nhật thông tin thanh toán
-    payment.details = {
-      ...payment.details,
-      vnpTransactionNo: vnpParams["vnp_TransactionNo"],
-      vnpResponseData: vnpParams,
-    };
-
-    if (rspCode === "00") {
-      // Thanh toán thành công
-      payment.status = "success";
-      order.paymentStatus = "paid";
-
-      // Nếu đơn hàng đang ở trạng thái pending, chuyển sang confirmed
-      if (order.status === "pending") {
-        order.status = "confirmed";
-      }
-    } else {
-      // Thanh toán thất bại
-      payment.status = "failed";
-      order.paymentStatus = "failed";
-    }
-
-    // Lưu thay đổi
-    await payment.save();
-    await order.save();
 
     return {
-      RspCode: "00",
-      Message: "Confirm Success",
-    };
-  },
-
-  /**
-   * Xử lý callback thanh toán từ VNPay (cho frontend)
-   * @param {Object} vnpParams - Tham số từ VNPay
-   * @param {Object} notificationService - Service để tạo thông báo
-   * @returns {Object} - Kết quả xử lý callback
-   */
-  handlePaymentCallback: async (vnpParams, notificationService) => {
-    const secureHash = vnpParams["vnp_SecureHash"];
-
-    // Xóa các trường không cần thiết
-    delete vnpParams["vnp_SecureHash"];
-    delete vnpParams["vnp_SecureHashType"];
-
-    // Sắp xếp đúng thứ tự
-    const sortedParams = paymentService.sortObject(vnpParams);
-
-    // Tạo chữ ký để xác thực
-    const secretKey = process.env.VNP_HASH_SECRET;
-    const signData = querystring.stringify(sortedParams, { encode: false });
-    const hmac = crypto.createHmac("sha512", secretKey);
-    const signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
-
-    // Kiểm tra chữ ký
-    if (secureHash !== signed) {
-      return {
-        success: false,
-        message: "Chữ ký không hợp lệ",
-      };
-    }
-
-    const orderId = vnpParams["vnp_TxnRef"];
-    const responseCode = vnpParams["vnp_ResponseCode"];
-    const transactionId = vnpParams["vnp_TransactionNo"];
-    const amount = parseInt(vnpParams["vnp_Amount"]) / 100; // Chia 100 vì VNPay gửi số tiền * 100
-
-    // Tìm đơn hàng
-    const order = await Order.findOne({ paymentCode: orderId });
-    if (!order) {
-      return {
-        success: false,
-        message: "Không tìm thấy đơn hàng",
-      };
-    }
-
-    // Tìm thanh toán
-    let payment = await Payment.findOne({ paymentCode: orderId });
-
-    // Nếu chưa có thanh toán, tạo mới
-    if (!payment) {
-      payment = await paymentService.createPayment({
-        orderId: order._id,
-        amount,
-        method: "VNPAY",
-        status: responseCode === "00" ? "success" : "failed",
-        details: {
-          vnpResponseData: vnpParams,
-          transactionId,
-        },
-      });
-    } else {
-      // Cập nhật thông tin thanh toán
-      payment.status = responseCode === "00" ? "success" : "failed";
-      payment.details = {
-        ...payment.details,
-        vnpResponseData: vnpParams,
-        transactionId,
-      };
-      await payment.save();
-    }
-
-    // Xử lý thành công
-    if (responseCode === "00") {
-      // Cập nhật trạng thái đơn hàng
-      order.isPaid = true;
-      order.paidAt = Date.now();
-      order.paymentStatus = "paid";
-      order.paymentResult = {
-        id: transactionId,
-        status: "success",
-        update_time: Date.now(),
-        email_address: order.user ? order.user.email : "unknown",
-      };
-
-      // Nếu đơn hàng đang ở trạng thái pending, chuyển sang confirmed
-      if (order.status === "pending") {
-        order.status = "confirmed";
-      }
-
-      await order.save();
-
-      // Tạo thông báo thanh toán thành công
-      if (notificationService && order.userId) {
-        await notificationService.createNotification({
-          userId: order.userId,
-          title: "Thanh toán thành công",
-          message: `Đơn hàng ${order._id} đã được thanh toán thành công.`,
-          type: "order",
-          referenceId: order._id,
-        });
-      }
-
-      return {
-        success: true,
-        message: "Thanh toán thành công",
-        order,
-        payment,
-        redirectUrl: `${process.env.FRONTEND_URL}/payment/success?orderId=${orderId}`,
-      };
-    }
-    // Xử lý thất bại
-    else {
-      // Cập nhật thông tin đơn hàng khi thanh toán thất bại
-      order.paymentStatus = "failed";
-      order.paymentResult = {
-        id: transactionId,
-        status: "failed",
-        update_time: Date.now(),
-        email_address: order.user ? order.user.email : "unknown",
-        error_message: `Mã lỗi: ${responseCode}`,
-      };
-      await order.save();
-
-      // Tạo thông báo thanh toán thất bại
-      if (notificationService && order.userId) {
-        await notificationService.createNotification({
-          userId: order.userId,
-          title: "Thanh toán thất bại",
-          message: `Đơn hàng ${order._id} thanh toán không thành công. Vui lòng thử lại.`,
-          type: "order",
-          referenceId: order._id,
-        });
-      }
-
-      return {
-        success: false,
-        message: "Thanh toán thất bại",
-        order,
-        payment,
-        redirectUrl: `${process.env.FRONTEND_URL}/payment/failed?orderId=${orderId}&code=${responseCode}`,
-      };
-    }
-  },
-
-  /**
-   * Thử lại thanh toán cho đơn hàng
-   * @param {String} orderId - ID đơn hàng
-   * @param {Object} options - Các tùy chọn thanh toán (bankCode, language)
-   * @param {Object} req - Request object
-   * @returns {Object} - URL thanh toán mới
-   */
-  retryPayment: async (orderId, options, req) => {
-    // Tìm đơn hàng
-    const order = await Order.findById(orderId);
-    if (!order) {
-      throw new Error("Không tìm thấy đơn hàng");
-    }
-
-    // Kiểm tra trạng thái đơn hàng
-    if (
-      order.paymentMethod !== "VNPAY" ||
-      (order.status !== "pending" && order.paymentStatus !== "failed")
-    ) {
-      throw new Error(
-        "Đơn hàng không thể thanh toán lại ở trạng thái hiện tại"
-      );
-    }
-
-    // Tạo mã thanh toán mới
-    const paymentCode = paymentService.generatePaymentCode();
-
-    // Tạo hoặc cập nhật thanh toán
-    let payment = await Payment.findOne({
       order: order._id,
-      status: { $ne: "success" },
-    });
-    if (!payment) {
-      payment = await paymentService.createPayment({
-        orderId: order._id,
-        amount: order.totalAmount,
-        method: "VNPAY",
-        status: "pending",
-        details: {
-          orderInfo: `Thanh toan lai don hang: ${order._id}`,
-          paymentCode,
-        },
-      });
-    } else {
-      payment.status = "pending";
-      payment.paymentCode = paymentCode;
-      payment.details = {
-        ...payment.details,
-        orderInfo: `Thanh toan lai don hang: ${order._id}`,
-        retryAt: new Date(),
-      };
-      await payment.save();
-    }
-
-    // Cập nhật đơn hàng
-    order.paymentStatus = "pending";
-    await order.save();
-
-    // Tạo URL thanh toán mới
-    const { bankCode, language } = options;
-    const result = await paymentService.createVnpayPaymentUrl(
-      {
-        orderId: order._id,
-        amount: order.totalAmount,
-        orderInfo: `Thanh toan lai don hang: ${order._id}`,
-        bankCode,
-        language,
-      },
-      req
-    );
-
-    return result;
-  },
-
-  /**
-   * Xử lý kết quả thanh toán từ VNPay (hàm thống nhất)
-   * @param {Object} vnpParams - Tham số từ VNPay
-   * @param {Boolean} isIpn - Có phải là IPN callback không
-   * @param {Object} notificationService - Service để tạo thông báo (tùy chọn)
-   * @returns {Object} - Kết quả xử lý thanh toán
-   */
-  processVnpayPayment: async (
-    vnpParams,
-    isIpn = false,
-    notificationService = null
-  ) => {
-    // Xác thực chữ ký
-    const secureHash = vnpParams["vnp_SecureHash"];
-    delete vnpParams["vnp_SecureHash"];
-    delete vnpParams["vnp_SecureHashType"];
-
-    // Sắp xếp đúng thứ tự
-    const sortedParams = paymentService.sortObject(vnpParams);
-
-    // Tạo chữ ký để xác thực
-    const secretKey = process.env.VNP_HASH_SECRET;
-    const signData = querystring.stringify(sortedParams, { encode: false });
-    const hmac = crypto.createHmac("sha512", secretKey);
-    const signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
-
-    // Kiểm tra chữ ký
-    if (secureHash !== signed) {
-      return isIpn
-        ? { RspCode: "97", Message: "Invalid Signature" }
-        : { success: false, message: "Chữ ký không hợp lệ" };
-    }
-
-    const paymentCode = vnpParams["vnp_TxnRef"];
-    const responseCode = vnpParams["vnp_ResponseCode"];
-    const transactionId = vnpParams["vnp_TransactionNo"];
-    const amount = parseInt(vnpParams["vnp_Amount"]) / 100; // Chia 100 vì VNPay gửi số tiền * 100
-
-    // Tìm thanh toán và đơn hàng
-    let payment = await Payment.findOne({ paymentCode });
-    let order;
-
-    if (payment) {
-      order = await Order.findById(payment.order);
-    } else {
-      // Tìm đơn hàng theo mã thanh toán
-      order = await Order.findOne({ paymentCode });
-    }
-
-    // Kiểm tra tồn tại
-    if (!order) {
-      return isIpn
-        ? { RspCode: "01", Message: "Order not found" }
-        : { success: false, message: "Không tìm thấy đơn hàng" };
-    }
-
-    // Kiểm tra số tiền (nếu là IPN)
-    if (isIpn && amount !== order.totalAmount) {
-      return { RspCode: "04", Message: "Invalid amount" };
-    }
-
-    // Nếu thanh toán đã được xử lý trước đó (cho IPN)
-    if (
-      isIpn &&
-      payment &&
-      payment.details.vnpTransactionNo === transactionId
-    ) {
-      return { RspCode: "02", Message: "Payment already confirmed" };
-    }
-
-    // Nếu chưa có thanh toán, tạo mới
-    if (!payment) {
-      payment = await paymentService.createPayment({
-        orderId: order._id,
-        amount,
-        method: "VNPAY",
-        status: responseCode === "00" ? "success" : "failed",
-        details: {
-          vnpResponseData: vnpParams,
-          transactionId,
-        },
-      });
-    } else {
-      // Cập nhật thông tin thanh toán
-      payment.status = responseCode === "00" ? "success" : "failed";
-      payment.details = {
-        ...payment.details,
-        vnpResponseData: vnpParams,
-        transactionId,
-      };
-      await payment.save();
-    }
-
-    // Thanh toán thành công
-    if (responseCode === "00") {
-      // Cập nhật đơn hàng
-      order.paymentStatus = "paid";
-      order.isPaid = true;
-      order.paidAt = Date.now();
-
-      if (order.status === "pending") {
-        order.status = "confirmed";
-        order.confirmedAt = Date.now();
-      }
-
-      // Tạo thông báo nếu không phải IPN và có notification service
-      if (!isIpn && notificationService && order.user) {
-        await notificationService.createNotification({
-          userId: order.user,
-          title: "Thanh toán thành công",
-          message: `Đơn hàng #${order.orderCode} đã được thanh toán thành công.`,
-          type: "order",
-          referenceId: order._id,
-        });
-      }
-    }
-    // Thanh toán thất bại
-    else {
-      order.paymentStatus = "failed";
-
-      // Tạo thông báo nếu không phải IPN và có notification service
-      if (!isIpn && notificationService && order.user) {
-        await notificationService.createNotification({
-          userId: order.user,
-          title: "Thanh toán thất bại",
-          message: `Thanh toán cho đơn hàng #${order.orderCode} không thành công. Vui lòng thử lại.`,
-          type: "order",
-          referenceId: order._id,
-        });
-      }
-    }
-
-    // Lưu đơn hàng
-    await order.save();
-
-    // Trả về kết quả phù hợp với loại callback
-    if (isIpn) {
-      return { RspCode: "00", Message: "Confirm Success" };
-    } else {
-      return {
-        success: responseCode === "00",
-        message:
-          responseCode === "00"
-            ? "Thanh toán thành công"
-            : "Thanh toán thất bại",
-        order,
-        payment,
-        redirectUrl:
-          responseCode === "00"
-            ? `${process.env.FRONTEND_URL}/payment/success?orderId=${order._id}`
-            : `${process.env.FRONTEND_URL}/payment/failed?orderId=${order._id}&code=${responseCode}`,
-      };
-    }
+      amount: order.totalAmount,
+      method: order.paymentMethod,
+      status: order.paymentStatus,
+      paymentCode: order.paymentCode,
+      details: order.paymentInfo,
+    };
   },
 };
 
