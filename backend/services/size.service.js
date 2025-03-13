@@ -7,11 +7,8 @@ const sizeService = {
   getSizes: async (showAll = false) => {
     let query = {};
 
-    if (!showAll) {
-      query.status = "active";
-    }
-
-    const sizes = await Size.find(query).sort({ value: 1 });
+    // Nếu không yêu cầu lấy tất cả, không cần điều kiện
+    const sizes = await Size.find(query).sort({ value: 1 }); // Lấy tất cả kích thước
     return sizes;
   },
 
@@ -78,92 +75,22 @@ const sizeService = {
     return size;
   },
 
-  // Kiểm tra trước khi xóa
-  checkBeforeDelete: async (sizeId) => {
+  // Xóa kích thước
+  deleteSizeWithCheck: async (sizeId) => {
     const size = await Size.findById(sizeId);
     if (!size) {
       throw new Error("Không tìm thấy kích thước");
     }
 
     // Kiểm tra xem kích thước có đang được sử dụng không trong variants của Product
-    const productsWithVariants = await Product.aggregate([
-      { $match: { "variants.size": new mongoose.Types.ObjectId(sizeId) } },
-      {
-        $lookup: {
-          from: "colors",
-          localField: "variants.color",
-          foreignField: "_id",
-          as: "colorInfo",
-        },
-      },
-      {
-        $project: {
-          name: 1,
-          variants: {
-            $filter: {
-              input: "$variants",
-              as: "variant",
-              cond: {
-                $eq: ["$$variant.size", new mongoose.Types.ObjectId(sizeId)],
-              },
-            },
-          },
-          colorInfo: 1,
-        },
-      },
-      { $limit: 10 },
-    ]);
+    const productsWithVariants = await Product.find({ "variants.size": sizeId })
+      .select("name _id variants")
+      .limit(10);
 
     const hasDependencies = productsWithVariants.length > 0;
 
-    return {
-      canDelete: !hasDependencies,
-      hasDependencies,
-      dependencies: {
-        productsWithVariants: productsWithVariants,
-        variantCount: productsWithVariants.length,
-      },
-      message: hasDependencies
-        ? "Kích thước đang được sử dụng bởi các sản phẩm"
-        : "Có thể xóa kích thước này",
-    };
-  },
-
-  // Vô hiệu hóa kích thước
-  deactivateSize: async (sizeId) => {
-    const size = await Size.findById(sizeId);
-    if (!size) {
-      throw new Error("Không tìm thấy kích thước");
-    }
-
-    size.status = "inactive";
-    await size.save();
-    return size;
-  },
-
-  // Kích hoạt lại kích thước
-  activateSize: async (sizeId) => {
-    const size = await Size.findById(sizeId);
-    if (!size) {
-      throw new Error("Không tìm thấy kích thước");
-    }
-
-    size.status = "active";
-    await size.save();
-    return size;
-  },
-
-  // Xóa kích thước
-  deleteSize: async (sizeId) => {
-    const size = await Size.findById(sizeId);
-    if (!size) {
-      throw new Error("Không tìm thấy kích thước");
-    }
-
-    // Kiểm tra trước khi xóa
-    const checkResult = await sizeService.checkBeforeDelete(sizeId);
-    if (!checkResult.canDelete) {
-      throw new Error(checkResult.message);
+    if (hasDependencies) {
+      throw new Error("Kích thước đang được sử dụng bởi các sản phẩm");
     }
 
     // Xóa kích thước

@@ -5,8 +5,6 @@ const {
   createColor,
   updateColor,
   deleteColor,
-  deactivateColor,
-  activateColor,
 } = require("../controllers/color.controller");
 
 const router = express.Router();
@@ -20,8 +18,6 @@ router.use(admin);
 
 router.post("/", createColor);
 router.put("/:colorId", updateColor);
-router.put("/:colorId/deactivate", deactivateColor);
-router.put("/:colorId/activate", activateColor);
 router.delete("/:colorId", deleteColor);
 
 module.exports = router;

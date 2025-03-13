@@ -4,8 +4,16 @@ const sizeService = require("../services/size.service");
 // Lấy danh sách kích thước
 exports.getSizes = asyncHandler(async (req, res) => {
   try {
-    const { showAll } = req.query;
-    const sizes = await sizeService.getSizes(showAll === "true");
+    const sizes = await sizeService.getSizes();
+
+    if (sizes.length === 0) {
+      return res.json({
+        success: true,
+        count: 0,
+        message: "Không có kích thước nào được tìm thấy.",
+        sizes: [],
+      });
+    }
 
     res.json({
       success: true,
@@ -24,6 +32,14 @@ exports.getSizes = asyncHandler(async (req, res) => {
 exports.createSize = asyncHandler(async (req, res) => {
   try {
     const { value, description } = req.body;
+
+    // Kiểm tra đầu vào
+    if (!value || isNaN(value)) {
+      return res.status(400).json({
+        success: false,
+        message: "Giá trị kích thước không hợp lệ",
+      });
+    }
 
     const size = await sizeService.createSize({ value, description });
 
@@ -46,6 +62,14 @@ exports.updateSize = asyncHandler(async (req, res) => {
     const { sizeId } = req.params;
     const { value, description, status } = req.body;
 
+    // Kiểm tra đầu vào
+    if (value !== undefined && isNaN(value)) {
+      return res.status(400).json({
+        success: false,
+        message: "Giá trị kích thước không hợp lệ",
+      });
+    }
+
     const size = await sizeService.updateSize(sizeId, {
       value,
       description,
@@ -65,67 +89,11 @@ exports.updateSize = asyncHandler(async (req, res) => {
   }
 });
 
-// Kiểm tra trước khi xóa (Admin)
-exports.checkBeforeDelete = asyncHandler(async (req, res) => {
-  try {
-    const { sizeId } = req.params;
-    const result = await sizeService.checkBeforeDelete(sizeId);
-
-    res.json({
-      success: true,
-      ...result,
-    });
-  } catch (error) {
-    res.status(error.message === "Không tìm thấy kích thước" ? 404 : 500).json({
-      success: false,
-      message: error.message || "Lỗi khi kiểm tra kích thước trước khi xóa",
-    });
-  }
-});
-
-// Vô hiệu hóa kích thước (Admin)
-exports.deactivateSize = asyncHandler(async (req, res) => {
-  try {
-    const { sizeId } = req.params;
-    const size = await sizeService.deactivateSize(sizeId);
-
-    res.json({
-      success: true,
-      message: "Đã vô hiệu hóa kích thước",
-      size,
-    });
-  } catch (error) {
-    res.status(error.message === "Không tìm thấy kích thước" ? 404 : 500).json({
-      success: false,
-      message: error.message || "Lỗi khi vô hiệu hóa kích thước",
-    });
-  }
-});
-
-// Kích hoạt lại kích thước (Admin)
-exports.activateSize = asyncHandler(async (req, res) => {
-  try {
-    const { sizeId } = req.params;
-    const size = await sizeService.activateSize(sizeId);
-
-    res.json({
-      success: true,
-      message: "Đã kích hoạt lại kích thước",
-      size,
-    });
-  } catch (error) {
-    res.status(error.message === "Không tìm thấy kích thước" ? 404 : 500).json({
-      success: false,
-      message: error.message || "Lỗi khi kích hoạt lại kích thước",
-    });
-  }
-});
-
 // Xóa kích thước (Admin)
 exports.deleteSize = asyncHandler(async (req, res) => {
   try {
     const { sizeId } = req.params;
-    await sizeService.deleteSize(sizeId);
+    await sizeService.deleteSizeWithCheck(sizeId);
 
     res.json({
       success: true,

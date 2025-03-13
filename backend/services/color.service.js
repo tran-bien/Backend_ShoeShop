@@ -9,14 +9,9 @@ const colorService = {
    * @param {Boolean} showAll - Hiển thị tất cả màu sắc, bao gồm cả không hoạt động
    * @returns {Promise<Array>} Danh sách màu sắc
    */
-  getColors: async (showAll = false) => {
-    let query = {};
-
-    if (!showAll) {
-      query.status = "active";
-    }
-
-    const colors = await Color.find(query).sort({ name: 1 });
+  getColors: async () => {
+    // Lấy tất cả màu sắc mà không cần điều kiện
+    const colors = await Color.find({}).sort({ name: 1 }); // Sắp xếp theo tên
     return colors;
   },
 
@@ -142,87 +137,6 @@ const colorService = {
   },
 
   /**
-   * Kiểm tra trước khi xóa màu sắc
-   * @param {String} colorId - ID màu sắc
-   * @returns {Promise<Object>} Thông tin về khả năng xóa
-   */
-  checkBeforeDelete: async (colorId) => {
-    const color = await Color.findById(colorId);
-    if (!color) {
-      throw new Error("Không tìm thấy màu sắc");
-    }
-
-    // Kiểm tra xem màu có đang được sử dụng không trong colors của Product
-    const productWithColor = await Product.find({ "colors.color": colorId })
-      .select("name _id")
-      .limit(10);
-
-    // Kiểm tra xem màu có đang được sử dụng không trong variants của Product
-    const productsWithVariants = await Product.aggregate([
-      { $match: { "variants.color": new mongoose.Types.ObjectId(colorId) } },
-      { $project: { name: 1 } },
-      { $limit: 10 },
-    ]);
-
-    const hasDependencies =
-      productWithColor.length > 0 || productsWithVariants.length > 0;
-
-    return {
-      canDelete: !hasDependencies,
-      hasDependencies,
-      dependencies: {
-        products: productWithColor,
-        variantProducts: productsWithVariants,
-        productCount: productWithColor.length,
-        variantCount: productsWithVariants.length,
-      },
-      message: hasDependencies
-        ? "Màu sắc đang được sử dụng bởi các sản phẩm"
-        : "Có thể xóa màu sắc này",
-    };
-  },
-
-  /**
-   * Vô hiệu hóa màu sắc
-   * @param {String} colorId - ID màu sắc
-   * @returns {Promise<Object>} Màu sắc đã vô hiệu hóa
-   */
-  deactivateColor: async (colorId) => {
-    const color = await Color.findById(colorId);
-    if (!color) {
-      throw new Error("Không tìm thấy màu sắc");
-    }
-
-    color.status = "inactive";
-    await color.save();
-
-    // Cập nhật trạng thái màu sắc trong các biến thể sản phẩm
-    await Product.updateMany(
-      { "variants.color": colorId },
-      { $set: { "variants.$[].deletedColor": true } } // Đánh dấu màu sắc là đã xóa mềm
-    );
-
-    return color;
-  },
-
-  /**
-   * Kích hoạt lại màu sắc
-   * @param {String} colorId - ID màu sắc
-   * @returns {Promise<Object>} Màu sắc đã kích hoạt
-   */
-  activateColor: async (colorId) => {
-    const color = await Color.findById(colorId);
-    if (!color) {
-      throw new Error("Không tìm thấy màu sắc");
-    }
-
-    color.status = "active";
-    await color.save();
-
-    return color;
-  },
-
-  /**
    * Xóa màu sắc
    * @param {String} colorId - ID màu sắc
    * @returns {Promise<Boolean>} Kết quả xóa
@@ -243,6 +157,30 @@ const colorService = {
       { $pull: { variants: { color: colorId } } } // Xóa màu sắc khỏi biến thể
     );
 
+    return true;
+  },
+
+  deleteColorWithCheck: async (colorId) => {
+    const color = await Color.findById(colorId);
+    if (!color) {
+      throw new Error("Không tìm thấy màu sắc");
+    }
+
+    // Kiểm tra xem màu có đang được sử dụng không trong variants của Product
+    const productsWithVariants = await Product.find({
+      "variants.color": colorId,
+    })
+      .select("name _id variants")
+      .limit(10);
+
+    const hasDependencies = productsWithVariants.length > 0;
+
+    if (hasDependencies) {
+      throw new Error("Màu sắc đang được sử dụng bởi các sản phẩm");
+    }
+
+    // Xóa màu sắc
+    await Color.deleteOne({ _id: colorId });
     return true;
   },
 };
