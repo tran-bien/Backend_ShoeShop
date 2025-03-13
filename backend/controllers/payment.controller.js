@@ -86,14 +86,19 @@ exports.createPaymentUrl = asyncHandler(async (req, res) => {
 exports.vnpayReturn = asyncHandler(async (req, res) => {
   try {
     // Sử dụng paymentService để xác thực thanh toán
-    const result = await paymentService.verifyVnpayPayment(req.query);
+    const result = await paymentService.processVnpayPayment(
+      req.query,
+      false,
+      req.app.get("notificationService")
+    );
 
     // Trả về kết quả
     res.json({
       success: result.success,
       message: result.message,
       payment: result.payment,
-      order: result.payment.order,
+      order: result.order,
+      redirectUrl: result.redirectUrl,
     });
   } catch (error) {
     res.status(500).json({
@@ -107,7 +112,7 @@ exports.vnpayReturn = asyncHandler(async (req, res) => {
 exports.vnpayIpn = asyncHandler(async (req, res) => {
   try {
     // Sử dụng paymentService để xử lý IPN
-    const result = await paymentService.handleVnpayIpn(req.query);
+    const result = await paymentService.processVnpayPayment(req.query, true);
     return res.status(200).json(result);
   } catch (error) {
     console.error("Lỗi khi xử lý IPN từ VNPay:", error);

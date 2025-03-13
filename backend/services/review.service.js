@@ -314,6 +314,72 @@ const reviewService = {
 
     return review;
   },
+
+  /**
+   * Like hoặc unlike một đánh giá
+   * @param {String} reviewId - ID đánh giá
+   * @param {String} userId - ID người dùng thực hiện
+   * @returns {Object} - Kết quả like/unlike
+   */
+  toggleLikeReview: async (reviewId, userId) => {
+    // Tìm review
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      throw new Error("Không tìm thấy đánh giá");
+    }
+
+    // Kiểm tra xem người dùng đã like chưa
+    const isLiked = review.likes.includes(userId);
+
+    // Toggle like
+    if (isLiked) {
+      // Unlike - Xóa userId khỏi mảng likes
+      review.likes = review.likes.filter(
+        (id) => id.toString() !== userId.toString()
+      );
+    } else {
+      // Like - Thêm userId vào mảng likes
+      review.likes.push(userId);
+    }
+
+    // Lưu thay đổi
+    await review.save();
+
+    // Trả về trạng thái mới
+    return {
+      isLiked: !isLiked,
+      likeCount: review.likes.length,
+      message: isLiked ? "Đã bỏ thích đánh giá" : "Đã thích đánh giá",
+    };
+  },
+
+  /**
+   * Kiểm tra xem người dùng có thể đánh giá sản phẩm không
+   * @param {String} userId - ID người dùng
+   * @param {String} productId - ID sản phẩm
+   * @returns {Object} - Kết quả kiểm tra
+   */
+  checkReviewEligibility: async (userId, productId) => {
+    // Kiểm tra xem người dùng đã mua sản phẩm này chưa
+    const Order = mongoose.model("Order");
+    const hasPurchased = await Order.exists({
+      user: userId,
+      "orderItems.product": productId,
+      status: "delivered",
+    });
+
+    // Kiểm tra xem người dùng đã đánh giá sản phẩm này chưa
+    const hasReviewed = await Review.exists({
+      user: userId,
+      product: productId,
+    });
+
+    return {
+      canReview: hasPurchased && !hasReviewed,
+      hasPurchased: !!hasPurchased,
+      hasReviewed: !!hasReviewed,
+    };
+  },
 };
 
 /**

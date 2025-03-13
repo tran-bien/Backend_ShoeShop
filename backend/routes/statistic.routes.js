@@ -5,6 +5,9 @@ const {
   getProductStatistics,
   getCustomerStatistics,
   getDashboardStatistics,
+  getProfitStatistics,
+  getCategoryStatistics,
+  getPaymentMethodStatistics,
 } = require("../controllers/statistic.controller");
 const { protect, admin } = require("../middlewares/auth.middleware");
 
@@ -12,9 +15,13 @@ const { protect, admin } = require("../middlewares/auth.middleware");
 router.use(protect);
 router.use(admin);
 
+// Routes thống kê
+router.get("/dashboard", getDashboardStatistics);
 router.get("/revenue", getRevenueStatistics);
+router.get("/profit", getProfitStatistics);
 router.get("/products", getProductStatistics);
 router.get("/customers", getCustomerStatistics);
-router.get("/dashboard", getDashboardStatistics);
+router.get("/categories", getCategoryStatistics);
+router.get("/payment-methods", getPaymentMethodStatistics);
 
 module.exports = router;

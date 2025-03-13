@@ -12,12 +12,15 @@ const {
   createReview,
   getUserReviews,
   getProductReviews,
-  toggleReviewLike,
+  toggleLikeReview,
   hideReview,
   updateReview,
   deleteReview,
   getAllReviews,
   getReviewStatistics,
+  getReviewDetail,
+  adminUpdateReview,
+  checkReviewEligibility,
 } = require("../controllers/review.controller");
 
 const router = express.Router();
@@ -32,10 +35,13 @@ router.post("/", uploadMultiple, handleUploadError, createReview);
 router.get("/user", getUserReviews);
 router.put("/:id", updateReview);
 router.delete("/:id", deleteReview);
-router.post("/:id/like", toggleReviewLike);
+router.post("/:id/like", toggleLikeReview);
+router.get("/check-eligibility/:productId", checkReviewEligibility);
 
 // Route dành cho admin
 router.get("/all", admin, getAllReviews);
 router.patch("/:id/hide", admin, hideReview);
+router.get("/:id", getReviewDetail);
+router.put("/admin/:id", adminUpdateReview);
 
 module.exports = router;

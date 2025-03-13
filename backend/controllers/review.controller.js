@@ -66,30 +66,6 @@ exports.getProductReviews = asyncHandler(async (req, res) => {
   }
 });
 
-// Like/Unlike đánh giá
-exports.toggleReviewLike = asyncHandler(async (req, res) => {
-  const { reviewId } = req.params;
-
-  const review = await Review.findById(reviewId);
-  if (!review) {
-    return res.status(404).json({
-      success: false,
-      message: "Không tìm thấy đánh giá",
-    });
-  }
-
-  // Tăng/giảm số lượng like
-  review.likes = review.likes || 0;
-  review.likes += 1;
-  await review.save();
-
-  res.json({
-    success: true,
-    message: "Đã thích đánh giá",
-    likes: review.likes,
-  });
-});
-
 // Ẩn đánh giá (Admin)
 exports.hideReview = asyncHandler(async (req, res) => {
   const { reviewId } = req.params;
@@ -236,8 +212,8 @@ exports.getReviewStatistics = asyncHandler(async (req, res) => {
   const stats = await Review.aggregate([
     {
       $match: {
-        productId: new mongoose.Types.ObjectId(productId),
-        status: "active",
+        product: new mongoose.Types.ObjectId(productId),
+        status: "approved",
       },
     },
     {
@@ -356,6 +332,50 @@ exports.adminDeleteReview = asyncHandler(async (req, res) => {
     res.status(400).json({
       success: false,
       message: error.message || "Lỗi khi xóa đánh giá",
+    });
+  }
+});
+
+// Thích hoặc bỏ thích một đánh giá
+exports.toggleLikeReview = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Gọi service để toggle like
+    const result = await reviewService.toggleLikeReview(id, req.user._id);
+
+    res.status(200).json({
+      success: true,
+      data: result,
+      message: result.message,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message || "Lỗi khi thích/bỏ thích đánh giá",
+    });
+  }
+});
+
+// Kiểm tra xem người dùng có thể đánh giá sản phẩm không
+exports.checkReviewEligibility = asyncHandler(async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    // Gọi service để kiểm tra quyền đánh giá
+    const result = await reviewService.checkReviewEligibility(
+      req.user._id,
+      productId
+    );
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message || "Lỗi khi kiểm tra quyền đánh giá",
     });
   }
 });
