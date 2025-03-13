@@ -2,6 +2,7 @@ const asyncHandler = require("express-async-handler");
 const LoginHistory = require("../models/login.history.model");
 const emailUtils = require("../utils/email");
 const authService = require("../services/auth.service");
+const User = require("../models/user.model");
 
 // Tạo token JWT
 const generateToken = (id) => {
@@ -25,60 +26,45 @@ const createSession = async (userId, req, token, refreshToken) => {
 
 // Đăng ký người dùng
 exports.register = asyncHandler(async (req, res) => {
-  try {
-    const { name, email, password, phone } = req.body;
+  const { name, email, password, phone } = req.body;
 
-    // Kiểm tra định dạng email
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!email || !emailRegex.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: "Email không hợp lệ hoặc không đúng định dạng",
-      });
-    }
-
-    // Sử dụng authService để đăng ký
-    const user = await authService.registerUser({
-      name,
-      email,
-      password,
-      phone,
-    });
-
-    // Tạo mã OTP
-    const otp = authService.generateOTP();
-    const otpExpiry = new Date();
-    otpExpiry.setMinutes(otpExpiry.getMinutes() + 10); // OTP hết hạn sau 10 phút
-
-    // Cập nhật OTP cho user
-    user.otp = {
-      code: otp,
-      expiredAt: otpExpiry,
-    };
-    await user.save();
-
-    try {
-      // Gửi email xác nhận
-      await emailUtils.sendVerificationEmail(email, name, otp);
-    } catch (error) {
-      console.error("Error sending verification email:", error);
-      // Ghi log lỗi nhưng vẫn cho đăng ký thành công
-    }
-
-    res.status(201).json({
-      success: true,
-      message:
-        "Đăng ký thành công! Vui lòng kiểm tra email để xác nhận tài khoản.",
-      userId: user._id,
-      // trả về OTP trong response (chỉ cho môi trường phát triển)
-      otp: process.env.NODE_ENV === "production" ? undefined : otp,
-    });
-  } catch (error) {
-    res.status(400).json({
+  // Kiểm tra thông tin đầu vào
+  if (!name || !email || !password || !phone) {
+    return res.status(400).json({
       success: false,
-      message: error.message || "Đăng ký thất bại. Vui lòng thử lại sau.",
+      message: "Vui lòng cung cấp đầy đủ thông tin",
     });
   }
+
+  // Kiểm tra xem email đã tồn tại chưa
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    return res.status(400).json({
+      success: false,
+      message: "Email đã tồn tại",
+    });
+  }
+
+  // Tạo người dùng mới
+  const user = await User.create({
+    name,
+    email,
+    password,
+    phone,
+    isVerified: false,
+    otp: {
+      code: authService.generateOTP(),
+      expiredAt: Date.now() + 10 * 60 * 1000, // Hết hạn sau 10 phút
+    },
+  });
+
+  // Gửi mã OTP đến email
+  await emailUtils.sendVerificationEmail(user.email, name, user.otp.code);
+
+  res.status(201).json({
+    success: true,
+    message: "Đăng ký thành công! Mã OTP đã được gửi đến email của bạn.",
+  });
 });
 
 // Xác nhận OTP
@@ -86,6 +72,7 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
   try {
     const { userId, email, otp } = req.body;
 
+    // Kiểm tra đầu vào
     if (!otp) {
       return res.status(400).json({
         success: false,
@@ -100,9 +87,13 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
       });
     }
 
+    // Log để debug
+    console.log(`Đang xác thực OTP: ${otp} cho ${email || userId}`);
+
     // Sử dụng authService để xác thực OTP
     const result = await authService.verifyOTP({ userId, email, otp });
 
+    // Nếu xác thực thành công, trả về token và thông tin người dùng
     res.status(200).json({
       success: true,
       message: "Xác thực thành công!",
@@ -116,6 +107,7 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
       },
     });
   } catch (error) {
+    console.error(`Lỗi xác thực OTP: ${error.message}`);
     res.status(400).json({
       success: false,
       message: error.message || "Xác thực thất bại",
@@ -139,6 +131,7 @@ exports.login = asyncHandler(async (req, res) => {
     // Kiểm tra định dạng email
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(email)) {
+      // Lưu lịch sử đăng nhập thất bại
       try {
         await LoginHistory.create({
           userId: null,
@@ -148,7 +141,7 @@ exports.login = asyncHandler(async (req, res) => {
           userAgent: req.headers["user-agent"] || "Unknown",
         });
       } catch (error) {
-        console.error("Error creating login history:", error.message);
+        console.error("Lỗi khi lưu lịch sử đăng nhập:", error.message);
       }
 
       return res.status(400).json({
@@ -181,9 +174,10 @@ exports.login = asyncHandler(async (req, res) => {
         userAgent: req.headers["user-agent"] || "Unknown",
       });
     } catch (error) {
-      console.error("Error creating login history:", error.message);
+      console.error("Lỗi khi lưu lịch sử đăng nhập:", error.message);
     }
 
+    // Trả về thông tin người dùng (không bao gồm thông tin nhạy cảm)
     res.json({
       success: true,
       message: "Đăng nhập thành công",
@@ -194,9 +188,9 @@ exports.login = asyncHandler(async (req, res) => {
         name: userData.user.name,
         email: userData.user.email,
         phone: userData.user.phone,
-        isAdmin: userData.user.isAdmin,
+        role: userData.user.role,
         isVerified: userData.user.isVerified,
-        avatar: userData.user.avatar,
+        image: userData.user.image,
       },
     });
   } catch (error) {
@@ -210,7 +204,7 @@ exports.login = asyncHandler(async (req, res) => {
         userAgent: req.headers["user-agent"] || "Unknown",
       });
     } catch (historyError) {
-      console.error("Error creating login history:", historyError.message);
+      console.error("Lỗi khi lưu lịch sử đăng nhập:", historyError.message);
     }
 
     res.status(401).json({
@@ -270,14 +264,18 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
       result.resetToken
     );
 
+    // Không trả về token trong response để đảm bảo an toàn
     res.status(200).json({
       success: true,
       message: "Email hướng dẫn đặt lại mật khẩu đã được gửi!",
     });
   } catch (error) {
+    // Không tiết lộ thông tin cụ thể về lỗi
+    console.error(`Lỗi quên mật khẩu: ${error.message}`);
     res.status(error.statusCode || 500).json({
       success: false,
-      message: error.message || "Lỗi khi gửi email đặt lại mật khẩu",
+      message:
+        "Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu",
     });
   }
 });
@@ -285,12 +283,21 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
 // Đặt lại mật khẩu
 exports.resetPassword = asyncHandler(async (req, res) => {
   try {
-    const { token, password } = req.body;
+    const { token, password, confirmPassword } = req.body;
 
+    // Kiểm tra đầu vào
     if (!token || !password) {
       return res.status(400).json({
         success: false,
         message: "Vui lòng cung cấp token và mật khẩu mới",
+      });
+    }
+
+    // Kiểm tra mật khẩu và xác nhận mật khẩu
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Mật khẩu và xác nhận mật khẩu không khớp",
       });
     }
 
@@ -302,9 +309,10 @@ exports.resetPassword = asyncHandler(async (req, res) => {
       message: "Mật khẩu đã được đặt lại thành công!",
     });
   } catch (error) {
+    console.error(`Lỗi đặt lại mật khẩu: ${error.message}`);
     res.status(400).json({
       success: false,
-      message: error.message || "Token không hợp lệ hoặc đã hết hạn",
+      message: "Token không hợp lệ hoặc đã hết hạn",
     });
   }
 });
@@ -312,8 +320,9 @@ exports.resetPassword = asyncHandler(async (req, res) => {
 // Đổi mật khẩu
 exports.changePassword = asyncHandler(async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body;
+    const { currentPassword, newPassword, confirmPassword } = req.body;
 
+    // Kiểm tra đầu vào
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
         success: false,
@@ -321,14 +330,31 @@ exports.changePassword = asyncHandler(async (req, res) => {
       });
     }
 
+    // Kiểm tra mật khẩu mới và xác nhận mật khẩu
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Mật khẩu mới và xác nhận mật khẩu không khớp",
+      });
+    }
+
     // Sử dụng authService để đổi mật khẩu
-    await authService.changePassword(req.user.id, currentPassword, newPassword);
+    await authService.changePassword(
+      req.user._id,
+      currentPassword,
+      newPassword
+    );
+
+    // Đăng xuất khỏi các phiên khác để đảm bảo an toàn
+    await authService.logoutAllOtherSessions(req.user._id, req.session?._id);
 
     res.status(200).json({
       success: true,
-      message: "Mật khẩu đã được thay đổi thành công!",
+      message:
+        "Mật khẩu đã được thay đổi thành công! Các phiên đăng nhập khác đã bị đăng xuất.",
     });
   } catch (error) {
+    console.error(`Lỗi đổi mật khẩu: ${error.message}`);
     res.status(401).json({
       success: false,
       message: error.message || "Không thể thay đổi mật khẩu",
@@ -425,17 +451,17 @@ exports.logout = asyncHandler(async (req, res) => {
     }
 
     // Sử dụng authService để đăng xuất
-    await authService.logout(req.user.id, token);
+    await authService.logout(req.user._id, token);
 
     res.status(200).json({
       success: true,
       message: "Đăng xuất thành công",
     });
   } catch (error) {
+    console.error(`Lỗi đăng xuất: ${error.message}`);
     res.status(500).json({
       success: false,
       message: "Lỗi khi đăng xuất",
-      error: error.message,
     });
   }
 });
