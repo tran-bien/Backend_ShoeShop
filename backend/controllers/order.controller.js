@@ -1,14 +1,10 @@
 const asyncHandler = require("express-async-handler");
-const Order = require("../models/order.model");
-const Cart = require("../models/cart.model");
 const Product = require("../models/product.model");
 const Coupon = require("../models/coupon.model");
 const CancelRequest = require("../models/cancel.request.model");
-const emailUtils = require("../utils/email");
 const Notification = require("../models/notification.model");
 const User = require("../models/user.model");
 const mongoose = require("mongoose");
-const { generateOrderCode } = require("../utils/helpers");
 const NotificationService = require("../services/notification.service");
 const orderService = require("../services/order.service");
 

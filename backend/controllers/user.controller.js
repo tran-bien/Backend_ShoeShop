@@ -1,6 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const userService = require("../services/user.service");
 const mongoose = require("mongoose");
+const { isValidPhoneNumber } = require("../utils/validators");
 
 // Nếu có dịch vụ notification riêng
 // const { createNotification } = require("../services/notification.service");
@@ -41,10 +42,7 @@ exports.updateProfile = asyncHandler(async (req, res) => {
 
     // Kiểm tra số điện thoại
     if (phone !== undefined) {
-      // Kiểm tra định dạng số điện thoại Việt Nam
-      // Các định dạng chấp nhận: 0912345678, 84912345678, +84912345678
-      const phoneRegex = /^(0|\+84|84)?([3|5|7|8|9])([0-9]{8})$/;
-      if (phone !== "" && !phoneRegex.test(phone)) {
+      if (phone !== "" && !isValidPhoneNumber(phone)) {
         errors.phone = ["Số điện thoại không hợp lệ"];
       }
     }
@@ -157,9 +155,8 @@ exports.addAddress = asyncHandler(async (req, res) => {
       });
     }
 
-    // Kiểm tra định dạng số điện thoại (số điện thoại Việt Nam)
-    const phoneRegex = /(84|0[3|5|7|8|9])+([0-9]{8})\b/;
-    if (!phoneRegex.test(phone)) {
+    // Kiểm tra định dạng số điện thoại
+    if (!isValidPhoneNumber(phone)) {
       return res.status(400).json({
         success: false,
         message: "Số điện thoại không hợp lệ",
@@ -213,14 +210,11 @@ exports.updateAddress = asyncHandler(async (req, res) => {
     }
 
     // Kiểm tra định dạng số điện thoại nếu có
-    if (phone) {
-      const phoneRegex = /(84|0[3|5|7|8|9])+([0-9]{8})\b/;
-      if (!phoneRegex.test(phone)) {
-        return res.status(400).json({
-          success: false,
-          message: "Số điện thoại không hợp lệ",
-        });
-      }
+    if (phone && !isValidPhoneNumber(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: "Số điện thoại không hợp lệ",
+      });
     }
 
     // Sử dụng userService để cập nhật địa chỉ

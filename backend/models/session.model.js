@@ -2,29 +2,38 @@ const mongoose = require("mongoose");
 
 const SessionSchema = new mongoose.Schema(
   {
-    userId: {
+    user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      required: true,
+    },
+    userId: {
+      type: String,
       required: true,
     },
     token: {
       type: String,
       required: true,
     },
-    deviceInfo: {
-      deviceName: { type: String },
-      deviceType: { type: String }, // mobile, tablet, desktop
-      browser: { type: String },
-      os: { type: String },
-      ipAddress: { type: String },
+    refreshToken: {
+      type: String,
+      required: true,
     },
-    lastActive: {
-      type: Date,
-      default: Date.now,
+    userAgent: {
+      type: String,
+      required: true,
+    },
+    ip: {
+      type: String,
+      required: true,
     },
     isActive: {
       type: Boolean,
       default: true,
+    },
+    lastActive: {
+      type: Date,
+      default: Date.now,
     },
     expiresAt: {
       type: Date,

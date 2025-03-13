@@ -44,7 +44,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
       console.log("User not found for id:", decoded.id);
       return res.status(401).json({
         success: false,
-        message: "Người dùng không tồn tại",
+        message: "Người dùng không tồn tại. Vui lòng đăng nhập lại.",
       });
     }
 
@@ -53,7 +53,8 @@ exports.protect = asyncHandler(async (req, res, next) => {
       console.log("User account is inactive:", decoded.id);
       return res.status(401).json({
         success: false,
-        message: "Tài khoản đã bị vô hiệu hóa",
+        message:
+          "Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ với quản trị viên.",
       });
     }
 
@@ -90,7 +91,8 @@ exports.protect = asyncHandler(async (req, res, next) => {
 
       return res.status(401).json({
         success: false,
-        message: "Không tìm thấy phiên đăng nhập hợp lệ",
+        message:
+          "Không tìm thấy phiên đăng nhập hợp lệ. Vui lòng đăng nhập lại.",
       });
     }
 
@@ -108,7 +110,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
     console.error("Error in auth middleware:", error.message);
     return res.status(401).json({
       success: false,
-      message: "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại",
+      message: "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.",
     });
   }
 });
@@ -168,7 +170,6 @@ exports.optionalAuth = asyncHandler(async (req, res, next) => {
       return next();
     }
 
-    // Tìm session hiện tại
     const session = await Session.findOne({
       userId: user._id,
       token: token,

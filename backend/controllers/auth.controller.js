@@ -3,33 +3,14 @@ const LoginHistory = require("../models/login.history.model");
 const emailUtils = require("../utils/email");
 const authService = require("../services/auth.service");
 const User = require("../models/user.model");
-
-// Tạo token JWT
-const generateToken = (id) => {
-  return authService.generateToken(id);
-};
-
-// Tạo mã OTP ngẫu nhiên
-const generateOTP = () => {
-  return authService.generateOTP();
-};
-
-// Tạo refresh token
-const generateRefreshToken = (id) => {
-  return authService.generateRefreshToken(id);
-};
-
-// Tạo phiên đăng nhập mới
-const createSession = async (userId, req, token, refreshToken) => {
-  return await authService.createSession(userId, req, token, refreshToken);
-};
+const { isValidEmail } = require("../utils/validators");
 
 // Đăng ký người dùng
 exports.register = asyncHandler(async (req, res) => {
   const { name, email, password, phone } = req.body;
 
   // Kiểm tra thông tin đầu vào
-  if (!name || !email || !password || !phone) {
+  if (!name || !email || !password) {
     return res.status(400).json({
       success: false,
       message: "Vui lòng cung cấp đầy đủ thông tin",
@@ -39,57 +20,57 @@ exports.register = asyncHandler(async (req, res) => {
   // Kiểm tra xem email đã tồn tại chưa
   const existingUser = await User.findOne({ email });
   if (existingUser) {
+    // Thay đổi logic ở đây
     return res.status(400).json({
       success: false,
-      message: "Email đã tồn tại",
+      message: "Email đã tồn tại! Vui lòng sử dụng email khác.",
     });
   }
 
-  // Tạo người dùng mới
-  const user = await User.create({
-    name,
-    email,
-    password,
-    phone,
-    isVerified: false,
-    otp: {
-      code: authService.generateOTP(),
-      expiredAt: Date.now() + 10 * 60 * 1000, // Hết hạn sau 10 phút
-    },
-  });
+  // Gọi service để đăng ký người dùng mới
+  try {
+    const user = await authService.registerUser({
+      name,
+      email,
+      password,
+    });
 
-  // Gửi mã OTP đến email
-  await emailUtils.sendVerificationEmail(user.email, name, user.otp.code);
+    // Gửi mã OTP đến email
+    await emailUtils.sendVerificationEmail(
+      user.email,
+      user.name,
+      user.otp.code
+    );
 
-  res.status(201).json({
-    success: true,
-    message: "Đăng ký thành công! Mã OTP đã được gửi đến email của bạn.",
-  });
+    res.status(201).json({
+      success: true,
+      message: "Đăng ký thành công! Mã OTP đã được gửi đến email của bạn.",
+      // otp: user.otp.code,
+    });
+  } catch (error) {
+    console.error("Lỗi đăng ký:", error);
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
 });
 
 // Xác nhận OTP
 exports.verifyOTP = asyncHandler(async (req, res) => {
+  const { userId, email, otp } = req.body;
+
+  // Kiểm tra đầu vào
+  if (!otp || (!userId && !email)) {
+    return res.status(400).json({
+      success: false,
+      message: !otp
+        ? "Vui lòng cung cấp mã OTP"
+        : "Vui lòng cung cấp userId hoặc email",
+    });
+  }
+
   try {
-    const { userId, email, otp } = req.body;
-
-    // Kiểm tra đầu vào
-    if (!otp) {
-      return res.status(400).json({
-        success: false,
-        message: "Vui lòng cung cấp mã OTP",
-      });
-    }
-
-    if (!userId && !email) {
-      return res.status(400).json({
-        success: false,
-        message: "Vui lòng cung cấp userId hoặc email",
-      });
-    }
-
-    // Log để debug
-    console.log(`Đang xác thực OTP: ${otp} cho ${email || userId}`);
-
     // Sử dụng authService để xác thực OTP
     const result = await authService.verifyOTP({ userId, email, otp });
 
@@ -108,68 +89,53 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     console.error(`Lỗi xác thực OTP: ${error.message}`);
+
+    // Kiểm tra lỗi cụ thể để trả về thông báo phù hợp
+    if (error.message === "Người dùng không tồn tại") {
+      return res.status(400).json({
+        success: false,
+        message: "Email không hợp lệ",
+      });
+    } else if (error.message === "Mã OTP không hợp lệ") {
+      return res.status(400).json({
+        success: false,
+        message: "Mã OTP không hợp lệ",
+      });
+    } else if (error.message === "Mã OTP đã hết hạn") {
+      return res.status(400).json({
+        success: false,
+        message: "Mã OTP đã hết hạn",
+      });
+    }
+
+    // Nếu không phải lỗi cụ thể, trả về thông báo chung
     res.status(400).json({
       success: false,
-      message: error.message || "Xác thực thất bại",
+      message: "Xác thực thất bại",
     });
   }
 });
 
 // Đăng nhập
 exports.login = asyncHandler(async (req, res) => {
-  try {
-    const { email, password } = req.body;
+  const { email, password } = req.body;
 
-    // Kiểm tra email và mật khẩu
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Vui lòng cung cấp email và mật khẩu",
-      });
-    }
+  // Kiểm tra email và mật khẩu
+  if (!email || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Vui lòng cung cấp email và mật khẩu",
+    });
+  }
 
-    // Kiểm tra định dạng email
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!emailRegex.test(email)) {
-      // Lưu lịch sử đăng nhập thất bại
-      try {
-        await LoginHistory.create({
-          userId: null,
-          status: "failed",
-          reason: "Email không đúng định dạng",
-          ipAddress: req.ip || "Unknown",
-          userAgent: req.headers["user-agent"] || "Unknown",
-        });
-      } catch (error) {
-        console.error("Lỗi khi lưu lịch sử đăng nhập:", error.message);
-      }
-
-      return res.status(400).json({
-        success: false,
-        message: "Email không đúng định dạng",
-      });
-    }
-
-    // Sử dụng authService để đăng nhập
-    const userData = await authService.loginUser(email, password, req);
-
-    // Tạo JWT token và refresh token
-    const token = authService.generateToken(userData.user._id);
-    const refreshToken = authService.generateRefreshToken(userData.user._id);
-
-    // Tạo phiên đăng nhập
-    await authService.createSession(
-      userData.user._id,
-      req,
-      token,
-      refreshToken
-    );
-
-    // Lưu lịch sử đăng nhập thành công
+  // Kiểm tra định dạng email
+  if (!isValidEmail(email)) {
+    // Lưu lịch sử đăng nhập thất bại
     try {
       await LoginHistory.create({
-        userId: userData.user._id,
-        status: "success",
+        userId: null,
+        status: "failed",
+        reason: "Email không đúng định dạng",
         ipAddress: req.ip || "Unknown",
         userAgent: req.headers["user-agent"] || "Unknown",
       });
@@ -177,20 +143,42 @@ exports.login = asyncHandler(async (req, res) => {
       console.error("Lỗi khi lưu lịch sử đăng nhập:", error.message);
     }
 
-    // Trả về thông tin người dùng (không bao gồm thông tin nhạy cảm)
+    return res.status(400).json({
+      success: false,
+      message: "Email không đúng định dạng",
+    });
+  }
+
+  try {
+    // Sử dụng authService để đăng nhập
+    const userData = await authService.loginUser(email, password, req);
+
+    // Kiểm tra xem người dùng đã xác thực chưa
+    if (!userData.isVerified) {
+      // Gọi service resendOTP để gửi mã OTP mới
+      await authService.resendOTP(userData.email);
+      console.log(`Mã OTP mới đã được gửi đến email: ${userData.email}`);
+
+      return res.status(200).json({
+        success: false,
+        message:
+          "Tài khoản chưa được xác thực! Mã OTP mới đã được gửi đến email của bạn.",
+      });
+    }
+
     res.json({
       success: true,
       message: "Đăng nhập thành công",
-      token,
-      refreshToken,
+      token: userData.token,
+      refreshToken: userData.refreshToken,
       user: {
-        _id: userData.user._id,
-        name: userData.user.name,
-        email: userData.user.email,
-        phone: userData.user.phone,
-        role: userData.user.role,
-        isVerified: userData.user.isVerified,
-        image: userData.user.image,
+        _id: userData._id,
+        name: userData.name,
+        email: userData.email,
+        phone: userData.phone,
+        role: userData.role,
+        isVerified: userData.isVerified,
+        image: userData.image,
       },
     });
   } catch (error) {
@@ -246,8 +234,7 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
     const { email } = req.body;
 
     // Kiểm tra định dạng email
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!email || !emailRegex.test(email)) {
+    if (!email || !isValidEmail(email)) {
       return res.status(400).json({
         success: false,
         message: "Email không hợp lệ hoặc không đúng định dạng",

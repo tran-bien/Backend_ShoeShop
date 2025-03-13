@@ -1,40 +1,5 @@
-// Hàm tiện ích kiểm tra các điều kiện mật khẩu
-const checkPasswordRequirements = (password) => {
-  const errors = [];
-
-  // Kiểm tra độ dài
-  if (!password || password.length < 8) {
-    errors.push("Mật khẩu phải có ít nhất 8 ký tự");
-  }
-
-  if (password && password.length > 50) {
-    errors.push("Mật khẩu không được dài quá 50 ký tự");
-  }
-
-  // Kiểm tra chữ hoa
-  if (password && !/[A-Z]/.test(password)) {
-    errors.push("Mật khẩu phải chứa ít nhất một chữ hoa");
-  }
-
-  // Kiểm tra chữ thường
-  if (password && !/[a-z]/.test(password)) {
-    errors.push("Mật khẩu phải chứa ít nhất một chữ thường");
-  }
-
-  // Kiểm tra số
-  if (password && !/[0-9]/.test(password)) {
-    errors.push("Mật khẩu phải chứa ít nhất một số");
-  }
-
-  // Kiểm tra ký tự đặc biệt
-  if (password && !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-    errors.push(
-      'Mật khẩu phải chứa ít nhất một ký tự đặc biệt (!@#$%^&*(),.?":{}|<>)'
-    );
-  }
-
-  return errors;
-};
+const { checkPasswordRequirements } = require("../utils/validators");
+const { isValidEmail } = require("../utils/validators");
 
 const validatePassword = (req, res, next) => {
   const { password } = req.body;
@@ -65,7 +30,7 @@ const validateRegisterInput = (req, res, next) => {
   // Kiểm tra email
   if (!email) {
     errors.email = ["Email không được để trống"];
-  } else if (!/\S+@\S+\.\S+/.test(email)) {
+  } else if (!isValidEmail(email)) {
     errors.email = ["Địa chỉ email không hợp lệ"];
   }
 
@@ -150,6 +115,4 @@ module.exports = {
   validateRegisterInput,
   validateResetPassword,
   validateChangePassword,
-
-  checkPasswordRequirements,
 };
