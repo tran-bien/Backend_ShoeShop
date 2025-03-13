@@ -1,5 +1,9 @@
 const express = require("express");
-const { protect, admin } = require("../middlewares/auth.middleware");
+const {
+  protect,
+  admin,
+  optionalAuth,
+} = require("../middlewares/auth.middleware");
 const {
   uploadMultiple,
   handleUploadError,
@@ -13,25 +17,25 @@ const {
   updateReview,
   deleteReview,
   getAllReviews,
+  getReviewStatistics,
 } = require("../controllers/review.controller");
 
 const router = express.Router();
 
-// Route công khai - không yêu cầu xác thực
-router.get("/product/:productId", getProductReviews);
+// Route công khai - có thể xem đánh giá mà không cần đăng nhập
+router.get("/product/:productId", optionalAuth, getProductReviews);
+router.get("/statistics/:productId", optionalAuth, getReviewStatistics);
 
-// Tất cả các route còn lại đều yêu cầu xác thực
+// Route yêu cầu đăng nhập - chỉ người dùng đã đăng nhập mới có thể thêm, cập nhật, xóa đánh giá
 router.use(protect);
-
-// Route đánh giá - yêu cầu đăng nhập
 router.post("/", uploadMultiple, handleUploadError, createReview);
-router.get("/my-reviews", getUserReviews);
-router.post("/:reviewId/like", toggleReviewLike);
-
-// Route cho admin
-router.get("/all", admin, getAllReviews);
-router.put("/:reviewId/hide", admin, hideReview);
+router.get("/user", getUserReviews);
 router.put("/:id", updateReview);
 router.delete("/:id", deleteReview);
+router.post("/:id/like", toggleReviewLike);
+
+// Route dành cho admin
+router.get("/all", admin, getAllReviews);
+router.patch("/:id/hide", admin, hideReview);
 
 module.exports = router;

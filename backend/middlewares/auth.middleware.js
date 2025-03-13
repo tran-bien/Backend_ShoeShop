@@ -2,7 +2,6 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/user.model");
 const Session = require("../models/session.model");
 const asyncHandler = require("express-async-handler");
-const rateLimit = require("express-rate-limit");
 
 // Bảo vệ các route yêu cầu đăng nhập
 exports.protect = asyncHandler(async (req, res, next) => {
@@ -137,9 +136,63 @@ exports.admin = (req, res, next) => {
   }
 };
 
-// Nên thêm rate limiting cho API login
-// Hiện tại chưa có bảo vệ brute force attack
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 phút
-  max: 5, // 5 lần thử
+// Middleware không yêu cầu đăng nhập nhưng vẫn lấy thông tin user nếu có
+exports.optionalAuth = asyncHandler(async (req, res, next) => {
+  let token;
+
+  // Lấy token từ Authorization header hoặc từ cookie
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
+    token = req.headers.authorization.split(" ")[1];
+  } else if (req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  }
+
+  // Nếu không có token, vẫn cho phép truy cập
+  if (!token) {
+    req.user = null;
+    return next();
+  }
+
+  try {
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Lấy thông tin user
+    const user = await User.findById(decoded.id);
+
+    if (!user || !user.isActive) {
+      req.user = null;
+      return next();
+    }
+
+    // Tìm session hiện tại
+    const session = await Session.findOne({
+      userId: user._id,
+      token: token,
+      isActive: true,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!session) {
+      req.user = null;
+      return next();
+    }
+
+    // Cập nhật thời gian hoạt động mới nhất
+    session.lastActive = new Date();
+    await session.save();
+
+    // Gắn thông tin user vào request
+    req.user = user;
+    req.session = session;
+
+    next();
+  } catch (error) {
+    // Nếu có lỗi, vẫn cho phép truy cập nhưng không có thông tin user
+    req.user = null;
+    next();
+  }
 });

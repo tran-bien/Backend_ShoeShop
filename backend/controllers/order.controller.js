@@ -10,6 +10,7 @@ const User = require("../models/user.model");
 const mongoose = require("mongoose");
 const { generateOrderCode } = require("../utils/helpers");
 const NotificationService = require("../services/notification.service");
+const orderService = require("../services/order.service");
 
 // Tạo đơn hàng mới
 exports.createOrder = asyncHandler(async (req, res) => {
@@ -22,8 +23,6 @@ exports.createOrder = asyncHandler(async (req, res) => {
       shippingAddress,
       addressId,
       paymentMethod,
-      totalPrice,
-      shippingPrice,
       couponCode,
       note,
     } = req.body;
@@ -194,53 +193,39 @@ exports.createOrder = asyncHandler(async (req, res) => {
       }
     }
 
+    // Sử dụng service để tính phí vận chuyển
+    const shippingPrice = orderService.calculateShippingFee(itemsPrice);
+
     // Xử lý mã giảm giá nếu có
     let discountAmount = 0;
     let coupon = null;
 
-    if (couponCode) {
-      coupon = await Coupon.findOne({
-        code: couponCode,
-        isActive: true,
-        expiryDate: { $gt: Date.now() },
-      }).session(session);
+    if (couponCode && req.user) {
+      // Sử dụng service để kiểm tra và tính giảm giá
+      const couponResult = await orderService.validateCoupon(
+        couponCode,
+        itemsPrice,
+        req.user._id
+      );
 
-      if (!coupon) {
-        throw new Error("Mã giảm giá không hợp lệ hoặc đã hết hạn");
+      if (!couponResult.valid) {
+        throw new Error(couponResult.message);
       }
 
-      // Kiểm tra số lượng sử dụng
-      if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
-        throw new Error("Mã giảm giá đã hết lượt sử dụng");
-      }
+      discountAmount = couponResult.discount;
+      coupon = couponResult.coupon;
 
-      // Kiểm tra giá trị đơn hàng tối thiểu
-      if (coupon.minOrderValue && itemsPrice < coupon.minOrderValue) {
-        throw new Error(
-          `Đơn hàng phải có giá trị tối thiểu ${coupon.minOrderValue} để sử dụng mã giảm giá này`
-        );
+      // Cập nhật mã giảm giá đã sử dụng
+      if (coupon) {
+        const couponDb = await Coupon.findById(coupon._id).session(session);
+        couponDb.usedCount += 1;
+        couponDb.usedBy.push(req.user._id);
+        await couponDb.save({ session });
       }
-
-      // Tính toán số tiền giảm giá
-      if (coupon.discountType === "percentage") {
-        discountAmount = (itemsPrice * coupon.discountValue) / 100;
-        if (
-          coupon.maxDiscountAmount &&
-          discountAmount > coupon.maxDiscountAmount
-        ) {
-          discountAmount = coupon.maxDiscountAmount;
-        }
-      } else {
-        discountAmount = coupon.discountValue;
-        if (discountAmount > itemsPrice) {
-          discountAmount = itemsPrice;
-        }
-      }
-
-      // Cập nhật số lần sử dụng mã giảm giá
-      coupon.usedCount += 1;
-      await coupon.save({ session });
     }
+
+    // Tính tổng tiền đơn hàng
+    const totalPrice = itemsPrice + shippingPrice - discountAmount;
 
     // Tạo đơn hàng
     const order = new Order({
@@ -258,7 +243,7 @@ exports.createOrder = asyncHandler(async (req, res) => {
       paymentMethod,
       itemsPrice,
       shippingPrice,
-      totalPrice: totalPrice || itemsPrice + shippingPrice - discountAmount,
+      totalPrice: totalPrice,
       coupon: coupon ? coupon._id : null,
       discountAmount,
       note,

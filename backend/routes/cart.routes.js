@@ -1,8 +1,8 @@
 const express = require("express");
 const { protect } = require("../middlewares/auth.middleware");
 const {
-  getCart,
   addToCart,
+  getCart,
   updateCartItem,
   removeCartItem,
   clearCart,
@@ -10,13 +10,14 @@ const {
 
 const router = express.Router();
 
-// Tất cả các route đều yêu cầu xác thực
+// Tất cả các route liên quan đến giỏ hàng đều yêu cầu đăng nhập
 router.use(protect);
 
+// Route cho giỏ hàng
+router.post("/", addToCart);
 router.get("/", getCart);
-router.post("/add", addToCart);
-router.put("/update/:itemId", updateCartItem);
-router.delete("/remove/:itemId", removeCartItem);
-router.delete("/clear", clearCart);
+router.put("/:itemId", updateCartItem);
+router.delete("/:itemId", removeCartItem);
+router.delete("/", clearCart);
 
 module.exports = router;

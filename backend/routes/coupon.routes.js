@@ -8,6 +8,7 @@ const {
   deleteCoupon,
   validateCoupon,
   collectCoupon,
+  verifyCoupon,
 } = require("../controllers/coupon.controller");
 
 const router = express.Router();
@@ -21,6 +22,7 @@ router.delete("/:id", protect, admin, deleteCoupon);
 
 // Routes cho user
 router.post("/validate", protect, validateCoupon);
+router.post("/verify", protect, verifyCoupon);
 router.post("/collect", protect, collectCoupon);
 
 module.exports = router;

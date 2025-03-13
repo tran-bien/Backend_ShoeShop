@@ -43,6 +43,16 @@ const ReviewSchema = new mongoose.Schema(
       enum: ["active", "hidden", "deleted"],
       default: "active",
     },
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
+      required: true,
+    },
+    variant: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Variant",
+      required: true,
+    },
   },
   {
     timestamps: true,

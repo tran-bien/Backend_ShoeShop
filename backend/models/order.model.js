@@ -19,30 +19,10 @@ const OrderSchema = new mongoose.Schema(
           ref: "Product",
           required: [true, "ID sản phẩm là bắt buộc"],
         },
-        productName: {
-          type: String,
-          required: [true, "Tên sản phẩm là bắt buộc"],
-        },
-        productImage: {
-          type: String,
-        },
-        color: {
+        variant: {
           type: mongoose.Schema.Types.ObjectId,
-          ref: "Color",
-          required: [true, "ID màu sắc là bắt buộc"],
-        },
-        colorName: {
-          type: String,
-          required: [true, "Tên màu sắc là bắt buộc"],
-        },
-        size: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Size",
-          required: [true, "ID kích thước là bắt buộc"],
-        },
-        sizeValue: {
-          type: Number,
-          required: [true, "Giá trị kích thước là bắt buộc"],
+          ref: "Variant",
+          required: [true, "ID biến thể là bắt buộc"],
         },
         quantity: {
           type: Number,
@@ -53,11 +33,6 @@ const OrderSchema = new mongoose.Schema(
           type: Number,
           required: [true, "Giá sản phẩm là bắt buộc"],
           min: [0, "Giá sản phẩm không được âm"],
-        },
-        costPrice: {
-          type: Number,
-          required: [true, "Giá gốc sản phẩm là bắt buộc"],
-          min: [0, "Giá gốc sản phẩm không được âm"],
         },
       },
     ],
@@ -81,7 +56,7 @@ const OrderSchema = new mongoose.Schema(
       default: 0,
       min: [0, "Tổng lợi nhuận không được âm"],
     },
-    shippingFee: {
+    shippingPrice: {
       type: Number,
       default: 0,
       min: [0, "Phí vận chuyển không được âm"],
@@ -198,6 +173,65 @@ const OrderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Middleware trước khi validate
+OrderSchema.pre("validate", async function (next) {
+  // Tự động tạo mã đơn hàng nếu chưa có
+  if (!this.orderCode) {
+    const date = new Date();
+    const timestamp = date.getTime().toString().slice(-6);
+    const randomNum = Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, "0");
+    this.orderCode = `OD${date.getFullYear()}${(date.getMonth() + 1)
+      .toString()
+      .padStart(2, "0")}${date
+      .getDate()
+      .toString()
+      .padStart(2, "0")}-${timestamp}${randomNum}`;
+  }
+
+  // Tính toán tổng tiền nếu có thay đổi trong orderItems
+  if (this.isModified("orderItems")) {
+    this.itemsPrice = this.orderItems.reduce(
+      (total, item) => total + item.price * item.quantity,
+      0
+    );
+
+    // Tính tổng tiền cuối cùng
+    this.totalPrice =
+      this.itemsPrice + this.shippingPrice - this.discountAmount;
+  }
+
+  // Kiểm tra tính hợp lệ của các sản phẩm trong đơn hàng
+  const Product = mongoose.model("Product");
+  for (const item of this.orderItems) {
+    const product = await Product.findById(item.product);
+    if (!product || product.isDeleted) {
+      return next(new Error("Sản phẩm không tồn tại hoặc đã bị xóa"));
+    }
+
+    const variant = product.variants.find(
+      (v) => v._id.toString() === item.variant.toString()
+    );
+    if (!variant) {
+      return next(new Error("Biến thể sản phẩm không tồn tại"));
+    }
+
+    const sizeItem = variant.sizes.find(
+      (s) => s.size.toString() === item.size.toString()
+    );
+    if (!sizeItem) {
+      return next(new Error("Kích thước không tồn tại trong biến thể này"));
+    }
+
+    if (sizeItem.quantity < item.quantity) {
+      return next(new Error("Không đủ số lượng trong kho"));
+    }
+  }
+
+  next();
+});
+
 // Validate toàn bộ đơn hàng trước khi lưu
 OrderSchema.pre("save", function (next) {
   // Kiểm tra đơn hàng phải có ít nhất 1 sản phẩm
@@ -209,7 +243,7 @@ OrderSchema.pre("save", function (next) {
   if (
     this.isNew ||
     this.isModified("orderItems") ||
-    this.isModified("shippingFee") ||
+    this.isModified("shippingPrice") ||
     this.isModified("discountAmount")
   ) {
     // Tính tổng tiền sản phẩm
@@ -227,7 +261,7 @@ OrderSchema.pre("save", function (next) {
 
     // Kiểm tra tổng tiền đơn hàng
     const calculatedTotal =
-      calculatedSubTotal + this.shippingFee - this.discountAmount;
+      calculatedSubTotal + this.shippingPrice - this.discountAmount;
     if (Math.abs(calculatedTotal - this.totalAmount) > 0.01) {
       return next(
         new Error("Tổng tiền đơn hàng không khớp với giá trị tính toán")
@@ -332,66 +366,6 @@ OrderSchema.post("save", async function () {
   }
 });
 
-// Cập nhật tồn kho khi hủy đơn hàng (không sử dụng ProductSize nữa)
-OrderSchema.post(
-  "save",
-  async function () {
-    // Chỉ xử lý khi trạng thái thay đổi sang cancelled
-    if (this.isModified("status") && this.status === "cancelled") {
-      try {
-        const Product = mongoose.model("Product");
-
-        // Lặp qua từng sản phẩm và cập nhật kho
-        for (const item of this.orderItems) {
-          const product = await Product.findById(item.product);
-
-          if (product) {
-            // Tìm variant tương ứng
-            const variant = product.findVariant(item.color, item.size);
-
-            if (variant) {
-              // Cập nhật số lượng
-              variant.quantity += item.quantity;
-
-              // Cập nhật trạng thái
-              if (variant.quantity > 0 && variant.status === "active") {
-                variant.isAvailable = true;
-              }
-
-              // Cập nhật tổng số lượng và số lượng theo màu
-              product.updateColorQuantities();
-              await product.updateTotalQuantity();
-
-              // Lưu sản phẩm
-              await product.save();
-
-              console.log(
-                `Đã hoàn lại ${item.quantity} sản phẩm ${product.name} vào kho`
-              );
-            } else {
-              console.warn(
-                `Không tìm thấy biến thể màu ${item.color} kích thước ${item.size} cho sản phẩm ${product._id}`
-              );
-            }
-          } else {
-            console.warn(`Không tìm thấy sản phẩm với ID: ${item.product}`);
-          }
-        }
-
-        console.log(`Đã cập nhật lại tồn kho cho đơn hàng ${this.orderCode}`);
-      } catch (error) {
-        console.error(
-          `Lỗi khi cập nhật tồn kho cho đơn hàng ${this.orderCode}:`,
-          error
-        );
-      }
-    }
-  },
-  {
-    timestamps: true,
-  }
-);
-
 // Thêm các index để cải thiện hiệu suất truy vấn
 OrderSchema.index({ user: 1, createdAt: -1 }); // Tìm kiếm đơn hàng của người dùng
 OrderSchema.index({ status: 1 }); // Lọc theo trạng thái
@@ -418,27 +392,37 @@ OrderSchema.methods.updateInventoryAfterPayment = async function (session) {
 
     if (product) {
       // Tìm variant tương ứng
-      const variant = product.findVariant(orderItem.color, orderItem.size);
+      const variant = product.variants.find(
+        (v) => v._id.toString() === orderItem.variant.toString()
+      );
 
       if (variant) {
         try {
-          // Cập nhật số lượng và trạng thái
-          variant.quantity -= orderItem.quantity;
-          product.totalSold += orderItem.quantity;
+          // Tìm size tương ứng
+          const sizeItem = variant.sizes.find(
+            (s) => s.size.toString() === orderItem.size.toString()
+          );
 
-          if (variant.quantity <= 0) {
-            variant.isAvailable = false;
-          }
+          if (sizeItem) {
+            // Cập nhật số lượng và trạng thái
+            sizeItem.quantity -= orderItem.quantity;
+            sizeItem.totalSoldSize += orderItem.quantity;
+            product.totalSoldproduct += orderItem.quantity;
 
-          // Cập nhật tổng số lượng và số lượng theo màu
-          product.updateColorQuantities();
-          await product.updateTotalQuantity();
+            if (sizeItem.quantity <= 0) {
+              sizeItem.isSizeAvailable = false;
+            }
 
-          // Lưu sản phẩm, sử dụng session nếu có
-          if (session) {
-            await product.save({ session });
+            // Lưu sản phẩm, sử dụng session nếu có
+            if (session) {
+              await product.save({ session });
+            } else {
+              await product.save();
+            }
           } else {
-            await product.save();
+            console.warn(
+              `Không tìm thấy kích thước ${orderItem.size} trong biến thể màu ${orderItem.color} cho sản phẩm ${product._id}`
+            );
           }
         } catch (error) {
           console.error(`Lỗi khi cập nhật kho hàng: ${error.message}`);
@@ -448,7 +432,7 @@ OrderSchema.methods.updateInventoryAfterPayment = async function (session) {
         }
       } else {
         console.warn(
-          `Không tìm thấy biến thể màu ${orderItem.color} kích thước ${orderItem.size} cho sản phẩm ${product._id}`
+          `Không tìm thấy biến thể màu ${orderItem.color} cho sản phẩm ${product._id}`
         );
       }
     } else {

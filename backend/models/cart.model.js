@@ -14,11 +14,10 @@ const CartSchema = new mongoose.Schema(
           ref: "Product",
           required: true,
         },
-        quantity: {
-          type: Number,
+        variant: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Variant",
           required: true,
-          default: 1,
-          min: 1,
         },
         color: {
           type: mongoose.Schema.Types.ObjectId,
@@ -30,11 +29,25 @@ const CartSchema = new mongoose.Schema(
           ref: "Size",
           required: true,
         },
+        quantity: {
+          type: Number,
+          required: true,
+          default: 1,
+          min: 1,
+        },
+        addedAt: {
+          type: Date,
+          default: Date.now,
+        },
       },
     ],
     active: {
       type: Boolean,
       default: true,
+    },
+    totalItems: {
+      type: Number,
+      default: 0,
     },
   },
   { timestamps: true }
@@ -52,46 +65,88 @@ CartSchema.pre("save", function (next) {
 CartSchema.methods.validateItems = async function () {
   try {
     const Product = mongoose.model("Product");
-
     const invalidItems = [];
 
     for (const item of this.cartItems) {
       try {
-        const product = await Product.findById(item.product);
+        // Lấy thông tin sản phẩm với populate đầy đủ
+        const product = await Product.findById(item.product)
+          .populate("variants.color", "name hexCode")
+          .populate("variants.sizes.size", "value");
 
-        if (!product || !product.isActive || product.isDeleted) {
+        // Kiểm tra sản phẩm có tồn tại không
+        if (!product) {
           invalidItems.push({
             item,
-            reason: "Sản phẩm không tồn tại hoặc không còn hoạt động",
+            reason: "Sản phẩm không tồn tại",
+            statusCode: "PRODUCT_NOT_FOUND",
           });
           continue;
         }
 
-        // Tìm biến thể tương ứng
-        const variant = product.findVariant(item.color, item.size);
+        // Kiểm tra sản phẩm có đang hoạt động không
+        if (!product.isActive || product.isDeleted) {
+          invalidItems.push({
+            item,
+            reason: "Sản phẩm không còn hoạt động hoặc đã bị xóa",
+            statusCode: "PRODUCT_UNAVAILABLE",
+          });
+          continue;
+        }
 
-        if (!variant) {
+        // Sử dụng phương thức findVariant từ Product model
+        const variantInfo = product.findVariant(
+          item.color.toString(),
+          item.size.toString()
+        );
+
+        if (!variantInfo) {
           invalidItems.push({
             item,
             reason: "Biến thể sản phẩm không tồn tại",
+            statusCode: "VARIANT_NOT_FOUND",
           });
           continue;
         }
 
-        if (!variant.isAvailable || variant.status !== "active") {
+        // Kiểm tra tính khả dụng của biến thể
+        if (!variantInfo.isAvailable) {
+          let reason = "Biến thể sản phẩm hiện không khả dụng";
+          let statusCode = "VARIANT_UNAVAILABLE";
+
+          // Cung cấp lý do chi tiết hơn
+          if (variantInfo.status === "discontinued") {
+            reason = "Sản phẩm tạm ngưng kinh doanh";
+            statusCode = "VARIANT_DISCONTINUED";
+          } else if (variantInfo.status === "inactive") {
+            reason = "Biến thể sản phẩm không còn hoạt động";
+            statusCode = "VARIANT_INACTIVE";
+          } else if (
+            !variantInfo.isSizeAvailable ||
+            variantInfo.quantity <= 0
+          ) {
+            reason = "Kích thước này đã hết hàng";
+            statusCode = "SIZE_OUT_OF_STOCK";
+          }
+
           invalidItems.push({
             item,
-            reason: "Biến thể sản phẩm hiện không khả dụng",
+            reason,
+            statusCode,
+            status: variantInfo.status,
           });
           continue;
         }
 
-        if (variant.quantity < item.quantity) {
+        // Kiểm tra số lượng
+        if (variantInfo.quantity < item.quantity) {
           invalidItems.push({
             item,
             reason: "Không đủ số lượng trong kho",
-            availableQuantity: variant.quantity,
+            statusCode: "INSUFFICIENT_QUANTITY",
+            availableQuantity: variantInfo.quantity,
           });
+          continue;
         }
       } catch (error) {
         console.error(
@@ -100,6 +155,7 @@ CartSchema.methods.validateItems = async function () {
         invalidItems.push({
           item,
           reason: `Lỗi khi kiểm tra: ${error.message}`,
+          statusCode: "VALIDATION_ERROR",
         });
       }
     }
@@ -113,6 +169,7 @@ CartSchema.methods.validateItems = async function () {
     return {
       isValid: false,
       error: error.message,
+      statusCode: "SYSTEM_ERROR",
     };
   }
 };

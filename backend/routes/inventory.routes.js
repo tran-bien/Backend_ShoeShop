@@ -6,6 +6,7 @@ const {
   getInventoryStats,
   updateInventoryItem,
   bulkUpdateInventory,
+  getInventoryStatsByColorAndSize,
 } = require("../controllers/inventory.controller");
 
 const router = express.Router();
@@ -17,6 +18,7 @@ router.use(admin);
 // Routes quản lý tồn kho
 router.get("/", getInventory);
 router.get("/stats", getInventoryStats);
+router.get("/stats/color-size", getInventoryStatsByColorAndSize);
 router.get("/:id/:colorId/:sizeId", getInventoryItem);
 router.put("/bulk-update", bulkUpdateInventory);
 router.put("/:id/:colorId/:sizeId", updateInventoryItem);

@@ -1,6 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const Coupon = require("../models/coupon.model");
 const User = require("../models/user.model");
+const couponService = require("../services/coupon.service");
 
 // Tạo mã giảm giá mới (Admin)
 exports.createCoupon = asyncHandler(async (req, res) => {
@@ -248,43 +249,80 @@ exports.validateCoupon = asyncHandler(async (req, res) => {
   });
 });
 
+// Xác minh mã giảm giá cho người dùng đã đăng nhập
+exports.verifyCoupon = asyncHandler(async (req, res) => {
+  try {
+    const { code, orderValue } = req.body;
+
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp mã giảm giá",
+      });
+    }
+
+    // Gọi service để xác minh mã giảm giá
+    const result = await couponService.verifyCoupon(
+      code,
+      req.user._id,
+      orderValue || 0
+    );
+
+    if (!result.valid) {
+      return res.status(400).json({
+        success: false,
+        message: result.message,
+        minOrderValue: result.minOrderValue,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Mã giảm giá hợp lệ",
+      data: {
+        coupon: result.coupon,
+        discount: result.discount,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Lỗi khi xác minh mã giảm giá",
+    });
+  }
+});
+
 // Người dùng thu thập mã giảm giá
 exports.collectCoupon = asyncHandler(async (req, res) => {
-  const { code } = req.body;
+  try {
+    const { code } = req.body;
 
-  // Tìm mã giảm giá
-  const coupon = await Coupon.findOne({ code, isActive: true });
-  if (!coupon) {
-    return res.status(404).json({
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp mã giảm giá",
+      });
+    }
+
+    // Gọi service để thu thập mã giảm giá
+    const result = await couponService.collectCoupon(req.user._id, code);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.message,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      coupon: result.coupon,
+    });
+  } catch (error) {
+    res.status(500).json({
       success: false,
-      message: "Mã giảm giá không hợp lệ hoặc đã hết hạn",
+      message: error.message || "Lỗi khi thu thập mã giảm giá",
     });
   }
-
-  // Tìm người dùng
-  const user = await User.findById(req.user._id);
-  if (!user) {
-    return res.status(404).json({
-      success: false,
-      message: "Không tìm thấy người dùng",
-    });
-  }
-
-  // Kiểm tra xem người dùng đã thu thập mã giảm giá này chưa
-  if (user.coupons.includes(coupon._id)) {
-    return res.status(400).json({
-      success: false,
-      message: "Bạn đã thu thập mã giảm giá này rồi",
-    });
-  }
-
-  // Thêm mã giảm giá vào danh sách của người dùng
-  user.coupons.push(coupon._id);
-  await user.save();
-
-  res.status(200).json({
-    success: true,
-    message: "Đã thu thập mã giảm giá thành công",
-    coupon,
-  });
 });

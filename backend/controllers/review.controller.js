@@ -4,163 +4,66 @@ const Order = require("../models/order.model");
 const Product = require("../models/product.model");
 const { uploadImage } = require("../utils/cloudinary");
 const mongoose = require("mongoose");
+const reviewService = require("../services/review.service");
 
 // Tạo đánh giá mới
 exports.createReview = asyncHandler(async (req, res) => {
-  const { productId, orderId, rating, comment } = req.body;
-  const images = req.files || [];
-
-  // Kiểm tra xem người dùng đã mua sản phẩm chưa
-  const order = await Order.findOne({
-    _id: orderId,
-    userId: req.user._id,
-    status: "delivered",
-    "items.product": productId,
-  });
-
-  if (!order) {
-    return res.status(400).json({
-      success: false,
-      message: "Bạn chỉ có thể đánh giá sản phẩm đã mua và nhận hàng",
-    });
-  }
-
-  // Kiểm tra xem đã đánh giá chưa
-  const existingReview = await Review.findOne({
-    userId: req.user._id,
-    productId,
-    orderId,
-  });
-
-  if (existingReview) {
-    return res.status(400).json({
-      success: false,
-      message: "Bạn đã đánh giá sản phẩm này cho đơn hàng này rồi",
-    });
-  }
-
   try {
-    // Tải ảnh lên Cloudinary nếu có
-    let imageUrls = [];
-    if (images.length > 0) {
-      const uploadPromises = images.map((file) =>
-        uploadImage(file.path, `reviews/${productId}`)
-      );
-      const uploadedImages = await Promise.all(uploadPromises);
-      imageUrls = uploadedImages.map((img) => img.url);
+    const { productId, content, rating, images, orderId, variantId } = req.body;
+
+    // Kiểm tra dữ liệu đầu vào
+    if (!productId) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp ID sản phẩm",
+      });
     }
 
-    // Tạo đánh giá mới
-    const review = await Review.create({
-      userId: req.user._id,
-      productId,
-      orderId,
-      rating,
-      comment,
-      images: imageUrls,
-    });
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng cung cấp đánh giá từ 1-5 sao",
+      });
+    }
 
-    // Cập nhật đánh giá trung bình cho sản phẩm
-    await updateProductRating(productId);
+    // Gọi service để tạo đánh giá
+    const review = await reviewService.createReview(req.user._id, {
+      productId,
+      content,
+      rating,
+      images,
+      orderId,
+      variantId,
+    });
 
     res.status(201).json({
       success: true,
-      message: "Đánh giá đã được gửi thành công",
-      review,
+      data: review,
+      message: "Đã thêm đánh giá thành công",
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(400).json({
       success: false,
-      message: "Không thể tạo đánh giá. Vui lòng thử lại!",
-      error: error.message,
+      message: error.message || "Lỗi khi tạo đánh giá",
     });
   }
 });
 
 // Lấy đánh giá của sản phẩm
 exports.getProductReviews = asyncHandler(async (req, res) => {
-  const { productId } = req.params;
-  const { page = 1, limit = 10, sort = "newest" } = req.query;
+  try {
+    const { id: productId } = req.params;
 
-  // Xây dựng query
-  const query = {
-    productId,
-    status: "active",
-  };
+    // Gọi service để lấy đánh giá sản phẩm
+    const result = await reviewService.getProductReviews(productId, req.query);
 
-  // Xử lý sắp xếp
-  let sortOptions = {};
-  switch (sort) {
-    case "highest":
-      sortOptions = { rating: -1 };
-      break;
-    case "lowest":
-      sortOptions = { rating: 1 };
-      break;
-    case "most_liked":
-      sortOptions = { likes: -1 };
-      break;
-    default:
-      sortOptions = { createdAt: -1 };
-  }
-
-  // Tính toán skip cho phân trang
-  const skip = (Number(page) - 1) * Number(limit);
-
-  // Lấy đánh giá
-  const reviews = await Review.find(query)
-    .populate("userId", "name image")
-    .sort(sortOptions)
-    .skip(skip)
-    .limit(Number(limit));
-
-  // Đếm tổng số đánh giá
-  const count = await Review.countDocuments(query);
-
-  // Tính điểm trung bình và thống kê
-  const stats = await Review.aggregate([
-    {
-      $match: {
-        productId: mongoose.Types.ObjectId(productId),
-        status: "active",
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        avgRating: { $avg: "$rating" },
-        totalReviews: { $sum: 1 },
-        ratings: {
-          $push: "$rating",
-        },
-      },
-    },
-  ]);
-
-  // Tính phân bố rating
-  let ratingDistribution = {
-    1: 0,
-    2: 0,
-    3: 0,
-    4: 0,
-    5: 0,
-  };
-
-  if (stats.length > 0) {
-    stats[0].ratings.forEach((rating) => {
-      ratingDistribution[rating]++;
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Lỗi khi lấy đánh giá sản phẩm",
     });
   }
-
-  res.json({
-    success: true,
-    count,
-    totalPages: Math.ceil(count / Number(limit)),
-    currentPage: Number(page),
-    reviews,
-    stats: stats[0] || null,
-    ratingDistribution,
-  });
 });
 
 // Like/Unlike đánh giá
@@ -214,105 +117,64 @@ exports.hideReview = asyncHandler(async (req, res) => {
 
 // Lấy đánh giá của người dùng đang đăng nhập
 exports.getUserReviews = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
-  const skip = (page - 1) * limit;
+  try {
+    // Gọi service để lấy đánh giá của người dùng
+    const result = await reviewService.getUserReviews(req.user._id, req.query);
 
-  // Tìm tất cả đánh giá của người dùng
-  const reviews = await Review.find({ userId: req.user._id })
-    .populate("productId", "name images")
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(Number(limit));
-
-  // Đếm tổng số đánh giá
-  const total = await Review.countDocuments({ userId: req.user._id });
-
-  res.json({
-    success: true,
-    data: {
-      reviews,
-      pagination: {
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    },
-  });
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Lỗi khi lấy đánh giá người dùng",
+    });
+  }
 });
 
 // Cập nhật đánh giá
 exports.updateReview = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const { rating, comment } = req.body;
+  try {
+    const { id } = req.params;
+    const { content, rating, images } = req.body;
 
-  // Tìm đánh giá cần cập nhật
-  const review = await Review.findById(id);
+    // Gọi service để cập nhật đánh giá
+    const review = await reviewService.updateReview(
+      id,
+      { content, rating, images },
+      req.user._id,
+      false
+    );
 
-  if (!review) {
-    res.status(404);
-    throw new Error("Không tìm thấy đánh giá");
+    res.status(200).json({
+      success: true,
+      data: review,
+      message: "Đã cập nhật đánh giá thành công",
+    });
+  } catch (error) {
+    res.status(error.message.includes("không có quyền") ? 403 : 400).json({
+      success: false,
+      message: error.message || "Lỗi khi cập nhật đánh giá",
+    });
   }
-
-  // Kiểm tra quyền: chỉ người tạo hoặc admin mới có thể cập nhật
-  if (
-    review.userId.toString() !== req.user._id.toString() &&
-    req.user.role !== "admin"
-  ) {
-    res.status(403);
-    throw new Error("Bạn không có quyền cập nhật đánh giá này");
-  }
-
-  // Cập nhật các trường
-  if (rating) review.rating = rating;
-  if (comment) review.comment = comment;
-
-  await review.save();
-
-  // Cập nhật đánh giá trung bình cho sản phẩm
-  await updateProductRating(review.productId);
-
-  res.json({
-    success: true,
-    message: "Đánh giá đã được cập nhật",
-    data: review,
-  });
 });
 
 // Xóa đánh giá
 exports.deleteReview = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-  // Tìm đánh giá cần xóa
-  const review = await Review.findById(id);
+    // Gọi service để xóa đánh giá
+    const result = await reviewService.deleteReview(id, req.user._id, false);
 
-  if (!review) {
-    res.status(404);
-    throw new Error("Không tìm thấy đánh giá");
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error) {
+    res.status(error.message.includes("không có quyền") ? 403 : 400).json({
+      success: false,
+      message: error.message || "Lỗi khi xóa đánh giá",
+    });
   }
-
-  // Kiểm tra quyền: chỉ người tạo hoặc admin mới có thể xóa
-  if (
-    review.userId.toString() !== req.user._id.toString() &&
-    req.user.role !== "admin"
-  ) {
-    res.status(403);
-    throw new Error("Bạn không có quyền xóa đánh giá này");
-  }
-
-  // Lưu productId để cập nhật rating sau khi xóa
-  const productId = review.productId;
-
-  // Xóa đánh giá
-  await review.deleteOne();
-
-  // Cập nhật đánh giá trung bình cho sản phẩm
-  await updateProductRating(productId);
-
-  res.json({
-    success: true,
-    message: "Đánh giá đã được xóa",
-  });
 });
 
 // Hàm helper để cập nhật đánh giá trung bình của sản phẩm
@@ -345,48 +207,157 @@ const updateProductRating = async (productId) => {
 
 // Lấy tất cả đánh giá (chỉ dành cho Admin)
 exports.getAllReviews = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, status, productId, rating } = req.query;
-  const skip = (page - 1) * limit;
+  try {
+    // Gọi service để lấy tất cả đánh giá
+    const result = await reviewService.getAllReviews(req.query);
 
-  // Xây dựng query
-  let query = {};
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Lỗi khi lấy danh sách đánh giá",
+    });
+  }
+});
 
-  // Lọc theo trạng thái nếu được cung cấp
-  if (status) {
-    query.status = status;
+// Lấy thống kê đánh giá của sản phẩm
+exports.getReviewStatistics = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+
+  // Xác thực productId
+  if (!mongoose.Types.ObjectId.isValid(productId)) {
+    return res.status(400).json({
+      success: false,
+      message: "ID sản phẩm không hợp lệ",
+    });
   }
 
-  // Lọc theo sản phẩm nếu được cung cấp
-  if (productId) {
-    query.productId = productId;
+  // Tính thống kê đánh giá
+  const stats = await Review.aggregate([
+    {
+      $match: {
+        productId: new mongoose.Types.ObjectId(productId),
+        status: "active",
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        avgRating: { $avg: "$rating" },
+        totalReviews: { $sum: 1 },
+        ratings: {
+          $push: "$rating",
+        },
+      },
+    },
+  ]);
+
+  // Tính phân bố rating
+  let ratingDistribution = {
+    1: 0,
+    2: 0,
+    3: 0,
+    4: 0,
+    5: 0,
+  };
+
+  if (stats.length > 0) {
+    stats[0].ratings.forEach((rating) => {
+      ratingDistribution[rating]++;
+    });
   }
 
-  // Lọc theo rating nếu được cung cấp
-  if (rating) {
-    query.rating = Number(rating);
+  // Tính phần trăm từng loại rating
+  const totalReviews = stats.length > 0 ? stats[0].totalReviews : 0;
+  const ratingPercentages = {};
+
+  for (const [rating, count] of Object.entries(ratingDistribution)) {
+    ratingPercentages[rating] =
+      totalReviews > 0 ? Math.round((count / totalReviews) * 100) : 0;
   }
-
-  // Lấy danh sách đánh giá với thông tin sản phẩm và người dùng
-  const reviews = await Review.find(query)
-    .populate("userId", "name email image")
-    .populate("productId", "name images price sku")
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(Number(limit));
-
-  // Đếm tổng số đánh giá theo bộ lọc
-  const total = await Review.countDocuments(query);
 
   res.json({
     success: true,
-    data: {
-      reviews,
-      pagination: {
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    },
+    stats:
+      stats.length > 0
+        ? {
+            averageRating: stats[0].avgRating,
+            totalReviews: stats[0].totalReviews,
+          }
+        : {
+            averageRating: 0,
+            totalReviews: 0,
+          },
+    ratingDistribution,
+    ratingPercentages,
   });
 });
+
+// Lấy chi tiết đánh giá (admin)
+exports.getReviewDetail = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Gọi service để lấy chi tiết đánh giá
+    const review = await reviewService.getReviewDetail(id);
+
+    res.status(200).json({
+      success: true,
+      data: review,
+    });
+  } catch (error) {
+    res.status(404).json({
+      success: false,
+      message: error.message || "Lỗi khi lấy chi tiết đánh giá",
+    });
+  }
+});
+
+// Admin cập nhật đánh giá
+exports.adminUpdateReview = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content, rating, status, adminReply, images } = req.body;
+
+    // Gọi service để cập nhật đánh giá
+    const review = await reviewService.updateReview(
+      id,
+      { content, rating, status, adminReply, images },
+      req.user._id,
+      true
+    );
+
+    res.status(200).json({
+      success: true,
+      data: review,
+      message: "Admin đã cập nhật đánh giá thành công",
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message || "Lỗi khi cập nhật đánh giá",
+    });
+  }
+});
+
+// Admin xóa đánh giá
+exports.adminDeleteReview = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Gọi service để xóa đánh giá
+    const result = await reviewService.deleteReview(id, req.user._id, true);
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message || "Lỗi khi xóa đánh giá",
+    });
+  }
+});
+
+module.exports = exports;
