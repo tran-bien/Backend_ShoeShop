@@ -1,6 +1,5 @@
 const asyncHandler = require("express-async-handler");
 const Coupon = require("../models/coupon.model");
-const User = require("../models/user.model");
 const couponService = require("../services/coupon.service");
 
 // Tạo mã giảm giá mới (Admin)

@@ -1,7 +1,4 @@
 const asyncHandler = require("express-async-handler");
-const Order = require("../models/order.model");
-const Product = require("../models/product.model");
-const User = require("../models/user.model");
 const statisticService = require("../services/statistic.service");
 
 // Thống kê tổng quan cho dashboard

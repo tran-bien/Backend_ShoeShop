@@ -1,7 +1,5 @@
 const asyncHandler = require("express-async-handler");
 const sizeService = require("../services/size.service");
-const Product = require("../models/product.model");
-const mongoose = require("mongoose");
 
 // Lấy danh sách kích thước
 exports.getSizes = asyncHandler(async (req, res) => {

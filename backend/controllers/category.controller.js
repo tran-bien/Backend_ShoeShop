@@ -1,6 +1,5 @@
 const asyncHandler = require("express-async-handler");
 const categoryService = require("../services/category.service");
-const slugify = require("slugify");
 
 // Lấy tất cả danh mục
 exports.getCategories = asyncHandler(async (req, res) => {

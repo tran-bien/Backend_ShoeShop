@@ -1,6 +1,5 @@
 const asyncHandler = require("express-async-handler");
 const brandService = require("../services/brand.service");
-const slugify = require("slugify");
 
 // Lấy tất cả thương hiệu
 exports.getBrands = asyncHandler(async (req, res) => {

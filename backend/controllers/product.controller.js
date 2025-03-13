@@ -1,12 +1,5 @@
 const asyncHandler = require("express-async-handler");
-const slugify = require("slugify");
-const Product = require("../models/product.model");
-const Color = require("../models/color.model");
-const Size = require("../models/size.model");
-const { uploadImage, deleteImage } = require("../utils/cloudinary");
-const mongoose = require("mongoose");
 const productService = require("../services/product.service");
-const paginationService = require("../services/pagination.service");
 
 // Lấy thông tin chi tiết sản phẩm cho cả admin và người dùng
 exports.getProductDetails = asyncHandler(async (req, res) => {

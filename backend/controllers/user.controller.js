@@ -1,9 +1,6 @@
 const asyncHandler = require("express-async-handler");
-const User = require("../models/user.model");
-const Product = require("../models/product.model");
-const { uploadImage, deleteImage } = require("../utils/cloudinary");
-const mongoose = require("mongoose");
 const userService = require("../services/user.service");
+const mongoose = require("mongoose");
 
 // Nếu có dịch vụ notification riêng
 // const { createNotification } = require("../services/notification.service");
@@ -415,39 +412,41 @@ exports.blockUser = asyncHandler(async (req, res) => {
 
     // Đăng xuất người dùng khỏi tất cả các thiết bị nếu có model Session
     try {
-      if (mongoose.modelNames().includes("Session")) {
+      // Kiểm tra xem model Session có tồn tại không trước khi sử dụng
+      if (
+        mongoose &&
+        mongoose.modelNames &&
+        mongoose.modelNames().includes("Session")
+      ) {
         const Session = mongoose.model("Session");
         await Session.deleteMany({ userId: user._id });
       }
-    } catch (error) {
-      console.error("Lỗi khi đăng xuất người dùng:", error);
+    } catch (sessionError) {
+      console.error("Lỗi khi đăng xuất người dùng:", sessionError);
+      // Không cần throw lỗi, chỉ log và tiếp tục
     }
 
-    // Gửi thông báo đến người dùng nếu có hàm createNotification
+    // Gửi thông báo đến người dùng
     try {
-      if (typeof createNotification === "function") {
-        await createNotification(
-          user._id,
-          "Tài khoản bị khóa",
-          `Tài khoản của bạn đã bị khóa với lý do: ${user.blockReason}. Vui lòng liên hệ quản trị viên để biết thêm chi tiết.`,
-          "user",
-          user._id
-        );
-      } else {
-        // Tạo thông báo bằng model Notification nếu có
-        if (mongoose.modelNames().includes("Notification")) {
-          const Notification = mongoose.model("Notification");
-          await Notification.create({
-            userId: user._id,
-            title: "Tài khoản bị khóa",
-            message: `Tài khoản của bạn đã bị khóa với lý do: ${user.blockReason}. Vui lòng liên hệ quản trị viên để biết thêm chi tiết.`,
-            type: "user",
-            entityId: user._id,
-          });
-        }
+      if (
+        mongoose &&
+        mongoose.modelNames &&
+        mongoose.modelNames().includes("Notification")
+      ) {
+        const Notification = mongoose.model("Notification");
+        await Notification.create({
+          userId: user._id,
+          title: "Tài khoản bị khóa",
+          message: `Tài khoản của bạn đã bị khóa với lý do: ${
+            user.blockReason || "Vi phạm chính sách người dùng"
+          }. Vui lòng liên hệ quản trị viên để biết thêm chi tiết.`,
+          type: "user",
+          entityId: user._id,
+        });
       }
-    } catch (error) {
-      console.error("Lỗi khi tạo thông báo:", error);
+    } catch (notificationError) {
+      console.error("Lỗi khi tạo thông báo:", notificationError);
+      // Không cần throw lỗi, chỉ log và tiếp tục
     }
 
     res.status(200).json({
@@ -478,32 +477,26 @@ exports.unblockUser = asyncHandler(async (req, res) => {
     // Sử dụng userService để mở khóa tài khoản
     const user = await userService.unblockUser(userId);
 
-    // Gửi thông báo đến người dùng nếu có hàm createNotification
+    // Gửi thông báo đến người dùng
     try {
-      if (typeof createNotification === "function") {
-        await createNotification(
-          user._id,
-          "Tài khoản đã được mở khóa",
-          "Tài khoản của bạn đã được mở khóa và có thể sử dụng bình thường.",
-          "user",
-          user._id
-        );
-      } else {
-        // Tạo thông báo bằng model Notification
-        if (mongoose.modelNames().includes("Notification")) {
-          const Notification = mongoose.model("Notification");
-          await Notification.create({
-            userId: user._id,
-            title: "Tài khoản đã được mở khóa",
-            message:
-              "Tài khoản của bạn đã được mở khóa và có thể sử dụng bình thường.",
-            type: "user",
-            entityId: user._id,
-          });
-        }
+      if (
+        mongoose &&
+        mongoose.modelNames &&
+        mongoose.modelNames().includes("Notification")
+      ) {
+        const Notification = mongoose.model("Notification");
+        await Notification.create({
+          userId: user._id,
+          title: "Tài khoản đã được mở khóa",
+          message:
+            "Tài khoản của bạn đã được mở khóa và có thể sử dụng bình thường.",
+          type: "user",
+          entityId: user._id,
+        });
       }
-    } catch (error) {
-      console.error("Lỗi khi tạo thông báo:", error);
+    } catch (notificationError) {
+      console.error("Lỗi khi tạo thông báo:", notificationError);
+      // Không cần throw lỗi, chỉ log và tiếp tục
     }
 
     res.status(200).json({

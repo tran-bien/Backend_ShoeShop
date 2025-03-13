@@ -1,8 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const Review = require("../models/review.model");
-const Order = require("../models/order.model");
 const Product = require("../models/product.model");
-const { uploadImage } = require("../utils/cloudinary");
 const mongoose = require("mongoose");
 const reviewService = require("../services/review.service");
 

@@ -1,7 +1,5 @@
 const asyncHandler = require("express-async-handler");
-const Cart = require("../models/cart.model");
-const Product = require("../models/product.model");
-const mongoose = require("mongoose");
+
 const cartService = require("../services/cart.service");
 
 // Lấy giỏ hàng của người dùng

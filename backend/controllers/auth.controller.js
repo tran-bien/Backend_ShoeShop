@@ -1,14 +1,6 @@
-const crypto = require("crypto");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
-const randomstring = require("randomstring");
 const asyncHandler = require("express-async-handler");
-const User = require("../models/user.model");
 const LoginHistory = require("../models/login.history.model");
 const emailUtils = require("../utils/email");
-const { uploadImage } = require("../utils/cloudinary");
-const Session = require("../models/session.model");
-const UAParser = require("ua-parser-js");
 const authService = require("../services/auth.service");
 
 // Tạo token JWT

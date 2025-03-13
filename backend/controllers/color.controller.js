@@ -1,8 +1,5 @@
 const asyncHandler = require("express-async-handler");
 const colorService = require("../services/color.service");
-const Product = require("../models/product.model");
-const mongoose = require("mongoose");
-const { ObjectId } = require("mongoose").Types;
 
 // Lấy danh sách màu sắc
 exports.getColors = asyncHandler(async (req, res) => {
