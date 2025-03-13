@@ -1,5 +1,8 @@
 const Product = require("../models/product.model");
 const paginationService = require("./pagination.service");
+const Color = require("../models/color.model");
+const Size = require("../models/size.model");
+const mongoose = require("mongoose");
 
 const productService = {
   /**
@@ -664,6 +667,22 @@ const productService = {
       total,
       pagination
     );
+  },
+
+  getProductDetails: async (id, isAdmin) => {
+    // Logic để lấy thông tin chi tiết sản phẩm
+  },
+
+  addVariant: async (productId, variantData) => {
+    // Logic để thêm biến thể cho sản phẩm
+  },
+
+  updateVariant: async (productId, variantId, updateData) => {
+    // Logic để cập nhật biến thể
+  },
+
+  deleteVariant: async (productId, variantId) => {
+    // Logic để xóa biến thể
   },
 };
 
