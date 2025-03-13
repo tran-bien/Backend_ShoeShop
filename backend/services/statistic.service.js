@@ -57,9 +57,7 @@ const statisticService = {
     // Thêm các trường tính toán
     groupConfig.revenue = { $sum: "$totalAmount" };
     groupConfig.orders = { $sum: 1 };
-    groupConfig.profit = {
-      $sum: { $subtract: ["$totalAmount", "$costAmount"] },
-    };
+    groupConfig.profit = { $sum: "$totalProfit" };
 
     const revenueData = await Order.aggregate([
       { $match: matchStage },
@@ -213,15 +211,14 @@ const statisticService = {
         $group: {
           _id: null,
           totalRevenue: { $sum: "$totalAmount" },
-          totalCost: { $sum: "$costAmount" },
+          totalProfit: { $sum: "$totalProfit" },
           count: { $sum: 1 },
         },
       },
     ]);
 
     const totalRevenue = revenueStats[0]?.totalRevenue || 0;
-    const totalProfit =
-      revenueStats[0]?.totalRevenue - revenueStats[0]?.totalCost || 0;
+    const totalProfit = revenueStats[0]?.totalProfit || 0;
     const profitMargin =
       totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 

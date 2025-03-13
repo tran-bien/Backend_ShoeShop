@@ -355,61 +355,183 @@ const userService = {
   },
 
   /**
-   * Cập nhật vai trò người dùng
+   * Khóa tài khoản người dùng
+   * @param {String} userId - ID người dùng
+   * @param {String} reason - Lý do khóa
+   * @returns {Object} - Thông tin người dùng đã cập nhật
+   */
+  blockUser: async (userId, reason) => {
+    // Tìm người dùng
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new Error("Không tìm thấy người dùng");
+    }
+
+    // Kiểm tra xem người dùng đã bị khóa chưa
+    if (user.isActive === false) {
+      throw new Error("Tài khoản này đã bị khóa");
+    }
+
+    // Không cho phép khóa tài khoản admin
+    if (user.role === "admin") {
+      throw new Error("Không thể khóa tài khoản admin");
+    }
+
+    // Cập nhật trạng thái và lý do khóa
+    user.isActive = false;
+    user.blockReason = reason || "Vi phạm chính sách người dùng";
+    user.blockedAt = Date.now();
+
+    await user.save();
+    return user;
+  },
+
+  /**
+   * Mở khóa tài khoản người dùng
+   * @param {String} userId - ID người dùng
+   * @returns {Object} - Thông tin người dùng đã cập nhật
+   */
+  unblockUser: async (userId) => {
+    // Tìm người dùng
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new Error("Không tìm thấy người dùng");
+    }
+
+    // Kiểm tra xem người dùng đã bị khóa chưa
+    if (user.isActive === true) {
+      throw new Error("Tài khoản này đang hoạt động");
+    }
+
+    // Cập nhật trạng thái và xóa lý do khóa
+    user.isActive = true;
+    user.blockReason = undefined;
+    user.blockedAt = undefined;
+
+    await user.save();
+    return user;
+  },
+
+  /**
+   * Cập nhật vai trò của người dùng
    * @param {String} userId - ID người dùng
    * @param {String} role - Vai trò mới
    * @returns {Object} - Thông tin người dùng đã cập nhật
    */
   updateUserRole: async (userId, role) => {
     // Kiểm tra vai trò hợp lệ
-    if (!["admin", "user"].includes(role)) {
+    const validRoles = ["user", "admin"];
+    if (!validRoles.includes(role)) {
       throw new Error("Vai trò không hợp lệ");
     }
 
-    // Kiểm tra người dùng tồn tại
+    // Tìm và cập nhật người dùng
     const user = await User.findById(userId);
     if (!user) {
       throw new Error("Không tìm thấy người dùng");
     }
 
-    // Cập nhật vai trò
     user.role = role;
     await user.save();
 
-    const updatedUser = await User.findById(userId).select("-password");
-    return updatedUser;
+    return user;
   },
 
   /**
-   * Xóa tài khoản người dùng
+   * Xóa người dùng
    * @param {String} userId - ID người dùng
    * @returns {Boolean} - Kết quả xóa
    */
   deleteUser: async (userId) => {
-    // Kiểm tra người dùng tồn tại
+    const result = await User.findByIdAndDelete(userId);
+    if (!result) {
+      throw new Error("Không tìm thấy người dùng");
+    }
+    return true;
+  },
+
+  /**
+   * Thêm sản phẩm vào danh sách yêu thích
+   * @param {String} userId - ID người dùng
+   * @param {String} productId - ID sản phẩm
+   * @returns {Array} - Danh sách sản phẩm yêu thích
+   */
+  addToWishlist: async (userId, productId) => {
+    // Tìm người dùng
     const user = await User.findById(userId);
     if (!user) {
       throw new Error("Không tìm thấy người dùng");
     }
 
-    // Không thể xóa tài khoản admin
-    if (user.role === "admin") {
-      throw new Error("Không thể xóa tài khoản admin");
+    // Kiểm tra sản phẩm đã có trong danh sách chưa
+    if (user.wishlist.includes(productId)) {
+      throw new Error("Sản phẩm đã có trong danh sách yêu thích");
     }
 
-    // Xóa avatar từ cloudinary nếu có
-    if (user.avatar && user.avatar.public_id) {
-      try {
-        await deleteImage(user.avatar.public_id);
-      } catch (error) {
-        console.error("Lỗi khi xóa avatar:", error);
-      }
+    // Thêm vào danh sách yêu thích
+    user.wishlist.push(productId);
+    await user.save();
+
+    return user.wishlist;
+  },
+
+  /**
+   * Xóa sản phẩm khỏi danh sách yêu thích
+   * @param {String} userId - ID người dùng
+   * @param {String} productId - ID sản phẩm
+   * @returns {Array} - Danh sách sản phẩm yêu thích
+   */
+  removeFromWishlist: async (userId, productId) => {
+    // Tìm người dùng
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new Error("Không tìm thấy người dùng");
     }
 
-    // Xóa người dùng
-    await User.deleteOne({ _id: userId });
+    // Xóa khỏi danh sách yêu thích
+    user.wishlist = user.wishlist.filter((id) => id.toString() !== productId);
+    await user.save();
 
-    return true;
+    return user.wishlist;
+  },
+
+  /**
+   * Lấy danh sách sản phẩm yêu thích
+   * @param {String} userId - ID người dùng
+   * @returns {Array} - Danh sách sản phẩm yêu thích
+   */
+  getWishlist: async (userId) => {
+    // Tìm người dùng và populate danh sách yêu thích
+    const user = await User.findById(userId).populate({
+      path: "wishlist",
+      select:
+        "name price images description category brand gender totalSold rating",
+      populate: [
+        { path: "category", select: "name" },
+        { path: "brand", select: "name" },
+      ],
+    });
+
+    if (!user) {
+      throw new Error("Không tìm thấy người dùng");
+    }
+
+    return user.wishlist;
+  },
+
+  /**
+   * Lấy danh sách mã giảm giá của người dùng
+   * @param {String} userId - ID người dùng
+   * @returns {Array} - Danh sách mã giảm giá
+   */
+  getUserCoupons: async (userId) => {
+    // Tìm người dùng và populate danh sách mã giảm giá
+    const user = await User.findById(userId).populate("coupons");
+    if (!user) {
+      throw new Error("Không tìm thấy người dùng");
+    }
+
+    return user.coupons;
   },
 };
 

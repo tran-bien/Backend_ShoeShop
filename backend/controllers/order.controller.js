@@ -155,6 +155,10 @@ exports.createOrder = asyncHandler(async (req, res) => {
           );
         }
 
+        // Lấy giá từ biến thể sản phẩm
+        const variantPrice = variant.priceFinal || variant.price;
+        const costPrice = product.costPrice || 0;
+
         // Thêm vào danh sách sản phẩm
         newOrderItems.push({
           name: product.name,
@@ -162,14 +166,16 @@ exports.createOrder = asyncHandler(async (req, res) => {
           image:
             product.images.find((img) => img.isMain)?.url ||
             product.images[0]?.url,
-          price: product.price,
+          price: variantPrice,
+          costPrice: costPrice,
           product: product._id,
+          variant: variant._id,
           color: item.color,
           size: item.size,
         });
 
         // Cộng vào tổng giá
-        itemsPrice += product.price * item.quantity;
+        itemsPrice += variantPrice * item.quantity;
 
         // Cập nhật số lượng trong kho sử dụng variants trong model Product
         variant.quantity -= item.quantity;
@@ -1375,6 +1381,12 @@ exports.updatePaymentStatus = asyncHandler(async (req, res) => {
 
     // Cập nhật trạng thái thanh toán
     order.paymentStatus = paymentStatus;
+
+    // Kiểm tra xem trường paymentHistory có tồn tại không
+    if (!order.paymentHistory) {
+      order.paymentHistory = [];
+    }
+
     order.paymentHistory.push({
       status: paymentStatus,
       updatedBy: req.user._id,

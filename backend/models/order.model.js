@@ -34,6 +34,11 @@ const OrderSchema = new mongoose.Schema(
           required: [true, "Giá sản phẩm là bắt buộc"],
           min: [0, "Giá sản phẩm không được âm"],
         },
+        costPrice: {
+          type: Number,
+          default: 0,
+          min: [0, "Giá gốc không được âm"],
+        },
       },
     ],
     subTotal: {

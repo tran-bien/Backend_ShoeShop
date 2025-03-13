@@ -434,7 +434,7 @@ const orderService = {
       }
 
       // Danh sách các trạng thái hợp lệ
-      const validPaymentStatuses = ["pending", "paid", "failed", "refunded"];
+      const validPaymentStatuses = ["pending", "paid", "failed"];
 
       // Kiểm tra trạng thái hợp lệ
       if (!validPaymentStatuses.includes(paymentStatus)) {
@@ -444,17 +444,19 @@ const orderService = {
       // Lưu trạng thái hiện tại để so sánh
       const oldPaymentStatus = order.paymentStatus;
 
-      // Nếu đã hoàn tiền, không thể thay đổi trạng thái
-      if (oldPaymentStatus === "refunded" && paymentStatus !== "refunded") {
-        throw new Error(
-          "Đơn hàng đã được hoàn tiền, không thể thay đổi trạng thái thanh toán"
-        );
+      // Không thay đổi nếu trạng thái giống nhau
+      if (oldPaymentStatus === paymentStatus) {
+        throw new Error("Trạng thái thanh toán không thay đổi");
       }
 
       // Cập nhật trạng thái thanh toán
       order.paymentStatus = paymentStatus;
 
       // Ghi lại lịch sử thanh toán
+      if (!order.paymentHistory) {
+        order.paymentHistory = [];
+      }
+
       order.paymentHistory.push({
         status: paymentStatus,
         updatedBy,
@@ -500,7 +502,7 @@ const orderService = {
       await order.save({ session });
 
       // Tạo thông báo trong database nếu có
-      if (notificationTitle && notificationMessage) {
+      if (notificationTitle && notificationMessage && order.userId) {
         await Notification.create(
           [
             {
@@ -519,16 +521,12 @@ const orderService = {
       await session.commitTransaction();
       session.endSession();
 
-      return {
-        success: true,
-        message: "Cập nhật trạng thái thanh toán thành công",
-        order,
-      };
+      // Trả về đơn hàng đã cập nhật
+      return await Order.findById(orderId);
     } catch (error) {
       // Hủy bỏ transaction nếu có lỗi
       await session.abortTransaction();
       session.endSession();
-
       throw error;
     }
   },

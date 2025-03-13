@@ -16,6 +16,10 @@ const cartService = {
         select: "name price discount thumbnail images isActive stockStatus",
       })
       .populate({
+        path: "items.variant",
+        select: "priceFinal price color sizes",
+      })
+      .populate({
         path: "items.color",
         select: "name hexCode",
       })
@@ -118,7 +122,26 @@ const cartService = {
       await cart.save();
     }
 
-    return cart;
+    // Populate thông tin chi tiết
+    const updatedCart = await Cart.findById(cart._id)
+      .populate({
+        path: "items.product",
+        select: "name price discount thumbnail images",
+      })
+      .populate({
+        path: "items.variant",
+        select: "priceFinal price color sizes",
+      })
+      .populate({
+        path: "items.color",
+        select: "name hexCode",
+      })
+      .populate({
+        path: "items.size",
+        select: "value",
+      });
+
+    return updatedCart;
   },
 
   /**
@@ -205,14 +228,13 @@ const cartService = {
       }
     } else {
       // Nếu sản phẩm chưa có trong giỏ hàng, thêm mới
-      const price = variant.price || product.price;
-      const discountPrice =
-        variant.percentDiscount > 0
-          ? price * (1 - variant.percentDiscount / 100)
-          : price;
+      // Sử dụng priceFinal của biến thể thay vì giá sản phẩm
+      const price = variant.priceFinal || variant.price;
+      const discountPrice = price; // Giá priceFinal đã tính discount rồi nên không cần tính lại
 
       cart.items.push({
         product: productId,
+        variant: variant._id,
         color: colorId,
         size: sizeId,
         quantity,
@@ -234,6 +256,10 @@ const cartService = {
       .populate({
         path: "items.product",
         select: "name price discount thumbnail images",
+      })
+      .populate({
+        path: "items.variant",
+        select: "priceFinal price color sizes",
       })
       .populate({
         path: "items.color",
@@ -327,6 +353,10 @@ const cartService = {
         select: "name price discount thumbnail images",
       })
       .populate({
+        path: "items.variant",
+        select: "priceFinal price color sizes",
+      })
+      .populate({
         path: "items.color",
         select: "name hexCode",
       })
@@ -377,6 +407,10 @@ const cartService = {
         select: "name price discount thumbnail images",
       })
       .populate({
+        path: "items.variant",
+        select: "priceFinal price color sizes",
+      })
+      .populate({
         path: "items.color",
         select: "name hexCode",
       })
@@ -423,6 +457,7 @@ function calculateCartTotal(items) {
 
   items.forEach((item) => {
     totalQuantity += item.quantity;
+    // Sử dụng discountPrice (đã là priceFinal của biến thể) để tính tổng tiền
     totalAmount += item.quantity * (item.discountPrice || item.price);
   });
 

@@ -17,15 +17,15 @@ const CouponSchema = new mongoose.Schema(
     discountValue: {
       type: Number,
       required: true,
-      min: 0,
+      min: [0, "Giá trị giảm giá không được âm"],
     },
     maxDiscountAmount: {
       type: Number,
-      min: 0,
+      min: [0, "Giá trị giảm giá tối đa không được âm"],
     },
     minOrderValue: {
       type: Number,
-      min: 0,
+      min: [0, "Giá trị đơn hàng tối thiểu không được âm"],
     },
     expiryDate: {
       type: Date,
