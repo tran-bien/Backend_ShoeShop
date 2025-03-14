@@ -43,43 +43,38 @@ const categoryService = {
    * @returns {Promise<Object>} Danh mục đã tạo
    */
   createCategory: async (categoryData) => {
-    const { name, description } = categoryData;
+    const { name, description, parentId } = categoryData;
 
-    // Kiểm tra tên danh mục
-    if (!name || name.trim() === "") {
+    // Validation
+    if (!name || name.trim().length === 0) {
       throw new Error("Tên danh mục không được để trống");
     }
 
-    // Kiểm tra độ dài tên
-    if (name.length > 100) {
-      throw new Error("Tên danh mục không được vượt quá 100 ký tự");
+    if (description && description.trim().length === 0) {
+      throw new Error("Mô tả danh mục không được để trống");
     }
 
-    // Tạo slug từ tên
-    const slug = slugify(name, { lower: true });
+    // Kiểm tra parentId nếu có
+    if (parentId) {
+      if (!mongoose.Types.ObjectId.isValid(parentId)) {
+        throw new Error("ID danh mục cha không hợp lệ");
+      }
 
-    // Kiểm tra danh mục đã tồn tại (theo tên chính xác)
-    const existingCategoryByName = await Category.findOne({
+      const parentCategory = await Category.findById(parentId);
+      if (!parentCategory) {
+        throw new Error("Không tìm thấy danh mục cha");
+      }
+    }
+
+    // Kiểm tra trùng lặp
+    const existingCategory = await Category.findOne({
       name: { $regex: new RegExp(`^${name}$`, "i") },
     });
-
-    if (existingCategoryByName) {
-      throw new Error("Tên danh mục này đã tồn tại");
+    if (existingCategory) {
+      throw new Error("Danh mục này đã tồn tại");
     }
 
-    // Kiểm tra danh mục đã tồn tại (theo slug)
-    const existingCategoryBySlug = await Category.findOne({ slug });
-    if (existingCategoryBySlug) {
-      throw new Error("Danh mục này đã tồn tại với tên tương tự");
-    }
-
-    // Tạo danh mục mới
-    const category = await Category.create({
-      name,
-      description,
-      slug,
-    });
-
+    const category = await Category.create(categoryData);
     return category;
   },
 
@@ -89,60 +84,58 @@ const categoryService = {
    * @param {Object} updateData - Dữ liệu cập nhật
    * @returns {Promise<Object>} Danh mục đã cập nhật
    */
-  updateCategory: async (categoryId, updateData) => {
-    const { name, description, isActive } = updateData;
-    let category = await Category.findById(categoryId);
+  updateCategory: async (id, updateData) => {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new Error("ID danh mục không hợp lệ");
+    }
 
+    const { name, description, parentId } = updateData;
+
+    // Validation
+    if (name && name.trim().length === 0) {
+      throw new Error("Tên danh mục không được để trống");
+    }
+
+    if (description && description.trim().length === 0) {
+      throw new Error("Mô tả danh mục không được để trống");
+    }
+
+    // Kiểm tra parentId nếu có
+    if (parentId) {
+      if (!mongoose.Types.ObjectId.isValid(parentId)) {
+        throw new Error("ID danh mục cha không hợp lệ");
+      }
+
+      const parentCategory = await Category.findById(parentId);
+      if (!parentCategory) {
+        throw new Error("Không tìm thấy danh mục cha");
+      }
+
+      // Kiểm tra vòng lặp (không cho phép danh mục là cha của chính nó)
+      if (parentId === id) {
+        throw new Error("Không thể chọn chính danh mục này làm danh mục cha");
+      }
+    }
+
+    // Kiểm tra trùng lặp nếu thay đổi tên
+    if (name) {
+      const existingCategory = await Category.findOne({
+        name: { $regex: new RegExp(`^${name}$`, "i") },
+        _id: { $ne: id },
+      });
+      if (existingCategory) {
+        throw new Error("Danh mục này đã tồn tại");
+      }
+    }
+
+    const category = await Category.findById(id);
     if (!category) {
       throw new Error("Không tìm thấy danh mục");
     }
 
-    // Kiểm tra nếu tên được cung cấp
-    if (name !== undefined) {
-      // Kiểm tra tên không được trống
-      if (!name || name.trim() === "") {
-        throw new Error("Tên danh mục không được để trống");
-      }
-
-      // Kiểm tra độ dài tên
-      if (name.length > 100) {
-        throw new Error("Tên danh mục không được vượt quá 100 ký tự");
-      }
-
-      // Cập nhật slug nếu tên thay đổi
-      if (name !== category.name) {
-        const slug = slugify(name, { lower: true });
-
-        // Kiểm tra tên đã tồn tại (theo tên chính xác)
-        const existingCategoryByName = await Category.findOne({
-          name: { $regex: new RegExp(`^${name}$`, "i") },
-          _id: { $ne: categoryId },
-        });
-
-        if (existingCategoryByName) {
-          throw new Error("Tên danh mục này đã tồn tại");
-        }
-
-        // Kiểm tra slug đã tồn tại
-        const existingCategory = await Category.findOne({
-          slug,
-          _id: { $ne: categoryId },
-        });
-
-        if (existingCategory) {
-          throw new Error("Danh mục với tên này đã tồn tại");
-        }
-
-        category.slug = slug;
-      }
-    }
-
-    // Cập nhật thông tin
-    if (name) category.name = name;
-    if (description !== undefined) category.description = description;
-    if (isActive !== undefined) category.isActive = isActive;
-
+    Object.assign(category, updateData);
     await category.save();
+
     return category;
   },
 
@@ -151,22 +144,24 @@ const categoryService = {
    * @param {String} categoryId - ID danh mục
    * @returns {Promise<Boolean>} Kết quả xóa
    */
-  deleteCategory: async (categoryId) => {
-    const { canDelete, message } = await this.checkDeletableCategory(
-      categoryId
-    );
-
-    if (canDelete) {
-      // Xóa cứng
-      await Category.deleteOne({ _id: categoryId });
-      return { success: true, message: "Đã xóa danh mục" };
-    } else {
-      // Xóa mềm
-      const category = await Category.findById(categoryId);
-      category.isActive = false; // Đánh dấu không còn hoạt động
-      await category.save();
-      return { success: true, message: "Danh mục đã được ẩn đi" };
+  deleteCategory: async (id) => {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new Error("ID danh mục không hợp lệ");
     }
+
+    const category = await Category.findById(id);
+    if (!category) {
+      throw new Error("Không tìm thấy danh mục");
+    }
+
+    // Kiểm tra xem danh mục có con không
+    const hasChildren = await Category.exists({ parentId: id });
+    if (hasChildren) {
+      throw new Error("Không thể xóa danh mục có danh mục con");
+    }
+
+    await category.remove();
+    return { message: "Danh mục đã được xóa thành công" };
   },
 
   /**

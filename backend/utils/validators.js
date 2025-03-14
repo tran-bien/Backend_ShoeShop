@@ -12,9 +12,10 @@ const isValidPhoneNumber = (phone) => {
 
 // Logic cho kiểm tra mật khẩu
 const checkPasswordRequirements = (password) => {
-  // Kiểm tra mật khẩu có ít nhất 8 ký tự, 1 chữ cái và 1 số
-  const re = /^(?=.*[a-zA-Z])(?=.*\d)[A-Za-z\d]{8,}$/;
-  return re.test(password);
+  const minLength = 8;
+  const hasLetter = /[a-zA-Z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  return password.length >= minLength && hasLetter && hasNumber;
 };
 
 module.exports = {

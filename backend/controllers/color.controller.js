@@ -2,97 +2,39 @@ const asyncHandler = require("express-async-handler");
 const colorService = require("../services/color.service");
 
 // Lấy danh sách màu sắc
-exports.getColors = asyncHandler(async (req, res) => {
-  try {
-    const colors = await colorService.getColors();
-    res.json({
-      success: true,
-      count: colors.length,
-      colors,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi lấy danh sách màu sắc",
-    });
-  }
+exports.getAllColors = asyncHandler(async (req, res) => {
+  const colors = await colorService.getAllColors();
+  res.json({
+    success: true,
+    data: colors,
+  });
 });
 
 // Tạo màu sắc mới (Admin)
 exports.createColor = asyncHandler(async (req, res) => {
-  try {
-    const { name, hexCode } = req.body;
-
-    // Kiểm tra đầu vào
-    if (!name || !hexCode) {
-      return res.status(400).json({
-        success: false,
-        message: "Tên và mã màu không được để trống",
-      });
-    }
-
-    const color = await colorService.createColor({ name, hexCode });
-    res.status(201).json({
-      success: true,
-      message: "Đã thêm màu sắc mới",
-      color,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message || "Lỗi khi tạo màu sắc",
-    });
-  }
+  const color = await colorService.createColor(req.body);
+  res.status(201).json({
+    success: true,
+    data: color,
+  });
 });
 
 // Cập nhật màu sắc (Admin)
 exports.updateColor = asyncHandler(async (req, res) => {
-  try {
-    const { colorId } = req.params;
-    const { name, hexCode, status } = req.body;
-
-    // Kiểm tra đầu vào
-    if (name === undefined || hexCode === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: "Tên và mã màu không được để trống",
-      });
-    }
-
-    const color = await colorService.updateColor(colorId, {
-      name,
-      hexCode,
-      status,
-    });
-
-    res.json({
-      success: true,
-      message: "Đã cập nhật màu sắc",
-      color,
-    });
-  } catch (error) {
-    res.status(error.message === "Không tìm thấy màu sắc" ? 404 : 400).json({
-      success: false,
-      message: error.message || "Lỗi khi cập nhật màu sắc",
-    });
-  }
+  const color = await colorService.updateColor(req.params.id, req.body);
+  res.json({
+    success: true,
+    data: color,
+  });
 });
 
 // Xóa màu sắc (Admin)
 exports.deleteColor = asyncHandler(async (req, res) => {
-  try {
-    const { colorId } = req.params;
-    await colorService.deleteColorWithCheck(colorId);
-    res.json({
-      success: true,
-      message: "Đã xóa màu sắc",
-    });
-  } catch (error) {
-    res.status(error.message === "Không tìm thấy màu sắc" ? 404 : 500).json({
-      success: false,
-      message: error.message || "Lỗi khi xóa màu sắc",
-    });
-  }
+  await colorService.deleteColor(req.params.id);
+  res.json({
+    success: true,
+    message: "Xóa màu sắc thành công",
+  });
 });
 
 // Kiểm tra xem màu sắc có thể xóa được không
@@ -110,4 +52,12 @@ exports.checkDeletableColor = asyncHandler(async (req, res) => {
       message: error.message || "Lỗi khi kiểm tra màu sắc trước khi xóa",
     });
   }
+});
+
+exports.getColorDetails = asyncHandler(async (req, res) => {
+  const color = await colorService.getColorDetails(req.params.id);
+  res.json({
+    success: true,
+    data: color,
+  });
 });

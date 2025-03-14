@@ -81,6 +81,19 @@ exports.getCoupons = asyncHandler(async (req, res) => {
   });
 });
 
+// Lấy danh sách mã giảm giá cho người dùng (Public)
+exports.getCouponUser = asyncHandler(async (req, res) => {
+  const coupons = await Coupon.find({
+    isActive: true,
+    expiryDate: { $gt: new Date() },
+  });
+
+  res.status(200).json({
+    success: true,
+    data: coupons,
+  });
+});
+
 // Lấy chi tiết mã giảm giá (Admin)
 exports.getCouponById = asyncHandler(async (req, res) => {
   const coupon = await Coupon.findById(req.params.id);

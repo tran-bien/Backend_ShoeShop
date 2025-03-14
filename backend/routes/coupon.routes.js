@@ -9,9 +9,13 @@ const {
   validateCoupon,
   collectCoupon,
   verifyCoupon,
+  getCouponUser,
 } = require("../controllers/coupon.controller");
 
 const router = express.Router();
+
+// Routes cho tất cả người dùng (public) - không yêu cầu đăng nhập nhưng vẫn lấy thông tin user nếu có
+router.get("/", getCouponUser);
 
 // Routes cho admin
 router.post("/", protect, admin, createCoupon);

@@ -41,10 +41,9 @@ const ReviewSchema = new mongoose.Schema(
         },
       },
     ],
-    status: {
-      type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "approved",
+    isActive: {
+      type: Boolean,
+      default: true,
     },
     adminReply: {
       type: String,
@@ -71,7 +70,6 @@ const ReviewSchema = new mongoose.Schema(
 ReviewSchema.index({ product: 1, createdAt: -1 });
 ReviewSchema.index({ user: 1, createdAt: -1 });
 ReviewSchema.index({ rating: 1 });
-ReviewSchema.index({ status: 1 });
 
 // Virtual field cho số lượng likes
 ReviewSchema.virtual("likeCount").get(function () {
@@ -111,7 +109,7 @@ async function updateProductRating(productId) {
     {
       $match: {
         product: new mongoose.Types.ObjectId(productId),
-        status: "approved",
+        isActive: true,
       },
     },
     {

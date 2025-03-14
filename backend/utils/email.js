@@ -42,7 +42,7 @@ exports.sendVerificationEmail = async (email, name, otp) => {
 };
 
 // Gửi email đặt lại mật khẩu
-exports.sendPasswordResetEmail = async (email, name, resetToken) => {
+exports.sendResetPasswordEmail = async (email, name, resetToken) => {
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
   const mailOptions = {
@@ -67,7 +67,7 @@ exports.sendPasswordResetEmail = async (email, name, resetToken) => {
   try {
     await transporter.sendMail(mailOptions);
   } catch (error) {
-    console.error("Error sending password reset email:", error);
+    console.error("Error sending reset password email:", error);
     throw new Error("Không thể gửi email đặt lại mật khẩu. Vui lòng thử lại!");
   }
 };

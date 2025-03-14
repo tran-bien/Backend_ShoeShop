@@ -1,7 +1,7 @@
 const express = require("express");
 const { protect, admin } = require("../middlewares/auth.middleware");
 const {
-  getSizes,
+  getAllSizes,
   createSize,
   updateSize,
   deleteSize,
@@ -11,7 +11,7 @@ const {
 const router = express.Router();
 
 // Route công khai
-router.get("/", getSizes);
+router.get("/", getAllSizes);
 
 // Route cho Admin - yêu cầu đăng nhập và quyền Admin
 router.use(protect);

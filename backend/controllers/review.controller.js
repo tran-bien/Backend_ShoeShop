@@ -55,7 +55,10 @@ exports.getProductReviews = asyncHandler(async (req, res) => {
     // Gọi service để lấy đánh giá sản phẩm
     const result = await reviewService.getProductReviews(productId, req.query);
 
-    res.status(200).json(result);
+    // Chỉ lấy các đánh giá đang hoạt động
+    const activeReviews = result.filter((review) => review.isActive);
+
+    res.status(200).json(activeReviews);
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -77,11 +80,11 @@ exports.hideReview = asyncHandler(async (req, res) => {
   }
 
   // Cập nhật trạng thái đánh giá
-  review.status = "hidden";
+  review.isActive = false;
   await review.save();
 
   // Cập nhật đánh giá trung bình cho sản phẩm
-  await updateProductRating(review.productId);
+  await updateProductRating(review.product);
 
   res.json({
     success: true,
@@ -157,7 +160,7 @@ const updateProductRating = async (productId) => {
     {
       $match: {
         productId: mongoose.Types.ObjectId(productId),
-        status: "active",
+        isActive: true,
       },
     },
     {
@@ -211,7 +214,7 @@ exports.getReviewStatistics = asyncHandler(async (req, res) => {
     {
       $match: {
         product: new mongoose.Types.ObjectId(productId),
-        status: "approved",
+        isActive: true,
       },
     },
     {

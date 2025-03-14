@@ -16,6 +16,32 @@ const colorService = {
   },
 
   /**
+   * Lấy tất cả màu sắc
+   * @returns {Promise<Array>} Danh sách màu sắc
+   */
+  getAllColors: async () => {
+    const colors = await Color.find();
+    return colors;
+  },
+
+  /**
+   * Lấy chi tiết màu sắc
+   * @param {String} id - ID màu sắc
+   * @returns {Promise<Object>} Chi tiết màu sắc
+   */
+  getColorDetails: async (id) => {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new Error("ID màu sắc không hợp lệ");
+    }
+
+    const color = await Color.findById(id);
+    if (!color) {
+      throw new Error("Không tìm thấy màu sắc");
+    }
+    return color;
+  },
+
+  /**
    * Tạo màu sắc mới
    * @param {Object} colorData - Dữ liệu màu sắc
    * @returns {Promise<Object>} Màu sắc đã tạo
@@ -23,97 +49,102 @@ const colorService = {
   createColor: async (colorData) => {
     const { name, hexCode } = colorData;
 
-    const existingColorByName = await Color.findOne({
-      name: { $regex: new RegExp(`^${name}$`, "i") },
-    });
-
-    if (existingColorByName) {
-      throw new Error("Tên màu sắc này đã tồn tại");
+    // Validation
+    if (!name || name.trim().length === 0) {
+      throw new Error("Tên màu sắc không được để trống");
     }
 
-    const existingColorByHexCode = await Color.findOne({
-      hexCode: { $regex: new RegExp(`^${hexCode}$`, "i") },
-    });
-
-    if (existingColorByHexCode) {
-      throw new Error("Mã màu này đã tồn tại");
+    if (!hexCode || hexCode.trim().length === 0) {
+      throw new Error("Mã màu không được để trống");
     }
 
-    const color = await Color.create({
-      name,
-      hexCode,
-      status: "active",
-    });
+    // Kiểm tra định dạng mã màu hex
+    const hexCodeRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+    if (!hexCodeRegex.test(hexCode)) {
+      throw new Error("Mã màu không hợp lệ");
+    }
 
+    // Kiểm tra trùng lặp
+    const existingColor = await Color.findOne({
+      $or: [{ name }, { hexCode }],
+    });
+    if (existingColor) {
+      throw new Error("Màu sắc này đã tồn tại");
+    }
+
+    const color = await Color.create(colorData);
     return color;
   },
 
   /**
    * Cập nhật màu sắc
-   * @param {String} colorId - ID màu sắc
+   * @param {String} id - ID màu sắc
    * @param {Object} updateData - Dữ liệu cập nhật
    * @returns {Promise<Object>} Màu sắc đã cập nhật
    */
-  updateColor: async (colorId, updateData) => {
-    const { name, hexCode, status } = updateData;
+  updateColor: async (id, updateData) => {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new Error("ID màu sắc không hợp lệ");
+    }
 
-    const color = await Color.findById(colorId);
+    const { name, hexCode } = updateData;
+
+    // Validation
+    if (name && name.trim().length === 0) {
+      throw new Error("Tên màu sắc không được để trống");
+    }
+
+    if (hexCode && hexCode.trim().length === 0) {
+      throw new Error("Mã màu không được để trống");
+    }
+
+    // Kiểm tra định dạng mã màu hex nếu có thay đổi
+    if (hexCode) {
+      const hexCodeRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+      if (!hexCodeRegex.test(hexCode)) {
+        throw new Error("Mã màu không hợp lệ");
+      }
+    }
+
+    // Kiểm tra trùng lặp nếu thay đổi name hoặc hexCode
+    if (name || hexCode) {
+      const existingColor = await Color.findOne({
+        $or: [{ name: name || undefined }, { hexCode: hexCode || undefined }],
+        _id: { $ne: id },
+      });
+      if (existingColor) {
+        throw new Error("Màu sắc này đã tồn tại");
+      }
+    }
+
+    const color = await Color.findById(id);
     if (!color) {
       throw new Error("Không tìm thấy màu sắc");
     }
 
-    if (name !== undefined) {
-      const existingColor = await Color.findOne({
-        name: { $regex: new RegExp(`^${name}$`, "i") },
-        _id: { $ne: colorId },
-      });
-
-      if (existingColor) {
-        throw new Error("Tên màu sắc này đã tồn tại");
-      }
-    }
-
-    if (hexCode !== undefined) {
-      const existingColor = await Color.findOne({
-        hexCode: { $regex: new RegExp(`^${hexCode}$`, "i") },
-        _id: { $ne: colorId },
-      });
-
-      if (existingColor) {
-        throw new Error("Mã màu này đã tồn tại");
-      }
-    }
-
-    if (name) color.name = name;
-    if (hexCode !== undefined) color.hexCode = hexCode;
-    if (status) color.status = status;
-
+    Object.assign(color, updateData);
     await color.save();
+
     return color;
   },
 
   /**
    * Xóa màu sắc
-   * @param {String} colorId - ID màu sắc
-   * @returns {Promise<Boolean>} Kết quả xóa
+   * @param {String} id - ID màu sắc
+   * @returns {Promise<Object>} Kết quả xóa
    */
-  deleteColor: async (colorId) => {
-    // Kiểm tra trước khi xóa
-    const color = await Color.findById(colorId);
+  deleteColor: async (id) => {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new Error("ID màu sắc không hợp lệ");
+    }
+
+    const color = await Color.findById(id);
     if (!color) {
       throw new Error("Không tìm thấy màu sắc");
     }
 
-    // Xóa vĩnh viễn màu sắc
-    await Color.deleteOne({ _id: colorId });
-
-    // Xóa màu sắc khỏi các biến thể sản phẩm
-    await Product.updateMany(
-      { "variants.color": colorId },
-      { $pull: { variants: { color: colorId } } } // Xóa màu sắc khỏi biến thể
-    );
-
-    return true;
+    await color.remove();
+    return { message: "Màu sắc đã được xóa thành công" };
   },
 
   deleteColorWithCheck: async (colorId) => {

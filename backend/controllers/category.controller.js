@@ -74,62 +74,32 @@ exports.getCategoryById = asyncHandler(async (req, res) => {
 
 // Tạo danh mục mới
 exports.createCategory = asyncHandler(async (req, res) => {
-  try {
-    const { name, description } = req.body;
-
-    const category = await categoryService.createCategory({
-      name,
-      description,
-    });
-
-    res.status(201).json({
-      success: true,
-      data: category,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message || "Lỗi khi tạo danh mục",
-    });
-  }
+  const category = await categoryService.createCategory(req.body);
+  res.status(201).json({
+    success: true,
+    data: category,
+  });
 });
 
 // Cập nhật danh mục
 exports.updateCategory = asyncHandler(async (req, res) => {
-  try {
-    const { name, description, isActive } = req.body;
-
-    const category = await categoryService.updateCategory(req.params.id, {
-      name,
-      description,
-      isActive,
-    });
-
-    res.status(200).json({
-      success: true,
-      data: category,
-    });
-  } catch (error) {
-    res.status(error.message === "Không tìm thấy danh mục" ? 404 : 400).json({
-      success: false,
-      message: error.message || "Lỗi khi cập nhật danh mục",
-    });
-  }
+  const category = await categoryService.updateCategory(
+    req.params.id,
+    req.body
+  );
+  res.json({
+    success: true,
+    data: category,
+  });
 });
 
 // Xóa danh mục
 exports.deleteCategory = asyncHandler(async (req, res) => {
-  try {
-    const { categoryId } = req.params;
-    const result = await categoryService.deleteCategory(categoryId);
-
-    res.json(result);
-  } catch (error) {
-    res.status(error.message === "Không tìm thấy danh mục" ? 404 : 500).json({
-      success: false,
-      message: error.message || "Lỗi khi xóa danh mục",
-    });
-  }
+  await categoryService.deleteCategory(req.params.id);
+  res.json({
+    success: true,
+    message: "Xóa danh mục thành công",
+  });
 });
 
 exports.checkDeletableCategory = asyncHandler(async (req, res) => {
@@ -203,4 +173,20 @@ exports.activateCategory = asyncHandler(async (req, res) => {
       message: error.message || "Lỗi khi kích hoạt danh mục",
     });
   }
+});
+
+exports.getAllCategories = asyncHandler(async (req, res) => {
+  const categories = await categoryService.getAllCategories();
+  res.json({
+    success: true,
+    data: categories,
+  });
+});
+
+exports.getCategoryDetails = asyncHandler(async (req, res) => {
+  const category = await categoryService.getCategoryDetails(req.params.id);
+  res.json({
+    success: true,
+    data: category,
+  });
 });

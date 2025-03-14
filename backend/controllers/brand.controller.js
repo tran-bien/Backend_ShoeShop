@@ -72,89 +72,29 @@ exports.getBrandById = asyncHandler(async (req, res) => {
 
 // Tạo thương hiệu mới
 exports.createBrand = asyncHandler(async (req, res) => {
-  try {
-    const { name, description, logo } = req.body;
-
-    // Kiểm tra đầu vào
-    if (!name || !logo) {
-      return res.status(400).json({
-        success: false,
-        message: "Tên và logo không được để trống",
-      });
-    }
-
-    const brand = await brandService.createBrand({
-      name,
-      description,
-      logo,
-    });
-
-    res.status(201).json({
-      success: true,
-      data: brand,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message || "Lỗi khi tạo thương hiệu",
-    });
-  }
+  const brand = await brandService.createBrand(req.body);
+  res.status(201).json({
+    success: true,
+    data: brand,
+  });
 });
 
 // Cập nhật thương hiệu
 exports.updateBrand = asyncHandler(async (req, res) => {
-  try {
-    const { name, description, logo, isActive } = req.body;
-
-    // Kiểm tra đầu vào
-    if (!name || !logo) {
-      return res.status(400).json({
-        success: false,
-        message: "Tên và logo không được để trống",
-      });
-    }
-
-    const brand = await brandService.updateBrand(req.params.id, {
-      name,
-      description,
-      logo,
-      isActive,
-    });
-
-    res.status(200).json({
-      success: true,
-      data: brand,
-    });
-  } catch (error) {
-    res
-      .status(error.message === "Không tìm thấy thương hiệu" ? 404 : 400)
-      .json({
-        success: false,
-        message: error.message || "Lỗi khi cập nhật thương hiệu",
-      });
-  }
+  const brand = await brandService.updateBrand(req.params.id, req.body);
+  res.json({
+    success: true,
+    data: brand,
+  });
 });
 
 // Xóa thương hiệu
 exports.deleteBrand = asyncHandler(async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "ID không hợp lệ",
-      });
-    }
-    const result = await brandService.deleteBrand(id);
-    res.json(result);
-  } catch (error) {
-    res
-      .status(error.message === "Không tìm thấy thương hiệu" ? 404 : 500)
-      .json({
-        success: false,
-        message: error.message || "Lỗi khi xóa thương hiệu",
-      });
-  }
+  await brandService.deleteBrand(req.params.id);
+  res.json({
+    success: true,
+    message: "Xóa thương hiệu thành công",
+  });
 });
 
 // Ẩn thương hiệu
@@ -226,4 +166,20 @@ exports.checkDeletableBrand = asyncHandler(async (req, res) => {
         message: error.message || "Lỗi khi kiểm tra thương hiệu trước khi xóa",
       });
   }
+});
+
+exports.getAllBrands = asyncHandler(async (req, res) => {
+  const brands = await brandService.getAllBrands();
+  res.json({
+    success: true,
+    data: brands,
+  });
+});
+
+exports.getBrandDetails = asyncHandler(async (req, res) => {
+  const brand = await brandService.getBrandDetails(req.params.id);
+  res.json({
+    success: true,
+    data: brand,
+  });
 });

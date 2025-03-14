@@ -1,5 +1,5 @@
 const express = require("express");
-const { protect, authorize } = require("../middlewares/auth.middleware");
+const { protect } = require("../middlewares/auth.middleware");
 const {
   uploadSingle,
   uploadMultiple,

@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 // const BaseSchema = require("./base.model");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 
 const UserSchema = new mongoose.Schema(
   {
@@ -78,12 +79,8 @@ const UserSchema = new mongoose.Schema(
       code: { type: String },
       expiredAt: { type: Date },
     },
-    passwordResetToken: {
-      type: String,
-    },
-    passwordResetExpires: {
-      type: Date,
-    },
+    resetPasswordToken: { type: String },
+    resetPasswordExpire: { type: Date },
   },
   {
     timestamps: true,
@@ -91,17 +88,16 @@ const UserSchema = new mongoose.Schema(
 );
 
 // Tự động hash mật khẩu trước khi lưu
-UserSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
+// Hãy kiểm tra và tạm thời vô hiệu hóa middleware này nếu có
+// userSchema.pre("save", async function (next) {
+//   if (!this.isModified("password")) {
+//     return next();
+//   }
+//   // Nếu mật khẩu đã thay đổi, hash nó
+//   const salt = await bcrypt.genSalt(10);
+//   this.password = await bcrypt.hash(this.password, salt);
+//   next();
+// });
 
 // Phương thức kiểm tra mật khẩu
 UserSchema.methods.comparePassword = async function (password) {
@@ -141,6 +137,20 @@ mongoose.Query.prototype._skipBlockCheck = function (skip) {
 
 UserSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
+};
+
+// Phương thức để tạo reset token
+UserSchema.methods.getResetPasswordToken = function () {
+  // Tạo token
+  const resetToken = crypto.randomBytes(20).toString("hex");
+
+  // Lưu token vào thuộc tính resetPasswordToken
+  this.resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+
+  return resetToken;
 };
 
 const User = mongoose.model("User", UserSchema);

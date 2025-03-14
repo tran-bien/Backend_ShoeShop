@@ -1,10 +1,5 @@
 const express = require("express");
-const {
-  protect,
-  admin,
-  optionalAuth,
-  authorize,
-} = require("../middlewares/auth.middleware");
+const { protect, admin } = require("../middlewares/auth.middleware");
 const {
   createProduct,
   getAllProducts,
@@ -15,14 +10,10 @@ const {
   deleteProductImage,
   manageVariant,
   addVariantImages,
-  deleteVariantImage,
-  searchProducts,
-  filterProducts,
-  getRelatedProducts,
-  getProductDetailsWithAvailability,
-  manageVariants,
-  getVariantByColorAndSize,
   checkProductAvailability,
+  deleteVariantImage,
+  getRelatedProducts,
+  manageVariants,
   getFeaturedProducts,
   getInventoryStats,
   getSearchSuggestions,
@@ -37,13 +28,12 @@ const {
 const router = express.Router();
 
 // Route cho tất cả người dùng (public) - không yêu cầu đăng nhập nhưng vẫn lấy thông tin user nếu có
-router.get("/products", optionalAuth, getAllProducts);
-router.get("/search-filter", optionalAuth, searchAndFilter);
+router.get("/products", getAllProducts);
+router.get("/search-filter", searchAndFilter);
 router.get("/suggestions", getSearchSuggestions);
-router.get("/:id", optionalAuth, getProductDetails);
-router.get("/:id/related", optionalAuth, getRelatedProducts);
-router.get("/:id/availability", optionalAuth, checkProductAvailability);
-router.get("/:id/variant", optionalAuth, getVariantByColorAndSize);
+router.get("/:id", getProductDetails);
+router.get("/:id/related", getRelatedProducts);
+router.get("/:id/availability", checkProductAvailability);
 
 // Route dành cho user đã đăng nhập
 // Các route liên quan đến mua hàng và đánh giá sẽ được thêm ở file cart.routes.js và review.routes.js
@@ -76,10 +66,11 @@ router.post(
   handleUploadError,
   addVariantImages
 );
+
 router.delete("/:id/variant/:variantId/image", admin, deleteVariantImage);
 
 // Route cho API sản phẩm nổi bật
-router.get("/featured", optionalAuth, getFeaturedProducts);
+router.get("/featured", getFeaturedProducts);
 
 // Route cho API thống kê hàng tồn kho
 router.get("/:id/inventory-stats", protect, admin, getInventoryStats);
