@@ -210,8 +210,47 @@ ProductSchema.virtual("calculatedStockStatus").get(function () {
   return "inStock";
 });
 
+// Hàm tính toán giá cuối cùng
+function calculateFinalPrice(price, percentDiscount) {
+  return percentDiscount > 0 ? price - (price * percentDiscount) / 100 : price;
+}
+
+// Hàm cập nhật trạng thái biến thể
+function updateVariantStatus(variant) {
+  const variantTotalQuantity = variant.sizes.reduce((total, size) => {
+    return total + (size.isSizeAvailable ? size.quantity : 0);
+  }, 0);
+
+  if (variantTotalQuantity === 0) {
+    variant.status = "discontinued";
+  } else if (variant.status === "discontinued") {
+    variant.status = "active";
+  }
+}
+
 // Middleware trước khi lưu sản phẩm
 ProductSchema.pre("save", function (next) {
+  // Tạo slug tự động từ tên sản phẩm
+  if (this.name) {
+    this.slug = this.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+  }
+
+  // Tạo SKU cho từng biến thể nếu chưa có
+  if (this.variants && this.variants.length > 0) {
+    this.variants.forEach((variant, index) => {
+      if (!variant.sku) {
+        // Tạo SKU duy nhất cho từng biến thể dựa trên tên SP, màu sắc và timestamp
+        const timestamp = Date.now() + index;
+        variant.sku = `${this.name.substring(0, 3).toUpperCase()}-${
+          variant.color
+        }-${timestamp}`;
+      }
+    });
+  }
+
   // Cập nhật thời gian thay đổi
   this.updatedAt = Date.now();
 
@@ -227,11 +266,11 @@ ProductSchema.pre("save", function (next) {
   // Cập nhật trạng thái isSizeAvailable cho tất cả các size
   if (this.variants && this.variants.length > 0) {
     this.variants.forEach((variant) => {
-      // Cập nhật giá cuối cùng (priceFinal) dựa trên phần trăm giảm giá
-      variant.priceFinal =
-        variant.percentDiscount > 0
-          ? variant.price - (variant.price * variant.percentDiscount) / 100
-          : variant.price;
+      variant.priceFinal = calculateFinalPrice(
+        variant.price,
+        variant.percentDiscount
+      );
+      updateVariantStatus(variant);
 
       // Tính tổng số lượng sẵn có của biến thể
       let variantTotalQuantity = 0;
@@ -253,13 +292,7 @@ ProductSchema.pre("save", function (next) {
       });
 
       // Cập nhật trạng thái của biến thể dựa trên tổng số lượng của các size
-      if (variantTotalQuantity === 0) {
-        variant.status = "discontinued"; // Đổi thành discontinued nếu hết hàng
-      } else if (variant.status === "discontinued") {
-        // Nếu đã là discontinued nhưng có hàng trở lại, đổi thành active
-        variant.status = "active";
-      }
-      // Giữ nguyên trạng thái "inactive" nếu đã được thiết lập thủ công
+      updateVariantStatus(variant);
     });
   }
 
@@ -373,22 +406,6 @@ ProductSchema.methods.findVariant = function (colorId, sizeId) {
       sizeItem.quantity > 0,
     totalSoldSize: sizeItem.totalSoldSize || 0,
   };
-};
-
-// Phương thức định dạng giá theo VNĐ
-ProductSchema.methods.formatPrice = function (price) {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-  }).format(price || this.price);
-};
-
-// Phương thức định dạng giá gốc theo VNĐ
-ProductSchema.methods.formatCostPrice = function () {
-  return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-  }).format(this.costPrice);
 };
 
 // Kích hoạt plugin phân trang

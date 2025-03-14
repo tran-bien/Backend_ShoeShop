@@ -11,13 +11,52 @@ exports.getProductDetails = asyncHandler(async (req, res) => {
 });
 
 // Tạo sản phẩm mới
-exports.createProduct = asyncHandler(async (req, res) => {
-  const product = await productService.createProduct(req.body);
-  res.status(201).json({
-    success: true,
-    data: product,
-  });
-});
+exports.createProduct = async (req, res) => {
+  try {
+    const productData = req.body;
+    const newProduct = await productService.createProduct(productData);
+    res.status(201).json({
+      success: true,
+      data: newProduct,
+    });
+  } catch (error) {
+    let message = error.message;
+
+    // Xử lý lỗi E11000 (trùng slug)
+    if (message.includes("E11000") && message.includes("slug")) {
+      message = "Sản phẩm với slug này đã tồn tại";
+    }
+    // Xử lý lỗi validation từ Mongoose
+    else if (message.includes("validation failed")) {
+      const errorFields = {
+        name: "Tên sản phẩm là bắt buộc",
+        description: "Mô tả sản phẩm là bắt buộc",
+        category: "Danh mục sản phẩm không hợp lệ",
+        brand: "Thương hiệu sản phẩm không hợp lệ",
+        price: "Giá sản phẩm là bắt buộc và phải là số dương",
+        // Thêm các trường khác nếu cần
+      };
+
+      // Kiểm tra từng trường và lấy thông báo lỗi tương ứng
+      for (const [field, errorMsg] of Object.entries(errorFields)) {
+        if (message.includes(`${field}:`)) {
+          message = errorMsg;
+          break;
+        }
+      }
+
+      // Nếu không khớp với bất kỳ trường nào
+      if (message.includes("validation failed")) {
+        message = "Dữ liệu sản phẩm không hợp lệ";
+      }
+    }
+
+    res.status(400).json({
+      success: false,
+      message: message,
+    });
+  }
+};
 
 // Cập nhật thông tin sản phẩm
 exports.updateProduct = asyncHandler(async (req, res) => {
@@ -223,3 +262,49 @@ exports.searchAndFilter = asyncHandler(async (req, res) => {
 
   res.status(200).json(result);
 });
+
+// Lấy danh sách sản phẩm
+exports.getProducts = async (req, res) => {
+  try {
+    const result = await productService.getProducts(req.query);
+    res.status(200).json({
+      success: true,
+      data: result.docs,
+      pagination: {
+        total: result.totalDocs,
+        page: result.page,
+        pages: result.totalPages,
+        limit: result.limit,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy danh sách sản phẩm",
+      error: error.message,
+    });
+  }
+};
+
+// Lấy sản phẩm theo slug
+exports.getProductBySlug = async (req, res) => {
+  try {
+    const product = await productService.getProductBySlug(req.params.slug);
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy sản phẩm",
+      });
+    }
+    res.status(200).json({
+      success: true,
+      data: product,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Lỗi khi lấy thông tin sản phẩm",
+      error: error.message,
+    });
+  }
+};

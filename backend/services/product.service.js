@@ -55,7 +55,7 @@ const productService = {
    * @returns {Object} - Thông tin sản phẩm đã tạo
    */
   createProduct: async (productData) => {
-    const { name, description, price, category, brand } = productData;
+    const { name, description, category, brand } = productData;
 
     // Validation
     if (!name || name.trim().length === 0) {
@@ -64,10 +64,6 @@ const productService = {
 
     if (!description || description.trim().length === 0) {
       throw new Error("Mô tả sản phẩm không được để trống");
-    }
-
-    if (price === undefined || price <= 0) {
-      throw new Error("Giá sản phẩm phải lớn hơn 0");
     }
 
     if (!category || !mongoose.Types.ObjectId.isValid(category)) {
@@ -79,7 +75,24 @@ const productService = {
     }
 
     const product = new Product(productData);
-    await product.save();
+
+    try {
+      await product.save();
+    } catch (error) {
+      console.error("Error saving product:", error); // In ra lỗi chi tiết
+
+      // Cải thiện cách bắt lỗi trùng lặp
+      if (error.code === 11000) {
+        // Xác định trường bị trùng
+        const field = Object.keys(error.keyPattern || {})[0] || "slug";
+        if (field === "slug") {
+          throw new Error(`Sản phẩm đã bị trùng lặp ở trường ${field}`);
+        }
+      }
+
+      throw new Error("Lỗi khi lưu sản phẩm: " + error.message);
+    }
+
     return product;
   },
 
@@ -255,13 +268,6 @@ const productService = {
         if (existingVariant) {
           throw new Error("Biến thể này đã tồn tại");
         }
-
-        // Tạo SKU nếu chưa có
-        const sku =
-          data.sku ||
-          `${productId.slice(-6)}-${data.color.slice(-3)}-${data.size.slice(
-            -3
-          )}`;
 
         // Kiểm tra xem đã có variant với color và gender này chưa
         const existingColorGender = product.variants.find(
@@ -928,6 +934,133 @@ const productService = {
       .exec();
 
     return suggestions;
+  },
+
+  // Lấy danh sách sản phẩm với phân trang và lọc
+  async getProducts(queryOptions) {
+    const {
+      page = 1,
+      limit = 10,
+      category,
+      brand,
+      minPrice,
+      maxPrice,
+      sort,
+      search,
+    } = queryOptions;
+
+    // Xây dựng query cho filter
+    let query = { isDeleted: false };
+    if (category) query.category = category;
+    if (brand) query.brand = brand;
+
+    // Filter theo giá
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) query.price.$gte = Number(minPrice);
+      if (maxPrice) query.price.$lte = Number(maxPrice);
+    }
+
+    // Xử lý search
+    if (search) {
+      query.$text = { $search: search };
+    }
+
+    // Xử lý sort
+    let sortOption = {};
+    if (sort) {
+      const [field, order] = sort.split(":");
+      sortOption[field] = order === "desc" ? -1 : 1;
+    } else {
+      sortOption = { createdAt: -1 }; // Mặc định sắp xếp theo thời gian tạo
+    }
+
+    // Thực hiện query với pagination
+    const options = {
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      sort: sortOption,
+      populate: [
+        { path: "category", select: "name" },
+        { path: "brand", select: "name" },
+      ],
+    };
+
+    return await Product.paginate(query, options);
+  },
+
+  // Thêm sản phẩm mới
+  async createProduct(productData) {
+    const product = new Product(productData);
+    return await product.save();
+  },
+
+  // Lấy thông tin chi tiết sản phẩm
+  async getProductById(productId) {
+    return await Product.findById(productId)
+      .populate("category", "name")
+      .populate("brand", "name")
+      .populate("variants.color", "name code")
+      .populate("variants.sizes.size", "name value");
+  },
+
+  // Lấy sản phẩm theo slug
+  async getProductBySlug(slug) {
+    return await Product.findOne({ slug, isDeleted: false })
+      .populate("category", "name")
+      .populate("brand", "name")
+      .populate("variants.color", "name code")
+      .populate("variants.sizes.size", "name value");
+  },
+
+  // Cập nhật sản phẩm
+  async updateProduct(productId, updateData) {
+    return await Product.findByIdAndUpdate(productId, updateData, {
+      new: true,
+      runValidators: true,
+    });
+  },
+
+  // Xóa sản phẩm (soft delete)
+  async deleteProduct(productId) {
+    return await Product.findByIdAndUpdate(
+      productId,
+      { isDeleted: true, isActive: false },
+      { new: true }
+    );
+  },
+
+  // Cập nhật số lượng sản phẩm
+  async updateProductStock(productId, variantId, sizeId, quantity) {
+    const product = await Product.findById(productId);
+    if (!product) throw new Error("Không tìm thấy sản phẩm");
+
+    const variant = product.variants.id(variantId);
+    if (!variant) throw new Error("Không tìm thấy biến thể sản phẩm");
+
+    const sizeItem = variant.sizes.find((s) => s.size.toString() === sizeId);
+    if (!sizeItem) throw new Error("Không tìm thấy size");
+
+    sizeItem.quantity = Math.max(0, sizeItem.quantity + quantity);
+
+    return await product.save();
+  },
+
+  // Tăng số lượng đã bán
+  async incrementSoldCount(productId, variantId, sizeId, quantity) {
+    const product = await Product.findById(productId);
+    if (!product) throw new Error("Không tìm thấy sản phẩm");
+
+    const variant = product.variants.id(variantId);
+    if (!variant) throw new Error("Không tìm thấy biến thể sản phẩm");
+
+    const sizeItem = variant.sizes.find((s) => s.size.toString() === sizeId);
+    if (!sizeItem) throw new Error("Không tìm thấy size");
+
+    sizeItem.totalSoldSize += quantity;
+    sizeItem.quantity = Math.max(0, sizeItem.quantity - quantity);
+
+    return await product.save();
   },
 };
 
