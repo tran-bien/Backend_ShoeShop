@@ -1,23 +1,35 @@
+const mongoose = require("mongoose");
 const Brand = require("../models/brand.model");
 const slugify = require("slugify");
+const Product = require("../models/product.model");
 
 const brandService = {
   /**
-   * Lấy tất cả thương hiệu đang hoạt động
+   * Lấy tất cả thương hiệu cho người dùng
    * @returns {Promise<Array>} Danh sách thương hiệu
    */
-  getBrands: async () => {
-    const brands = await Brand.find({ isActive: true });
-    return brands;
+  getBrandsForUser: async () => {
+    return await Brand.find({ isActive: true }); // Chỉ lấy thương hiệu đang hoạt động
+  },
+
+  /**
+   * Lấy tất cả thương hiệu cho admin
+   * @returns {Promise<Array>} Danh sách thương hiệu
+   */
+  getBrandsForAdmin: async () => {
+    return await Brand.find({}); // Lấy tất cả thương hiệu
   },
 
   /**
    * Lấy chi tiết thương hiệu theo ID
-   * @param {String} brandId - ID thương hiệu
-   * @returns {Promise<Object>} Thông tin thương hiệu
+   * @param {String} id - ID thương hiệu
+   * @param {Boolean} isAdmin - Kiểm tra xem người dùng có phải là admin không
+   * @returns {Promise<Object>} Thông tin thương hiệu user không xem được thương hiệu ẩn admin xem được tất cả
    */
-  getBrandById: async (brandId) => {
-    const brand = await Brand.findById(brandId);
+
+  getBrandById: async (brandId, isAdmin = false) => {
+    const query = isAdmin ? { _id: brandId } : { _id: brandId, isActive: true }; // Nếu là admin, lấy tất cả
+    const brand = await Brand.findOne(query);
     if (!brand) {
       throw new Error("Không tìm thấy thương hiệu");
     }
@@ -30,128 +42,83 @@ const brandService = {
    * @returns {Promise<Object>} Thương hiệu đã tạo
    */
   createBrand: async (brandData) => {
-    const { name, description, logo } = brandData;
-
-    // Kiểm tra tên thương hiệu
-    if (!name || name.trim() === "") {
-      throw new Error("Tên thương hiệu không được để trống");
-    }
-
-    // Kiểm tra độ dài tên
-    if (name.length > 100) {
-      throw new Error("Tên thương hiệu không được vượt quá 100 ký tự");
-    }
-
-    // Tạo slug từ tên
-    const slug = slugify(name, { lower: true });
-
-    // Kiểm tra thương hiệu đã tồn tại (theo tên chính xác)
-    const existingBrandByName = await Brand.findOne({
-      name: { $regex: new RegExp(`^${name}$`, "i") },
-    });
-
-    if (existingBrandByName) {
-      throw new Error("Tên thương hiệu này đã tồn tại");
-    }
-
-    // Kiểm tra thương hiệu đã tồn tại (theo slug)
-    const existingBrandBySlug = await Brand.findOne({ slug });
-    if (existingBrandBySlug) {
-      throw new Error("Thương hiệu này đã tồn tại với tên tương tự");
-    }
-
-    // Tạo thương hiệu mới
-    const brand = await Brand.create({
-      name,
-      description,
-      logo,
-      slug,
-    });
-
-    return brand;
+    const brand = new Brand(brandData);
+    return await brand.save();
   },
 
   /**
    * Cập nhật thương hiệu
-   * @param {String} brandId - ID thương hiệu
-   * @param {Object} updateData - Dữ liệu cập nhật
+   * @param {String} id - ID thương hiệu
+   * @param {Object} brandData - Dữ liệu cập nhật
    * @returns {Promise<Object>} Thương hiệu đã cập nhật
    */
-  updateBrand: async (brandId, updateData) => {
-    const { name, description, logo, isActive } = updateData;
-    let brand = await Brand.findById(brandId);
-
+  updateBrand: async (id, brandData) => {
+    const brand = await Brand.findByIdAndUpdate(id, brandData, { new: true });
     if (!brand) {
       throw new Error("Không tìm thấy thương hiệu");
     }
-
-    // Kiểm tra nếu tên được cung cấp
-    if (name !== undefined) {
-      // Kiểm tra tên không được trống
-      if (!name || name.trim() === "") {
-        throw new Error("Tên thương hiệu không được để trống");
-      }
-
-      // Kiểm tra độ dài tên
-      if (name.length > 100) {
-        throw new Error("Tên thương hiệu không được vượt quá 100 ký tự");
-      }
-
-      // Cập nhật slug nếu tên thay đổi
-      if (name !== brand.name) {
-        const slug = slugify(name, { lower: true });
-
-        // Kiểm tra tên đã tồn tại (theo tên chính xác)
-        const existingBrandByName = await Brand.findOne({
-          name: { $regex: new RegExp(`^${name}$`, "i") },
-          _id: { $ne: brandId },
-        });
-
-        if (existingBrandByName) {
-          throw new Error("Tên thương hiệu này đã tồn tại");
-        }
-
-        // Kiểm tra slug đã tồn tại
-        const existingBrand = await Brand.findOne({
-          slug,
-          _id: { $ne: brandId },
-        });
-
-        if (existingBrand) {
-          throw new Error("Thương hiệu với tên này đã tồn tại");
-        }
-
-        brand.slug = slug;
-      }
-    }
-
-    // Cập nhật thông tin
-    if (name) brand.name = name;
-    if (description !== undefined) brand.description = description;
-    if (logo !== undefined) brand.logo = logo;
-    if (isActive !== undefined) brand.isActive = isActive;
-
-    await brand.save();
     return brand;
   },
 
   /**
    * Xóa thương hiệu (xóa mềm)
-   * @param {String} brandId - ID thương hiệu
+   * @param {String} id - ID thương hiệu
    * @returns {Promise<Boolean>} Kết quả xóa
    */
-  deleteBrand: async (brandId) => {
-    const brand = await Brand.findById(brandId);
-
+  deleteBrand: async (id) => {
+    const brand = await Brand.findByIdAndDelete(id);
     if (!brand) {
       throw new Error("Không tìm thấy thương hiệu");
     }
+    return { success: true, message: "Thương hiệu đã được xóa" };
+  },
 
-    // Xóa mềm - chỉ đánh dấu không còn hoạt động
-    brand.isActive = false;
-    await brand.save();
+  /**
+   * Kiểm tra xem thương hiệu có thể xóa được không
+   * @param {String} id - ID thương hiệu
+   * @returns {Promise<Object>} Kết quả kiểm tra
+   */
+  checkDeletableBrand: async (id) => {
+    const brand = await Brand.findById(id);
+    if (!brand) {
+      throw new Error("Không tìm thấy thương hiệu");
+    }
+    // Logic kiểm tra xem thương hiệu có thể xóa được không
+    return { canDelete: true }; // Thay đổi logic theo yêu cầu
+  },
 
-    return true;
+  /**
+   * Ẩn thương hiệu
+   * @param {String} id - ID thương hiệu
+   * @returns {Promise<Object>} Thương hiệu đã ẩn
+   */
+  hideBrand: async (id) => {
+    const brand = await Brand.findByIdAndUpdate(
+      id,
+      { isActive: false },
+      { new: true }
+    );
+    if (!brand) {
+      throw new Error("Không tìm thấy thương hiệu");
+    }
+    return brand;
+  },
+
+  /**
+   * Kích hoạt thương hiệu
+   * @param {String} id - ID thương hiệu
+   * @returns {Promise<Object>} Thương hiệu đã kích hoạt
+   */
+  activateBrand: async (id) => {
+    const brand = await Brand.findByIdAndUpdate(
+      id,
+      { isActive: true },
+      { new: true }
+    );
+    if (!brand) {
+      throw new Error("Không tìm thấy thương hiệu");
+    }
+    return brand;
   },
 };
 

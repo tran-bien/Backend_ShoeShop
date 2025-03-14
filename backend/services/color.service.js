@@ -23,22 +23,6 @@ const colorService = {
   createColor: async (colorData) => {
     const { name, hexCode } = colorData;
 
-    // Kiểm tra tên màu
-    if (!name || name.trim() === "") {
-      throw new Error("Tên màu sắc không được để trống");
-    }
-
-    // Kiểm tra độ dài tên màu
-    if (name.length > 50) {
-      throw new Error("Tên màu sắc không được vượt quá 50 ký tự");
-    }
-
-    // Kiểm tra mã màu
-    if (!hexCode || hexCode.trim() === "") {
-      throw new Error("Mã màu không được để trống");
-    }
-
-    // Kiểm tra màu đã tồn tại (theo tên, không phân biệt chữ hoa/thường)
     const existingColorByName = await Color.findOne({
       name: { $regex: new RegExp(`^${name}$`, "i") },
     });
@@ -47,7 +31,6 @@ const colorService = {
       throw new Error("Tên màu sắc này đã tồn tại");
     }
 
-    // Kiểm tra màu đã tồn tại (theo mã màu)
     const existingColorByHexCode = await Color.findOne({
       hexCode: { $regex: new RegExp(`^${hexCode}$`, "i") },
     });
@@ -56,7 +39,6 @@ const colorService = {
       throw new Error("Mã màu này đã tồn tại");
     }
 
-    // Tạo màu mới
     const color = await Color.create({
       name,
       hexCode,
@@ -80,54 +62,28 @@ const colorService = {
       throw new Error("Không tìm thấy màu sắc");
     }
 
-    // Kiểm tra tên màu nếu được cung cấp
     if (name !== undefined) {
-      // Kiểm tra tên không được trống
-      if (!name || name.trim() === "") {
-        throw new Error("Tên màu sắc không được để trống");
-      }
+      const existingColor = await Color.findOne({
+        name: { $regex: new RegExp(`^${name}$`, "i") },
+        _id: { $ne: colorId },
+      });
 
-      // Kiểm tra độ dài tên
-      if (name.length > 50) {
-        throw new Error("Tên màu sắc không được vượt quá 50 ký tự");
-      }
-
-      // Nếu tên thay đổi, kiểm tra trùng lặp
-      if (name !== color.name) {
-        // Kiểm tra tên màu đã tồn tại
-        const existingColor = await Color.findOne({
-          name: { $regex: new RegExp(`^${name}$`, "i") },
-          _id: { $ne: colorId },
-        });
-
-        if (existingColor) {
-          throw new Error("Tên màu sắc này đã tồn tại");
-        }
+      if (existingColor) {
+        throw new Error("Tên màu sắc này đã tồn tại");
       }
     }
 
-    // Kiểm tra mã màu nếu được cung cấp
     if (hexCode !== undefined) {
-      // Kiểm tra mã màu không được trống
-      if (!hexCode || hexCode.trim() === "") {
-        throw new Error("Mã màu không được để trống");
-      }
+      const existingColor = await Color.findOne({
+        hexCode: { $regex: new RegExp(`^${hexCode}$`, "i") },
+        _id: { $ne: colorId },
+      });
 
-      // Nếu mã màu thay đổi, kiểm tra trùng lặp
-      if (hexCode !== color.hexCode) {
-        // Kiểm tra mã màu đã tồn tại
-        const existingColor = await Color.findOne({
-          hexCode: { $regex: new RegExp(`^${hexCode}$`, "i") },
-          _id: { $ne: colorId },
-        });
-
-        if (existingColor) {
-          throw new Error("Mã màu này đã tồn tại");
-        }
+      if (existingColor) {
+        throw new Error("Mã màu này đã tồn tại");
       }
     }
 
-    // Cập nhật thông tin
     if (name) color.name = name;
     if (hexCode !== undefined) color.hexCode = hexCode;
     if (status) color.status = status;
@@ -161,6 +117,21 @@ const colorService = {
   },
 
   deleteColorWithCheck: async (colorId) => {
+    // Gọi hàm kiểm tra xóa trực tiếp từ colorService
+    const { canDelete, message } = await colorService.checkDeletableColor(
+      colorId
+    );
+
+    if (!canDelete) {
+      throw new Error(message); // Nếu không thể xóa, ném lỗi với thông báo
+    }
+
+    // Nếu có thể xóa, thực hiện xóa cứng
+    await Color.deleteOne({ _id: colorId });
+    return true;
+  },
+
+  checkDeletableColor: async (colorId) => {
     const color = await Color.findById(colorId);
     if (!color) {
       throw new Error("Không tìm thấy màu sắc");
@@ -175,13 +146,12 @@ const colorService = {
 
     const hasDependencies = productsWithVariants.length > 0;
 
-    if (hasDependencies) {
-      throw new Error("Màu sắc đang được sử dụng bởi các sản phẩm");
-    }
-
-    // Xóa màu sắc
-    await Color.deleteOne({ _id: colorId });
-    return true;
+    return {
+      canDelete: !hasDependencies,
+      message: hasDependencies
+        ? "Màu sắc đang được sử dụng bởi các sản phẩm"
+        : "Có thể xóa màu sắc này",
+    };
   },
 };
 

@@ -5,6 +5,7 @@ const {
   createSize,
   updateSize,
   deleteSize,
+  checkDeletableSize,
 } = require("../controllers/size.controller");
 
 const router = express.Router();
@@ -19,5 +20,6 @@ router.use(admin);
 router.post("/", createSize);
 router.put("/:sizeId", updateSize);
 router.delete("/:sizeId", deleteSize);
+router.get("/check-delete/:sizeId", checkDeletableSize);
 
 module.exports = router;

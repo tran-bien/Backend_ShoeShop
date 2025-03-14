@@ -1,11 +1,9 @@
 const asyncHandler = require("express-async-handler");
 const emailUtils = require("../utils/email");
-const authService = require("../services/auth.service");
+const { authService } = require("../services/auth.service");
 const User = require("../models/user.model");
 const { isValidEmail } = require("../utils/validators");
-const jwt = require("jsonwebtoken");
 const LoginHistory = require("../models/login.history.model");
-const Session = require("../models/session.model");
 
 // Đăng ký người dùng
 exports.register = asyncHandler(async (req, res) => {
@@ -122,38 +120,39 @@ exports.verifyOTP = asyncHandler(async (req, res) => {
 exports.login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  // Kiểm tra email và mật khẩu
-  if (!email || !password) {
-    return res.status(400).json({
-      success: false,
-      message: "Vui lòng cung cấp email và mật khẩu",
-    });
-  }
-
-  // Kiểm tra định dạng email
-  if (!isValidEmail(email)) {
-    // Không ghi login history nếu không được import đúng
-    try {
-      if (LoginHistory) {
+  try {
+    // Kiểm tra thông tin đăng nhập
+    const user = await User.findOne({ email });
+    if (!user || !(await user.matchPassword(password))) {
+      // Lưu lịch sử đăng nhập thất bại mà không sử dụng userId null
+      try {
         await LoginHistory.create({
-          userId: null,
+          email: email, // Lưu email thay vì userId
           status: "failed",
-          reason: "Email không đúng định dạng",
+          reason: "Thông tin đăng nhập không hợp lệ",
           ipAddress: req.ip || "Unknown",
           userAgent: req.headers["user-agent"] || "Unknown",
         });
+      } catch (historyError) {
+        console.error("Lỗi khi lưu lịch sử đăng nhập:", historyError.message);
       }
-    } catch (error) {
-      console.error("Lỗi khi lưu lịch sử đăng nhập:", error.message);
+
+      return res.status(401).json({
+        success: false,
+        message: "Thông tin đăng nhập không hợp lệ",
+      });
     }
 
-    return res.status(400).json({
-      success: false,
-      message: "Email không đúng định dạng",
+    // Tạo bản ghi lịch sử đăng nhập thành công
+    await LoginHistory.create({
+      userId: user._id,
+      email: user.email,
+      status: "success",
+      ipAddress: req.ip || "Unknown",
+      userAgent: req.headers["user-agent"] || "Unknown",
+      loginTime: new Date(),
     });
-  }
 
-  try {
     // Sử dụng authService để đăng nhập
     const userData = await authService.loginUser(email, password, req);
 
@@ -187,16 +186,17 @@ exports.login = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     // Không ghi login history nếu không được import đúng
+    console.error("Lỗi đăng nhập:", error.message);
+
+    // Lưu lịch sử đăng nhập thất bại
     try {
-      if (LoginHistory) {
-        await LoginHistory.create({
-          userId: null,
-          status: "failed",
-          reason: error.message,
-          ipAddress: req.ip || "Unknown",
-          userAgent: req.headers["user-agent"] || "Unknown",
-        });
-      }
+      await LoginHistory.create({
+        email: email, // Lưu email thay vì userId
+        status: "failed",
+        reason: error.message,
+        ipAddress: req.ip || "Unknown",
+        userAgent: req.headers["user-agent"] || "Unknown",
+      });
     } catch (historyError) {
       console.error("Lỗi khi lưu lịch sử đăng nhập:", historyError.message);
     }

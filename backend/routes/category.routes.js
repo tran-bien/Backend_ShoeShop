@@ -1,17 +1,36 @@
 const express = require("express");
 const router = express.Router();
-const categoryController = require("../controllers/category.controller");
+const {
+  getCategoryById,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  activateCategory,
+  checkDeletableCategory,
+  hideCategory,
+  getCategoriesForUser,
+  getCategoriesForAdmin,
+} = require("../controllers/category.controller");
 const { protect, admin } = require("../middlewares/auth.middleware");
 
-// Route công khai - lấy tất cả danh mục
-router.get("/", categoryController.getCategories);
+// Route cho người dùng
+router.get("/", getCategoriesForUser); // Lấy danh mục cho người dùng
+
+// Route cho admin
+router.get("/admin", protect, admin, getCategoriesForAdmin);
 
 // Route công khai - lấy chi tiết danh mục
-router.get("/:id", categoryController.getCategoryById);
+router.get("/:id", getCategoryById);
 
 // Routes cho Admin
-router.post("/", protect, admin, categoryController.createCategory);
-router.put("/:id", protect, admin, categoryController.updateCategory);
-router.delete("/:id", protect, admin, categoryController.deleteCategory);
+router.use(protect);
+router.use(admin);
+
+router.post("/", createCategory);
+router.put("/:categoryId", updateCategory);
+router.delete("/:categoryId", deleteCategory);
+router.get("/check-delete/:categoryId", checkDeletableCategory);
+router.put("/activate/:id", activateCategory);
+router.put("/hide/:id", hideCategory);
 
 module.exports = router;

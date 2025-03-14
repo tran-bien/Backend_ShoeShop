@@ -5,6 +5,7 @@ const {
   createColor,
   updateColor,
   deleteColor,
+  checkDeletableColor,
 } = require("../controllers/color.controller");
 
 const router = express.Router();
@@ -19,5 +20,6 @@ router.use(admin);
 router.post("/", createColor);
 router.put("/:colorId", updateColor);
 router.delete("/:colorId", deleteColor);
+router.get("/check-delete/:colorId", checkDeletableColor);
 
 module.exports = router;

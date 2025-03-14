@@ -5,26 +5,41 @@ const loginHistorySchema = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: function () {
+        return this.status === "success"; // Chỉ bắt buộc khi đăng nhập thành công
+      },
+    },
+    email: {
+      type: String,
+      required: function () {
+        return this.status === "failed"; // Bắt buộc khi đăng nhập thất bại
+      },
     },
     status: {
       type: String,
-      required: true,
+      enum: ["success", "failed"],
+      default: "success",
     },
     reason: {
       type: String,
-      required: true,
+      default: null,
     },
     ipAddress: {
       type: String,
-      required: true,
+      default: "Unknown",
     },
     userAgent: {
       type: String,
-      required: true,
+      default: "Unknown",
+    },
+    loginTime: {
+      type: Date,
+      default: Date.now,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
 const LoginHistory = mongoose.model("LoginHistory", loginHistorySchema);

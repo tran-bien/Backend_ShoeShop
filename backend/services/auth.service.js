@@ -146,39 +146,20 @@ const authService = {
    * @returns {Object} - Thông tin người dùng và token
    */
   loginUser: async (email, password, req) => {
-    // Tìm người dùng theo email
+    // Tìm user theo email
     const user = await User.findOne({ email });
-    if (!user) {
-      throw new Error("Email không tồn tại");
+
+    // Kiểm tra user tồn tại và mật khẩu đúng
+    if (!user || !(await user.matchPassword(password))) {
+      throw new Error("Thông tin đăng nhập không hợp lệ");
     }
 
-    // Kiểm tra mật khẩu
-    const isPasswordMatch = await user.matchPassword(password);
-    if (!isPasswordMatch) {
-      throw new Error("Mật khẩu không đúng");
-    }
-
-    // Kiểm tra trạng thái người dùng
-    if (user.isBlocked) {
-      throw new Error("Tài khoản của bạn đã bị khóa");
-    }
-
-    // Tạo token và refresh token
+    // Tạo token và refreshToken
     const token = authService.generateToken(user._id);
     const refreshToken = authService.generateRefreshToken(user._id);
 
-    // Vô hiệu hóa tất cả session cũ trước khi tạo cái mới
-    await Session.updateMany(
-      { user: user._id, isActive: true },
-      { isActive: false }
-    );
-
     // Tạo session mới
     await authService.createSession(user._id, req, token, refreshToken);
-
-    // Cập nhật thông tin đăng nhập cuối cùng
-    user.lastLogin = Date.now();
-    await user.save({ validateBeforeSave: false });
 
     return {
       _id: user._id,
@@ -186,8 +167,8 @@ const authService = {
       email: user.email,
       phone: user.phone,
       role: user.role,
-      avatar: user.avatar,
       isVerified: user.isVerified,
+      image: user.image,
       token,
       refreshToken,
     };
@@ -521,4 +502,26 @@ const authService = {
   },
 };
 
-module.exports = authService;
+/**
+ * Kiểm tra xem người dùng có phải là admin không
+ * @param {String} token - Token từ header
+ * @returns {Promise<Boolean>} - Trả về true nếu là admin, false nếu không
+ */
+const isAdmin = async (token) => {
+  if (token && token.startsWith("Bearer ")) {
+    try {
+      const decoded = jwt.verify(token.split(" ")[1], process.env.JWT_SECRET);
+      const user = await User.findById(decoded.id).select("-password");
+      return user && user.role === "admin";
+    } catch (error) {
+      console.log("Token verification failed:", error);
+      return false; // Nếu token không hợp lệ, trả về false
+    }
+  }
+  return false; // Nếu không có token, trả về false
+};
+
+module.exports = {
+  authService,
+  isAdmin,
+};

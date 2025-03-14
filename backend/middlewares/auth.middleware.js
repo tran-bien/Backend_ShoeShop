@@ -7,25 +7,42 @@ const asyncHandler = require("express-async-handler");
 exports.protect = asyncHandler(async (req, res, next) => {
   let token;
 
+  // Lấy token từ header
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith("Bearer")
   ) {
     token = req.headers.authorization.split(" ")[1];
-  } else if (req.cookies && req.cookies.token) {
-    token = req.cookies.token;
   }
 
+  // Kiểm tra token
   if (!token) {
+    console.log("No token found");
     return res.status(401).json({
       success: false,
-      message: "Không có token, không thể xác thực",
+      message: "Không có quyền truy cập, vui lòng đăng nhập",
     });
   }
 
   try {
+    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("Token decoded:", decoded);
+
+    // Lấy thông tin người dùng (bao gồm role)
     req.user = await User.findById(decoded.id).select("-password");
+    console.log(
+      "User found:",
+      req.user ? req.user.email : "No user",
+      "Role:",
+      req.user ? req.user.role : "No role"
+    );
+
+    if (!req.user) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Không tìm thấy người dùng" });
+    }
 
     if (!req.user || !req.user.isActive) {
       return res.status(401).json({
@@ -84,10 +101,10 @@ exports.protect = asyncHandler(async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error(error);
+    console.error("Auth error:", error);
     return res.status(401).json({
       success: false,
-      message: "Token không hợp lệ hoặc đã hết hạn",
+      message: "Không có quyền truy cập, token không hợp lệ",
     });
   }
 });
