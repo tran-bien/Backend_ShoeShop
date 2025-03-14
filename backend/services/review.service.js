@@ -233,7 +233,7 @@ const reviewService = {
 
     // Cập nhật các trường
     const allowedFields = isAdmin
-      ? ["content", "rating", "status", "images", "adminReply"]
+      ? ["content", "rating", "status", "images"]
       : ["content", "rating", "images"];
 
     for (const field of allowedFields) {
@@ -245,11 +245,6 @@ const reviewService = {
     // Nếu rating thay đổi, cập nhật reply date
     if (updateData.rating !== undefined) {
       review.updatedAt = new Date();
-    }
-
-    // Nếu admin reply thay đổi, cập nhật reply date
-    if (isAdmin && updateData.adminReply !== undefined) {
-      review.adminReplyDate = new Date();
     }
 
     // Lưu đánh giá

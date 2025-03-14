@@ -18,8 +18,15 @@ const checkPasswordRequirements = (password) => {
   return password.length >= minLength && hasLetter && hasNumber;
 };
 
+//logic kiểm tra mã màu
+const isValidHexColor = (hex) => {
+  const re = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+  return re.test(String(hex));
+};
+
 module.exports = {
   isValidEmail,
   isValidPhoneNumber,
   checkPasswordRequirements,
+  isValidHexColor,
 };

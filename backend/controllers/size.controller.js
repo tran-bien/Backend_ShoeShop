@@ -22,7 +22,7 @@ exports.createSize = asyncHandler(async (req, res) => {
 
 // Cập nhật kích thước (Admin)
 exports.updateSize = asyncHandler(async (req, res) => {
-  const size = await sizeService.updateSize(req.params.id, req.body);
+  const size = await sizeService.updateSize(req.params.sizeId, req.body);
   res.json({
     success: true,
     data: size,
@@ -31,7 +31,7 @@ exports.updateSize = asyncHandler(async (req, res) => {
 
 // Xóa kích thước (Admin)
 exports.deleteSize = asyncHandler(async (req, res) => {
-  await sizeService.deleteSize(req.params.id);
+  await sizeService.deleteSizeWithCheck(req.params.sizeId);
   res.json({
     success: true,
     message: "Xóa kích thước thành công",
@@ -56,7 +56,7 @@ exports.checkDeletableSize = asyncHandler(async (req, res) => {
 });
 
 exports.getSizeDetails = asyncHandler(async (req, res) => {
-  const size = await sizeService.getSizeDetails(req.params.id);
+  const size = await sizeService.getSizeDetails(req.params.sizeId);
   res.json({
     success: true,
     data: size,

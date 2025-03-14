@@ -21,7 +21,7 @@ exports.createColor = asyncHandler(async (req, res) => {
 
 // Cập nhật màu sắc (Admin)
 exports.updateColor = asyncHandler(async (req, res) => {
-  const color = await colorService.updateColor(req.params.id, req.body);
+  const color = await colorService.updateColor(req.params.colorId, req.body);
   res.json({
     success: true,
     data: color,
@@ -30,7 +30,7 @@ exports.updateColor = asyncHandler(async (req, res) => {
 
 // Xóa màu sắc (Admin)
 exports.deleteColor = asyncHandler(async (req, res) => {
-  await colorService.deleteColor(req.params.id);
+  await colorService.deleteColorWithCheck(req.params.colorId);
   res.json({
     success: true,
     message: "Xóa màu sắc thành công",
@@ -55,7 +55,7 @@ exports.checkDeletableColor = asyncHandler(async (req, res) => {
 });
 
 exports.getColorDetails = asyncHandler(async (req, res) => {
-  const color = await colorService.getColorDetails(req.params.id);
+  const color = await colorService.getColorDetails(req.params.colorId);
   res.json({
     success: true,
     data: color,

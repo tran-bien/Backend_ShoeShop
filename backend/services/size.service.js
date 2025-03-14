@@ -26,8 +26,11 @@ const sizeService = {
   createSize: async (sizeData) => {
     const { value, description } = sizeData;
 
-    // Validation
-    if (!value || value.trim().length === 0) {
+    if (typeof value !== "number") {
+      throw new Error("Giá trị không hợp lệ, phải là số");
+    }
+
+    if (!value || value.length === 0) {
       throw new Error("Giá trị kích thước không được để trống");
     }
 
@@ -53,8 +56,11 @@ const sizeService = {
 
     const { value, description } = updateData;
 
-    // Validation
-    if (value && value.trim().length === 0) {
+    if (typeof value !== "number") {
+      throw new Error("Giá trị không hợp lệ, phải là số");
+    }
+
+    if (!value || value.length === 0) {
       throw new Error("Giá trị kích thước không được để trống");
     }
 
@@ -82,17 +88,13 @@ const sizeService = {
   },
 
   // Xóa kích thước
-  deleteSize: async (id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID kích thước không hợp lệ");
+  deleteSizeWithCheck: async (id) => {
+    const { canDelete, message } = await sizeService.checkDeletableSize(id);
+    if (!canDelete) {
+      throw new Error(message);
     }
 
-    const size = await Size.findById(id);
-    if (!size) {
-      throw new Error("Không tìm thấy kích thước");
-    }
-
-    await size.remove();
+    await Size.findByIdAndDelete(id);
     return { message: "Kích thước đã được xóa thành công" };
   },
 

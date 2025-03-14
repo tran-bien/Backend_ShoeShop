@@ -294,12 +294,12 @@ exports.getReviewDetail = asyncHandler(async (req, res) => {
 exports.adminUpdateReview = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
-    const { content, rating, status, adminReply, images } = req.body;
+    const { content, rating, status, images } = req.body;
 
     // Gọi service để cập nhật đánh giá
     const review = await reviewService.updateReview(
       id,
-      { content, rating, status, adminReply, images },
+      { content, rating, status, images },
       req.user._id,
       true
     );

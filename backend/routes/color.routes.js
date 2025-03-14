@@ -1,22 +1,26 @@
 const express = require("express");
-const { protect, admin } = require("../middlewares/auth.middleware");
+
 const {
   getAllColors,
+  getColorDetails,
   createColor,
   updateColor,
   deleteColor,
   checkDeletableColor,
 } = require("../controllers/color.controller");
+const { protect, admin } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
 
 // Route công khai
 router.get("/", getAllColors);
+router.get("/:colorId", getColorDetails);
 
-// Route cho Admin - yêu cầu đăng nhập và quyền Admin
+// Route yêu cầu xác thực
 router.use(protect);
-router.use(admin);
 
+// Route cho Admin - yêu cầu quyền Admin
+router.use(admin);
 router.post("/", createColor);
 router.put("/:colorId", updateColor);
 router.delete("/:colorId", deleteColor);

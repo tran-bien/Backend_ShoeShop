@@ -211,6 +211,8 @@ const authService = {
         await user.save();
       }
 
+      console.log("Mã OTP:", user.otp.code);
+
       // Gửi mã OTP
       await emailUtils.sendVerificationEmail(
         user.email,

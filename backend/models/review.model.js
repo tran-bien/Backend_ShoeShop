@@ -45,13 +45,6 @@ const ReviewSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    adminReply: {
-      type: String,
-      maxlength: [500, "Phản hồi không được vượt quá 500 ký tự"],
-    },
-    adminReplyDate: {
-      type: Date,
-    },
     likes: [
       {
         type: mongoose.Schema.Types.ObjectId,

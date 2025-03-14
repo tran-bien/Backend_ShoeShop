@@ -87,18 +87,6 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
-// Tự động hash mật khẩu trước khi lưu
-// Hãy kiểm tra và tạm thời vô hiệu hóa middleware này nếu có
-// userSchema.pre("save", async function (next) {
-//   if (!this.isModified("password")) {
-//     return next();
-//   }
-//   // Nếu mật khẩu đã thay đổi, hash nó
-//   const salt = await bcrypt.genSalt(10);
-//   this.password = await bcrypt.hash(this.password, salt);
-//   next();
-// });
-
 // Phương thức kiểm tra mật khẩu
 UserSchema.methods.comparePassword = async function (password) {
   return await bcrypt.compare(password, this.password);

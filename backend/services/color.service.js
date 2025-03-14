@@ -2,7 +2,7 @@ const Color = require("../models/color.model");
 const Product = require("../models/product.model");
 const mongoose = require("mongoose");
 const { ObjectId } = require("mongoose").Types;
-
+const { isValidHexColor } = require("../utils/validators");
 const colorService = {
   /**
    * Lấy danh sách màu sắc
@@ -59,8 +59,7 @@ const colorService = {
     }
 
     // Kiểm tra định dạng mã màu hex
-    const hexCodeRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-    if (!hexCodeRegex.test(hexCode)) {
+    if (!isValidHexColor(hexCode)) {
       throw new Error("Mã màu không hợp lệ");
     }
 
@@ -99,11 +98,8 @@ const colorService = {
     }
 
     // Kiểm tra định dạng mã màu hex nếu có thay đổi
-    if (hexCode) {
-      const hexCodeRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-      if (!hexCodeRegex.test(hexCode)) {
-        throw new Error("Mã màu không hợp lệ");
-      }
+    if (hexCode && !isValidHexColor(hexCode)) {
+      throw new Error("Mã màu không hợp lệ");
     }
 
     // Kiểm tra trùng lặp nếu thay đổi name hoặc hexCode
@@ -128,38 +124,14 @@ const colorService = {
     return color;
   },
 
-  /**
-   * Xóa màu sắc
-   * @param {String} id - ID màu sắc
-   * @returns {Promise<Object>} Kết quả xóa
-   */
-  deleteColor: async (id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID màu sắc không hợp lệ");
-    }
-
-    const color = await Color.findById(id);
-    if (!color) {
-      throw new Error("Không tìm thấy màu sắc");
-    }
-
-    await color.remove();
-    return { message: "Màu sắc đã được xóa thành công" };
-  },
-
-  deleteColorWithCheck: async (colorId) => {
-    // Gọi hàm kiểm tra xóa trực tiếp từ colorService
-    const { canDelete, message } = await colorService.checkDeletableColor(
-      colorId
-    );
-
+  deleteColorWithCheck: async (id) => {
+    const { canDelete, message } = await colorService.checkDeletableColor(id);
     if (!canDelete) {
-      throw new Error(message); // Nếu không thể xóa, ném lỗi với thông báo
+      throw new Error(message);
     }
 
-    // Nếu có thể xóa, thực hiện xóa cứng
-    await Color.deleteOne({ _id: colorId });
-    return true;
+    await Color.findByIdAndDelete(id);
+    return { message: "Màu sắc đã được xóa thành công" };
   },
 
   checkDeletableColor: async (colorId) => {
