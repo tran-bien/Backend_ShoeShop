@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Brand = require("../models/brand.model");
 const slugify = require("slugify");
 const Product = require("../models/product.model");
+const asyncHandler = require("express-async-handler");
 
 const brandService = {
   /**
@@ -10,6 +11,17 @@ const brandService = {
    */
   getBrandsForUser: async () => {
     return await Brand.find({ isActive: true }); // Chỉ lấy thương hiệu đang hoạt động
+  },
+
+  /**kiểm tra dữ liệu đầu vào có hợp lệ không */
+  validateBrandData: (brandData) => {
+    const { name, description } = brandData;
+    if (!name || name.trim().length === 0) {
+      throw new Error("Tên thương hiệu không được để trống");
+    }
+    if (description && description.trim().length === 0) {
+      throw new Error("Mô tả thương hiệu không được để trống");
+    }
   },
 
   /**
@@ -39,82 +51,45 @@ const brandService = {
    * @returns {Promise<Object>} Thương hiệu đã tạo
    */
   createBrand: async (brandData) => {
-    const { name } = brandData;
+    validateBrandData(brandData); // Kiểm tra điều kiện đầu vào
 
-    // Validation
-    if (!name || name.trim().length === 0) {
-      throw new Error("Tên thương hiệu không được để trống");
-    }
-
-    // Kiểm tra trùng lặp
-    const existingBrand = await Brand.findOne({
-      name: { $regex: new RegExp(`^${name}$`, "i") },
-    });
-    if (existingBrand) {
-      throw new Error("Thương hiệu này đã tồn tại");
-    }
-
-    const brand = await Brand.create(brandData);
+    const brand = new Brand(brandData);
+    await brand.save();
     return brand;
   },
 
   /**
    * Cập nhật thương hiệu
    * @param {String} brandId - ID thương hiệu
-   * @param {Object} updateData - Dữ liệu cập nhật
+   * @param {Object} brandData - Dữ liệu cập nhật
    * @returns {Promise<Object>} Thương hiệu đã cập nhật
    */
-  updateBrand: async (id, updateData) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID thương hiệu không hợp lệ");
-    }
+  updateBrand: async (brandId, brandData) => {
+    validateBrandData(brandData); // Kiểm tra điều kiện đầu vào
 
-    const { name } = updateData;
-
-    // Validation
-    if (name && name.trim().length === 0) {
-      throw new Error("Tên thương hiệu không được để trống");
-    }
-
-    // Kiểm tra trùng lặp nếu thay đổi tên
-    if (name) {
-      const existingBrand = await Brand.findOne({
-        name: { $regex: new RegExp(`^${name}$`, "i") },
-        _id: { $ne: id },
-      });
-      if (existingBrand) {
-        throw new Error("Thương hiệu này đã tồn tại");
-      }
-    }
-
-    const brand = await Brand.findById(id);
+    const brand = await Brand.findByIdAndUpdate(brandId, brandData, {
+      new: true,
+      runValidators: true,
+    });
     if (!brand) {
       throw new Error("Không tìm thấy thương hiệu");
     }
-
-    Object.assign(brand, updateData);
-    await brand.save();
-
     return brand;
   },
 
   /**
    * Xóa thương hiệu
    * @param {String} brandId - ID thương hiệu
-   * @returns {Promise<Boolean>} Kết quả xóa
+   * @returns {Promise<Object>} Kết quả xóa
    */
-  deleteBrand: async (id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID thương hiệu không hợp lệ");
-    }
+  deleteBrand: async (brandId) => {
+    validateBrandId(brandId); // Kiểm tra điều kiện đầu vào
 
-    const brand = await Brand.findById(id);
+    const brand = await Brand.findByIdAndDelete(brandId);
     if (!brand) {
       throw new Error("Không tìm thấy thương hiệu");
     }
-
-    await brand.remove();
-    return { message: "Thương hiệu đã được xóa thành công" };
+    return brand;
   },
 
   /**
@@ -123,19 +98,14 @@ const brandService = {
    * @returns {Promise<Object>} Thương hiệu đã được toggle
    */
   toggleActive: async (brandId) => {
-    if (!mongoose.Types.ObjectId.isValid(brandId)) {
-      throw new Error("ID không hợp lệ");
-    }
+    validateBrandId(brandId); // Kiểm tra điều kiện đầu vào
 
     const brand = await Brand.findById(brandId);
     if (!brand) {
       throw new Error("Không tìm thấy thương hiệu");
     }
-
-    // Toggle trạng thái hoạt động của thương hiệu
     brand.isActive = !brand.isActive;
     await brand.save();
-
     return brand;
   },
 
@@ -145,6 +115,9 @@ const brandService = {
    * @returns {Promise<Object>} Kết quả kiểm tra
    */
   checkDeletableBrand: async (id) => {
+    // Kiểm tra điều kiện đầu vào
+    validateBrandId(id);
+
     const brand = await Brand.findById(id);
     if (!brand) {
       throw new Error("Không tìm thấy thương hiệu");
@@ -153,51 +126,20 @@ const brandService = {
     return { canDelete: true }; // Thay đổi logic theo yêu cầu
   },
 
-  // /**
-  //  * Ẩn thương hiệu
-  //  * @param {String} id - ID thương hiệu
-  //  * @returns {Promise<Object>} Thương hiệu đã ẩn
-  //  */
-  // hideBrand: async (id) => {
-  //   const brand = await Brand.findByIdAndUpdate(
-  //     id,
-  //     { isActive: false },
-  //     { new: true }
-  //   );
-  //   if (!brand) {
-  //     throw new Error("Không tìm thấy thương hiệu");
-  //   }
-  //   return brand;
-  // },
-
-  // /**
-  //  * Kích hoạt thương hiệu
-  //  * @param {String} id - ID thương hiệu
-  //  * @returns {Promise<Object>} Thương hiệu đã kích hoạt
-  //  */
-  // activateBrand: async (id) => {
-  //   const brand = await Brand.findByIdAndUpdate(
-  //     id,
-  //     { isActive: true },
-  //     { new: true }
-  //   );
-  //   if (!brand) {
-  //     throw new Error("Không tìm thấy thương hiệu");
-  //   }
-  //   return brand;
-  // },
-
   // Lấy tất cả thương hiệu
-  getAllBrands: async () => {
+  getAllBrandsForAdmin: async () => {
     const brands = await Brand.find();
     return brands;
   },
 
+  getAllBrandsForUser: async () => {
+    const brands = await Brand.find({ isActive: true });
+    return brands;
+  },
+
   // Lấy chi tiết thương hiệu
-  getBrandDetails: async (id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID thương hiệu không hợp lệ");
-    }
+  getBrandDetailsForAdmin: async (id) => {
+    validateBrandId(id);
 
     const brand = await Brand.findById(id);
     if (!brand) {
@@ -206,8 +148,14 @@ const brandService = {
     return brand;
   },
 
+  getBrandDetailsForUser: async (id) => {
+    validateBrandId(id);
+
+    const brand = await Brand.findById(id);
+  },
+
   /**
-   * Lấy thương hiệu theo slug
+   * Lấy thương hiệu theo slug cho người dùng
    * @param {String} slug - slug thương hiệu
    * @returns {Promise<Object>} Thương hiệu tìm thấy
    */
@@ -233,10 +181,9 @@ const brandService = {
   },
 
   // Kiểm tra điều kiện đầu vào cho thương hiệu
-  validateBrandData: (brandData) => {
-    const { name } = brandData;
-    if (!name || name.trim().length === 0) {
-      throw new Error("Tên thương hiệu không được để trống");
+  validateBrandId: (id) => {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new Error("ID thương hiệu không hợp lệ");
     }
   },
 };

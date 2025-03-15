@@ -48,6 +48,9 @@ const categoryService = {
    * @returns {Promise<Object>} Thông tin danh mục
    */
   getCategoryByIdForUser: async (categoryId) => {
+    //kiểm tra id có hợp lệ không
+    validateCategoryId(categoryId);
+
     const category = await Category.findOne({
       _id: categoryId,
       isActive: true,
@@ -64,9 +67,9 @@ const categoryService = {
    * @returns {Promise<Object>} Thông tin danh mục
    */
   getCategoryByIdForAdmin: async (categoryId) => {
-    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-      throw new Error("ID danh mục không hợp lệ");
-    }
+    //kiểm tra id có hợp lệ không
+    validateCategoryId(categoryId);
+
     const category = await Category.findOne({ _id: categoryId });
     if (!category) {
       throw new Error("Không tìm thấy danh mục");

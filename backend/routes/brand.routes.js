@@ -5,17 +5,18 @@ const {
   createBrand,
   updateBrand,
   deleteBrand,
-  hideBrand,
   checkDeletableBrand,
-  activateBrand,
   getBrandsForUser,
   getBrandsForAdmin,
+  toggleActive,
+  getBrandBySlugForUser,
+  getBrandBySlugForAdmin,
 } = require("../controllers/brand.controller");
 const { protect, admin } = require("../middlewares/auth.middleware");
 
 // Route cho người dùng
 router.get("/", getBrandsForUser);
-
+router.get("/slug/:slug", getBrandBySlugForUser);
 // Route cho admin
 router.get("/admin", protect, admin, getBrandsForAdmin);
 
@@ -29,8 +30,8 @@ router.use(admin);
 router.post("/", createBrand);
 router.put("/:id", updateBrand);
 router.delete("/:id", deleteBrand);
-router.put("/hide/:id", hideBrand);
 router.get("/check-delete/:id", checkDeletableBrand);
-router.put("/activate/:id", activateBrand);
+router.patch("/:id/toggle", toggleActive);
+router.get("/admin/slug/:slug", getBrandBySlugForAdmin);
 
 module.exports = router;
