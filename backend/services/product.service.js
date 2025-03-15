@@ -432,7 +432,7 @@ const productService = {
    * @returns {Object} - Kết quả phân trang với danh sách sản phẩm
    */
   getAllProducts: async (reqQuery) => {
-    // Mặc định chỉ hiển thị sản phẩm hoạt động cho người dùng
+    // Mặc định chỉ hiển thị sản phẩm hoạt động cho người dùng. Nếu là adm
     const isAdmin = reqQuery.isAdmin || false;
 
     // Tạo các tùy chọn tìm kiếm và lọc

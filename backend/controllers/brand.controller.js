@@ -7,67 +7,29 @@ const { isAdmin } = require("../services/auth.service");
 
 // Lấy tất cả thương hiệu cho người dùng
 exports.getBrandsForUser = asyncHandler(async (req, res) => {
-  try {
-    const brands = await brandService.getBrandsForUser();
-    res.status(200).json({
-      success: true,
-      data: brands,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi lấy danh sách thương hiệu",
-    });
-  }
+  const brands = await brandService.getBrandsForUser();
+  res.status(200).json({
+    success: true,
+    data: brands,
+  });
 });
 
 // Lấy tất cả thương hiệu cho admin
 exports.getBrandsForAdmin = asyncHandler(async (req, res) => {
-  try {
-    const brands = await brandService.getBrandsForAdmin();
-    res.status(200).json({
-      success: true,
-      data: brands,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi lấy danh sách thương hiệu",
-    });
-  }
+  const brands = await brandService.getBrandsForAdmin();
+  res.status(200).json({
+    success: true,
+    data: brands,
+  });
 });
 
 // Lấy chi tiết thương hiệu theo ID
 exports.getBrandById = asyncHandler(async (req, res) => {
-  try {
-    const brandId = req.params.id;
-
-    // Kiểm tra ID có hợp lệ không
-    if (!mongoose.Types.ObjectId.isValid(brandId)) {
-      return res.status(400).json({
-        success: false,
-        message: "ID không hợp lệ",
-      });
-    }
-
-    // Kiểm tra admin thông qua token
-    const token = req.headers.authorization;
-    const adminStatus = await isAdmin(token);
-
-    // Lấy thương hiệu theo ID
-    const brand = await brandService.getBrandById(brandId, adminStatus);
-    res.status(200).json({
-      success: true,
-      data: brand,
-    });
-  } catch (error) {
-    res
-      .status(error.message === "Không tìm thấy thương hiệu" ? 404 : 500)
-      .json({
-        success: false,
-        message: error.message || "Lỗi khi lấy thông tin thương hiệu",
-      });
-  }
+  const brand = await brandService.getBrandById(req.params.id);
+  res.status(200).json({
+    success: true,
+    data: brand,
+  });
 });
 
 // Tạo thương hiệu mới
@@ -94,6 +56,16 @@ exports.deleteBrand = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: "Xóa thương hiệu thành công",
+  });
+});
+
+// Toggle trạng thái hoạt động của thương hiệu
+exports.toggleActive = asyncHandler(async (req, res) => {
+  const brand = await brandService.toggleActive(req.params.id);
+  res.status(200).json({
+    success: true,
+    data: brand,
+    message: `Đã ${brand.isActive ? "kích hoạt" : "vô hiệu hóa"} thương hiệu`,
   });
 });
 
@@ -179,6 +151,24 @@ exports.getAllBrands = asyncHandler(async (req, res) => {
 exports.getBrandDetails = asyncHandler(async (req, res) => {
   const brand = await brandService.getBrandDetails(req.params.id);
   res.json({
+    success: true,
+    data: brand,
+  });
+});
+
+// Tìm thương hiệu theo slug cho người dùng
+exports.getBrandBySlugForUser = asyncHandler(async (req, res) => {
+  const brand = await brandService.getBrandBySlug(req.params.slug);
+  res.status(200).json({
+    success: true,
+    data: brand,
+  });
+});
+
+// Tìm thương hiệu theo slug cho admin thấy được tất cả
+exports.getBrandBySlugForAdmin = asyncHandler(async (req, res) => {
+  const brand = await brandService.getBrandBySlug(req.params.slug);
+  res.status(200).json({
     success: true,
     data: brand,
   });

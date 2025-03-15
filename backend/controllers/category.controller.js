@@ -5,71 +5,29 @@ const { isAdmin } = require("../services/auth.service"); // Import service
 
 // Lấy tất cả danh mục cho người dùng
 exports.getCategoriesForUser = asyncHandler(async (req, res) => {
-  try {
-    const categories = await categoryService.getCategoriesForUser();
-
-    res.status(200).json({
-      success: true,
-      data: categories,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi lấy danh sách danh mục",
-    });
-  }
+  const categories = await categoryService.getCategoriesForUser();
+  res.status(200).json({
+    success: true,
+    data: categories,
+  });
 });
 
 // Lấy tất cả danh mục cho admin
 exports.getCategoriesForAdmin = asyncHandler(async (req, res) => {
-  try {
-    const categories = await categoryService.getCategoriesForAdmin();
-
-    res.status(200).json({
-      success: true,
-      data: categories,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi lấy danh sách danh mục",
-    });
-  }
+  const categories = await categoryService.getCategoriesForAdmin();
+  res.status(200).json({
+    success: true,
+    data: categories,
+  });
 });
 
 // Lấy chi tiết danh mục theo ID
 exports.getCategoryById = asyncHandler(async (req, res) => {
-  try {
-    const categoryId = req.params.id;
-
-    // Kiểm tra ID có hợp lệ không
-    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-      return res.status(400).json({
-        success: false,
-        message: "ID không hợp lệ",
-      });
-    }
-
-    // Kiểm tra admin thông qua token
-    const token = req.headers.authorization;
-    const adminStatus = await isAdmin(token); // Sử dụng service
-
-    // Lấy danh mục theo ID
-    const category = await categoryService.getCategoryById(
-      categoryId,
-      adminStatus
-    );
-
-    res.status(200).json({
-      success: true,
-      data: category,
-    });
-  } catch (error) {
-    res.status(error.message === "Không tìm thấy danh mục" ? 404 : 500).json({
-      success: false,
-      message: error.message || "Lỗi khi lấy thông tin danh mục",
-    });
-  }
+  const category = await categoryService.getCategoryById(req.params.id);
+  res.status(200).json({
+    success: true,
+    data: category,
+  });
 });
 
 // Tạo danh mục mới
@@ -119,60 +77,14 @@ exports.checkDeletableCategory = asyncHandler(async (req, res) => {
   }
 });
 
-// Ẩn danh mục
-exports.hideCategory = asyncHandler(async (req, res) => {
-  try {
-    const { id } = req.params; // Lấy ID từ tham số
-
-    // Kiểm tra ID có hợp lệ không
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "ID không hợp lệ",
-      });
-    }
-
-    const category = await categoryService.hideCategory(id); // Gọi service để ẩn danh mục
-
-    res.json({
-      success: true,
-      message: "Danh mục đã được ẩn",
-      data: category,
-    });
-  } catch (error) {
-    res.status(error.message === "Không tìm thấy danh mục" ? 404 : 500).json({
-      success: false,
-      message: error.message || "Lỗi khi ẩn danh mục",
-    });
-  }
-});
-
-// Kích hoạt danh mục
-exports.activateCategory = asyncHandler(async (req, res) => {
-  try {
-    const { id } = req.params; // Lấy ID từ tham số
-
-    // Kiểm tra ID có hợp lệ không
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "ID không hợp lệ",
-      });
-    }
-
-    const category = await categoryService.activateCategory(id); // Gọi service để kích hoạt danh mục
-
-    res.json({
-      success: true,
-      message: "Danh mục đã được kích hoạt",
-      data: category,
-    });
-  } catch (error) {
-    res.status(error.message === "Không tìm thấy danh mục" ? 404 : 500).json({
-      success: false,
-      message: error.message || "Lỗi khi kích hoạt danh mục",
-    });
-  }
+// Toggle trạng thái hoạt động của danh mục
+exports.toggleActive = asyncHandler(async (req, res) => {
+  const category = await categoryService.toggleActive(req.params.id);
+  res.status(200).json({
+    success: true,
+    data: category,
+    message: `Đã ${category.isActive ? "kích hoạt" : "vô hiệu hóa"} danh mục`,
+  });
 });
 
 exports.getAllCategories = asyncHandler(async (req, res) => {

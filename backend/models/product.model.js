@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const mongoosePaginate = require("mongoose-paginate-v2"); // Import plugin phân trang cho mongoose
+const slugify = require("slugify");
 
 const ProductImageSchema = new mongoose.Schema(
   {
@@ -29,10 +30,12 @@ const VariantSchema = new mongoose.Schema(
   {
     imagesvariant: [ProductImageSchema],
     priceFinal: {
-      // giá bán hàng chính thức cuối cùng khi add phần trăm giảm giá
-      // ví dụ: giá gốc 100k, phần trăm giảm giá 10%, giá bán hàng chính thức cuối cùng là 90k
       type: Number,
-      default: 0,
+      default: function () {
+        return this.percentDiscount > 0
+          ? this.price - (this.price * this.percentDiscount) / 100
+          : this.price;
+      },
       min: 0,
     },
     price: {
@@ -58,6 +61,20 @@ const VariantSchema = new mongoose.Schema(
       min: [0, "Phần trăm giảm giá không được âm"],
       max: [100, "Phần trăm giảm giá không được vượt quá 100%"],
     },
+    profit: {
+      type: Number,
+      default: function () {
+        return this.price - this.costPrice; // Tính lợi nhuận tự động từ giá bán và giá gốc
+      },
+    },
+    profitPercentage: {
+      type: Number,
+      default: function () {
+        return this.costPrice > 0
+          ? parseFloat(((this.profit / this.costPrice) * 100).toFixed(2)) // Làm tròn đến 2 chữ số thập phân
+          : 0;
+      },
+    },
     gender: {
       type: String,
       enum: ["male", "female"],
@@ -81,7 +98,12 @@ const VariantSchema = new mongoose.Schema(
           default: 0,
           min: [0, "Số lượng sản phẩm theo size không được âm"],
         },
-        isSizeAvailable: { type: Boolean, default: true },
+        isSizeAvailable: {
+          type: Boolean,
+          default: function () {
+            return this.quantity > 0; // Tự động xác định size có sẵn dựa trên số lượng
+          },
+        },
         totalSoldSize: { type: Number, default: 0 },
       },
     ],
@@ -175,6 +197,8 @@ const ProductSchema = new mongoose.Schema(
   },
   {
     timestamps: true, // Tự động thêm trường createdAt và updatedAt
+    toJSON: { virtuals: true }, // Đảm bảo trường ảo được bao gồm khi chuyển đổi thành JSON
+    toObject: { virtuals: true }, // Đảm bảo trường ảo được bao gồm khi chuyển đổi thành object
   }
 );
 
@@ -185,6 +209,8 @@ ProductSchema.index({ category: 1 });
 ProductSchema.index({ brand: 1 });
 ProductSchema.index({ price: 1 });
 ProductSchema.index({ rating: -1 });
+ProductSchema.index({ slug: 1 }); // Index cho tìm kiếm bằng slug
+ProductSchema.index({ "variants.sku": 1 }); // Index cho tìm kiếm bằng SKU của biến thể
 
 // Virtual field để tính toán tổng số lượng và trạng thái kho hàng
 ProductSchema.virtual("calculatedTotalQuantity").get(function () {
@@ -228,109 +254,227 @@ function updateVariantStatus(variant) {
   }
 }
 
-// Middleware trước khi lưu sản phẩm
-ProductSchema.pre("save", function (next) {
-  // Tạo slug tự động từ tên sản phẩm
-  if (this.name) {
-    this.slug = this.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-  }
+// Hàm tạo slug cải tiến với xử lý đặc biệt
+function createUniqueSlug(name, suffix = "") {
+  const baseSlug = slugify(name, {
+    lower: true, // Chuyển thành chữ thường
+    strict: true, // Loại bỏ các ký tự đặc biệt
+    remove: /[*+~.()'"!:@]/g, // Quy tắc xóa ký tự đặc biệt
+  });
 
-  // Tạo SKU cho từng biến thể nếu chưa có
-  if (this.variants && this.variants.length > 0) {
-    this.variants.forEach((variant, index) => {
-      if (!variant.sku) {
-        // Tạo SKU duy nhất cho từng biến thể dựa trên tên SP, màu sắc và timestamp
-        const timestamp = Date.now() + index;
-        variant.sku = `${this.name.substring(0, 3).toUpperCase()}-${
-          variant.color
-        }-${timestamp}`;
+  return suffix ? `${baseSlug}-${suffix}` : baseSlug;
+}
+
+// Middleware trước khi lưu sản phẩm - cải tiến với async/await
+ProductSchema.pre("save", async function (next) {
+  try {
+    // Xử lý tạo slug cải tiến với kiểm tra trùng lặp
+    if (this.isModified("name") || !this.slug) {
+      const baseSlug = createUniqueSlug(this.name);
+
+      // Nếu là sản phẩm mới hoặc slug bị thay đổi
+      if (this.isNew || this.isModified("slug")) {
+        // Kiểm tra trùng lặp slug trong database
+        let newSlug = baseSlug;
+        let count = 1;
+
+        // Kiểm tra trùng lặp trong vòng lặp
+        let slugExists = await mongoose
+          .model("Product")
+          .findOne({ slug: newSlug, _id: { $ne: this._id } });
+        while (slugExists) {
+          newSlug = `${baseSlug}-${count}`;
+          count++;
+          slugExists = await mongoose
+            .model("Product")
+            .findOne({ slug: newSlug, _id: { $ne: this._id } });
+        }
+
+        this.slug = newSlug;
       }
-    });
-  }
+    }
 
-  // Cập nhật thời gian thay đổi
-  this.updatedAt = Date.now();
+    // Xử lý SKU biến thể cải tiến
+    if (this.variants && this.variants.length > 0) {
+      for (const [index, variant] of this.variants.entries()) {
+        if (!variant.sku) {
+          try {
+            // Tìm nạp dữ liệu liên quan nếu cần
+            const productId = this._id.toString().substring(0, 5);
 
-  // Kiểm tra nếu sản phẩm bị đánh dấu là đã xóa thì chuyển trạng thái hoạt động thành false
-  if (this.isDeleted === true) {
-    this.isActive = false;
-  }
+            // Kiểm tra nếu brand và color là ObjectId hoặc đã là đối tượng
+            let brandName = "";
+            if (typeof this.brand === "object" && this.brand.name) {
+              brandName = this.brand.name;
+            } else {
+              const brand = await mongoose.model("Brand").findById(this.brand);
+              if (brand) brandName = brand.name;
+            }
 
-  // Tính tổng số lượng sản phẩm nam và nữ
-  let totalMaleQuantity = 0;
-  let totalFemaleQuantity = 0;
+            let colorName = "";
+            if (typeof variant.color === "object" && variant.color.name) {
+              colorName = variant.color.name;
+            } else {
+              const colorDoc = await mongoose
+                .model("Color")
+                .findById(variant.color);
+              if (colorDoc) colorName = colorDoc.name;
+            }
 
-  // Cập nhật trạng thái isSizeAvailable cho tất cả các size
-  if (this.variants && this.variants.length > 0) {
-    this.variants.forEach((variant) => {
-      variant.priceFinal = calculateFinalPrice(
-        variant.price,
-        variant.percentDiscount
-      );
-      updateVariantStatus(variant);
+            // Tạo SKU với cấu trúc rõ ràng hơn
+            const brandCode = brandName
+              ? brandName.substring(0, 3).toUpperCase()
+              : "BRD";
+            const colorCode = colorName
+              ? colorName.substring(0, 3).toUpperCase()
+              : "CLR";
+            const uniqueCode = Date.now().toString().substring(8) + index;
 
-      // Tính tổng số lượng sẵn có của biến thể
-      let variantTotalQuantity = 0;
+            const newSKU = `${brandCode}-${productId}-${colorCode}-${uniqueCode}`;
 
-      // Cập nhật isSizeAvailable dựa trên quantity
-      variant.sizes.forEach((size) => {
-        // Size có khả dụng nếu số lượng > 0
-        size.isSizeAvailable = size.quantity > 0;
-        if (size.isSizeAvailable) {
-          variantTotalQuantity += size.quantity;
+            // Kiểm tra trùng lặp SKU
+            const existingSKU = await mongoose.model("Product").findOne({
+              "variants.sku": newSKU,
+              _id: { $ne: this._id },
+            });
 
-          // Cộng vào tổng số lượng theo giới tính
-          if (variant.gender === "male") {
-            totalMaleQuantity += size.quantity;
-          } else if (variant.gender === "female") {
-            totalFemaleQuantity += size.quantity;
+            if (existingSKU) {
+              variant.sku = `${newSKU}-${Math.floor(
+                1000 + Math.random() * 9000
+              )}`;
+            } else {
+              variant.sku = newSKU;
+            }
+          } catch (error) {
+            // Cơ chế dự phòng nếu không thể lấy dữ liệu liên quan
+            const timestamp = Date.now() + index;
+            variant.sku = `PROD-${this._id
+              .toString()
+              .substring(0, 5)}-${timestamp}`;
           }
         }
-      });
 
-      // Cập nhật trạng thái của biến thể dựa trên tổng số lượng của các size
-      updateVariantStatus(variant);
-    });
+        // Tự động tính giá cuối cùng và lợi nhuận cho biến thể
+        variant.priceFinal = calculateFinalPrice(
+          variant.price,
+          variant.percentDiscount
+        );
+        variant.profit = variant.price - variant.costPrice;
+        variant.profitPercentage =
+          variant.costPrice > 0
+            ? parseFloat(
+                ((variant.profit / variant.costPrice) * 100).toFixed(2)
+              )
+            : 0;
+
+        // Cập nhật trạng thái variant
+        updateVariantStatus(variant);
+      }
+    }
+
+    // Cập nhật thời gian thay đổi
+    this.updatedAt = Date.now();
+
+    // Kiểm tra nếu sản phẩm bị đánh dấu là đã xóa thì chuyển trạng thái hoạt động thành false
+    if (this.isDeleted === true) {
+      this.isActive = false;
+    }
+
+    // Tính tổng số lượng sản phẩm nam và nữ
+    let totalMaleQuantity = 0;
+    let totalFemaleQuantity = 0;
+
+    // Cập nhật trạng thái isSizeAvailable cho tất cả các size
+    if (this.variants && this.variants.length > 0) {
+      for (const variant of this.variants) {
+        // Tính tổng số lượng sẵn có của biến thể
+        let variantTotalQuantity = 0;
+
+        // Cập nhật isSizeAvailable dựa trên quantity
+        for (const size of variant.sizes) {
+          // Size có khả dụng nếu số lượng > 0
+          size.isSizeAvailable = size.quantity > 0;
+          if (size.isSizeAvailable) {
+            variantTotalQuantity += size.quantity;
+
+            // Cộng vào tổng số lượng theo giới tính
+            if (variant.gender === "male") {
+              totalMaleQuantity += size.quantity;
+            } else if (variant.gender === "female") {
+              totalFemaleQuantity += size.quantity;
+            }
+          }
+        }
+      }
+    }
+
+    // Tính tổng số lượng sản phẩm và cập nhật trạng thái kho
+    const totalQuantity = totalMaleQuantity + totalFemaleQuantity;
+
+    // Cập nhật tổng số lượng
+    this.totalQuantity = totalQuantity;
+
+    // Cập nhật trạng thái kho hàng dựa trên tổng số lượng
+    if (totalQuantity === 0) {
+      const allDiscontinued =
+        this.variants.length > 0 &&
+        this.variants.every((v) => v.status === "discontinued");
+      this.stockStatus = allDiscontinued ? "discontinued" : "outOfStock";
+    } else if (totalQuantity < 10) {
+      this.stockStatus = "lowStock";
+    } else {
+      this.stockStatus = "inStock";
+    }
+
+    next();
+  } catch (error) {
+    next(error);
   }
-
-  // Tính tổng số lượng sản phẩm và cập nhật trạng thái kho
-  let totalQuantity = totalMaleQuantity + totalFemaleQuantity;
-
-  // Cập nhật tổng số lượng
-  this.totalQuantity = totalQuantity;
-
-  // Cập nhật trạng thái kho hàng dựa trên tổng số lượng
-  if (totalQuantity === 0) {
-    const allDiscontinued =
-      this.variants.length > 0 &&
-      this.variants.every((v) => v.status === "discontinued");
-    this.stockStatus = allDiscontinued ? "discontinued" : "outOfStock";
-  } else if (totalQuantity < 10) {
-    this.stockStatus = "lowStock";
-  } else {
-    this.stockStatus = "inStock";
-  }
-
-  next();
 });
 
-// Middleware trước khi cập nhật sản phẩm
-ProductSchema.pre("findOneAndUpdate", function (next) {
-  const update = this.getUpdate();
+// Middleware để tự động cập nhật slug khi cập nhật tên
+ProductSchema.pre("findOneAndUpdate", async function (next) {
+  try {
+    const update = this.getUpdate();
 
-  // Kiểm tra giá và giá gốc
-  if (update.price && update.costPrice && update.price < update.costPrice) {
-    const error = new Error("Giá bán phải lớn hơn hoặc bằng giá gốc");
-    return next(error);
-  }
+    // Tạo slug mới nếu tên sản phẩm được cập nhật
+    if (update.name) {
+      const baseSlug = createUniqueSlug(update.name);
+      let newSlug = baseSlug;
+      let count = 1;
 
-  // Tính lại giá bán cuối cùng và lợi nhuận nếu cập nhật giá hoặc phần trăm giảm giá
-  if (update.price || update.percentDiscount || update.costPrice) {
-    this.findOne({}, (err, product) => {
-      if (err || !product) return next(err);
+      // Lấy ID sản phẩm đang được cập nhật
+      const doc = await this.model.findOne(this.getQuery());
+      if (!doc) return next();
+
+      // Kiểm tra trùng lặp
+      let slugExists = await mongoose.model("Product").findOne({
+        slug: newSlug,
+        _id: { $ne: doc._id },
+      });
+
+      while (slugExists) {
+        newSlug = `${baseSlug}-${count}`;
+        count++;
+        slugExists = await mongoose.model("Product").findOne({
+          slug: newSlug,
+          _id: { $ne: doc._id },
+        });
+      }
+
+      update.slug = newSlug;
+    }
+
+    // Kiểm tra giá và giá gốc
+    if (update.price && update.costPrice && update.price < update.costPrice) {
+      const error = new Error("Giá bán phải lớn hơn hoặc bằng giá gốc");
+      return next(error);
+    }
+
+    // Tính lại giá bán cuối cùng và lợi nhuận nếu cập nhật giá hoặc phần trăm giảm giá
+    if (update.price || update.percentDiscount || update.costPrice) {
+      const doc = await this.model.findOne(this.getQuery());
+      if (!doc) return next();
 
       // Nếu đang cập nhật biến thể
       if (update["variants.$"]) {
@@ -338,21 +482,31 @@ ProductSchema.pre("findOneAndUpdate", function (next) {
 
         // Tính giá bán cuối cùng nếu có thông tin giá và phần trăm giảm giá
         if (variant.price || variant.percentDiscount) {
-          const price = variant.price || product.variants[0].price;
+          const price = variant.price || doc.variants[0].price;
           const percentDiscount =
-            variant.percentDiscount || product.variants[0].percentDiscount;
+            variant.percentDiscount || doc.variants[0].percentDiscount;
 
           if (percentDiscount > 0) {
             variant.priceFinal = price - (price * percentDiscount) / 100;
           } else {
             variant.priceFinal = price;
           }
+
+          // Cập nhật lợi nhuận nếu có costPrice
+          if (variant.costPrice || variant.price) {
+            const costPrice = variant.costPrice || doc.variants[0].costPrice;
+            variant.profit = price - costPrice;
+            variant.profitPercentage =
+              costPrice > 0
+                ? parseFloat(((variant.profit / costPrice) * 100).toFixed(2))
+                : 0;
+          }
         }
       }
       // Cập nhật sản phẩm
       else if (update.price || update.costPrice) {
-        const newPrice = update.price || product.price;
-        const newCostPrice = update.costPrice || product.costPrice;
+        const newPrice = update.price || doc.price;
+        const newCostPrice = update.costPrice || doc.costPrice;
 
         update.profit = newPrice - newCostPrice;
         update.profitPercentage =
@@ -360,13 +514,33 @@ ProductSchema.pre("findOneAndUpdate", function (next) {
             ? parseFloat(((update.profit / newCostPrice) * 100).toFixed(2))
             : 0;
       }
+    }
 
-      next();
-    });
-  } else {
     next();
+  } catch (error) {
+    next(error);
   }
 });
+
+// Thêm phương thức tạo SKU chuyên nghiệp
+ProductSchema.methods.generateSKU = async function (variant, size) {
+  try {
+    const brand = await mongoose.model("Brand").findById(this.brand);
+    const color = await mongoose.model("Color").findById(variant.color);
+
+    const brandCode = brand.name.substring(0, 3).toUpperCase();
+    const productCode = this._id.toString().substring(0, 5);
+    const colorCode = color.name.substring(0, 3).toUpperCase();
+    const sizeValue = size.value;
+
+    return `${brandCode}-${productCode}-${colorCode}-${sizeValue}`;
+  } catch (error) {
+    // Cơ chế dự phòng nếu có lỗi
+    return `PROD-${this._id.toString().substring(0, 8)}-${Date.now()
+      .toString()
+      .substring(8)}`;
+  }
+};
 
 // Tìm variant theo color và size
 ProductSchema.methods.findVariant = function (colorId, sizeId) {

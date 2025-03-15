@@ -5,6 +5,28 @@ const mongoose = require("mongoose");
 
 const categoryService = {
   /**
+   * Kiểm tra điều kiện đầu vào cho danh mục
+   * @param {Object} categoryData - Dữ liệu danh mục
+   * @throws {Error} Nếu dữ liệu không hợp lệ
+   */
+  validateCategoryData: (categoryData) => {
+    const { name, description } = categoryData;
+    if (!name || name.trim().length === 0) {
+      throw new Error("Tên danh mục không được để trống");
+    }
+    if (description && description.trim().length === 0) {
+      throw new Error("Mô tả danh mục không được để trống");
+    }
+  },
+
+  //kiểm tra id có hợp lệ không
+  validateCategoryId: (categoryId) => {
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+      throw new Error("ID danh mục không hợp lệ");
+    }
+  },
+
+  /**
    * Lấy tất cả danh mục cho người dùng
    * @returns {Promise<Array>} Danh sách danh mục
    */
@@ -23,14 +45,29 @@ const categoryService = {
   /**
    * Lấy chi tiết danh mục theo ID
    * @param {String} categoryId - ID danh mục
-   * @param {Boolean} isAdmin - Kiểm tra xem người dùng có phải là admin không
    * @returns {Promise<Object>} Thông tin danh mục
    */
-  getCategoryById: async (categoryId, isAdmin = false) => {
-    const query = isAdmin
-      ? { _id: categoryId }
-      : { _id: categoryId, isActive: true }; // Nếu là admin, lấy tất cả
-    const category = await Category.findOne(query);
+  getCategoryByIdForUser: async (categoryId) => {
+    const category = await Category.findOne({
+      _id: categoryId,
+      isActive: true,
+    });
+    if (!category) {
+      throw new Error("Không tìm thấy danh mục");
+    }
+    return category;
+  },
+
+  /**
+   * Lấy chi tiết danh mục theo ID cho admin
+   * @param {String} categoryId - ID danh mục
+   * @returns {Promise<Object>} Thông tin danh mục
+   */
+  getCategoryByIdForAdmin: async (categoryId) => {
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+      throw new Error("ID danh mục không hợp lệ");
+    }
+    const category = await Category.findOne({ _id: categoryId });
     if (!category) {
       throw new Error("Không tìm thấy danh mục");
     }
@@ -43,28 +80,10 @@ const categoryService = {
    * @returns {Promise<Object>} Danh mục đã tạo
    */
   createCategory: async (categoryData) => {
-    const { name, description, parentId } = categoryData;
+    const { name, description } = categoryData;
 
-    // Validation
-    if (!name || name.trim().length === 0) {
-      throw new Error("Tên danh mục không được để trống");
-    }
-
-    if (description && description.trim().length === 0) {
-      throw new Error("Mô tả danh mục không được để trống");
-    }
-
-    // Kiểm tra parentId nếu có
-    if (parentId) {
-      if (!mongoose.Types.ObjectId.isValid(parentId)) {
-        throw new Error("ID danh mục cha không hợp lệ");
-      }
-
-      const parentCategory = await Category.findById(parentId);
-      if (!parentCategory) {
-        throw new Error("Không tìm thấy danh mục cha");
-      }
-    }
+    // Kiểm tra điều kiện đầu vào
+    validateCategoryData(categoryData);
 
     // Kiểm tra trùng lặp
     const existingCategory = await Category.findOne({
@@ -85,37 +104,13 @@ const categoryService = {
    * @returns {Promise<Object>} Danh mục đã cập nhật
    */
   updateCategory: async (id, updateData) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID danh mục không hợp lệ");
-    }
+    //kiểm tra id có hợp lệ không
+    validateCategoryId(id);
 
-    const { name, description, parentId } = updateData;
+    const { name, description } = updateData;
 
-    // Validation
-    if (name && name.trim().length === 0) {
-      throw new Error("Tên danh mục không được để trống");
-    }
-
-    if (description && description.trim().length === 0) {
-      throw new Error("Mô tả danh mục không được để trống");
-    }
-
-    // Kiểm tra parentId nếu có
-    if (parentId) {
-      if (!mongoose.Types.ObjectId.isValid(parentId)) {
-        throw new Error("ID danh mục cha không hợp lệ");
-      }
-
-      const parentCategory = await Category.findById(parentId);
-      if (!parentCategory) {
-        throw new Error("Không tìm thấy danh mục cha");
-      }
-
-      // Kiểm tra vòng lặp (không cho phép danh mục là cha của chính nó)
-      if (parentId === id) {
-        throw new Error("Không thể chọn chính danh mục này làm danh mục cha");
-      }
-    }
+    // Kiểm tra điều kiện đầu vào
+    validateCategoryData(updateData);
 
     // Kiểm tra trùng lặp nếu thay đổi tên
     if (name) {
@@ -145,19 +140,12 @@ const categoryService = {
    * @returns {Promise<Boolean>} Kết quả xóa
    */
   deleteCategory: async (id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID danh mục không hợp lệ");
-    }
+    //kiểm tra id có hợp lệ không
+    validateCategoryId(id);
 
     const category = await Category.findById(id);
     if (!category) {
       throw new Error("Không tìm thấy danh mục");
-    }
-
-    // Kiểm tra xem danh mục có con không
-    const hasChildren = await Category.exists({ parentId: id });
-    if (hasChildren) {
-      throw new Error("Không thể xóa danh mục có danh mục con");
     }
 
     await category.remove();
@@ -191,17 +179,15 @@ const categoryService = {
   },
 
   /**
-   * Ẩn danh mục (đánh dấu không hoạt động)
+   * Toggle trạng thái hoạt động của danh mục
    * @param {String} categoryId - ID danh mục
-   * @returns {Promise<Object>} Danh mục đã được ẩn
+   * @returns {Promise<Object>} Danh mục đã được toggle
    */
-  hideCategory: async (categoryId) => {
-    console.log("Attempting to hide category with ID:", categoryId); // Log ID
+  toggleActive: async (categoryId) => {
+    console.log("Attempting to toggle category with ID:", categoryId); // Log ID
 
     // Kiểm tra ID có hợp lệ không
-    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-      throw new Error("ID không hợp lệ");
-    }
+    validateCategoryId(categoryId);
 
     const category = await Category.findById(categoryId);
     if (!category) {
@@ -209,38 +195,37 @@ const categoryService = {
       throw new Error("Không tìm thấy danh mục");
     }
 
-    // Đánh dấu danh mục là không hoạt động
-    category.isActive = false;
+    // Toggle trạng thái hoạt động của danh mục
+    category.isActive = !category.isActive;
     await category.save();
 
-    console.log("Category hidden successfully:", category); // Log thông tin danh mục đã ẩn
+    console.log("Category toggled successfully:", category); // Log thông tin danh mục đã toggle
     return category;
   },
 
   /**
-   * Kích hoạt danh mục (đánh dấu hoạt động)
-   * @param {String} categoryId - ID danh mục
-   * @returns {Promise<Object>} Danh mục đã được kích hoạt
+   * Lấy danh mục theo slug
+   * @param {String} slug - slug danh mục
+   * @returns {Promise<Object>} Danh mục tìm thấy
    */
-  activateCategory: async (categoryId) => {
-    console.log("Attempting to activate category with ID:", categoryId); // Log ID
-
-    // Kiểm tra ID có hợp lệ không
-    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-      throw new Error("ID không hợp lệ");
-    }
-
-    const category = await Category.findById(categoryId);
+  getCategoryBySlugForUser: async (slug) => {
+    const category = await Category.findOne({ slug, isActive: true });
     if (!category) {
-      console.log("Category not found for ID:", categoryId); // Log nếu không tìm thấy
       throw new Error("Không tìm thấy danh mục");
     }
+    return category;
+  },
 
-    // Đánh dấu danh mục là hoạt động
-    category.isActive = true;
-    await category.save();
-
-    console.log("Category activated successfully:", category); // Log thông tin danh mục đã kích hoạt
+  /**
+   * Lấy danh mục theo slug cho admin
+   * @param {String} slug - slug danh mục
+   * @returns {Promise<Object>} Danh mục tìm thấy
+   */
+  getCategoryBySlugForAdmin: async (slug) => {
+    const category = await Category.findOne({ slug });
+    if (!category) {
+      throw new Error("Không tìm thấy danh mục");
+    }
     return category;
   },
 };

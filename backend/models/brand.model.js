@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const slugify = require("slugify");
 
 const BrandSchema = new mongoose.Schema(
   {
@@ -30,6 +31,13 @@ const BrandSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+BrandSchema.pre("save", function (next) {
+  if (this.isModified("name") || !this.slug) {
+    this.slug = slugify(this.name, { lower: true, remove: /[*+~.()'"!:@]/g });
+  }
+  next();
+});
 
 const Brand = mongoose.model("Brand", BrandSchema);
 
