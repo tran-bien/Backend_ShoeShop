@@ -49,10 +49,7 @@ const authService = {
    */
   createSession: async (userId, token, refreshToken, req = {}) => {
     try {
-      const existingSession = await Session.findOne({
-        user: userId,
-        token: token,
-      });
+      const existingSession = await Session.findOne({ user: userId, token });
 
       if (existingSession) {
         existingSession.isActive = true;
@@ -61,33 +58,32 @@ const authService = {
         return existingSession;
       }
 
-      // Lấy thông tin client
-      const userAgent =
-        req && req.headers ? req.headers["user-agent"] : "Không xác định";
-      const ip = req
-        ? req.ip ||
-          (req.connection ? req.connection.remoteAddress : "Không xác định")
-        : "Không xác định";
+      const userAgent = req.headers["user-agent"] || "Không xác định";
+      const ip = req.ip || req.connection.remoteAddress || "Không xác định";
+      const parsedDevice = uaParser(userAgent) || {
+        ua: "Không xác định",
+        browser: { name: "Không xác định", version: "Không xác định" },
+        os: { name: "Không xác định", version: "Không xác định" },
+        device: {
+          type: "Không xác định",
+          model: "Không xác định",
+          vendor: "Không xác định",
+        },
+      };
 
-      // Sử dụng uaParser để lấy thông tin thiết bị và gán vào trường device
-      const parsedDevice = uaParser(userAgent);
-
-      // Tính thời gian hết hạn (30 ngày)
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-      // Tạo phiên mới với device đã được gán
-      const session = await Session.create({
+      return await Session.create({
         user: userId,
         token,
         refreshToken,
         userAgent,
         ip,
-        device: parsedDevice, // Gán thông tin thiết bị từ uaParser
+        device: parsedDevice,
         expiresAt,
         isActive: true,
+        lastActive: new Date(),
       });
-
-      return session;
     } catch (error) {
       console.error("Lỗi khi tạo phiên đăng nhập:", error);
       throw new Error("Không thể tạo phiên đăng nhập. Vui lòng thử lại sau.");
@@ -102,12 +98,33 @@ const authService = {
   registerUser: async (userData) => {
     const { name, email, password } = userData;
 
-    // Tạo mã OTP trước
-    const otpCode = authService.generateOTP();
-    console.log("Đang tạo mã OTP:", otpCode); // Để debug
+    // Kiểm tra nếu email đã tồn tại
+    let user = await User.findOne({ email });
+    if (user) {
+      if (!user.isVerified) {
+        // Nếu người dùng chưa xác thực, cập nhật mã OTP mới và gửi lại email xác thực
+        const otpCode = authService.generateOTP();
+        user.otp = {
+          code: otpCode,
+          expiredAt: Date.now() + 10 * 60 * 1000, // Hết hạn sau 10 phút
+        };
+        await user.save();
+        await emailUtils.sendVerificationEmail(user.email, user.name, otpCode);
+        console.log(
+          "Người dùng đã tồn tại nhưng chưa xác thực. Đã gửi lại mã OTP:",
+          otpCode
+        );
+        return user;
+      }
+      // Nếu người dùng đã xác thực, trả về lỗi
+      throw new Error("Email đã được đăng ký");
+    }
 
-    // Không cần mã hóa mật khẩu thủ công vì middleware của user sẽ tự mã hóa
-    const user = await User.create({
+    // Nếu email chưa tồn tại, tạo mới người dùng
+    const otpCode = authService.generateOTP();
+    console.log("mã otp được tạo:", otpCode); // Để debug
+
+    user = await User.create({
       name,
       email,
       password, // Gán trực tiếp password, middleware sẽ hash khi save
@@ -118,13 +135,11 @@ const authService = {
       },
     });
 
-    // Gửi mã OTP đến email
     await emailUtils.sendVerificationEmail(
-      user.email, // Email của người dùng
-      user.name, // Tên của người dùng
-      user.otp.code // Mã OTP
+      user.email,
+      user.name,
+      user.otp.code
     );
-
     console.log("Người dùng đã được tạo với OTP:", user.otp); // Để debug
 
     return user;
@@ -408,7 +423,7 @@ const authService = {
       { user: userId, isActive: true },
       { isActive: false }
     );
-    return result.modifiedCount || 0; // Sử dụng modifiedCount thay vì nModified
+    return result.modifiedCount || 0;
   },
 
   /**
@@ -444,25 +459,27 @@ const authService = {
 
     const token = authService.generateToken(user._id);
     const refreshToken = authService.generateRefreshToken(user._id);
+
+    const userAgent = req.headers["user-agent"] || "Không xác định";
+    const ip = req.ip || req.connection.remoteAddress || "Không xác định";
+    const parsedDevice = uaParser(userAgent);
+
     try {
       await Session.create({
         user: user._id,
         userId: user._id.toString(),
         token,
         refreshToken,
-        userAgent:
-          req && req.headers ? req.headers["user-agent"] : "Không xác định",
-        ip: req
-          ? req.ip ||
-            (req.connection ? req.connection.remoteAddress : "Không xác định")
-          : "Không xác định",
+        ip,
+        device: parsedDevice,
+        userAgent,
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         isActive: true,
         lastActive: new Date(),
       });
     } catch (error) {
       console.error("Lỗi khi tạo phiên đăng nhập:", error);
-      // Không ném lỗi, vẫn cho phép đăng nhập
+      throw new Error("Không thể tạo phiên đăng nhập. Vui lòng thử lại sau.");
     }
     return { user, token, refreshToken };
   },
@@ -542,28 +559,19 @@ const authService = {
 
     return result.modifiedCount || 0; // Sử dụng modifiedCount thay vì nModified
   },
-};
 
-/**
- * Kiểm tra xem người dùng có phải là admin không
- * @param {String} token - Token từ header
- * @returns {Promise<Boolean>} - Trả về true nếu là admin, false nếu không
- */
-const isAdmin = async (token) => {
-  if (token && token.startsWith("Bearer ")) {
-    try {
-      const decoded = jwt.verify(token.split(" ")[1], process.env.JWT_SECRET);
-      const user = await User.findById(decoded.id).select("-password");
-      return user && user.role === "admin";
-    } catch (error) {
-      console.log("Token verification failed:", error);
-      return false; // Nếu token không hợp lệ, trả về false
-    }
-  }
-  return false; // Nếu không có token, trả về false
+  /**
+   * Lấy tất cả session đang hoạt động của mọi user (Admin)
+   * @returns {Array} - Danh sách session
+   */
+  getAllSessions: async () => {
+    return await Session.find({ isActive: true }).populate(
+      "user",
+      "name email role"
+    );
+  },
 };
 
 module.exports = {
   authService,
-  isAdmin,
 };

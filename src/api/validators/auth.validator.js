@@ -8,6 +8,17 @@ exports.validateRegisterInput = [
     .withMessage("Vui lòng cung cấp email")
     .isEmail()
     .withMessage("Email không hợp lệ"),
+  check("password")
+    .notEmpty()
+    .withMessage("Mật khẩu không được để trống")
+    .isLength({ min: 8 })
+    .withMessage("Mật khẩu phải có ít nhất 8 ký tự")
+    .matches(/[A-Za-z]/)
+    .withMessage("Mật khẩu phải có ít nhất 1 chữ cái")
+    .matches(/\d/)
+    .withMessage("Mật khẩu phải có ít nhất 1 số")
+    .matches(/[!@#$%^&*(),.?":{}|<>]/)
+    .withMessage("Mật khẩu phải có ít nhất 1 ký tự đặc biệt"),
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -22,8 +33,14 @@ exports.validatePassword = [
   check("password")
     .notEmpty()
     .withMessage("Vui lòng cung cấp mật khẩu")
-    .matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/)
-    .withMessage("Mật khẩu phải có ít nhất 8 ký tự, bao gồm 1 chữ cái và 1 số"),
+    .isLength({ min: 8 })
+    .withMessage("Mật khẩu phải có ít nhất 8 ký tự")
+    .matches(/[A-Za-z]/)
+    .withMessage("Mật khẩu phải có ít nhất 1 chữ cái")
+    .matches(/\d/)
+    .withMessage("Mật khẩu phải có ít nhất 1 số")
+    .matches(/[!@#$%^&*(),.?":{}|<>]/)
+    .withMessage("Mật khẩu phải có ít nhất 1 ký tự đặc biệt"),
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -57,8 +74,14 @@ exports.validateResetPassword = [
   check("password")
     .notEmpty()
     .withMessage("Vui lòng cung cấp mật khẩu mới và xác nhận mật khẩu")
-    .matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/)
-    .withMessage("Mật khẩu phải có ít nhất 8 ký tự, bao gồm 1 chữ cái và 1 số"),
+    .isLength({ min: 8 })
+    .withMessage("Mật khẩu phải có ít nhất 8 ký tự")
+    .matches(/[A-Za-z]/)
+    .withMessage("Mật khẩu phải có ít nhất 1 chữ cái")
+    .matches(/\d/)
+    .withMessage("Mật khẩu phải có ít nhất 1 số")
+    .matches(/[!@#$%^&*(),.?":{}|<>]/)
+    .withMessage("Mật khẩu phải có ít nhất 1 ký tự đặc biệt"),
   check("confirmPassword").custom((value, { req }) => {
     if (value !== req.body.password) {
       throw new Error("Mật khẩu mới và xác nhận mật khẩu không khớp");
@@ -82,10 +105,14 @@ exports.validateChangePassword = [
   check("newPassword")
     .notEmpty()
     .withMessage("Vui lòng cung cấp mật khẩu mới và xác nhận mật khẩu")
-    .matches(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/)
-    .withMessage(
-      "Mật khẩu mới phải có ít nhất 8 ký tự, bao gồm 1 chữ cái và 1 số"
-    ),
+    .isLength({ min: 8 })
+    .withMessage("Mật khẩu mới phải có ít nhất 8 ký tự")
+    .matches(/[A-Za-z]/)
+    .withMessage("Mật khẩu mới phải có ít nhất 1 chữ cái")
+    .matches(/\d/)
+    .withMessage("Mật khẩu mới phải có ít nhất 1 số")
+    .matches(/[!@#$%^&*(),.?":{}|<>]/)
+    .withMessage("Mật khẩu mới phải có ít nhất 1 ký tự đặc biệt"),
   check("confirmPassword").custom((value, { req }) => {
     if (value !== req.body.newPassword) {
       throw new Error("Mật khẩu mới và xác nhận mật khẩu không khớp");
@@ -112,6 +139,11 @@ exports.validateLoginInput = [
     }
     next();
   },
+];
+
+//validator cho adminLogoutUser
+exports.validateAdminLogoutUser = [
+  check("userId").notEmpty().withMessage("Vui lòng cung cấp userId"),
 ];
 
 // Validator cho xác thực OTP
