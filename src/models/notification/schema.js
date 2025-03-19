@@ -40,10 +40,6 @@ const NotificationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    image: {
-      type: String,
-      default: null,
-    },
     isImportant: {
       type: Boolean,
       default: false,

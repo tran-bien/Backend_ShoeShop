@@ -3,14 +3,15 @@ const router = express.Router();
 
 // Import các routes
 const authRoutes = require("@routes/public/auth.routes");
-const uploadRoutes = require("@routes/public/upload.routes");
 const adminAuthRoutes = require("@routes/admin/auth.routes");
+const userImageRoutes = require("@routes/user/image.routes");
+const adminImageRoutes = require("@routes/admin/image.routes");
 // const userRoutes = require("@routes/user/index");
 // const adminRoutes = require("@routes/admin/index");
 
 // Sử dụng các routes cho người dùng
 router.use("/auth", authRoutes);
-router.use("/upload", uploadRoutes);
+router.use("/images", userImageRoutes);
 // router.use("/products", productRoutes);
 // router.use("/categories", categoryRoutes);
 // router.use("/brands", brandRoutes);
@@ -25,6 +26,7 @@ router.use("/upload", uploadRoutes);
 
 // Sử dụng các routes cho admin
 router.use("/admin/auth", adminAuthRoutes);
+router.use("/admin/images", adminImageRoutes);
 // router.use("/admin/products", adminProductRoutes);
 // router.use("/admin/categories", adminCategoryRoutes);
 // router.use("/admin/brands", adminBrandRoutes);
