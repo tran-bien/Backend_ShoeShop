@@ -47,6 +47,16 @@ exports.protect = asyncHandler(async (req, res, next) => {
         ip,
       }));
 
+    // Kiểm tra xem phiên có hết hạn không
+    if (session && new Date() > new Date(session.expiresAt)) {
+      session.isActive = false; // Đánh dấu là không hoạt động thay vì xóa
+      await session.save();
+      return res.status(401).json({
+        success: false,
+        message: "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại",
+      });
+    }
+
     if (session) {
       // Cập nhật session
       session.token = token;
