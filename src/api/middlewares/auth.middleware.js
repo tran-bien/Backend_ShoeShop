@@ -1,8 +1,6 @@
 const jwt = require("jsonwebtoken");
 const { User, Session } = require("@models");
 const asyncHandler = require("express-async-handler");
-const uaParser = require("ua-parser-js");
-const { authService } = require("@services/auth.service");
 
 // Bảo vệ các route yêu cầu đăng nhập
 exports.protect = asyncHandler(async (req, res, next) => {
@@ -32,24 +30,24 @@ exports.protect = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // Lấy thông tin thiết bị từ uaParser
-    const userAgent = req.headers["user-agent"] || "Không xác định";
-    const ip = req.ip || req.connection.remoteAddress || "Không xác định";
-    const parsedDevice = uaParser(userAgent);
+    // Tìm session theo token chính xác
+    const session = await Session.findOne({
+      token,
+      user: user._id,
+      isActive: true,
+    });
 
-    // Tìm session hiện tại hoặc tạo mới
-    let session =
-      (await Session.findOne({ user: user._id, token, isActive: true })) ||
-      (await Session.findOne({
-        user: user._id,
-        isActive: true,
-        userAgent,
-        ip,
-      }));
+    // Nếu không có session hợp lệ
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        message: "Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại",
+      });
+    }
 
-    // Kiểm tra xem phiên có hết hạn không
-    if (session && new Date() > new Date(session.expiresAt)) {
-      session.isActive = false; // Đánh dấu là không hoạt động thay vì xóa
+    // Kiểm tra hết hạn
+    if (new Date() > new Date(session.expiresAt)) {
+      session.isActive = false;
       await session.save();
       return res.status(401).json({
         success: false,
@@ -57,26 +55,9 @@ exports.protect = asyncHandler(async (req, res, next) => {
       });
     }
 
-    if (session) {
-      // Cập nhật session
-      session.token = token;
-      session.lastActive = new Date();
-      await session.save();
-    } else {
-      // Tạo session mới
-      const newRefreshToken = authService.generateRefreshToken(user._id);
-      session = await Session.create({
-        user: user._id,
-        token,
-        refreshToken: newRefreshToken,
-        userAgent,
-        ip,
-        device: parsedDevice,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 ngày
-        isActive: true,
-        lastActive: new Date(),
-      });
-    }
+    // Cập nhật thời gian hoạt động
+    session.lastActive = new Date();
+    await session.save();
 
     // Đặt session vào req
     req.token = token;

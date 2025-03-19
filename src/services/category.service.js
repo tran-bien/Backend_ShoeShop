@@ -4,40 +4,10 @@ const Product = require("../models/product.model");
 const mongoose = require("mongoose");
 
 const categoryService = {
-  /**
-   * Kiểm tra điều kiện đầu vào cho danh mục
-   * @param {Object} categoryData - Dữ liệu danh mục
-   * @throws {Error} Nếu dữ liệu không hợp lệ
-   */
-  validateCategoryData: (categoryData) => {
-    const { name, description } = categoryData;
-    if (!name || name.trim().length === 0) {
-      throw new Error("Tên danh mục không được để trống");
-    }
-    if (description && description.trim().length === 0) {
-      throw new Error("Mô tả danh mục không được để trống");
-    }
-  },
-
-  //kiểm tra id có hợp lệ không
-  validateCategoryId: (categoryId) => {
-    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
-      throw new Error("ID danh mục không hợp lệ");
-    }
-  },
-
-  /**
-   * Lấy tất cả danh mục cho người dùng
-   * @returns {Promise<Array>} Danh sách danh mục
-   */
   getCategoriesForUser: async () => {
     return await Category.find({ isActive: true }); // Chỉ lấy danh mục đang hoạt động
   },
 
-  /**
-   * Lấy tất cả danh mục cho admin
-   * @returns {Promise<Array>} Danh sách danh mục
-   */
   getCategoriesForAdmin: async () => {
     return await Category.find({}); // Lấy tất cả danh mục
   },

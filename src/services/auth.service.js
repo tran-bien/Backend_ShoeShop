@@ -18,15 +18,6 @@ const authService = {
   },
 
   /**
-   * Tạo mã OTP ngẫu nhiên
-   * @returns {String} - Mã OTP 6 chữ số
-   */
-  generateOTP: () => {
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    return otp;
-  },
-
-  /**
    * Tạo refresh token
    * @param {String} id - ID người dùng
    * @returns {String} - Refresh token
@@ -39,6 +30,77 @@ const authService = {
     );
   },
 
+  /**
+   * Tạo và quản lý phiên đăng nhập cho người dùng
+   * @param {String} userId - ID người dùng
+   * @param {Object} req - Request object
+   * @returns {Object} - Đối tượng phiên đăng nhập
+   */
+  manageUserSession: async (userId, req) => {
+    const token = authService.generateToken(userId);
+    const refreshToken = authService.generateRefreshToken(userId);
+
+    const userAgent = req.headers["user-agent"] || "Không xác định";
+    const ip = req.ip || req.connection.remoteAddress || "Không xác định";
+    const parsedDevice = uaParser(userAgent);
+
+    // Tìm session hiện tại theo thiết bị
+    const existingSession = await Session.findOne({
+      user: userId,
+      userAgent,
+      ip,
+      isActive: true,
+    });
+
+    if (existingSession) {
+      // Cập nhật session đã có
+      existingSession.token = token;
+      existingSession.refreshToken = refreshToken;
+      existingSession.lastActive = new Date();
+      existingSession.expiresAt = new Date(
+        Date.now() + 30 * 24 * 60 * 60 * 1000
+      );
+      await existingSession.save();
+
+      console.log(
+        `Cập nhật session cho user ${userId}, thiết bị: ${userAgent.substring(
+          0,
+          30
+        )}...`
+      );
+      return { token, refreshToken, session: existingSession };
+    }
+
+    // Tạo session mới nếu không tìm thấy
+    const newSession = await Session.create({
+      user: userId,
+      token,
+      refreshToken,
+      userAgent,
+      ip,
+      device: parsedDevice,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      isActive: true,
+      lastActive: new Date(),
+    });
+
+    console.log(
+      `Tạo mới session cho user ${userId}, thiết bị: ${userAgent.substring(
+        0,
+        30
+      )}...`
+    );
+    return { token, refreshToken, session: newSession };
+  },
+
+  /**
+   * Tạo mã OTP ngẫu nhiên
+   * @returns {String} - Mã OTP 6 chữ số
+   */
+  generateOTP: () => {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    return otp;
+  },
   /**
    * Tạo hoặc cập nhật phiên đăng nhập
    * @param {String} userId - ID người dùng
@@ -201,17 +263,10 @@ const authService = {
       );
     }
 
-    // Tạo token và refreshToken
-    const token = authService.generateToken(user._id);
-    const refreshToken = authService.generateRefreshToken(user._id);
-
-    try {
-      // Tìm phiên hiện tại để cập nhật hoặc tạo mới
-      await authService.createSession(user._id, token, refreshToken, req);
-    } catch (error) {
-      console.error("Lỗi khi tạo phiên đăng nhập:", error);
-      // Không ném lỗi, vẫn cho phép đăng nhập
-    }
+    const { token, refreshToken } = await authService.manageUserSession(
+      user._id,
+      req
+    );
 
     return {
       _id: user._id,
@@ -457,30 +512,10 @@ const authService = {
     user.otp = undefined;
     await user.save();
 
-    const token = authService.generateToken(user._id);
-    const refreshToken = authService.generateRefreshToken(user._id);
+    // Thay thế đoạn tạo session với lời gọi hàm manageUserSession
+    const { token, refreshToken, session } =
+      await authService.manageUserSession(user._id, req);
 
-    const userAgent = req.headers["user-agent"] || "Không xác định";
-    const ip = req.ip || req.connection.remoteAddress || "Không xác định";
-    const parsedDevice = uaParser(userAgent);
-
-    try {
-      await Session.create({
-        user: user._id,
-        userId: user._id.toString(),
-        token,
-        refreshToken,
-        ip,
-        device: parsedDevice,
-        userAgent,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        isActive: true,
-        lastActive: new Date(),
-      });
-    } catch (error) {
-      console.error("Lỗi khi tạo phiên đăng nhập:", error);
-      throw new Error("Không thể tạo phiên đăng nhập. Vui lòng thử lại sau.");
-    }
     return { user, token, refreshToken };
   },
 
