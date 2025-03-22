@@ -13,6 +13,7 @@ const {
   logoutSession,
   logoutAllOtherSessions,
   logoutAll,
+  refreshToken,
 } = authController;
 const {
   validateForgotPassword,
@@ -33,6 +34,9 @@ router.post("/login", validateLoginInput, login);
 router.delete("/logout", protect, logout);
 router.post("/forgot-password", validateForgotPassword, forgotPassword);
 router.post("/reset-password", validateResetPassword, resetPassword);
+
+// Route làm mới token
+router.post("/refresh-token", refreshToken);
 
 // Route yêu cầu xác thực
 router.post(

@@ -79,10 +79,6 @@ const UserSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
     blockReason: {
       type: String,
     },
@@ -95,6 +91,19 @@ const UserSchema = new mongoose.Schema(
     },
     resetPasswordToken: { type: String },
     resetPasswordExpire: { type: Date },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   {
     timestamps: true,

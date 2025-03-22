@@ -42,6 +42,7 @@
     "@middlewares": "src/api/middlewares",
     "@routes": "src/api/routes",
     "@utils": "src/utils",
-    "@validators": "src/api/validators"
+    "@validators": "src/api/validators",
+    "@plugins": "src/plugins"
   }
 }

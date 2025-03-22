@@ -14,17 +14,21 @@ const applyMiddlewares = (schema) => {
     next();
   });
 
-  // Trước khi xóa, đảm bảo không có sản phẩm trỏ đến thương hiệu
-  schema.pre("remove", async function (next) {
+  // Thay thế pre('remove') bằng phương thức kiểm tra trước khi xóa mềm
+  schema.method("checkBeforeSoftDelete", async function () {
     const Product = mongoose.model("Product");
-    const productCount = await Product.countDocuments({ brand: this._id });
+
+    // Đếm sản phẩm hoạt động liên kết với thương hiệu này
+    const productCount = await Product.countDocuments({
+      brand: this._id,
+      deletedAt: null, // Chỉ kiểm tra sản phẩm chưa bị xóa
+    });
 
     if (productCount > 0) {
-      const error = new Error("Không thể xóa thương hiệu có sản phẩm");
-      return next(error);
+      throw new Error("Không thể xóa thương hiệu có sản phẩm");
     }
 
-    next();
+    return true;
   });
 };
 

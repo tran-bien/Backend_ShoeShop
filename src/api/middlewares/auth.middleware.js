@@ -19,14 +19,34 @@ exports.protect = asyncHandler(async (req, res, next) => {
   try {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select("-password");
 
-    if (!user || !user.isActive) {
+    // Tìm người dùng kể cả đã xóa mềm để phân biệt thông báo lỗi
+    const user = await User.findOne({
+      _id: decoded.id,
+      includeDeleted: true, // Cho phép tìm cả người dùng đã xóa mềm
+    }).select("-password");
+
+    // Không tìm thấy người dùng
+    if (!user) {
       return res.status(401).json({
         success: false,
-        message: user
-          ? "Tài khoản của bạn đã bị vô hiệu hóa."
-          : "Không tìm thấy người dùng",
+        message: "Không tìm thấy người dùng",
+      });
+    }
+
+    // Người dùng đã bị xóa mềm
+    if (user.deletedAt) {
+      return res.status(401).json({
+        success: false,
+        message: "Tài khoản đã bị xóa khỏi hệ thống",
+      });
+    }
+
+    // Người dùng bị khóa
+    if (!user.isActive) {
+      return res.status(401).json({
+        success: false,
+        message: "Tài khoản của bạn đã bị vô hiệu hóa",
       });
     }
 
@@ -78,7 +98,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
   }
 });
 
-// Middleware cho Admin
+// Middleware cho Admin (không cần thay đổi)
 exports.admin = (req, res, next) => {
   if (req.user && req.user.role === "admin") {
     return next();

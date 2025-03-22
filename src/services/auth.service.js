@@ -215,12 +215,17 @@ const authService = {
    * @returns {Object} - Thông tin người dùng và token
    */
   loginUser: async (email, password, req = {}) => {
-    // Tìm user theo email
-    const user = await User.findOne({ email });
+    // Tìm user theo email kể cả đã xóa mềm
+    const user = await User.findOne({ email, includeDeleted: true });
 
     // Kiểm tra email có tồn tại không
     if (!user) {
       throw new Error("Email không tồn tại");
+    }
+
+    // Kiểm tra người dùng đã bị xóa mềm chưa
+    if (user.deletedAt) {
+      throw new Error("Tài khoản đã bị xóa khỏi hệ thống");
     }
 
     // Kiểm tra mật khẩu có đúng không - sử dụng bcrypt trực tiếp để debug
@@ -294,10 +299,23 @@ const authService = {
       throw new Error("Refresh token không hợp lệ hoặc đã hết hạn");
     }
 
-    // Kiểm tra người dùng
-    const user = await User.findById(session.user);
+    // Tìm người dùng kể cả đã xóa mềm
+    const user = await User.findOne({
+      _id: session.user,
+      includeDeleted: true,
+    });
+
     if (!user) {
       throw new Error("Người dùng không tồn tại");
+    }
+
+    // Kiểm tra người dùng đã bị xóa mềm chưa
+    if (user.deletedAt) {
+      // Vô hiệu hóa session
+      session.isActive = false;
+      await session.save();
+
+      throw new Error("Tài khoản đã bị xóa khỏi hệ thống");
     }
 
     // Tạo token mới
@@ -317,10 +335,18 @@ const authService = {
    * @returns {Object} - Thông tin token đặt lại mật khẩu
    */
   forgotPassword: async (email) => {
-    // Đã loại bỏ kiểm tra đầu vào vì đã được xử lý bởi validator
-    const user = await User.findOne({ email });
+    // Tìm user kể cả đã xóa mềm
+    const user = await User.findOne({ email, includeDeleted: true });
+
     if (!user) {
       throw new Error("Không tìm thấy tài khoản với email này");
+    }
+
+    // Kiểm tra người dùng đã bị xóa mềm chưa
+    if (user.deletedAt) {
+      throw new Error(
+        "Tài khoản đã bị xóa khỏi hệ thống, không thể đặt lại mật khẩu"
+      );
     }
 
     // Tạo reset token và thiết lập thời gian hết hạn
@@ -490,14 +516,20 @@ const authService = {
     const { userId, email, otp, req } = data;
 
     let user;
+    // Tìm người dùng kể cả đã xóa mềm
     if (userId) {
-      user = await User.findById(userId);
+      user = await User.findOne({ _id: userId, includeDeleted: true });
     } else if (email) {
-      user = await User.findOne({ email });
+      user = await User.findOne({ email, includeDeleted: true });
     }
 
     if (!user) {
       throw new Error("Người dùng không tồn tại");
+    }
+
+    // Kiểm tra người dùng đã bị xóa mềm chưa
+    if (user.deletedAt) {
+      throw new Error("Tài khoản đã bị xóa khỏi hệ thống");
     }
 
     if (!user.otp || user.otp.code !== otp) {
