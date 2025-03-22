@@ -21,6 +21,11 @@ const applyMiddlewares = (schema) => {
   // Sau khi lưu, xử lý cập nhật đơn hàng tùy theo trạng thái của yêu cầu hủy
   schema.post("save", async function () {
     try {
+      // Không xử lý nếu document đang bị xóa mềm (có trường deletedAt)
+      if (this.deletedAt) {
+        return;
+      }
+
       const currentStatus = this.status;
       const previousStatus = this._previousStatus;
 
@@ -47,6 +52,44 @@ const applyMiddlewares = (schema) => {
     } catch (error) {
       console.error("Lỗi khi xử lý yêu cầu hủy đơn:", error);
     }
+  });
+
+  // Xử lý khi khôi phục yêu cầu hủy (đặt deletedAt thành null)
+  schema.pre("findOneAndUpdate", async function (next) {
+    const update = this.getUpdate();
+
+    // Nếu đang khôi phục yêu cầu hủy (đặt deletedAt thành null)
+    if (update && update.$set && update.$set.deletedAt === null) {
+      try {
+        const doc = await this.model.findOne(this.getFilter(), {
+          includeDeleted: true,
+        });
+
+        // Nếu yêu cầu hủy đã được giải quyết (approved/rejected) trước khi bị xóa
+        // thì không cần xử lý gì thêm
+        // Nếu yêu cầu hủy đang ở trạng thái pending, cần kiểm tra đơn hàng liên quan
+        if (doc && doc.status === "pending") {
+          const Order = mongoose.model("Order");
+          const order = await Order.findById(doc.order);
+
+          // Nếu đơn hàng đã bị hủy hoặc đã giao hàng thành công,
+          // tự động chuyển trạng thái yêu cầu hủy thành rejected khi khôi phục
+          if (
+            order &&
+            (order.status === "cancelled" || order.status === "delivered")
+          ) {
+            update.$set.status = "rejected";
+            update.$set.adminResponse =
+              "Yêu cầu hủy không còn hợp lệ do đơn hàng đã được xử lý.";
+            update.$set.resolvedAt = new Date();
+          }
+        }
+      } catch (error) {
+        console.error("Lỗi khi khôi phục yêu cầu hủy đơn:", error);
+      }
+    }
+
+    next();
   });
 };
 

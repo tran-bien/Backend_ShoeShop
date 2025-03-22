@@ -30,7 +30,7 @@ const ReviewSchema = new mongoose.Schema(
     },
     content: {
       type: String,
-      maxlength: [1000, "Nội dung không được vượt quá 1000 ký tự"],
+      maxlength: [1500, "Nội dung không được vượt quá 1500 ký tự"],
     },
     images: [
       {
@@ -52,6 +52,15 @@ const ReviewSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -64,5 +73,11 @@ const ReviewSchema = new mongoose.Schema(
 ReviewSchema.virtual("likeCount").get(function () {
   return this.likes.length;
 });
+
+ReviewSchema.index({ user: 1 });
+ReviewSchema.index({ product: 1 });
+ReviewSchema.index({ variant: 1 });
+ReviewSchema.index({ order: 1 });
+ReviewSchema.index({ rating: 1 });
 
 module.exports = ReviewSchema;

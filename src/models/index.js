@@ -14,7 +14,6 @@ const Session = require("./session");
 const Notification = require("./notification");
 const Variant = require("./variant");
 
-// Export tất cả các model để có thể import từ models chính
 module.exports = {
   Product,
   Category,

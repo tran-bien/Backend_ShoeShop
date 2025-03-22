@@ -117,10 +117,26 @@ const OrderSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+OrderSchema.index({ code: 1 });
+OrderSchema.index({ user: 1, deletedAt: 1 });
+OrderSchema.index({ status: 1, deletedAt: 1 });
+OrderSchema.index({ "payment.paymentStatus": 1 });
+OrderSchema.index({ createdAt: -1 });
+OrderSchema.index({ deletedAt: 1 });
 
 module.exports = OrderSchema;

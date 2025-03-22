@@ -45,4 +45,9 @@ const SessionSchema = new mongoose.Schema(
   }
 );
 
+SessionSchema.index({ user: 1 });
+SessionSchema.index({ token: 1 });
+SessionSchema.index({ refreshToken: 1 });
+SessionSchema.index({ expiresAt: 1 });
+
 module.exports = SessionSchema;

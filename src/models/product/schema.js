@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const mongoosePaginate = require("mongoose-paginate-v2");
 
 const ProductSchema = new mongoose.Schema(
   {
@@ -77,6 +76,15 @@ const ProductSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -85,14 +93,10 @@ const ProductSchema = new mongoose.Schema(
   }
 );
 
-// Thêm index cho trường thường tìm kiếm
-ProductSchema.index({ name: "text", slug: "text" });
+ProductSchema.index({ name: "text" });
 ProductSchema.index({ category: 1 });
 ProductSchema.index({ brand: 1 });
-ProductSchema.index({ "variants.sku": 1 });
 ProductSchema.index({ isActive: 1 });
-
-// Thêm plugin phân trang
-ProductSchema.plugin(mongoosePaginate);
+ProductSchema.index({ deletedAt: 1 });
 
 module.exports = ProductSchema;

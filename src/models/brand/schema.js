@@ -39,4 +39,9 @@ const BrandSchema = new mongoose.Schema(
   }
 );
 
+BrandSchema.index({ name: 1 });
+BrandSchema.index({ slug: 1 });
+BrandSchema.index({ isActive: 1 });
+BrandSchema.index({ deletedAt: 1 });
+
 module.exports = BrandSchema;

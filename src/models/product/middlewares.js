@@ -101,6 +101,47 @@ const applyMiddlewares = (schema) => {
       next(error);
     }
   });
+
+  // Xử lý khi khôi phục sản phẩm (đặt deletedAt thành null)
+  schema.pre("findOneAndUpdate", async function (next) {
+    const update = this.getUpdate();
+
+    // Nếu đang khôi phục (đặt deletedAt thành null)
+    if (update && update.$set && update.$set.deletedAt === null) {
+      try {
+        const doc = await this.model.findOne(this.getFilter(), {
+          includeDeleted: true,
+        });
+
+        if (doc && doc.slug) {
+          // Kiểm tra xem có sản phẩm nào khác đang dùng slug này không
+          const duplicate = await this.model.findOne({
+            slug: doc.slug,
+            _id: { $ne: doc._id },
+            deletedAt: null,
+          });
+
+          if (duplicate) {
+            // Nếu có, tạo một slug mới với hậu tố thời gian
+            const newSlug = `${doc.slug}-${Date.now()}`;
+            update.$set.slug = newSlug;
+            console.log(
+              `Slug bị trùng khi khôi phục, đã tạo slug mới: ${newSlug}`
+            );
+          }
+        }
+
+        // Kiểm tra và cập nhật status khi khôi phục
+        if (!update.$set.isActive) {
+          update.$set.isActive = false; // Mặc định là inactive khi khôi phục
+        }
+      } catch (error) {
+        console.error("Lỗi khi kiểm tra slug khi khôi phục:", error);
+      }
+    }
+
+    next();
+  });
 };
 
 module.exports = { applyMiddlewares };

@@ -12,6 +12,7 @@ async function updateProductRating(productId) {
       $match: {
         product: new mongoose.Types.ObjectId(productId),
         isActive: true,
+        deletedAt: null, // Chỉ tính đánh giá chưa bị xóa
       },
     },
     {
@@ -84,6 +85,55 @@ const applyMiddlewares = (schema) => {
       }
     }
     next();
+  });
+
+  // Xử lý xóa mềm - cập nhật rating sau khi xóa mềm
+  schema.pre("findOneAndUpdate", async function (next) {
+    const update = this.getUpdate();
+
+    // Nếu đang cập nhật trường deletedAt (thực hiện xóa mềm)
+    if (update && update.$set && update.$set.deletedAt !== undefined) {
+      try {
+        const doc = await this.model.findOne(this.getFilter());
+
+        // Lưu productId để cập nhật rating sau khi xóa mềm
+        if (doc && doc.product) {
+          this._productIdToUpdate = doc.product;
+        }
+      } catch (error) {
+        console.error("Lỗi khi lấy thông tin review trước khi xóa mềm:", error);
+      }
+    }
+
+    // Nếu đang khôi phục review (đặt deletedAt thành null)
+    if (update && update.$set && update.$set.deletedAt === null) {
+      try {
+        const doc = await this.model.findOne(this.getFilter(), {
+          includeDeleted: true,
+        });
+
+        // Lưu productId để cập nhật rating sau khi khôi phục
+        if (doc && doc.product) {
+          this._productIdToUpdate = doc.product;
+        }
+      } catch (error) {
+        console.error(
+          "Lỗi khi lấy thông tin review trước khi khôi phục:",
+          error
+        );
+      }
+    }
+
+    next();
+  });
+
+  // Sau khi cập nhật (xóa mềm/khôi phục), cập nhật rating của sản phẩm
+  schema.post("findOneAndUpdate", async function () {
+    if (this._productIdToUpdate) {
+      await updateProductRating(this._productIdToUpdate);
+      // Xóa biến tạm để tránh rò rỉ bộ nhớ
+      delete this._productIdToUpdate;
+    }
   });
 };
 

@@ -1,7 +1,10 @@
 const mongoose = require("mongoose");
 const NotificationSchema = require("./schema");
+const { applyMiddlewares } = require("./middlewares");
 
-// Tạo model
+// Áp dụng middlewares
+applyMiddlewares(NotificationSchema);
+
 const Notification = mongoose.model("Notification", NotificationSchema);
 
 module.exports = Notification;

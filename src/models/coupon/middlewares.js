@@ -67,6 +67,54 @@ const applyMiddlewares = (schema) => {
         this.setUpdate(update);
       }
     }
+
+    // Xử lý khi khôi phục coupon (đặt deletedAt thành null)
+    if (update.$set && update.$set.deletedAt === null) {
+      try {
+        const doc = await this.model.findOne(this.getQuery(), {
+          includeDeleted: true,
+        });
+
+        if (doc && doc.code) {
+          // Kiểm tra xem có coupon nào khác đang dùng code này không
+          const duplicate = await this.model.findOne({
+            code: doc.code,
+            _id: { $ne: doc._id },
+            deletedAt: null,
+          });
+
+          if (duplicate) {
+            // Nếu có, tạo một code mới với hậu tố thời gian
+            const newCode = `${doc.code}_${Date.now()}`;
+            update.$set.code = newCode;
+            console.log(
+              `Code bị trùng khi khôi phục, đã tạo code mới: ${newCode}`
+            );
+          }
+        }
+
+        // Khi khôi phục, đặt lại isValid dựa trên các điều kiện hiện tại
+        const now = new Date();
+        const active = doc.isActive;
+        const validByDate = doc.startDate <= now && now <= doc.expiryDate;
+        let validUsage = true;
+        if (doc.usageLimit != null) {
+          validUsage = doc.usageCount < doc.usageLimit;
+        }
+
+        // Cập nhật trường isValid
+        update.$set.isValid = active && validByDate && validUsage;
+
+        // Mặc định đặt isActive thành false khi khôi phục
+        // Để quản trị viên xem xét lại trước khi kích hoạt
+        if (update.$set.isActive === undefined) {
+          update.$set.isActive = false;
+        }
+      } catch (error) {
+        console.error("Lỗi khi kiểm tra code khi khôi phục coupon:", error);
+      }
+    }
+
     next();
   });
 };

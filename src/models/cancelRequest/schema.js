@@ -28,10 +28,25 @@ const CancelRequestSchema = new mongoose.Schema(
     resolvedAt: {
       type: Date,
     },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+CancelRequestSchema.index({ order: 1 });
+CancelRequestSchema.index({ userId: 1, deletedAt: 1 });
+CancelRequestSchema.index({ status: 1, deletedAt: 1 });
+CancelRequestSchema.index({ createdAt: -1, deletedAt: 1 });
+CancelRequestSchema.index({ deletedAt: 1 });
 
 module.exports = CancelRequestSchema;

@@ -33,8 +33,6 @@ const applyMiddlewares = (schema) => {
         if (!this.status) {
           this.status = "pending";
         }
-
-        // Xóa đoạn code tạo statusHistory
       }
       next();
     } catch (error) {
@@ -177,10 +175,50 @@ const applyMiddlewares = (schema) => {
   // Tự động cập nhật trạng thái đơn hàng dựa trên thời gian
   schema.pre("save", function (next) {
     // Nếu trạng thái thanh toán (paid) và chưa có thời gian thanh toán, cập nhật vào payment.paidAt
-    if (this.status === "paid" && (!this.payment || !this.payment.paidAt)) {
-      if (!this.payment) this.payment = {};
+    if (
+      this.payment &&
+      this.payment.paymentStatus === "paid" &&
+      !this.payment.paidAt
+    ) {
       this.payment.paidAt = new Date();
     }
+    next();
+  });
+
+  // Xử lý khi khôi phục đơn hàng (đặt deletedAt thành null)
+  schema.pre("findOneAndUpdate", async function (next) {
+    const update = this.getUpdate();
+
+    // Nếu đang khôi phục đơn hàng (đặt deletedAt thành null)
+    if (update && update.$set && update.$set.deletedAt === null) {
+      try {
+        const doc = await this.model.findOne(this.getFilter(), {
+          includeDeleted: true,
+        });
+
+        if (doc && doc.code) {
+          // Kiểm tra xem có đơn hàng nào khác đang dùng code này không
+          const duplicate = await this.model.findOne({
+            code: doc.code,
+            _id: { $ne: doc._id },
+            deletedAt: null,
+          });
+
+          if (duplicate) {
+            // Nếu có, tạo một code mới bằng cách thêm hậu tố thời gian
+            const parts = doc.code.split("-");
+            const newCode = `${parts[0]}-${parts[1]}-${Date.now()}`;
+            update.$set.code = newCode;
+            console.log(
+              `Code bị trùng khi khôi phục, đã tạo code mới: ${newCode}`
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Lỗi khi kiểm tra code khi khôi phục đơn hàng:", error);
+      }
+    }
+
     next();
   });
 };

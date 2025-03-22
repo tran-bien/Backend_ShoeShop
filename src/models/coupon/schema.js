@@ -53,10 +53,25 @@ const CouponSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+CouponSchema.index({ code: 1 });
+CouponSchema.index({ isActive: 1, deletedAt: 1 });
+CouponSchema.index({ expiryDate: 1 });
+CouponSchema.index({ isValid: 1, deletedAt: 1 });
+CouponSchema.index({ deletedAt: 1 });
 
 module.exports = CouponSchema;

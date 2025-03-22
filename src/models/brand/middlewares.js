@@ -14,21 +14,39 @@ const applyMiddlewares = (schema) => {
     next();
   });
 
-  // Thay thế pre('remove') bằng phương thức kiểm tra trước khi xóa mềm
-  schema.method("checkBeforeSoftDelete", async function () {
-    const Product = mongoose.model("Product");
+  // Tạo ra slug mới khi khôi phục nếu đã có thương hiệu khác với cùng tên
+  schema.pre("findOneAndUpdate", async function (next) {
+    const update = this.getUpdate();
 
-    // Đếm sản phẩm hoạt động liên kết với thương hiệu này
-    const productCount = await Product.countDocuments({
-      brand: this._id,
-      deletedAt: null, // Chỉ kiểm tra sản phẩm chưa bị xóa
-    });
+    // Nếu đang khôi phục (đặt deletedAt thành null)
+    if (update && update.$set && update.$set.deletedAt === null) {
+      try {
+        const doc = await this.model.findOne(this.getFilter(), {
+          includeDeleted: true,
+        });
+        if (doc) {
+          // Kiểm tra xem có thương hiệu nào khác đang dùng slug này không
+          const duplicate = await this.model.findOne({
+            slug: doc.slug,
+            _id: { $ne: doc._id },
+            deletedAt: null,
+          });
 
-    if (productCount > 0) {
-      throw new Error("Không thể xóa thương hiệu có sản phẩm");
+          if (duplicate) {
+            // Nếu có, tạo một slug mới với hậu tố thời gian
+            const newSlug = `${doc.slug}-${Date.now()}`;
+            update.$set.slug = newSlug;
+            console.log(
+              `Đã tạo slug mới khi khôi phục thương hiệu: ${newSlug}`
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Lỗi khi kiểm tra slug khi khôi phục:", error);
+      }
     }
 
-    return true;
+    next();
   });
 };
 

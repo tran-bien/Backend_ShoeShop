@@ -125,6 +125,71 @@ const applyMiddlewares = (schema) => {
         update.$set.profitPercentage = newProfitPercentage;
         update.$set.priceFinal = newPriceFinal;
       }
+
+      // Xử lý khi khôi phục variant (đặt deletedAt thành null)
+      if (update.$set && update.$set.deletedAt === null) {
+        try {
+          const doc = await this.model.findOne(this.getQuery(), {
+            includeDeleted: true,
+          });
+
+          if (doc && doc.sizes && Array.isArray(doc.sizes)) {
+            // Kiểm tra xem có SKU nào bị trùng khi khôi phục không
+            const skus = doc.sizes.map((size) => size.sku);
+
+            // Tìm tất cả variant có SKU trùng với các SKU của variant đang khôi phục
+            const duplicateSKUs = [];
+            for (const sku of skus) {
+              if (sku) {
+                // Tìm các SKU trùng lặp trong các variant khác không bị xóa
+                const duplicateExists = await this.model.findOne({
+                  "sizes.sku": sku,
+                  _id: { $ne: doc._id },
+                  deletedAt: null,
+                });
+
+                if (duplicateExists) {
+                  duplicateSKUs.push(sku);
+                }
+              }
+            }
+
+            // Nếu có SKU bị trùng, tạo SKU mới cho các size bị trùng
+            if (duplicateSKUs.length > 0) {
+              console.log(
+                `Phát hiện ${duplicateSKUs.length} SKU trùng lặp khi khôi phục variant`
+              );
+
+              // Lấy sizes hiện tại
+              const updatedSizes = JSON.parse(JSON.stringify(doc.sizes));
+
+              // Tạo SKU mới cho các size bị trùng
+              const timestamp = Date.now();
+              updatedSizes.forEach((size, index) => {
+                if (duplicateSKUs.includes(size.sku)) {
+                  // Tạo SKU mới bằng cách thêm timestamp
+                  updatedSizes[index].sku = `${size.sku}-${timestamp}`;
+                  console.log(`Đã tạo SKU mới: ${updatedSizes[index].sku}`);
+                }
+              });
+
+              // Cập nhật mảng sizes với các SKU mới
+              if (!update.$set) update.$set = {};
+              update.$set.sizes = updatedSizes;
+            }
+          }
+
+          // Đặt trạng thái mặc định khi khôi phục là inactive
+          if (!update.$set.variantStatus) {
+            update.$set.variantStatus = "inactive";
+          }
+        } catch (error) {
+          console.error(
+            "Lỗi khi kiểm tra SKU trùng lặp khi khôi phục variant:",
+            error
+          );
+        }
+      }
     }
     next();
   });

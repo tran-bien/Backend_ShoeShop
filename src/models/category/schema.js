@@ -20,10 +20,24 @@ const CategorySchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   {
     timestamps: true,
   }
 );
+
+CategorySchema.index({ name: 1 });
+CategorySchema.index({ slug: 1 });
+CategorySchema.index({ isActive: 1 });
+CategorySchema.index({ deletedAt: 1 });
 
 module.exports = CategorySchema;

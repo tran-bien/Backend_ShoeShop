@@ -1,4 +1,5 @@
 const bcrypt = require("bcryptjs");
+const mongoose = require("mongoose");
 
 const applyMiddlewares = (schema) => {
   // Mã hóa mật khẩu trước khi lưu
@@ -35,96 +36,53 @@ const applyMiddlewares = (schema) => {
   });
 
   // Middleware trước khi cập nhật để hash mật khẩu nếu được cập nhật
+  // và xử lý xung đột email khi khôi phục
   schema.pre("findOneAndUpdate", async function (next) {
     const update = this.getUpdate();
 
-    // Nếu không cập nhật mật khẩu, bỏ qua
-    if (!update.password) {
-      return next();
+    // 1. Xử lý password nếu được cập nhật
+    if (update && update.password) {
+      try {
+        const salt = await bcrypt.genSalt(10);
+        update.password = await bcrypt.hash(update.password, salt);
+      } catch (error) {
+        return next(error);
+      }
     }
 
-    try {
-      // Hash mật khẩu mới
-      const salt = await bcrypt.genSalt(10);
-      update.password = await bcrypt.hash(update.password, salt);
-      next();
-    } catch (error) {
-      next(error);
+    // 2. Xử lý khi khôi phục (đặt deletedAt thành null)
+    if (update && update.$set && update.$set.deletedAt === null) {
+      try {
+        const doc = await this.model.findOne(this.getFilter(), {
+          includeDeleted: true,
+        });
+
+        if (doc && doc.email) {
+          // Kiểm tra xem có người dùng nào khác đang dùng email này không
+          const duplicate = await this.model.findOne({
+            email: doc.email,
+            _id: { $ne: doc._id },
+            deletedAt: null,
+          });
+
+          if (duplicate) {
+            // Nếu có, tạo một email mới với hậu tố thời gian
+            const emailParts = doc.email.split("@");
+            const newEmail = `archived.${emailParts[0]}.${Date.now()}@${
+              emailParts[1]
+            }`;
+            update.$set.email = newEmail;
+            console.log(
+              `Email bị trùng khi khôi phục, đã tạo email mới: ${newEmail}`
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Lỗi khi kiểm tra email khi khôi phục:", error);
+      }
     }
-  });
 
-  // Thêm middleware cho xóa mềm - kiểm tra trước khi xóa mềm
-  schema.method("checkBeforeSoftDelete", async function () {
-    // Kiểm tra đơn hàng đang xử lý
-    const Order = mongoose.model("Order");
-    const pendingOrders = await Order.countDocuments({
-      user: this._id,
-      status: { $nin: ["delivered", "cancelled", "refunded"] },
-      deletedAt: null,
-    });
-
-    if (pendingOrders > 0) {
-      throw new Error("Không thể xóa tài khoản có đơn hàng đang xử lý");
-    }
-
-    return true;
-  });
-
-  // Xử lý đồng bộ khi xóa mềm người dùng
-  schema.method("softDeleteRelatedData", async function (userId) {
-    try {
-      // Xóa các bình luận của người dùng
-      const Comment = mongoose.model("Comment");
-      if (Comment) {
-        await Comment.softDeleteMany({ user: this._id }, userId);
-      }
-
-      // Xóa giỏ hàng của người dùng
-      const Cart = mongoose.model("Cart");
-      if (Cart) {
-        await Cart.softDeleteMany({ user: this._id }, userId);
-      }
-
-      // Đánh dấu đã xóa các reviews của người dùng nhưng không xóa hoàn toàn
-      // để giữ lại thông tin đánh giá cho sản phẩm
-      const Review = mongoose.model("Review");
-      if (Review) {
-        await Review.softDeleteMany({ user: this._id }, userId);
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Lỗi khi xóa dữ liệu liên quan:", error);
-      throw error;
-    }
-  });
-
-  // Xử lý khôi phục dữ liệu liên quan khi khôi phục người dùng
-  schema.method("restoreRelatedData", async function () {
-    try {
-      // Khôi phục các bình luận của người dùng
-      const Comment = mongoose.model("Comment");
-      if (Comment) {
-        await Comment.restoreMany({ user: this._id });
-      }
-
-      // Khôi phục giỏ hàng của người dùng
-      const Cart = mongoose.model("Cart");
-      if (Cart) {
-        await Cart.restoreMany({ user: this._id });
-      }
-
-      // Khôi phục reviews của người dùng
-      const Review = mongoose.model("Review");
-      if (Review) {
-        await Review.restoreMany({ user: this._id });
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Lỗi khi khôi phục dữ liệu liên quan:", error);
-      throw error;
-    }
+    next();
   });
 };
 

@@ -60,4 +60,12 @@ const CartSchema = new mongoose.Schema(
   }
 );
 
+CartSchema.index({ user: 1 });
+CartSchema.index({ "cartItems.product": 1 });
+CartSchema.index({ "cartItems.variant": 1 });
+CartSchema.index({ "cartItems.color": 1 });
+CartSchema.index({ "cartItems.size": 1 });
+CartSchema.index({ totalItems: 1 });
+CartSchema.index({ totalPrice: 1 });
+
 module.exports = CartSchema;
