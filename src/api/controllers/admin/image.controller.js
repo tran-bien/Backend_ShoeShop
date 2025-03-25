@@ -7,13 +7,6 @@ const imageService = require("@services/image.service");
  * @access  Admin
  */
 exports.uploadBrandLogo = asyncHandler(async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({
-      success: false,
-      message: "Không có file ảnh nào được tải lên",
-    });
-  }
-
   const { brandId } = req.params;
 
   const logoData = {
@@ -22,7 +15,6 @@ exports.uploadBrandLogo = asyncHandler(async (req, res) => {
   };
 
   const result = await imageService.updateBrandLogo(brandId, logoData);
-
   res.json(result);
 });
 
@@ -33,9 +25,7 @@ exports.uploadBrandLogo = asyncHandler(async (req, res) => {
  */
 exports.removeBrandLogo = asyncHandler(async (req, res) => {
   const { brandId } = req.params;
-
   const result = await imageService.removeBrandLogo(brandId);
-
   res.json(result);
 });
 
@@ -45,13 +35,6 @@ exports.removeBrandLogo = asyncHandler(async (req, res) => {
  * @access  Admin
  */
 exports.uploadProductImages = asyncHandler(async (req, res) => {
-  if (!req.files || req.files.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Không có file ảnh nào được tải lên",
-    });
-  }
-
   const { productId } = req.params;
 
   const images = req.files.map((file, index) => ({
@@ -62,7 +45,6 @@ exports.uploadProductImages = asyncHandler(async (req, res) => {
   }));
 
   const result = await imageService.addProductImages(productId, images);
-
   res.json(result);
 });
 
@@ -75,15 +57,7 @@ exports.removeProductImages = asyncHandler(async (req, res) => {
   const { productId } = req.params;
   const { imageIds } = req.body;
 
-  if (!Array.isArray(imageIds) || imageIds.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Vui lòng cung cấp danh sách ID ảnh cần xóa",
-    });
-  }
-
   const result = await imageService.removeProductImages(productId, imageIds);
-
   res.json(result);
 });
 
@@ -93,13 +67,6 @@ exports.removeProductImages = asyncHandler(async (req, res) => {
  * @access  Admin
  */
 exports.uploadVariantImages = asyncHandler(async (req, res) => {
-  if (!req.files || req.files.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Không có file ảnh nào được tải lên",
-    });
-  }
-
   const { variantId } = req.params;
 
   const images = req.files.map((file, index) => ({
@@ -110,7 +77,6 @@ exports.uploadVariantImages = asyncHandler(async (req, res) => {
   }));
 
   const result = await imageService.addVariantImages(variantId, images);
-
   res.json(result);
 });
 
@@ -123,15 +89,7 @@ exports.removeVariantImages = asyncHandler(async (req, res) => {
   const { variantId } = req.params;
   const { imageIds } = req.body;
 
-  if (!Array.isArray(imageIds) || imageIds.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Vui lòng cung cấp danh sách ID ảnh cần xóa",
-    });
-  }
-
   const result = await imageService.removeVariantImages(variantId, imageIds);
-
   res.json(result);
 });
 
@@ -144,18 +102,10 @@ exports.reorderProductImages = asyncHandler(async (req, res) => {
   const { productId } = req.params;
   const { imageOrders } = req.body;
 
-  if (!Array.isArray(imageOrders) || imageOrders.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Vui lòng cung cấp danh sách thứ tự ảnh",
-    });
-  }
-
   const result = await imageService.reorderProductImages(
     productId,
     imageOrders
   );
-
   res.json(result);
 });
 
@@ -168,18 +118,10 @@ exports.reorderVariantImages = asyncHandler(async (req, res) => {
   const { variantId } = req.params;
   const { imageOrders } = req.body;
 
-  if (!Array.isArray(imageOrders) || imageOrders.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Vui lòng cung cấp danh sách thứ tự ảnh",
-    });
-  }
-
   const result = await imageService.reorderVariantImages(
     variantId,
     imageOrders
   );
-
   res.json(result);
 });
 
@@ -192,15 +134,7 @@ exports.setProductMainImage = asyncHandler(async (req, res) => {
   const { productId } = req.params;
   const { imageId } = req.body;
 
-  if (!imageId) {
-    return res.status(400).json({
-      success: false,
-      message: "Vui lòng cung cấp ID ảnh cần đặt làm ảnh chính",
-    });
-  }
-
   const result = await imageService.setProductMainImage(productId, imageId);
-
   res.json(result);
 });
 
@@ -213,15 +147,7 @@ exports.setVariantMainImage = asyncHandler(async (req, res) => {
   const { variantId } = req.params;
   const { imageId } = req.body;
 
-  if (!imageId) {
-    return res.status(400).json({
-      success: false,
-      message: "Vui lòng cung cấp ID ảnh cần đặt làm ảnh chính",
-    });
-  }
-
   const result = await imageService.setVariantMainImage(variantId, imageId);
-
   res.json(result);
 });
 
@@ -231,18 +157,7 @@ exports.setVariantMainImage = asyncHandler(async (req, res) => {
  * @access  Admin
  */
 exports.deleteFromCloudinary = asyncHandler(async (req, res) => {
-  let publicIds = req.body.publicIds;
-
-  if (!Array.isArray(publicIds)) {
-    if (req.body.publicId) {
-      publicIds = [req.body.publicId];
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: "Vui lòng cung cấp ít nhất một publicId để xóa",
-      });
-    }
-  }
+  let publicIds = req.body.publicIds || [req.body.publicId];
 
   const results = await imageService.deleteImages(publicIds);
 

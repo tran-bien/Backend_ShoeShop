@@ -17,6 +17,8 @@ router.post(
   protect,
   uploadMiddleware.handleAvatarUpload,
   uploadValidator.validateSingleFileExists,
+  uploadValidator.validateImageFileType,
+  uploadValidator.validateImageFileSize,
   validateRequest,
   imageController.uploadAvatar
 );

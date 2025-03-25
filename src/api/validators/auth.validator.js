@@ -1,36 +1,32 @@
-const { check, validationResult } = require("express-validator");
+const { body, param, validationResult } = require("express-validator");
+const mongoose = require("mongoose");
+
+// Middleware chung để xử lý lỗi validation
+const handleValidationErrors = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      errors: errors.array(),
+    });
+  }
+  next();
+};
 
 // Validator cho đăng ký user
 exports.validateRegisterInput = [
-  check("name").trim().notEmpty().withMessage("Tên không được để trống"),
-  check("email")
+  body("name").trim().notEmpty().withMessage("Tên không được để trống"),
+  body("email")
     .notEmpty()
     .withMessage("Vui lòng cung cấp email")
     .isEmail()
     .withMessage("Email không hợp lệ"),
-  check("password")
-    .notEmpty()
-    .withMessage("Mật khẩu không được để trống")
-    .isLength({ min: 8 })
-    .withMessage("Mật khẩu phải có ít nhất 8 ký tự")
-    .matches(/[A-Za-z]/)
-    .withMessage("Mật khẩu phải có ít nhất 1 chữ cái")
-    .matches(/\d/)
-    .withMessage("Mật khẩu phải có ít nhất 1 số")
-    .matches(/[!@#$%^&*(),.?":{}|<>]/)
-    .withMessage("Mật khẩu phải có ít nhất 1 ký tự đặc biệt"),
-  (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    next();
-  },
+  handleValidationErrors,
 ];
 
 // Validator cho mật khẩu (để dùng trong đăng ký hoặc đổi mật khẩu)
 exports.validatePassword = [
-  check("password")
+  body("password")
     .notEmpty()
     .withMessage("Vui lòng cung cấp mật khẩu")
     .isLength({ min: 8 })
@@ -41,37 +37,25 @@ exports.validatePassword = [
     .withMessage("Mật khẩu phải có ít nhất 1 số")
     .matches(/[!@#$%^&*(),.?":{}|<>]/)
     .withMessage("Mật khẩu phải có ít nhất 1 ký tự đặc biệt"),
-  (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    next();
-  },
+  handleValidationErrors,
 ];
 
 // Validator cho quên mật khẩu
 exports.validateForgotPassword = [
-  check("email")
+  body("email")
     .notEmpty()
     .withMessage("Vui lòng cung cấp email")
     .isEmail()
     .withMessage("Email không hợp lệ"),
-  (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    next();
-  },
+  handleValidationErrors,
 ];
 
 // Validator cho đặt lại mật khẩu
 exports.validateResetPassword = [
-  check("resetToken")
+  body("resetToken")
     .notEmpty()
     .withMessage("Vui lòng cung cấp token đặt lại mật khẩu"),
-  check("password")
+  body("password")
     .notEmpty()
     .withMessage("Vui lòng cung cấp mật khẩu mới và xác nhận mật khẩu")
     .isLength({ min: 8 })
@@ -82,29 +66,23 @@ exports.validateResetPassword = [
     .withMessage("Mật khẩu phải có ít nhất 1 số")
     .matches(/[!@#$%^&*(),.?":{}|<>]/)
     .withMessage("Mật khẩu phải có ít nhất 1 ký tự đặc biệt"),
-  check("confirmPassword").custom((value, { req }) => {
+  body("confirmPassword").custom((value, { req }) => {
     if (value !== req.body.password) {
       throw new Error("Mật khẩu mới và xác nhận mật khẩu không khớp");
     }
     return true;
   }),
-  (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    next();
-  },
+  handleValidationErrors,
 ];
 
 // Validator cho thay đổi mật khẩu
 exports.validateChangePassword = [
-  check("currentPassword")
+  body("currentPassword")
     .notEmpty()
     .withMessage("Vui lòng cung cấp mật khẩu hiện tại"),
-  check("newPassword")
+  body("newPassword")
     .notEmpty()
-    .withMessage("Vui lòng cung cấp mật khẩu mới và xác nhận mật khẩu")
+    .withMessage("Vui lòng cung cấp mật khẩu mới")
     .isLength({ min: 8 })
     .withMessage("Mật khẩu mới phải có ít nhất 8 ký tự")
     .matches(/[A-Za-z]/)
@@ -113,53 +91,85 @@ exports.validateChangePassword = [
     .withMessage("Mật khẩu mới phải có ít nhất 1 số")
     .matches(/[!@#$%^&*(),.?":{}|<>]/)
     .withMessage("Mật khẩu mới phải có ít nhất 1 ký tự đặc biệt"),
-  check("confirmPassword").custom((value, { req }) => {
-    if (value !== req.body.newPassword) {
-      throw new Error("Mật khẩu mới và xác nhận mật khẩu không khớp");
-    }
-    return true;
-  }),
-  (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    next();
-  },
+  body("confirmPassword")
+    .notEmpty()
+    .withMessage("Vui lòng xác nhận mật khẩu")
+    .custom((value, { req }) => {
+      if (value !== req.body.newPassword) {
+        throw new Error("Mật khẩu mới và xác nhận mật khẩu không khớp");
+      }
+      return true;
+    }),
+  handleValidationErrors,
 ];
 
 // Validator cho đăng nhập
 exports.validateLoginInput = [
-  check("email").notEmpty().withMessage("Vui lòng cung cấp email"),
-  check("password").notEmpty().withMessage("Vui lòng cung cấp mật khẩu"),
-  (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    next();
-  },
+  body("email")
+    .notEmpty()
+    .withMessage("Vui lòng cung cấp email")
+    .isEmail()
+    .withMessage("Email không hợp lệ"),
+  body("password").notEmpty().withMessage("Vui lòng cung cấp mật khẩu"),
+  handleValidationErrors,
 ];
 
-//validator cho adminLogoutUser
+// Validator cho admin logout user
 exports.validateAdminLogoutUser = [
-  check("userId").notEmpty().withMessage("Vui lòng cung cấp userId"),
+  param("userId")
+    .notEmpty()
+    .withMessage("Vui lòng cung cấp userId")
+    .custom((value) => {
+      if (!mongoose.Types.ObjectId.isValid(value)) {
+        throw new Error("User ID không hợp lệ");
+      }
+      return true;
+    }),
+  handleValidationErrors,
 ];
 
 // Validator cho xác thực OTP
 exports.validateVerifyOTP = [
-  check("otp").notEmpty().withMessage("Vui lòng cung cấp mã OTP"),
-  check().custom((_, { req }) => {
+  body("otp")
+    .notEmpty()
+    .withMessage("Vui lòng cung cấp mã OTP")
+    .isLength({ min: 6, max: 6 })
+    .withMessage("Mã OTP phải có 6 ký tự")
+    .isNumeric()
+    .withMessage("Mã OTP phải là số"),
+  body().custom((_, { req }) => {
     if (!req.body.userId && !req.body.email) {
       throw new Error("Vui lòng cung cấp userId hoặc email");
     }
+    if (req.body.email && !req.body.email.match(/^\S+@\S+\.\S+$/)) {
+      throw new Error("Email không hợp lệ");
+    }
+    if (req.body.userId && !mongoose.Types.ObjectId.isValid(req.body.userId)) {
+      throw new Error("User ID không hợp lệ");
+    }
     return true;
   }),
-  (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    next();
-  },
+  handleValidationErrors,
+];
+
+// Validator cho refresh token
+exports.validateRefreshToken = [
+  body("refreshToken")
+    .notEmpty()
+    .withMessage("Vui lòng cung cấp refresh token"),
+  handleValidationErrors,
+];
+
+// Validator cho logout session
+exports.validateLogoutSession = [
+  param("sessionId")
+    .notEmpty()
+    .withMessage("Vui lòng cung cấp sessionId")
+    .custom((value) => {
+      if (!mongoose.Types.ObjectId.isValid(value)) {
+        throw new Error("Session ID không hợp lệ");
+      }
+      return true;
+    }),
+  handleValidationErrors,
 ];

@@ -1,0 +1,39 @@
+const express = require("express");
+const categoryController = require("@controllers/public/category.controller");
+const categoryValidator = require("@validators/category.validator");
+const { validateRequest } = require("@middlewares/validateRequest");
+
+const router = express.Router();
+
+/**
+ * @route   GET /api/categories
+ * @desc    Lấy tất cả danh mục đang active và chưa xóa
+ * @access  Public
+ */
+router.get(
+  "/",
+  categoryValidator.validateCategoryQuery,
+  validateRequest,
+  categoryController.getAllCategories
+);
+
+/**
+ * @route   GET /api/categories/slug/:slug
+ * @desc    Lấy chi tiết danh mục theo slug
+ * @access  Public
+ */
+router.get("/slug/:slug", categoryController.getCategoryBySlug);
+
+/**
+ * @route   GET /api/categories/:id
+ * @desc    Lấy chi tiết danh mục theo ID
+ * @access  Public
+ */
+router.get(
+  "/:id",
+  categoryValidator.validateCategoryId,
+  validateRequest,
+  categoryController.getCategoryById
+);
+
+module.exports = router;

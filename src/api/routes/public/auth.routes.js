@@ -23,6 +23,8 @@ const {
   validateChangePassword,
   validateLoginInput,
   validateVerifyOTP,
+  validateRefreshToken,
+  validateLogoutSession,
 } = require("@validators/auth.validator");
 
 const router = express.Router();
@@ -36,7 +38,7 @@ router.post("/forgot-password", validateForgotPassword, forgotPassword);
 router.post("/reset-password", validateResetPassword, resetPassword);
 
 // Route làm mới token
-router.post("/refresh-token", refreshToken);
+router.post("/refresh-token", validateRefreshToken, refreshToken);
 
 // Route yêu cầu xác thực
 router.post(
@@ -48,7 +50,12 @@ router.post(
 
 // Quản lý phiên đăng nhập (yêu cầu đăng nhập)
 router.get("/sessions", protect, getCurrentSessions);
-router.delete("/sessions/:sessionId", protect, logoutSession);
+router.delete(
+  "/sessions/:sessionId",
+  protect,
+  validateLogoutSession,
+  logoutSession
+);
 router.delete("/sessions", protect, logoutAllOtherSessions);
 router.delete("/logout-all", protect, logoutAll);
 

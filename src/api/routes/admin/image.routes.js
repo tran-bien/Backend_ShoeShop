@@ -19,6 +19,10 @@ router.post(
   uploadValidator.validateBrandId,
   validateRequest,
   uploadMiddleware.handleBrandLogoUpload,
+  uploadValidator.validateSingleFileExists,
+  uploadValidator.validateImageFileType,
+  uploadValidator.validateImageFileSize,
+  validateRequest,
   imageController.uploadBrandLogo
 );
 
@@ -49,6 +53,9 @@ router.post(
   validateRequest,
   uploadMiddleware.handleProductImagesUpload,
   uploadValidator.validateMultipleFilesExist,
+  uploadValidator.validateMultipleImageFileTypes,
+  uploadValidator.validateMultipleImageFileSizes,
+  uploadValidator.validateMaxFileCount,
   validateRequest,
   imageController.uploadProductImages
 );
@@ -80,6 +87,11 @@ router.post(
   uploadValidator.validateVariantId,
   validateRequest,
   uploadMiddleware.handleVariantImagesUpload,
+  uploadValidator.validateMultipleFilesExist,
+  uploadValidator.validateMultipleImageFileTypes,
+  uploadValidator.validateMultipleImageFileSizes,
+  uploadValidator.validateMaxFileCount,
+  validateRequest,
   imageController.uploadVariantImages
 );
 

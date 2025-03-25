@@ -71,21 +71,7 @@ exports.resetPassword = asyncHandler(async (req, res) => {
 
 // Đổi mật khẩu
 exports.changePassword = asyncHandler(async (req, res) => {
-  const { currentPassword, newPassword, confirmPassword } = req.body;
-
-  if (!newPassword || !confirmPassword) {
-    return res.status(400).json({
-      success: false,
-      message: "Vui lòng cung cấp mật khẩu mới và xác nhận mật khẩu",
-    });
-  }
-  if (newPassword !== confirmPassword) {
-    return res.status(400).json({
-      success: false,
-      message: "Mật khẩu mới và xác nhận mật khẩu không khớp",
-    });
-  }
-
+  const { currentPassword, newPassword } = req.body;
   await authService.changePassword(req.user._id, currentPassword, newPassword);
   res.status(200).json({
     success: true,

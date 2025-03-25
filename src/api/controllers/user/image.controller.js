@@ -7,13 +7,6 @@ const imageService = require("@services/image.service");
  * @access  Private
  */
 exports.uploadAvatar = asyncHandler(async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({
-      success: false,
-      message: "Không có file ảnh nào được tải lên",
-    });
-  }
-
   const avatarData = {
     url: req.file.path,
     public_id: req.file.filename,
@@ -23,7 +16,6 @@ exports.uploadAvatar = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
   const result = await imageService.updateUserAvatar(userId, avatarData);
-
   res.json(result);
 });
 
@@ -34,8 +26,6 @@ exports.uploadAvatar = asyncHandler(async (req, res) => {
  */
 exports.removeAvatar = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-
   const result = await imageService.removeUserAvatar(userId);
-
   res.json(result);
 });

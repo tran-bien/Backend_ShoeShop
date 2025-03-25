@@ -155,6 +155,276 @@ const uploadValidator = {
       return true;
     }),
   ],
+
+  /**
+   * Validator kiểm tra loại file ảnh (single)
+   */
+  validateImageFileType: [
+    body().custom((_, { req }) => {
+      if (!req.file) return true;
+
+      const validMimeTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/svg+xml",
+      ];
+      if (!validMimeTypes.includes(req.file.mimetype)) {
+        throw new Error(
+          "Chỉ chấp nhận file hình ảnh (jpeg, png, gif, webp, svg)"
+        );
+      }
+      return true;
+    }),
+  ],
+
+  /**
+   * Validator kiểm tra loại file ảnh (multiple)
+   */
+  validateMultipleImageFileTypes: [
+    body().custom((_, { req }) => {
+      if (!req.files || req.files.length === 0) return true;
+
+      const validMimeTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/svg+xml",
+      ];
+      const invalidFiles = req.files.filter(
+        (file) => !validMimeTypes.includes(file.mimetype)
+      );
+
+      if (invalidFiles.length > 0) {
+        const invalidNames = invalidFiles.map((f) => f.originalname).join(", ");
+        throw new Error(
+          `Các file không hợp lệ: ${invalidNames}. Chỉ chấp nhận file hình ảnh (jpeg, png, gif, webp, svg)`
+        );
+      }
+      return true;
+    }),
+  ],
+
+  /**
+   * Validator kiểm tra kích thước file (single)
+   */
+  validateImageFileSize: [
+    body().custom((_, { req }) => {
+      if (!req.file) return true;
+
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (req.file.size > maxSize) {
+        throw new Error(
+          `Kích thước file không được vượt quá 5MB. File hiện tại: ${(
+            req.file.size /
+            (1024 * 1024)
+          ).toFixed(2)}MB`
+        );
+      }
+      return true;
+    }),
+  ],
+
+  /**
+   * Validator kiểm tra kích thước file (multiple)
+   */
+  validateMultipleImageFileSizes: [
+    body().custom((_, { req }) => {
+      if (!req.files || req.files.length === 0) return true;
+
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      const oversizedFiles = req.files.filter((file) => file.size > maxSize);
+
+      if (oversizedFiles.length > 0) {
+        const oversizedDetails = oversizedFiles
+          .map(
+            (f) => `${f.originalname}: ${(f.size / (1024 * 1024)).toFixed(2)}MB`
+          )
+          .join(", ");
+        throw new Error(
+          `Các file vượt quá kích thước cho phép (5MB): ${oversizedDetails}`
+        );
+      }
+      return true;
+    }),
+  ],
+
+  /**
+   * Validator giới hạn số lượng file
+   */
+  validateMaxFileCount: [
+    body().custom((_, { req }) => {
+      if (!req.files) return true;
+
+      const maxFileCount = 10; // Số file tối đa cho phép
+      if (req.files.length > maxFileCount) {
+        throw new Error(
+          `Chỉ được phép tải lên tối đa ${maxFileCount} file. Bạn đang tải lên ${req.files.length} file.`
+        );
+      }
+      return true;
+    }),
+  ],
+
+  /**
+   * Validator kiểm tra tổng kích thước của tất cả các file
+   */
+  validateTotalFileSize: [
+    body().custom((_, { req }) => {
+      if (!req.files || req.files.length === 0) return true;
+
+      const maxTotalSize = 20 * 1024 * 1024; // 20MB tổng
+      const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
+
+      if (totalSize > maxTotalSize) {
+        throw new Error(
+          `Tổng kích thước các file không được vượt quá 20MB. Hiện tại: ${(
+            totalSize /
+            (1024 * 1024)
+          ).toFixed(2)}MB`
+        );
+      }
+      return true;
+    }),
+  ],
+
+  /**
+   * Validator cho tất cả điều kiện của một file duy nhất
+   */
+  validateSingleImage: [
+    // Kiểm tra tồn tại
+    body().custom((_, { req }) => {
+      if (!req.file) {
+        throw new Error("Không có file nào được tải lên");
+      }
+      return true;
+    }),
+
+    // Kiểm tra loại file
+    body().custom((_, { req }) => {
+      if (!req.file) return true;
+
+      const validMimeTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/svg+xml",
+      ];
+      if (!validMimeTypes.includes(req.file.mimetype)) {
+        throw new Error(
+          "Chỉ chấp nhận file hình ảnh (jpeg, png, gif, webp, svg)"
+        );
+      }
+      return true;
+    }),
+
+    // Kiểm tra kích thước
+    body().custom((_, { req }) => {
+      if (!req.file) return true;
+
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (req.file.size > maxSize) {
+        throw new Error(
+          `Kích thước file không được vượt quá 5MB. File hiện tại: ${(
+            req.file.size /
+            (1024 * 1024)
+          ).toFixed(2)}MB`
+        );
+      }
+      return true;
+    }),
+  ],
+
+  /**
+   * Validator cho tất cả điều kiện của nhiều file
+   */
+  validateMultipleImages: [
+    // Kiểm tra tồn tại
+    body().custom((_, { req }) => {
+      if (!req.files || req.files.length === 0) {
+        throw new Error("Không có file nào được tải lên");
+      }
+      return true;
+    }),
+
+    // Kiểm tra số lượng
+    body().custom((_, { req }) => {
+      if (!req.files) return true;
+
+      const maxFileCount = 10; // Số file tối đa cho phép
+      if (req.files.length > maxFileCount) {
+        throw new Error(
+          `Chỉ được phép tải lên tối đa ${maxFileCount} file. Bạn đang tải lên ${req.files.length} file.`
+        );
+      }
+      return true;
+    }),
+
+    // Kiểm tra loại file
+    body().custom((_, { req }) => {
+      if (!req.files || req.files.length === 0) return true;
+
+      const validMimeTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/svg+xml",
+      ];
+      const invalidFiles = req.files.filter(
+        (file) => !validMimeTypes.includes(file.mimetype)
+      );
+
+      if (invalidFiles.length > 0) {
+        const invalidNames = invalidFiles.map((f) => f.originalname).join(", ");
+        throw new Error(
+          `Các file không hợp lệ: ${invalidNames}. Chỉ chấp nhận file hình ảnh (jpeg, png, gif, webp, svg)`
+        );
+      }
+      return true;
+    }),
+
+    // Kiểm tra kích thước từng file
+    body().custom((_, { req }) => {
+      if (!req.files || req.files.length === 0) return true;
+
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      const oversizedFiles = req.files.filter((file) => file.size > maxSize);
+
+      if (oversizedFiles.length > 0) {
+        const oversizedDetails = oversizedFiles
+          .map(
+            (f) => `${f.originalname}: ${(f.size / (1024 * 1024)).toFixed(2)}MB`
+          )
+          .join(", ");
+        throw new Error(
+          `Các file vượt quá kích thước cho phép (5MB): ${oversizedDetails}`
+        );
+      }
+      return true;
+    }),
+
+    // Kiểm tra tổng kích thước
+    body().custom((_, { req }) => {
+      if (!req.files || req.files.length === 0) return true;
+
+      const maxTotalSize = 20 * 1024 * 1024; // 20MB tổng
+      const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
+
+      if (totalSize > maxTotalSize) {
+        throw new Error(
+          `Tổng kích thước các file không được vượt quá 20MB. Hiện tại: ${(
+            totalSize /
+            (1024 * 1024)
+          ).toFixed(2)}MB`
+        );
+      }
+      return true;
+    }),
+  ],
 };
 
 module.exports = uploadValidator;
