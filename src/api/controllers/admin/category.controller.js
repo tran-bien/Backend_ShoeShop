@@ -7,7 +7,7 @@ const categoryController = {
    * @desc Lấy danh sách danh mục (kể cả không active)
    */
   getAllCategories: asyncHandler(async (req, res) => {
-    const result = await categoryService.getAllCategories(req.query);
+    const result = await categoryService.getAdminAllCategories(req.query);
     return res.json(result);
   }),
 
@@ -16,7 +16,7 @@ const categoryController = {
    * @desc Lấy chi tiết danh mục theo ID
    */
   getCategoryById: asyncHandler(async (req, res) => {
-    const category = await categoryService.getCategoryById(req.params.id, true);
+    const category = await categoryService.getAdminCategoryById(req.params.id);
     return res.json({
       success: true,
       category,
@@ -94,11 +94,12 @@ const categoryController = {
    * @desc Cập nhật trạng thái active của danh mục
    */
   updateCategoryStatus: asyncHandler(async (req, res) => {
-    const { isActive } = req.body;
+    const { isActive, cascade = true } = req.body;
 
     const result = await categoryService.updateCategoryStatus(
       req.params.id,
-      isActive
+      isActive,
+      cascade
     );
 
     return res.json({

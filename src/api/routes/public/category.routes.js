@@ -5,6 +5,12 @@ const { validateRequest } = require("@middlewares/validateRequest");
 
 const router = express.Router();
 
+// Gom nhóm validators + validateRequest để code ngắn gọn
+const validate = (validators) => [
+  ...(Array.isArray(validators) ? validators : [validators]),
+  validateRequest,
+];
+
 /**
  * @route   GET /api/categories
  * @desc    Lấy tất cả danh mục đang active và chưa xóa
@@ -12,8 +18,7 @@ const router = express.Router();
  */
 router.get(
   "/",
-  categoryValidator.validateCategoryQuery,
-  validateRequest,
+  validate(categoryValidator.validatePublicCategoryQuery),
   categoryController.getAllCategories
 );
 
@@ -22,7 +27,11 @@ router.get(
  * @desc    Lấy chi tiết danh mục theo slug
  * @access  Public
  */
-router.get("/slug/:slug", categoryController.getCategoryBySlug);
+router.get(
+  "/slug/:slug",
+  validate(categoryValidator.validateCategorySlug),
+  categoryController.getCategoryBySlug
+);
 
 /**
  * @route   GET /api/categories/:id
@@ -31,8 +40,7 @@ router.get("/slug/:slug", categoryController.getCategoryBySlug);
  */
 router.get(
   "/:id",
-  categoryValidator.validateCategoryId,
-  validateRequest,
+  validate(categoryValidator.validateCategoryId),
   categoryController.getCategoryById
 );
 

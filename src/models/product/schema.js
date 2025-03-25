@@ -21,11 +21,9 @@ const ProductSchema = new mongoose.Schema(
       {
         url: {
           type: String,
-          required: true,
         },
         public_id: {
           type: String,
-          required: true,
         },
         isMain: {
           type: Boolean,

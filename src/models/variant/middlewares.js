@@ -180,8 +180,8 @@ const applyMiddlewares = (schema) => {
           }
 
           // Đặt trạng thái mặc định khi khôi phục là inactive
-          if (!update.$set.variantStatus) {
-            update.$set.variantStatus = "inactive";
+          if (!update.$set.isActive) {
+            update.$set.isActive = false;
           }
         } catch (error) {
           console.error(

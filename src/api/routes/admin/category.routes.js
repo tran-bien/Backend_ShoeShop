@@ -6,6 +6,12 @@ const { validateRequest } = require("@middlewares/validateRequest");
 
 const router = express.Router();
 
+// Gom nhóm validators + validateRequest để code ngắn gọn
+const validate = (validators) => [
+  ...(Array.isArray(validators) ? validators : [validators]),
+  validateRequest,
+];
+
 /**
  * @route   GET /api/admin/categories
  * @desc    Lấy tất cả danh mục (có phân trang, filter)
@@ -15,8 +21,7 @@ router.get(
   "/",
   protect,
   admin,
-  categoryValidator.validateCategoryQuery,
-  validateRequest,
+  validate(categoryValidator.validateCategoryQuery),
   categoryController.getAllCategories
 );
 
@@ -29,8 +34,7 @@ router.get(
   "/deleted",
   protect,
   admin,
-  categoryValidator.validateCategoryQuery,
-  validateRequest,
+  validate(categoryValidator.validateCategoryQuery),
   categoryController.getDeletedCategories
 );
 
@@ -43,8 +47,7 @@ router.get(
   "/:id",
   protect,
   admin,
-  categoryValidator.validateCategoryId,
-  validateRequest,
+  validate(categoryValidator.validateCategoryId),
   categoryController.getCategoryById
 );
 
@@ -57,8 +60,7 @@ router.post(
   "/",
   protect,
   admin,
-  categoryValidator.validateCategoryData,
-  validateRequest,
+  validate(categoryValidator.validateCategoryData), // Bao gồm middleware addAuditInfo
   categoryController.createCategory
 );
 
@@ -71,9 +73,10 @@ router.put(
   "/:id",
   protect,
   admin,
-  categoryValidator.validateCategoryId,
-  categoryValidator.validateCategoryData,
-  validateRequest,
+  validate([
+    ...categoryValidator.validateCategoryId,
+    ...categoryValidator.validateCategoryData,
+  ]),
   categoryController.updateCategory
 );
 
@@ -86,8 +89,7 @@ router.delete(
   "/:id",
   protect,
   admin,
-  categoryValidator.validateCategoryId,
-  validateRequest,
+  validate(categoryValidator.validateCategoryId),
   categoryController.deleteCategory
 );
 
@@ -100,8 +102,7 @@ router.put(
   "/:id/restore",
   protect,
   admin,
-  categoryValidator.validateCategoryId,
-  validateRequest,
+  validate(categoryValidator.validateCategoryId),
   categoryController.restoreCategory
 );
 
@@ -114,8 +115,7 @@ router.patch(
   "/:id/status",
   protect,
   admin,
-  categoryValidator.validateStatusUpdate,
-  validateRequest,
+  validate(categoryValidator.validateStatusUpdate), // Bao gồm middleware addAuditInfo
   categoryController.updateCategoryStatus
 );
 

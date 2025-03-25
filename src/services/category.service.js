@@ -1,27 +1,24 @@
-const { Category } = require("@models");
+const { Category, Product, Variant } = require("@models");
 const paginate = require("@utils/pagination");
 
 const categoryService = {
+  // === ADMIN API METHODS ===
+
   /**
-   * Lấy danh sách danh mục với phân trang (chỉ lấy các danh mục active và chưa xóa)
+   * [ADMIN] Lấy tất cả category (bao gồm cả inactive)
    */
-  getAllCategories: async (query) => {
+  getAdminAllCategories: async (query) => {
     const { page = 1, limit = 10, name, isActive, sort } = query;
+    const filter = { deletedAt: null }; // Mặc định chỉ lấy các category chưa xóa
 
-    // Xây dựng query filter
-    const filter = {};
-
-    // Filter theo tên (tìm kiếm không phân biệt hoa thường)
     if (name) {
       filter.name = { $regex: name, $options: "i" };
     }
 
-    // Filter theo trạng thái active
     if (isActive !== undefined) {
       filter.isActive = isActive;
     }
 
-    // Tạo options cho paginate
     const options = {
       page,
       limit,
@@ -32,36 +29,112 @@ const categoryService = {
   },
 
   /**
-   * Lấy thông tin một danh mục theo ID (bao gồm cả đã xóa nếu là admin)
+   * [ADMIN] Lấy category theo ID (bao gồm cả inactive và đã xóa)
    */
-  getCategoryById: async (categoryId, includeDeleted = false) => {
-    const query = { _id: categoryId };
-    if (includeDeleted) {
-      query.includeDeleted = true;
-    }
-    const category = await Category.findOne(query);
+  getAdminCategoryById: async (categoryId) => {
+    // Sử dụng findById để tìm cả items chưa xóa và đã xóa
+    const category = await Category.findById(categoryId);
+
     if (!category) {
       throw new Error("Không tìm thấy danh mục");
     }
+
     return category;
   },
 
   /**
-   * Lấy danh mục theo slug
+   * [ADMIN] Lấy danh sách category đã xóa mềm
+   */
+  getDeletedCategories: async (query) => {
+    const { page = 1, limit = 10, name, sort } = query;
+    const filter = {
+      deletedAt: { $ne: null }, // Lấy các category đã xóa
+    };
+
+    if (name) {
+      filter.name = { $regex: name, $options: "i" };
+    }
+
+    const options = {
+      page,
+      limit,
+      sort: sort ? JSON.parse(sort) : { deletedAt: -1 },
+    };
+
+    return await paginate(Category, filter, options);
+  },
+
+  // === PUBLIC API METHODS ===
+
+  /**
+   * [PUBLIC] Lấy tất cả category (chỉ active và chưa xóa)
+   */
+  getPublicAllCategories: async (query) => {
+    const { page = 1, limit = 10, name, sort } = query;
+    const filter = {
+      isActive: true,
+      deletedAt: null, // Đảm bảo chỉ lấy các category chưa xóa
+    };
+
+    if (name) {
+      filter.name = { $regex: name, $options: "i" };
+    }
+
+    const options = {
+      page,
+      limit,
+      sort: sort ? JSON.parse(sort) : { createdAt: -1 },
+    };
+
+    return await paginate(Category, filter, options);
+  },
+
+  /**
+   * [PUBLIC] Lấy category theo ID (chỉ active và chưa xóa)
+   */
+  getPublicCategoryById: async (categoryId) => {
+    const category = await Category.findOne({
+      _id: categoryId,
+      isActive: true,
+      deletedAt: null, // Đảm bảo chỉ lấy category chưa xóa
+    });
+
+    if (!category) {
+      throw new Error("Không tìm thấy danh mục");
+    }
+
+    return category;
+  },
+
+  /**
+   * [PUBLIC] Lấy category theo slug (chỉ active và chưa xóa)
    */
   getCategoryBySlug: async (slug) => {
-    const category = await Category.findOne({ slug, isActive: true });
+    const category = await Category.findOne({
+      slug,
+      isActive: true,
+      deletedAt: null, // Đảm bảo chỉ lấy category chưa xóa
+    });
+
     if (!category) {
       throw new Error("Không tìm thấy danh mục");
     }
+
     return category;
   },
 
+  // === COMMON OPERATIONS ===
+
   /**
-   * Tạo danh mục mới
+   * Tạo category mới
    */
   createCategory: async (categoryData) => {
     try {
+      // Đảm bảo isActive mặc định là true nếu không được cung cấp
+      if (categoryData.isActive === undefined) {
+        categoryData.isActive = true;
+      }
+
       const category = new Category(categoryData);
       await category.save();
       return category;
@@ -74,7 +147,7 @@ const categoryService = {
   },
 
   /**
-   * Cập nhật danh mục
+   * Cập nhật category
    */
   updateCategory: async (categoryId, categoryData) => {
     try {
@@ -83,7 +156,15 @@ const categoryService = {
         throw new Error("Không tìm thấy danh mục");
       }
 
-      Object.assign(category, categoryData);
+      // Cập nhật từng trường thay vì Object.assign để xử lý thêm logic nếu cần
+      if (categoryData.name !== undefined) category.name = categoryData.name;
+      if (categoryData.description !== undefined)
+        category.description = categoryData.description;
+      if (categoryData.isActive !== undefined)
+        category.isActive = categoryData.isActive;
+
+      // Các trường audit được thêm tự động bởi middleware
+
       await category.save();
       return category;
     } catch (error) {
@@ -95,7 +176,7 @@ const categoryService = {
   },
 
   /**
-   * Xóa mềm danh mục
+   * Xóa mềm category (chuyển method từ model vào service)
    */
   deleteCategory: async (categoryId, userId) => {
     const category = await Category.findById(categoryId);
@@ -103,18 +184,27 @@ const categoryService = {
       throw new Error("Không tìm thấy danh mục");
     }
 
-    await category.softDelete(userId);
+    if (category.deletedAt) {
+      throw new Error("Danh mục đã bị xóa trước đó");
+    }
+
+    // Logic xóa mềm
+    category.deletedAt = new Date()
+      .toISOString()
+      .slice(0, 19)
+      .replace("T", " ");
+    category.deletedBy = userId;
+    await category.save();
+
     return { message: "Xóa danh mục thành công" };
   },
 
   /**
-   * Khôi phục danh mục đã xóa mềm
+   * Khôi phục category đã xóa mềm (chuyển method từ model vào service)
    */
   restoreCategory: async (categoryId) => {
-    const category = await Category.findOne({
-      _id: categoryId,
-      includeDeleted: true,
-    });
+    const category = await Category.findById(categoryId);
+
     if (!category) {
       throw new Error("Không tìm thấy danh mục");
     }
@@ -123,47 +213,57 @@ const categoryService = {
       throw new Error("Danh mục chưa bị xóa");
     }
 
-    await category.restore();
-    return { message: "Khôi phục danh mục thành công", category };
-  },
+    // Logic khôi phục
+    category.deletedAt = null;
+    category.deletedBy = null;
+    await category.save();
 
-  /**
-   * Danh sách danh mục đã xóa (chỉ dành cho admin)
-   */
-  getDeletedCategories: async (query) => {
-    const { page = 1, limit = 10, name, sort } = query;
-
-    // Xây dựng query filter để lấy chỉ các danh mục đã xóa
-    const filter = { deletedAt: { $ne: null }, includeDeleted: true };
-
-    // Filter theo tên (tìm kiếm không phân biệt hoa thường)
-    if (name) {
-      filter.name = { $regex: name, $options: "i" };
-    }
-
-    // Tạo options cho paginate
-    const options = {
-      page,
-      limit,
-      sort: sort ? JSON.parse(sort) : { deletedAt: -1 },
+    return {
+      message: "Khôi phục danh mục thành công",
+      category,
     };
-
-    return await paginate(Category, filter, options);
   },
 
   /**
-   * Cập nhật trạng thái active
+   * Cập nhật trạng thái active của category
+   * Thêm logic cascade để ẩn/hiện các sản phẩm và biến thể liên quan
    */
-  updateCategoryStatus: async (categoryId, isActive) => {
+  updateCategoryStatus: async (categoryId, isActive, cascade = true) => {
     const category = await Category.findById(categoryId);
     if (!category) {
       throw new Error("Không tìm thấy danh mục");
     }
 
+    // Cập nhật trạng thái category
     category.isActive = isActive;
     await category.save();
+
+    let affectedProducts = 0;
+
+    // CASCADE: Chỉ cập nhật sản phẩm và biến thể khi cascade = true
+    if (cascade) {
+      // Cập nhật trạng thái tất cả sản phẩm thuộc category này
+      const updateProductResult = await Product.updateMany(
+        { category: categoryId },
+        { isActive: isActive }
+      );
+      affectedProducts = updateProductResult.modifiedCount;
+
+      // CASCADE: Cập nhật trạng thái tất cả biến thể của các sản phẩm thuộc category này
+      const products = await Product.find({ category: categoryId });
+      const productIds = products.map((product) => product._id);
+
+      await Variant.updateMany(
+        { product: { $in: productIds } },
+        { isActive: isActive }
+      );
+    }
+
+    const statusMsg = isActive ? "kích hoạt" : "vô hiệu hóa";
     return {
-      message: `Danh mục đã được ${isActive ? "kích hoạt" : "vô hiệu hóa"}`,
+      message: cascade
+        ? `Danh mục đã được ${statusMsg}. Đã ${statusMsg} ${affectedProducts} sản phẩm liên quan.`
+        : `Danh mục đã được ${statusMsg} mà không ảnh hưởng đến sản phẩm.`,
       category,
     };
   },

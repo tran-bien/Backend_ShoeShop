@@ -7,7 +7,7 @@ const brandController = {
    * @desc Lấy danh sách thương hiệu (kể cả không active)
    */
   getAllBrands: asyncHandler(async (req, res) => {
-    const result = await brandService.getAllBrands(req.query);
+    const result = await brandService.getAdminAllBrands(req.query);
     return res.json(result);
   }),
 
@@ -16,7 +16,7 @@ const brandController = {
    * @desc Lấy chi tiết thương hiệu theo ID
    */
   getBrandById: asyncHandler(async (req, res) => {
-    const brand = await brandService.getBrandById(req.params.id, true);
+    const brand = await brandService.getAdminBrandById(req.params.id);
     return res.json({
       success: true,
       brand,
@@ -88,11 +88,11 @@ const brandController = {
    * @desc Cập nhật trạng thái active của thương hiệu
    */
   updateBrandStatus: asyncHandler(async (req, res) => {
-    const { isActive } = req.body;
-
+    const { isActive, cascade = true } = req.body;
     const result = await brandService.updateBrandStatus(
       req.params.id,
-      isActive
+      isActive,
+      cascade
     );
 
     return res.json({

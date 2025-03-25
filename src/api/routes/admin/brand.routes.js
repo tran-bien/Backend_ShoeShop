@@ -6,6 +6,12 @@ const { validateRequest } = require("@middlewares/validateRequest");
 
 const router = express.Router();
 
+// Gom nhóm validators + validateRequest để code ngắn gọn
+const validate = (validators) => [
+  ...(Array.isArray(validators) ? validators : [validators]),
+  validateRequest,
+];
+
 /**
  * @route   GET /api/admin/brands
  * @desc    Lấy tất cả thương hiệu (có phân trang, filter)
@@ -15,8 +21,7 @@ router.get(
   "/",
   protect,
   admin,
-  brandValidator.validateBrandQuery,
-  validateRequest,
+  validate(brandValidator.validateBrandQuery),
   brandController.getAllBrands
 );
 
@@ -29,8 +34,7 @@ router.get(
   "/deleted",
   protect,
   admin,
-  brandValidator.validateBrandQuery,
-  validateRequest,
+  validate(brandValidator.validateBrandQuery),
   brandController.getDeletedBrands
 );
 
@@ -43,8 +47,7 @@ router.get(
   "/:id",
   protect,
   admin,
-  brandValidator.validateBrandId,
-  validateRequest,
+  validate(brandValidator.validateBrandId),
   brandController.getBrandById
 );
 
@@ -57,8 +60,7 @@ router.post(
   "/",
   protect,
   admin,
-  brandValidator.validateBrandData,
-  validateRequest,
+  validate(brandValidator.validateBrandData), // Bao gồm middleware addAuditInfo
   brandController.createBrand
 );
 
@@ -71,9 +73,10 @@ router.put(
   "/:id",
   protect,
   admin,
-  brandValidator.validateBrandId,
-  brandValidator.validateBrandData,
-  validateRequest,
+  validate([
+    ...brandValidator.validateBrandId,
+    ...brandValidator.validateBrandData,
+  ]),
   brandController.updateBrand
 );
 
@@ -86,8 +89,7 @@ router.delete(
   "/:id",
   protect,
   admin,
-  brandValidator.validateBrandId,
-  validateRequest,
+  validate(brandValidator.validateBrandId),
   brandController.deleteBrand
 );
 
@@ -100,8 +102,7 @@ router.put(
   "/:id/restore",
   protect,
   admin,
-  brandValidator.validateBrandId,
-  validateRequest,
+  validate(brandValidator.validateBrandId),
   brandController.restoreBrand
 );
 
@@ -114,8 +115,7 @@ router.patch(
   "/:id/status",
   protect,
   admin,
-  brandValidator.validateStatusUpdate,
-  validateRequest,
+  validate(brandValidator.validateStatusUpdate), // Bao gồm middleware addAuditInfo
   brandController.updateBrandStatus
 );
 

@@ -1,32 +1,37 @@
-const { body, param, validationResult } = require("express-validator");
+const { body, param } = require("express-validator");
 const mongoose = require("mongoose");
 const User = require("@models/user");
 
-// Middleware chung để xử lý lỗi validation
-const handleValidationErrors = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      success: false,
-      errors: errors.array(),
-    });
+// Thêm thông tin audit vào dữ liệu
+const addAuditInfo = (req, res, next) => {
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+    const now = new Date();
+    const formattedDate = now.toISOString().slice(0, 19).replace("T", " ");
+    const username = req.user ? req.user.username || req.user.email : "system";
+
+    if (req.method === "POST") {
+      req.body.createdAt = formattedDate;
+      req.body.createdBy = username;
+    }
+    req.body.updatedAt = formattedDate;
+    req.body.updatedBy = username;
   }
   next();
 };
 
 // Validator cho đăng ký user
-exports.validateRegisterInput = [
+const validateRegisterInput = [
   body("name").trim().notEmpty().withMessage("Tên không được để trống"),
   body("email")
     .notEmpty()
     .withMessage("Vui lòng cung cấp email")
     .isEmail()
     .withMessage("Email không hợp lệ"),
-  handleValidationErrors,
+  addAuditInfo,
 ];
 
 // Validator cho mật khẩu (để dùng trong đăng ký hoặc đổi mật khẩu)
-exports.validatePassword = [
+const validatePassword = [
   body("password")
     .notEmpty()
     .withMessage("Vui lòng cung cấp mật khẩu")
@@ -38,21 +43,20 @@ exports.validatePassword = [
     .withMessage("Mật khẩu phải có ít nhất 1 số")
     .matches(/[!@#$%^&*(),.?":{}|<>]/)
     .withMessage("Mật khẩu phải có ít nhất 1 ký tự đặc biệt"),
-  handleValidationErrors,
 ];
 
 // Validator cho quên mật khẩu
-exports.validateForgotPassword = [
+const validateForgotPassword = [
   body("email")
     .notEmpty()
     .withMessage("Vui lòng cung cấp email")
     .isEmail()
     .withMessage("Email không hợp lệ"),
-  handleValidationErrors,
+  addAuditInfo,
 ];
 
 // Validator cho đặt lại mật khẩu
-exports.validateResetPassword = [
+const validateResetPassword = [
   body("resetToken")
     .notEmpty()
     .withMessage("Vui lòng cung cấp token đặt lại mật khẩu"),
@@ -73,11 +77,11 @@ exports.validateResetPassword = [
     }
     return true;
   }),
-  handleValidationErrors,
+  addAuditInfo,
 ];
 
 // Validator cho thay đổi mật khẩu
-exports.validateChangePassword = [
+const validateChangePassword = [
   body("currentPassword")
     .notEmpty()
     .withMessage("Vui lòng cung cấp mật khẩu hiện tại"),
@@ -107,22 +111,22 @@ exports.validateChangePassword = [
       }
       return true;
     }),
-  handleValidationErrors,
+  addAuditInfo,
 ];
 
 // Validator cho đăng nhập
-exports.validateLoginInput = [
+const validateLoginInput = [
   body("email")
     .notEmpty()
     .withMessage("Vui lòng cung cấp email")
     .isEmail()
     .withMessage("Email không hợp lệ"),
   body("password").notEmpty().withMessage("Vui lòng cung cấp mật khẩu"),
-  handleValidationErrors,
+  addAuditInfo,
 ];
 
 // Validator cho admin logout user
-exports.validateAdminLogoutUser = [
+const validateAdminLogoutUser = [
   param("userId")
     .notEmpty()
     .withMessage("Vui lòng cung cấp userId")
@@ -136,11 +140,11 @@ exports.validateAdminLogoutUser = [
       }
       return true;
     }),
-  handleValidationErrors,
+  addAuditInfo,
 ];
 
 // Validator cho xác thực OTP
-exports.validateVerifyOTP = [
+const validateVerifyOTP = [
   body("otp")
     .notEmpty()
     .withMessage("Vui lòng cung cấp mã OTP")
@@ -160,19 +164,19 @@ exports.validateVerifyOTP = [
     }
     return true;
   }),
-  handleValidationErrors,
+  addAuditInfo,
 ];
 
 // Validator cho refresh token
-exports.validateRefreshToken = [
+const validateRefreshToken = [
   body("refreshToken")
     .notEmpty()
     .withMessage("Vui lòng cung cấp refresh token"),
-  handleValidationErrors,
+  addAuditInfo,
 ];
 
 // Validator cho logout session
-exports.validateLogoutSession = [
+const validateLogoutSession = [
   param("sessionId")
     .notEmpty()
     .withMessage("Vui lòng cung cấp sessionId")
@@ -182,5 +186,18 @@ exports.validateLogoutSession = [
       }
       return true;
     }),
-  handleValidationErrors,
+  addAuditInfo,
 ];
+
+module.exports = {
+  validateRegisterInput,
+  validatePassword,
+  validateForgotPassword,
+  validateResetPassword,
+  validateChangePassword,
+  validateLoginInput,
+  validateAdminLogoutUser,
+  validateVerifyOTP,
+  validateRefreshToken,
+  validateLogoutSession,
+};

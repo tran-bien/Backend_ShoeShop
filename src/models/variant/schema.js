@@ -6,11 +6,9 @@ const VariantSchema = new mongoose.Schema(
       {
         url: {
           type: String,
-          required: true,
         },
         public_id: {
           type: String,
-          required: true,
         },
         isMain: {
           type: Boolean,
@@ -100,10 +98,9 @@ const VariantSchema = new mongoose.Schema(
         },
       },
     ],
-    variantStatus: {
-      type: String,
-      enum: ["active", "inactive"],
-      default: "active",
+    isActive: {
+      type: Boolean,
+      default: true,
     },
     deletedAt: {
       type: Date,
