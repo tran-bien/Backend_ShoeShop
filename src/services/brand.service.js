@@ -1,4 +1,4 @@
-const Brand = require("@models/brand/brand.model");
+const { Brand } = require("@models");
 const paginate = require("@utils/pagination");
 
 const brandService = {
