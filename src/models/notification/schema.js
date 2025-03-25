@@ -62,13 +62,4 @@ const NotificationSchema = new mongoose.Schema(
   }
 );
 
-// Thêm index cho các trường thường truy vấn để tối ưu hiệu suất
-NotificationSchema.index({ user: 1, isRead: 1 });
-NotificationSchema.index({ user: 1, type: 1 });
-NotificationSchema.index({ user: 1, createdAt: -1 }); // Để sắp xếp theo thời gian
-NotificationSchema.index({ markedForDeletion: 1, createdAt: 1 }); // Để xóa hàng loạt
-
-// Thiết lập TTL index để tự động xóa thông báo quá hạn
-NotificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-
 module.exports = NotificationSchema;

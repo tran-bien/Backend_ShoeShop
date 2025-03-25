@@ -110,10 +110,4 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
-UserSchema.index({ name: 1 });
-UserSchema.index({ email: 1 });
-UserSchema.index({ phone: 1 });
-UserSchema.index({ isActive: 1 });
-UserSchema.index({ deletedAt: 1 });
-
 module.exports = UserSchema;

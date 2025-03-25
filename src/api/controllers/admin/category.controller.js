@@ -1,192 +1,145 @@
 const asyncHandler = require("express-async-handler");
-const categoryService = require("../../services/category.service");
+const Category = require("@models/category/index");
+const Product = require("@models/product/index");
+const { createError } = require("@utils/error");
+const paginate = require("@utils/paginate");
 
 /**
- * @desc    Lấy tất cả danh mục cho người dùng
- * @route   GET /api/categories
- * @access  Public
+ * @desc    Lấy tất cả danh mục (bao gồm cả đã xóa mềm nếu có query)
+ * @route   GET /api/admin/categories
+ * @access  Admin
  */
-exports.getCategoriesForUser = asyncHandler(async (req, res) => {
-  try {
-    const categories = await categoryService.getCategoriesForUser();
-    res.status(200).json({
-      success: true,
-      data: categories,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi lấy danh mục",
-    });
-  }
-});
+exports.getAllCategories = asyncHandler(async (req, res) => {
+  const { includeDeleted } = req.query;
 
-/**
- * @desc    Lấy danh mục theo slug cho người dùng
- * @route   GET /api/categories/slug/:slug
- * @access  Public
- */
-exports.getCategoryBySlugForUser = asyncHandler(async (req, res) => {
-  try {
-    const category = await categoryService.getCategoryBySlugForUser(
-      req.params.slug
-    );
-    res.status(200).json({
-      success: true,
-      data: category,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi lấy danh mục theo slug",
-    });
+  let query = {};
+  if (includeDeleted !== "true") {
+    query.deletedAt = null;
   }
+
+  const options = {
+    page: req.query.page,
+    limit: req.query.limit,
+    sort: { createdAt: -1 },
+  };
+
+  const result = await paginate(Category, query, options);
+
+  res.status(200).json(result);
 });
 
 /**
- * @desc    Lấy danh mục theo ID cho người dùng
- * @route   GET /api/categories/:id
- * @access  Public
+ * @desc    Tạo danh mục mới
+ * @route   POST /api/admin/categories
+ * @access  Admin
  */
-exports.getCategoryByIdForUser = asyncHandler(async (req, res) => {
-  try {
-    const category = await categoryService.getCategoryByIdForUser(
-      req.params.id
-    );
-    res.json({
-      success: true,
-      data: category,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi lấy danh mục",
-    });
-  }
-});
-
-// Lấy tất cả danh mục cho admin
-exports.getCategoriesForAdmin = asyncHandler(async (req, res) => {
-  try {
-    const categories = await categoryService.getCategoriesForAdmin();
-    res.status(200).json({
-      success: true,
-      data: categories,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi lấy danh mục",
-    });
-  }
-});
-
-// Tạo danh mục mới
 exports.createCategory = asyncHandler(async (req, res) => {
-  try {
-    const category = await categoryService.createCategory(req.body);
-    res.status(201).json({
-      success: true,
-      data: category,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi tạo danh mục",
-    });
-  }
-});
+  const { name, description, isActive } = req.body;
 
-// Cập nhật danh mục
-exports.updateCategory = asyncHandler(async (req, res) => {
-  try {
-    const category = await categoryService.updateCategory(
-      req.params.id,
-      req.body
-    );
-    res.json({
-      success: true,
-      data: category,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi cập nhật danh mục",
-    });
-  }
-});
+  const category = await Category.create({
+    name,
+    description,
+    isActive: isActive !== undefined ? isActive : true,
+  });
 
-// Xóa danh mục
-exports.deleteCategory = asyncHandler(async (req, res) => {
-  try {
-    await categoryService.deleteCategory(req.params.id);
-    res.json({
-      success: true,
-      message: "Xóa danh mục thành công",
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi xóa danh mục",
-    });
-  }
-});
-
-exports.checkDeletableCategory = asyncHandler(async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await categoryService.checkDeletableCategory(id);
-
-    res.json({
-      success: true,
-      message: result,
-    });
-  } catch (error) {
-    res.status(error.message === "Không tìm thấy danh mục" ? 404 : 500).json({
-      success: false,
-      message: error.message || "Lỗi khi kiểm tra danh mục trước khi xóa",
-    });
-  }
-});
-
-// Toggle trạng thái hoạt động của danh mục
-exports.toggleActive = asyncHandler(async (req, res) => {
-  const category = await categoryService.toggleActive(req.params.id);
-  res.status(200).json({
+  res.status(201).json({
     success: true,
     data: category,
-    message: `Đã ${category.isActive ? "kích hoạt" : "vô hiệu hóa"} danh mục`,
   });
 });
 
-exports.getCategoriesForAdmin = asyncHandler(async (req, res) => {
-  try {
-    const categories = await categoryService.getCategoriesForAdmin();
-    res.json({
-      success: true,
-      data: categories,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi lấy danh mục",
-    });
+/**
+ * @desc    Cập nhật thông tin danh mục
+ * @route   PUT /api/admin/categories/:id
+ * @access  Admin
+ */
+exports.updateCategory = asyncHandler(async (req, res) => {
+  const { name, description, isActive } = req.body;
+  const categoryId = req.params.id;
+
+  // Kiểm tra danh mục tồn tại
+  const category = await Category.findOne({ _id: categoryId, deletedAt: null });
+  if (!category) {
+    throw createError(404, "Không tìm thấy danh mục");
   }
+
+  // Cập nhật thông tin
+  const updatedCategory = await Category.findByIdAndUpdate(
+    categoryId,
+    {
+      name: name || category.name,
+      description:
+        description !== undefined ? description : category.description,
+      isActive: isActive !== undefined ? isActive : category.isActive,
+    },
+    { new: true, runValidators: true }
+  );
+
+  res.status(200).json({
+    success: true,
+    data: updatedCategory,
+  });
 });
 
-exports.getCategoryBySlugForAdmin = asyncHandler(async (req, res) => {
-  try {
-    const category = await categoryService.getCategoryBySlugForAdmin(
-      req.params.slug
-    );
-    res.status(200).json({
-      success: true,
-      data: category,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Lỗi khi lấy danh mục",
-    });
+/**
+ * @desc    Xóa mềm danh mục
+ * @route   DELETE /api/admin/categories/:id
+ * @access  Admin
+ */
+exports.softDeleteCategory = asyncHandler(async (req, res) => {
+  const categoryId = req.params.id;
+
+  // Kiểm tra danh mục tồn tại
+  const category = await Category.findOne({ _id: categoryId, deletedAt: null });
+  if (!category) {
+    throw createError(404, "Không tìm thấy danh mục");
   }
+
+  // Kiểm tra xem có sản phẩm nào đang sử dụng danh mục này không
+  const productsCount = await Product.countDocuments({
+    category: categoryId,
+    deletedAt: null,
+  });
+  if (productsCount > 0) {
+    throw createError(
+      400,
+      "Không thể xóa danh mục đang được sử dụng bởi sản phẩm"
+    );
+  }
+
+  // Xóa mềm danh mục
+  await category.softDelete(req.user._id);
+
+  res.status(200).json({
+    success: true,
+    message: "Đã xóa danh mục thành công",
+  });
+});
+
+/**
+ * @desc    Khôi phục danh mục đã xóa mềm
+ * @route   PATCH /api/admin/categories/:id/restore
+ * @access  Admin
+ */
+exports.restoreCategory = asyncHandler(async (req, res) => {
+  const categoryId = req.params.id;
+
+  // Kiểm tra danh mục tồn tại và đã bị xóa mềm
+  const category = await Category.findOne(
+    { _id: categoryId, deletedAt: { $ne: null } },
+    { includeDeleted: true }
+  );
+
+  if (!category) {
+    throw createError(404, "Không tìm thấy danh mục đã xóa");
+  }
+
+  // Khôi phục danh mục
+  await category.restore();
+
+  res.status(200).json({
+    success: true,
+    message: "Đã khôi phục danh mục thành công",
+    data: category,
+  });
 });

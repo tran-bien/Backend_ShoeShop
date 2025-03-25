@@ -5,6 +5,13 @@ const Product = require("../models/product.model");
 const asyncHandler = require("express-async-handler");
 
 const brandService = {
+  // Kiểm tra điều kiện đầu vào cho thương hiệu
+  validateBrandId: (id) => {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new Error("ID thương hiệu không hợp lệ");
+    }
+  },
+
   /**kiểm tra dữ liệu đầu vào có hợp lệ không */
   validateBrandData: (brandData) => {
     const { name, description } = brandData;
@@ -149,13 +156,6 @@ const brandService = {
       throw new Error("Không tìm thấy thương hiệu");
     }
     return brand;
-  },
-
-  // Kiểm tra điều kiện đầu vào cho thương hiệu
-  validateBrandId: (id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID thương hiệu không hợp lệ");
-    }
   },
 };
 

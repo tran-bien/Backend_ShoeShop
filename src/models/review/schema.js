@@ -74,10 +74,4 @@ ReviewSchema.virtual("likeCount").get(function () {
   return this.likes.length;
 });
 
-ReviewSchema.index({ user: 1 });
-ReviewSchema.index({ product: 1 });
-ReviewSchema.index({ variant: 1 });
-ReviewSchema.index({ order: 1 });
-ReviewSchema.index({ rating: 1 });
-
 module.exports = ReviewSchema;

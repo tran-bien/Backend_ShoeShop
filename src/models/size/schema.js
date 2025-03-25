@@ -26,7 +26,4 @@ const SizeSchema = new mongoose.Schema(
   }
 );
 
-SizeSchema.index({ value: 1 });
-SizeSchema.index({ deletedAt: 1 });
-
 module.exports = SizeSchema;

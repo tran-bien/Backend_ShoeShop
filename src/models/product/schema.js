@@ -93,10 +93,4 @@ const ProductSchema = new mongoose.Schema(
   }
 );
 
-ProductSchema.index({ name: "text" });
-ProductSchema.index({ category: 1 });
-ProductSchema.index({ brand: 1 });
-ProductSchema.index({ isActive: 1 });
-ProductSchema.index({ deletedAt: 1 });
-
 module.exports = ProductSchema;

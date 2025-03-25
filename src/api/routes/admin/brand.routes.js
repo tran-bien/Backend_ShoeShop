@@ -1,36 +1,50 @@
 const express = require("express");
-const router = express.Router();
+const adminBrandController = require("@controllers/admin/brand.controller");
+const { protect, admin } = require("@middlewares/auth.middleware");
 const {
-  getAllBrandsForUser,
-  getBrandBySlugForUser,
-  getAllBrandsForAdmin,
-  getBrandBySlugForAdmin,
-  getBrandByIdForAdmin,
-  createBrand,
-  updateBrand,
-  deleteBrand,
-  checkDeletableBrand,
-  toggleActive,
-} = require("../controllers/brand.controller");
-const { protect, admin } = require("../../middlewares/auth.middleware");
+  createBrandValidator,
+  updateBrandValidator,
+  idValidator,
+  listBrandsValidator,
+} = require("@validators/brand.validator");
+const router = express.Router();
 
-// Route cho người dùng
-router.get("/", getAllBrandsForUser);
-router.get("/slug/:slug", getBrandBySlugForUser);
+// Tất cả routes đều yêu cầu đăng nhập và quyền admin
+router.use(protect, admin);
 
-// Route cho admin
-router.get("/admin", protect, admin, getAllBrandsForAdmin);
-router.get("/admin/:id", protect, admin, getBrandByIdForAdmin);
+/**
+ * @route   GET /api/admin/brands
+ * @desc    Lấy tất cả thương hiệu (bao gồm cả đã xóa mềm nếu có query)
+ * @access  Admin
+ */
+router.get("/", listBrandsValidator, adminBrandController.getAllBrands);
 
-// Routes cho Admin khác
-router.use(protect);
-router.use(admin);
+/**
+ * @route   POST /api/admin/brands
+ * @desc    Tạo thương hiệu mới
+ * @access  Admin
+ */
+router.post("/", createBrandValidator, adminBrandController.createBrand);
 
-router.post("/", createBrand);
-router.put("/:id", updateBrand);
-router.delete("/:id", deleteBrand);
-router.get("/check-delete/:id", checkDeletableBrand);
-router.patch("/:id/toggle", toggleActive);
-router.get("/admin/slug/:slug", getBrandBySlugForAdmin);
+/**
+ * @route   PUT /api/admin/brands/:id
+ * @desc    Cập nhật thông tin thương hiệu
+ * @access  Admin
+ */
+router.put("/:id", updateBrandValidator, adminBrandController.updateBrand);
+
+/**
+ * @route   DELETE /api/admin/brands/:id
+ * @desc    Xóa mềm thương hiệu
+ * @access  Admin
+ */
+router.delete("/:id", idValidator, adminBrandController.softDeleteBrand);
+
+/**
+ * @route   PATCH /api/admin/brands/:id/restore
+ * @desc    Khôi phục thương hiệu đã xóa mềm
+ * @access  Admin
+ */
+router.patch("/:id/restore", idValidator, adminBrandController.restoreBrand);
 
 module.exports = router;

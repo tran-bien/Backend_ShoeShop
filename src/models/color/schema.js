@@ -30,9 +30,4 @@ const ColorSchema = new mongoose.Schema(
   }
 );
 
-ColorSchema.index({ name: 1 });
-ColorSchema.index({ code: 1 });
-ColorSchema.index({ type: 1 });
-ColorSchema.index({ deletedAt: 1 });
-
 module.exports = ColorSchema;

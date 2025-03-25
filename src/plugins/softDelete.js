@@ -1,6 +1,15 @@
 const mongoose = require("mongoose");
 
 module.exports = function softDeletePlugin(schema, options) {
+  options = options || {};
+  // Thêm trường deletedAt (nhưng không dùng option index nếu đã được set)
+  schema.add({ deletedAt: { type: Date, default: null } });
+
+  // Nếu bạn không muốn plugin tự thêm index, hãy kiểm tra option index
+  if (options.index !== false) {
+    schema.index({ deletedAt: 1 });
+  }
+
   // Thêm thuộc tính ảo "isDeleted"
   schema.virtual("isDeleted").get(function () {
     return this.deletedAt !== null;
@@ -137,7 +146,4 @@ module.exports = function softDeletePlugin(schema, options) {
       }
     );
   });
-
-  // Thêm index để cải thiện hiệu suất truy vấn
-  schema.index({ deletedAt: 1 });
 };

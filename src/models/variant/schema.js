@@ -120,16 +120,4 @@ const VariantSchema = new mongoose.Schema(
   }
 );
 
-VariantSchema.index({ imagesvariant: 1 });
-VariantSchema.index({ price: 1 });
-VariantSchema.index({ costPrice: 1 });
-VariantSchema.index({ profit: 1 });
-VariantSchema.index({ profitPercentage: 1 });
-VariantSchema.index({ percentDiscount: 1 });
-VariantSchema.index({ gender: 1 });
-VariantSchema.index({ color: 1 });
-VariantSchema.index({ sizes: 1 });
-VariantSchema.index({ variantStatus: 1 });
-VariantSchema.index({ deletedAt: 1 });
-
 module.exports = VariantSchema;

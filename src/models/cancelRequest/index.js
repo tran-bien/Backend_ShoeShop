@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const CancelRequestSchema = require("./schema");
 const { applyMiddlewares } = require("./middlewares");
-const softDeletePlugin = require("@plugin/softDelete");
+const softDeletePlugin = require("@plugins/softDelete");
 
 // Áp dụng plugin xóa mềm
 CancelRequestSchema.plugin(softDeletePlugin);

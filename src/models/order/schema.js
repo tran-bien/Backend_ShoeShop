@@ -93,11 +93,11 @@ const OrderSchema = new mongoose.Schema(
         default: "pending",
       },
       transactionId: {
-        type: String, // ID giao dịch từ cổng thanh toán
+        type: String,
         default: null,
       },
       paidAt: {
-        type: Date, // Thời điểm thanh toán
+        type: Date,
         default: null,
       },
     },
@@ -131,12 +131,5 @@ const OrderSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-
-OrderSchema.index({ code: 1 });
-OrderSchema.index({ user: 1, deletedAt: 1 });
-OrderSchema.index({ status: 1, deletedAt: 1 });
-OrderSchema.index({ "payment.paymentStatus": 1 });
-OrderSchema.index({ createdAt: -1 });
-OrderSchema.index({ deletedAt: 1 });
 
 module.exports = OrderSchema;
