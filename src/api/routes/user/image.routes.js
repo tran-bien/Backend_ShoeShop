@@ -1,10 +1,9 @@
 const express = require("express");
 const { protect } = require("@middlewares/auth.middleware");
-const userImageController = require("@controllers/user/image.controller");
-const {
-  userAvatarMiddleware,
-  reviewImageMiddleware,
-} = require("@middlewares/image/image-routes.middleware");
+const imageController = require("@controllers/user/image.controller");
+const uploadMiddleware = require("@middlewares/upload.middleware");
+const uploadValidator = require("@validators/upload.validator");
+const { validateRequest } = require("@middlewares/validateRequest");
 
 const router = express.Router();
 
@@ -16,8 +15,10 @@ const router = express.Router();
 router.post(
   "/avatar",
   protect,
-  userAvatarMiddleware.upload,
-  userImageController.uploadAvatar
+  uploadMiddleware.handleAvatarUpload,
+  uploadValidator.validateSingleFileExists,
+  validateRequest,
+  imageController.uploadAvatar
 );
 
 /**
@@ -25,35 +26,6 @@ router.post(
  * @desc    Xóa ảnh đại diện của chính mình
  * @access  Private
  */
-router.delete(
-  "/avatar",
-  protect,
-  userAvatarMiddleware.remove,
-  userImageController.removeAvatar
-);
-
-/**
- * @route   POST /api/images/review/:reviewId
- * @desc    Upload ảnh cho review
- * @access  Private
- */
-router.post(
-  "/review/:reviewId",
-  protect,
-  reviewImageMiddleware.upload,
-  userImageController.uploadReviewImages
-);
-
-/**
- * @route   DELETE /api/images/review/:reviewId
- * @desc    Xóa ảnh của review
- * @access  Private
- */
-router.delete(
-  "/review/:reviewId",
-  protect,
-  reviewImageMiddleware.remove,
-  userImageController.removeReviewImages
-);
+router.delete("/avatar", protect, imageController.removeAvatar);
 
 module.exports = router;

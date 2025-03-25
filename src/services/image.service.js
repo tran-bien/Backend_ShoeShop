@@ -1,5 +1,5 @@
 const cloudinary = require("cloudinary").v2;
-const { Product, Variant, Brand, Review, User } = require("@models");
+const { Product, Variant, Brand, User } = require("@models");
 const mongoose = require("mongoose");
 
 const imageService = {
@@ -22,73 +22,6 @@ const imageService = {
     } catch (error) {
       console.error("Lỗi khi xóa ảnh từ Cloudinary:", error);
       throw new Error("Không thể xóa ảnh. Vui lòng thử lại!");
-    }
-  },
-
-  /**
-   * Cập nhật ảnh cho model cụ thể
-   * @param {String} modelType - Loại model (product, variant, brand, review, user)
-   * @param {String} modelId - ID của model
-   * @param {Object} data - Dữ liệu cập nhật
-   * @returns {Promise<Object>} - Kết quả cập nhật
-   */
-  updateModelImages: async (modelType, modelId, data) => {
-    try {
-      // Kiểm tra ID hợp lệ
-      if (!mongoose.Types.ObjectId.isValid(modelId)) {
-        throw new Error("ID không hợp lệ");
-      }
-
-      let model;
-      let updatePath;
-      let updateData = {};
-
-      switch (modelType) {
-        case "product":
-          model = Product;
-          updatePath = "images";
-          break;
-        case "variant":
-          model = Variant;
-          updatePath = "imagesvariant";
-          break;
-        case "brand":
-          model = Brand;
-          updatePath = "logo";
-          break;
-        case "review":
-          model = Review;
-          updatePath = "images";
-          break;
-        case "user":
-          model = User;
-          updatePath = "avatar";
-          break;
-        default:
-          throw new Error("Loại model không hợp lệ");
-      }
-
-      // Xử lý cập nhật khác nhau tùy loại model
-      if (modelType === "brand" || modelType === "user") {
-        // Brand và User chỉ có một ảnh
-        updateData[updatePath] = data;
-      } else {
-        // Các model khác có mảng ảnh
-        updateData[updatePath] = data;
-      }
-
-      const updatedDoc = await model.findByIdAndUpdate(modelId, updateData, {
-        new: true,
-      });
-
-      if (!updatedDoc) {
-        throw new Error(`Không tìm thấy ${modelType} với ID: ${modelId}`);
-      }
-
-      return updatedDoc;
-    } catch (error) {
-      console.error(`Lỗi khi cập nhật ảnh cho ${modelType}:`, error);
-      throw error;
     }
   },
 
@@ -183,54 +116,150 @@ const imageService = {
   },
 
   /**
-   * Xóa ảnh khỏi model và Cloudinary
-   * @param {String} modelType - Loại model
-   * @param {String} modelId - ID của model
-   * @param {Array} imageIds - ID của các ảnh trong MongoDB cần xóa (không phải public_id)
+   * Cập nhật logo cho brand
+   * @param {String} brandId - ID brand
+   * @param {Object} logoData - Dữ liệu logo mới { url, public_id }
+   * @returns {Promise<Object>} - Kết quả cập nhật
+   */
+  updateBrandLogo: async (brandId, logoData) => {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(brandId)) {
+        throw new Error("ID thương hiệu không hợp lệ");
+      }
+
+      // Tìm brand
+      const brand = await Brand.findById(brandId);
+      if (!brand) {
+        throw new Error("Không tìm thấy thương hiệu");
+      }
+
+      // Nếu brand đã có logo, xóa logo cũ
+      if (brand.logo && brand.logo.public_id) {
+        try {
+          await cloudinary.uploader.destroy(brand.logo.public_id);
+        } catch (err) {
+          console.error("Không thể xóa logo cũ:", err);
+        }
+      }
+
+      // Cập nhật logo mới
+      brand.logo = logoData;
+
+      await brand.save();
+
+      return {
+        success: true,
+        message: "Cập nhật logo thương hiệu thành công",
+        logo: brand.logo,
+      };
+    } catch (error) {
+      console.error("Lỗi cập nhật logo thương hiệu:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Xóa logo của brand
+   * @param {String} brandId - ID brand
    * @returns {Promise<Object>} - Kết quả xóa
    */
-  removeImagesFromModel: async (modelType, modelId, imageIds) => {
+  removeBrandLogo: async (brandId) => {
     try {
-      if (!mongoose.Types.ObjectId.isValid(modelId)) {
-        throw new Error("ID không hợp lệ");
+      if (!mongoose.Types.ObjectId.isValid(brandId)) {
+        throw new Error("ID thương hiệu không hợp lệ");
       }
 
-      let model;
-      let imagesPath;
-
-      switch (modelType) {
-        case "product":
-          model = Product;
-          imagesPath = "images";
-          break;
-        case "variant":
-          model = Variant;
-          imagesPath = "imagesvariant";
-          break;
-        case "review":
-          model = Review;
-          imagesPath = "images";
-          break;
-        case "brand":
-          throw new Error(
-            "Không thể xóa từng ảnh của Brand, chỉ có thể cập nhật logo"
-          );
-        case "user":
-          throw new Error(
-            "Không thể xóa từng ảnh của User, chỉ có thể cập nhật hoặc xóa avatar"
-          );
-        default:
-          throw new Error("Loại model không hợp lệ");
+      // Tìm brand
+      const brand = await Brand.findById(brandId);
+      if (!brand) {
+        throw new Error("Không tìm thấy thương hiệu");
       }
 
-      // Tìm document
-      const doc = await model.findById(modelId);
-      if (!doc) {
-        throw new Error(`Không tìm thấy ${modelType} với ID: ${modelId}`);
+      // Nếu brand có logo, xóa nó
+      if (brand.logo && brand.logo.public_id) {
+        try {
+          await cloudinary.uploader.destroy(brand.logo.public_id);
+        } catch (err) {
+          console.error("Không thể xóa logo:", err);
+        }
+      }
+
+      // Reset thông tin logo
+      brand.logo = {
+        url: "",
+        public_id: "",
+      };
+
+      await brand.save();
+
+      return {
+        success: true,
+        message: "Đã xóa logo thương hiệu",
+      };
+    } catch (error) {
+      console.error("Lỗi xóa logo thương hiệu:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Thêm ảnh cho product
+   * @param {String} productId - ID sản phẩm
+   * @param {Array} images - Mảng các đối tượng ảnh
+   * @returns {Promise<Object>} - Kết quả cập nhật
+   */
+  addProductImages: async (productId, images) => {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        throw new Error("ID sản phẩm không hợp lệ");
+      }
+
+      const product = await Product.findById(productId);
+      if (!product) {
+        throw new Error("Không tìm thấy sản phẩm");
+      }
+
+      // Kiểm tra nếu ảnh đầu tiên có isMain và không có ảnh chính nào trước đó
+      const hasMainImage = product.images.some((img) => img.isMain);
+      if (!hasMainImage && images.length > 0) {
+        images[0].isMain = true;
+      }
+
+      // Thêm ảnh mới vào mảng ảnh hiện có
+      product.images.push(...images);
+
+      await product.save();
+
+      return {
+        success: true,
+        message: "Thêm ảnh sản phẩm thành công",
+        images: product.images,
+      };
+    } catch (error) {
+      console.error("Lỗi thêm ảnh sản phẩm:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Xóa ảnh của product
+   * @param {String} productId - ID sản phẩm
+   * @param {Array} imageIds - Mảng ID ảnh cần xóa
+   * @returns {Promise<Object>} - Kết quả xóa
+   */
+  removeProductImages: async (productId, imageIds) => {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        throw new Error("ID sản phẩm không hợp lệ");
+      }
+
+      const product = await Product.findById(productId);
+      if (!product) {
+        throw new Error("Không tìm thấy sản phẩm");
       }
 
       // Lọc ra những ảnh cần xóa
-      const imagesToDelete = doc[imagesPath].filter((img) =>
+      const imagesToDelete = product.images.filter((img) =>
         imageIds.includes(img._id.toString())
       );
 
@@ -245,131 +274,292 @@ const imageService = {
       await imageService.deleteImages(publicIds);
 
       // Xóa ảnh khỏi model
-      doc[imagesPath] = doc[imagesPath].filter(
+      product.images = product.images.filter(
         (img) => !imageIds.includes(img._id.toString())
       );
 
-      // Nếu là Product hoặc Variant và không còn ảnh nào là ảnh chính
+      // Kiểm tra nếu đã xóa ảnh chính, đặt ảnh đầu tiên còn lại làm ảnh chính
       if (
-        (modelType === "product" || modelType === "variant") &&
-        doc[imagesPath].length > 0 &&
-        !doc[imagesPath].some((img) => img.isMain)
+        product.images.length > 0 &&
+        !product.images.some((img) => img.isMain)
       ) {
-        doc[imagesPath][0].isMain = true;
+        product.images[0].isMain = true;
       }
 
-      // Lưu thay đổi
-      await doc.save();
+      await product.save();
 
       return {
         success: true,
-        message: "Xóa ảnh thành công",
-        [imagesPath]: doc[imagesPath],
+        message: "Xóa ảnh sản phẩm thành công",
+        images: product.images,
       };
     } catch (error) {
-      console.error(`Lỗi khi xóa ảnh khỏi ${modelType}:`, error);
+      console.error("Lỗi xóa ảnh sản phẩm:", error);
       throw error;
     }
   },
 
   /**
-   * Thay đổi thứ tự ảnh
-   * @param {String} modelType - Loại model
-   * @param {String} modelId - ID của model
+   * Thêm ảnh cho variant
+   * @param {String} variantId - ID biến thể
+   * @param {Array} images - Mảng các đối tượng ảnh
+   * @returns {Promise<Object>} - Kết quả cập nhật
+   */
+  addVariantImages: async (variantId, images) => {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(variantId)) {
+        throw new Error("ID biến thể không hợp lệ");
+      }
+
+      const variant = await Variant.findById(variantId);
+      if (!variant) {
+        throw new Error("Không tìm thấy biến thể");
+      }
+
+      // Kiểm tra nếu ảnh đầu tiên có isMain và không có ảnh chính nào trước đó
+      const hasMainImage = variant.imagesvariant.some((img) => img.isMain);
+      if (!hasMainImage && images.length > 0) {
+        images[0].isMain = true;
+      }
+
+      // Thêm ảnh mới vào mảng ảnh hiện có
+      variant.imagesvariant.push(...images);
+
+      await variant.save();
+
+      return {
+        success: true,
+        message: "Thêm ảnh biến thể thành công",
+        images: variant.imagesvariant,
+      };
+    } catch (error) {
+      console.error("Lỗi thêm ảnh biến thể:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Xóa ảnh của variant
+   * @param {String} variantId - ID biến thể
+   * @param {Array} imageIds - Mảng ID ảnh cần xóa
+   * @returns {Promise<Object>} - Kết quả xóa
+   */
+  removeVariantImages: async (variantId, imageIds) => {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(variantId)) {
+        throw new Error("ID biến thể không hợp lệ");
+      }
+
+      const variant = await Variant.findById(variantId);
+      if (!variant) {
+        throw new Error("Không tìm thấy biến thể");
+      }
+
+      // Lọc ra những ảnh cần xóa
+      const imagesToDelete = variant.imagesvariant.filter((img) =>
+        imageIds.includes(img._id.toString())
+      );
+
+      if (imagesToDelete.length === 0) {
+        throw new Error("Không tìm thấy ảnh cần xóa");
+      }
+
+      // Lấy public_id để xóa trên Cloudinary
+      const publicIds = imagesToDelete.map((img) => img.public_id);
+
+      // Xóa ảnh trên Cloudinary
+      await imageService.deleteImages(publicIds);
+
+      // Xóa ảnh khỏi model
+      variant.imagesvariant = variant.imagesvariant.filter(
+        (img) => !imageIds.includes(img._id.toString())
+      );
+
+      // Kiểm tra nếu đã xóa ảnh chính, đặt ảnh đầu tiên còn lại làm ảnh chính
+      if (
+        variant.imagesvariant.length > 0 &&
+        !variant.imagesvariant.some((img) => img.isMain)
+      ) {
+        variant.imagesvariant[0].isMain = true;
+      }
+
+      await variant.save();
+
+      return {
+        success: true,
+        message: "Xóa ảnh biến thể thành công",
+        images: variant.imagesvariant,
+      };
+    } catch (error) {
+      console.error("Lỗi xóa ảnh biến thể:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Sắp xếp ảnh của product
+   * @param {String} productId - ID sản phẩm
    * @param {Array} imageOrders - Mảng { _id, displayOrder }
    * @returns {Promise<Object>} - Kết quả cập nhật
    */
-  reorderImages: async (modelType, modelId, imageOrders) => {
+  reorderProductImages: async (productId, imageOrders) => {
     try {
-      if (!mongoose.Types.ObjectId.isValid(modelId)) {
-        throw new Error("ID không hợp lệ");
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        throw new Error("ID sản phẩm không hợp lệ");
       }
 
-      if (modelType !== "product" && modelType !== "variant") {
-        throw new Error("Chỉ hỗ trợ sắp xếp ảnh cho Product và Variant");
-      }
-
-      const model = modelType === "product" ? Product : Variant;
-      const imagesPath = modelType === "product" ? "images" : "imagesvariant";
-
-      // Tìm document
-      const doc = await model.findById(modelId);
-      if (!doc) {
-        throw new Error(`Không tìm thấy ${modelType} với ID: ${modelId}`);
+      const product = await Product.findById(productId);
+      if (!product) {
+        throw new Error("Không tìm thấy sản phẩm");
       }
 
       // Cập nhật thứ tự
       imageOrders.forEach((order) => {
-        const image = doc[imagesPath].id(order._id);
+        const image = product.images.id(order._id);
         if (image) {
           image.displayOrder = order.displayOrder;
         }
       });
 
       // Sắp xếp lại mảng
-      doc[imagesPath].sort((a, b) => a.displayOrder - b.displayOrder);
+      product.images.sort((a, b) => a.displayOrder - b.displayOrder);
 
-      await doc.save();
+      await product.save();
 
       return {
         success: true,
-        message: "Cập nhật thứ tự ảnh thành công",
-        [imagesPath]: doc[imagesPath],
+        message: "Cập nhật thứ tự ảnh sản phẩm thành công",
+        images: product.images,
       };
     } catch (error) {
-      console.error(`Lỗi khi sắp xếp ảnh cho ${modelType}:`, error);
+      console.error("Lỗi sắp xếp ảnh sản phẩm:", error);
       throw error;
     }
   },
 
   /**
-   * Đặt ảnh chính
-   * @param {String} modelType - Loại model
-   * @param {String} modelId - ID của model
-   * @param {String} imageId - ID của ảnh sẽ đặt làm ảnh chính
+   * Sắp xếp ảnh của variant
+   * @param {String} variantId - ID biến thể
+   * @param {Array} imageOrders - Mảng { _id, displayOrder }
    * @returns {Promise<Object>} - Kết quả cập nhật
    */
-  setMainImage: async (modelType, modelId, imageId) => {
+  reorderVariantImages: async (variantId, imageOrders) => {
     try {
-      if (!mongoose.Types.ObjectId.isValid(modelId)) {
-        throw new Error("ID không hợp lệ");
+      if (!mongoose.Types.ObjectId.isValid(variantId)) {
+        throw new Error("ID biến thể không hợp lệ");
       }
 
-      if (modelType !== "product" && modelType !== "variant") {
-        throw new Error("Chỉ hỗ trợ đặt ảnh chính cho Product và Variant");
+      const variant = await Variant.findById(variantId);
+      if (!variant) {
+        throw new Error("Không tìm thấy biến thể");
       }
 
-      const model = modelType === "product" ? Product : Variant;
-      const imagesPath = modelType === "product" ? "images" : "imagesvariant";
+      // Cập nhật thứ tự
+      imageOrders.forEach((order) => {
+        const image = variant.imagesvariant.id(order._id);
+        if (image) {
+          image.displayOrder = order.displayOrder;
+        }
+      });
 
-      // Tìm document
-      const doc = await model.findById(modelId);
-      if (!doc) {
-        throw new Error(`Không tìm thấy ${modelType} với ID: ${modelId}`);
+      // Sắp xếp lại mảng
+      variant.imagesvariant.sort((a, b) => a.displayOrder - b.displayOrder);
+
+      await variant.save();
+
+      return {
+        success: true,
+        message: "Cập nhật thứ tự ảnh biến thể thành công",
+        images: variant.imagesvariant,
+      };
+    } catch (error) {
+      console.error("Lỗi sắp xếp ảnh biến thể:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Đặt ảnh chính cho product
+   * @param {String} productId - ID sản phẩm
+   * @param {String} imageId - ID ảnh cần đặt làm ảnh chính
+   * @returns {Promise<Object>} - Kết quả cập nhật
+   */
+  setProductMainImage: async (productId, imageId) => {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        throw new Error("ID sản phẩm không hợp lệ");
+      }
+
+      const product = await Product.findById(productId);
+      if (!product) {
+        throw new Error("Không tìm thấy sản phẩm");
       }
 
       // Bỏ đánh dấu ảnh chính cũ
-      doc[imagesPath].forEach((image) => {
+      product.images.forEach((image) => {
         image.isMain = false;
       });
 
       // Đánh dấu ảnh mới làm ảnh chính
-      const mainImage = doc[imagesPath].id(imageId);
+      const mainImage = product.images.id(imageId);
       if (!mainImage) {
         throw new Error("Không tìm thấy ảnh cần đặt làm ảnh chính");
       }
 
       mainImage.isMain = true;
 
-      await doc.save();
+      await product.save();
 
       return {
         success: true,
-        message: "Đã cập nhật ảnh chính",
-        [imagesPath]: doc[imagesPath],
+        message: "Đã cập nhật ảnh chính sản phẩm",
+        images: product.images,
       };
     } catch (error) {
-      console.error(`Lỗi khi đặt ảnh chính cho ${modelType}:`, error);
+      console.error("Lỗi đặt ảnh chính sản phẩm:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Đặt ảnh chính cho variant
+   * @param {String} variantId - ID biến thể
+   * @param {String} imageId - ID ảnh cần đặt làm ảnh chính
+   * @returns {Promise<Object>} - Kết quả cập nhật
+   */
+  setVariantMainImage: async (variantId, imageId) => {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(variantId)) {
+        throw new Error("ID biến thể không hợp lệ");
+      }
+
+      const variant = await Variant.findById(variantId);
+      if (!variant) {
+        throw new Error("Không tìm thấy biến thể");
+      }
+
+      // Bỏ đánh dấu ảnh chính cũ
+      variant.imagesvariant.forEach((image) => {
+        image.isMain = false;
+      });
+
+      // Đánh dấu ảnh mới làm ảnh chính
+      const mainImage = variant.imagesvariant.id(imageId);
+      if (!mainImage) {
+        throw new Error("Không tìm thấy ảnh cần đặt làm ảnh chính");
+      }
+
+      mainImage.isMain = true;
+
+      await variant.save();
+
+      return {
+        success: true,
+        message: "Đã cập nhật ảnh chính biến thể",
+        images: variant.imagesvariant,
+      };
+    } catch (error) {
+      console.error("Lỗi đặt ảnh chính biến thể:", error);
       throw error;
     }
   },

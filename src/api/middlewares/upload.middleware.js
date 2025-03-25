@@ -1,6 +1,5 @@
 const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const path = require("path");
 const cloudinary = require("@config/cloudinary");
 
 // Danh sách các loại file ảnh được phép
@@ -61,7 +60,7 @@ const fileFilter = (req, file, cb) => {
  * @param {Number} maxCount - Số lượng file tối đa
  * @returns {Function} - Middleware multer
  */
-const createUploadMiddleware = (folderPath, fieldName, maxCount = 10) => {
+const createMultiUploadMiddleware = (folderPath, fieldName, maxCount = 10) => {
   const storage = createStorage(folderPath);
   return multer({
     storage,
@@ -88,14 +87,17 @@ const createSingleUploadMiddleware = (folderPath, fieldName) => {
 // Middleware upload cho từng entity
 const uploadMiddleware = {
   // Các middleware upload cơ bản
-  uploadProductImages: createUploadMiddleware("products/images", "images", 10),
-  uploadVariantImages: createUploadMiddleware(
+  uploadProductImages: createMultiUploadMiddleware(
+    "products/images",
+    "images",
+    10
+  ),
+  uploadVariantImages: createMultiUploadMiddleware(
     "products/variants",
     "images",
     10
   ),
-  uploadBrandLogo: createUploadMiddleware("brands", "logo", 1),
-  uploadReviewImages: createUploadMiddleware("reviews", "images", 5),
+  uploadBrandLogo: createSingleUploadMiddleware("brands", "logo"),
   uploadAvatar: createSingleUploadMiddleware("users/avatars", "avatar"),
 
   /**
@@ -144,45 +146,7 @@ const uploadMiddleware = {
   },
 
   /**
-   * Middleware động để chọn middleware upload dựa vào loại model
-   * @param {Object} req - Request object
-   * @param {Object} res - Response object
-   * @param {Function} next - Next middleware
-   */
-  chooseUploadMiddlewareByModelType: (req, res, next) => {
-    const modelType = req.params.modelType;
-    let uploadMiddlewareFunc;
-
-    switch (modelType) {
-      case "product":
-        uploadMiddlewareFunc = uploadMiddleware.uploadProductImages;
-        break;
-      case "variant":
-        uploadMiddlewareFunc = uploadMiddleware.uploadVariantImages;
-        break;
-      case "brand":
-        uploadMiddlewareFunc = uploadMiddleware.uploadBrandLogo;
-        break;
-      default:
-        return res.status(400).json({
-          success: false,
-          message: "Loại model không hợp lệ",
-        });
-    }
-
-    uploadMiddlewareFunc(req, res, (err) => {
-      if (err) {
-        return uploadMiddleware.handleUploadError(err, req, res, next);
-      }
-      next();
-    });
-  },
-
-  /**
    * Middleware xử lý upload avatar
-   * @param {Object} req - Request object
-   * @param {Object} res - Response object
-   * @param {Function} next - Next middleware
    */
   handleAvatarUpload: (req, res, next) => {
     uploadMiddleware.uploadAvatar(req, res, (err) => {
@@ -194,13 +158,34 @@ const uploadMiddleware = {
   },
 
   /**
-   * Middleware xử lý upload ảnh review
-   * @param {Object} req - Request object
-   * @param {Object} res - Response object
-   * @param {Function} next - Next middleware
+   * Middleware xử lý upload product images
    */
-  handleReviewImageUpload: (req, res, next) => {
-    uploadMiddleware.uploadReviewImages(req, res, (err) => {
+  handleProductImagesUpload: (req, res, next) => {
+    uploadMiddleware.uploadProductImages(req, res, (err) => {
+      if (err) {
+        return uploadMiddleware.handleUploadError(err, req, res, next);
+      }
+      next();
+    });
+  },
+
+  /**
+   * Middleware xử lý upload variant images
+   */
+  handleVariantImagesUpload: (req, res, next) => {
+    uploadMiddleware.uploadVariantImages(req, res, (err) => {
+      if (err) {
+        return uploadMiddleware.handleUploadError(err, req, res, next);
+      }
+      next();
+    });
+  },
+
+  /**
+   * Middleware xử lý upload brand logo
+   */
+  handleBrandLogoUpload: (req, res, next) => {
+    uploadMiddleware.uploadBrandLogo(req, res, (err) => {
       if (err) {
         return uploadMiddleware.handleUploadError(err, req, res, next);
       }
