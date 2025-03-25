@@ -54,28 +54,35 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
   const result = await authService.forgotPassword(req.body.email);
   res.json({
     success: true,
-    message: "Email đặt lại mật khẩu đã được gửi",
-    data: result,
+    message: result.message,
   });
 });
 
 // Đặt lại mật khẩu
 exports.resetPassword = asyncHandler(async (req, res) => {
   const { resetToken, password, confirmPassword } = req.body;
-  await authService.resetPassword(resetToken, password, confirmPassword);
+  const result = await authService.resetPassword(
+    resetToken,
+    password,
+    confirmPassword
+  );
   res.status(200).json({
     success: true,
-    message: "Mật khẩu đã được đặt lại thành công",
+    message: result.message,
   });
 });
 
 // Đổi mật khẩu
 exports.changePassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
-  await authService.changePassword(req.user._id, currentPassword, newPassword);
+  const result = await authService.changePassword(
+    req.user._id,
+    currentPassword,
+    newPassword
+  );
   res.status(200).json({
     success: true,
-    message: "Mật khẩu đã được thay đổi thành công",
+    message: result.message,
   });
 });
 

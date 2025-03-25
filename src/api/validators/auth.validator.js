@@ -1,5 +1,6 @@
 const { body, param, validationResult } = require("express-validator");
 const mongoose = require("mongoose");
+const User = require("@models/user");
 
 // Middleware chung để xử lý lỗi validation
 const handleValidationErrors = (req, res, next) => {
@@ -90,7 +91,13 @@ exports.validateChangePassword = [
     .matches(/\d/)
     .withMessage("Mật khẩu mới phải có ít nhất 1 số")
     .matches(/[!@#$%^&*(),.?":{}|<>]/)
-    .withMessage("Mật khẩu mới phải có ít nhất 1 ký tự đặc biệt"),
+    .withMessage("Mật khẩu mới phải có ít nhất 1 ký tự đặc biệt")
+    .custom((value, { req }) => {
+      if (value === req.body.currentPassword) {
+        throw new Error("Mật khẩu mới phải khác mật khẩu hiện tại");
+      }
+      return true;
+    }),
   body("confirmPassword")
     .notEmpty()
     .withMessage("Vui lòng xác nhận mật khẩu")
@@ -119,9 +126,13 @@ exports.validateAdminLogoutUser = [
   param("userId")
     .notEmpty()
     .withMessage("Vui lòng cung cấp userId")
-    .custom((value) => {
+    .custom(async (value) => {
       if (!mongoose.Types.ObjectId.isValid(value)) {
         throw new Error("User ID không hợp lệ");
+      }
+      const user = await User.findById(value);
+      if (!user) {
+        throw new Error("User không tồn tại");
       }
       return true;
     }),

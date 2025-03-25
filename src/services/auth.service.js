@@ -101,6 +101,7 @@ const authService = {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     return otp;
   },
+
   /**
    * Tạo hoặc cập nhật phiên đăng nhập
    * @param {String} userId - ID người dùng
@@ -153,6 +154,33 @@ const authService = {
   },
 
   /**
+   * So sánh mật khẩu với mật khẩu đã hash
+   * @param {String} password - Mật khẩu chưa hash
+   * @param {String} hashedPassword - Mật khẩu đã hash
+   * @returns {Boolean} - Kết quả so sánh
+   */
+  verifyPassword: async (password, hashedPassword) => {
+    return await bcrypt.compare(password, hashedPassword);
+  },
+
+  /**
+   * Tạo token khôi phục mật khẩu
+   * @returns {Object} - Token khôi phục mật khẩu và token đã hash
+   */
+  generateResetPasswordToken: () => {
+    // Tạo token ngẫu nhiên
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    // Hash và lưu token
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
+    return { resetToken, hashedToken };
+  },
+
+  /**
    * Đăng ký người dùng mới
    * @param {Object} userData - Thông tin người dùng mới
    * @returns {Object} - Thông tin người dùng đã đăng ký
@@ -189,7 +217,7 @@ const authService = {
     user = await User.create({
       name,
       email,
-      password, // Gán trực tiếp password, middleware sẽ hash khi save
+      password, // Middleware sẽ tự động hash khi save
       isVerified: false,
       otp: {
         code: otpCode,
@@ -228,16 +256,6 @@ const authService = {
       throw new Error("Tài khoản đã bị xóa khỏi hệ thống");
     }
 
-    // Kiểm tra mật khẩu có đúng không - sử dụng bcrypt trực tiếp để debug
-    const isPasswordMatch = await bcrypt.compare(password, user.password);
-    console.log("Mật khẩu nhập vào:", password);
-    console.log("Mật khẩu trong DB:", user.password);
-    console.log("Mật khẩu có khớp không:", isPasswordMatch);
-
-    if (!isPasswordMatch) {
-      throw new Error("Mật khẩu không đúng");
-    }
-
     // Kiểm tra email có được xác thực không
     if (!user.isVerified) {
       // Kiểm tra và tạo OTP mới nếu cần
@@ -268,6 +286,15 @@ const authService = {
       );
     }
 
+    // Kiểm tra mật khẩu có đúng không
+    const isPasswordMatch = await authService.verifyPassword(
+      password,
+      user.password
+    );
+    if (!isPasswordMatch) {
+      throw new Error("Mật khẩu không đúng");
+    }
+
     const { token, refreshToken } = await authService.manageUserSession(
       user._id,
       req
@@ -289,10 +316,9 @@ const authService = {
   /**
    * Làm mới token
    * @param {String} refreshToken - Refresh token
-   * @param {Object} req - Request object
    * @returns {Object} - Token mới
    */
-  refreshToken: async (refreshToken, req) => {
+  refreshToken: async (refreshToken) => {
     // Kiểm tra refresh token
     const session = await Session.findOne({ refreshToken, isActive: true });
     if (!session) {
@@ -350,7 +376,9 @@ const authService = {
     }
 
     // Tạo reset token và thiết lập thời gian hết hạn
-    const resetToken = user.getResetPasswordToken();
+    const { resetToken, hashedToken } =
+      authService.generateResetPasswordToken();
+    user.resetPasswordToken = hashedToken;
     user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // Hết hạn sau 10 phút
     await user.save();
 
@@ -361,9 +389,10 @@ const authService = {
 
   /**
    * Đặt lại mật khẩu
-   * @param {String} token - Token đặt lại mật khẩu
+   * @param {String} resetToken - Token đặt lại mật khẩu
    * @param {String} newPassword - Mật khẩu mới
-   * @returns {Boolean} - Kết quả đặt lại mật khẩu
+   * @param {String} confirmPassword - Xác nhận mật khẩu
+   * @returns {Object} - Kết quả đặt lại mật khẩu
    */
   resetPassword: async (resetToken, newPassword, confirmPassword) => {
     console.log("Bắt đầu quá trình đặt lại mật khẩu với token:", resetToken);
@@ -373,8 +402,6 @@ const authService = {
       .createHash("sha256")
       .update(resetToken)
       .digest("hex");
-
-    console.log("Token đã hash để tìm kiếm:", hashedToken);
 
     // Tìm user với reset token đã hash
     const user = await User.findOne({
@@ -388,22 +415,22 @@ const authService = {
 
     console.log("Đã tìm thấy người dùng:", user.email);
 
-    // Mã hóa mật khẩu mới - sử dụng cùng cách mã hóa như khi đăng ký
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    // Kiểm tra mật khẩu mới trùng với mật khẩu cũ không
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      throw new Error(
+        "Mật khẩu mới trùng với mật khẩu cũ. Vui lòng chọn mật khẩu khác!"
+      );
+    }
 
-    // In ra để debug
-    console.log("Mật khẩu mới (chưa hash):", newPassword);
-    console.log("Mật khẩu mới (đã hash):", hashedPassword);
-
-    // Cập nhật mật khẩu trực tiếp
-    user.password = hashedPassword;
+    // Gán mật khẩu mới trực tiếp (middleware sẽ hash khi save)
+    user.password = newPassword;
 
     // Xóa reset token
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
 
-    // Lưu người dùng
+    // Lưu người dùng (middleware sẽ hash mật khẩu)
     await user.save();
 
     // Đăng xuất khỏi tất cả các thiết bị
@@ -421,7 +448,7 @@ const authService = {
    * @param {String} userId - ID người dùng
    * @param {String} currentPassword - Mật khẩu hiện tại
    * @param {String} newPassword - Mật khẩu mới
-   * @returns {Boolean} - Kết quả thay đổi mật khẩu
+   * @returns {Object} - Kết quả thay đổi mật khẩu
    */
   changePassword: async (userId, currentPassword, newPassword) => {
     console.log("Bắt đầu quá trình thay đổi mật khẩu cho người dùng:", userId);
@@ -429,31 +456,23 @@ const authService = {
     // Kiểm tra người dùng
     const user = await User.findById(userId);
     if (!user) {
-      console.log("Không tìm thấy người dùng với ID:", userId);
       throw new Error("Không tìm thấy người dùng");
     }
 
-    console.log("Đã tìm thấy người dùng:", user.email);
-
     // Kiểm tra mật khẩu hiện tại
-    const isPasswordMatch = await user.matchPassword(currentPassword);
+    const isPasswordMatch = await authService.verifyPassword(
+      currentPassword,
+      user.password
+    );
     if (!isPasswordMatch) {
-      console.log("Mật khẩu hiện tại không đúng cho người dùng:", user.email);
       throw new Error(
         "Mật khẩu hiện tại không đúng, không thể thay đổi mật khẩu"
       );
     }
 
-    console.log("Mật khẩu hiện tại đã được xác minh");
-
-    // Gán mật khẩu mới, middleware của user sẽ tự động mã hóa khi save
+    // Gán mật khẩu mới (middleware sẽ hash khi save)
     user.password = newPassword;
     await user.save();
-
-    console.log(
-      "Mật khẩu đã được thay đổi thành công cho người dùng:",
-      user.email
-    );
 
     // Đăng xuất khỏi tất cả các thiết bị
     const logoutResult = await authService.logoutAll(user._id);
@@ -544,7 +563,7 @@ const authService = {
     user.otp = undefined;
     await user.save();
 
-    // Thay thế đoạn tạo session với lời gọi hàm manageUserSession
+    // Tạo phiên đăng nhập
     const { token, refreshToken, session } =
       await authService.manageUserSession(user._id, req);
 
@@ -590,10 +609,6 @@ const authService = {
       });
 
       if (!session) {
-        // Thay vì ném lỗi, trả về thông báo đăng xuất thành công
-        console.log(
-          `Không tìm thấy phiên đăng nhập cho user: ${userId} với token hiện tại`
-        );
         return { success: true, message: "Đã đăng xuất thành công" };
       }
 
@@ -624,7 +639,7 @@ const authService = {
       { isActive: false }
     );
 
-    return result.modifiedCount || 0; // Sử dụng modifiedCount thay vì nModified
+    return result.modifiedCount || 0;
   },
 
   /**
