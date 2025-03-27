@@ -33,22 +33,21 @@ module.exports = function softDeletePlugin(schema, options) {
     return this.deletedAt !== null;
   });
 
-  // SỬ DỤNG MIDDLEWARE THAY VÌ GHI ĐÈ PHƯƠNG THỨC
-
-  // Middleware cho find và findOne
+  // CẢI TIẾN: Middleware cho find operations
   ["find", "findOne", "findById", "countDocuments", "count"].forEach(
     (method) => {
       schema.pre(method, function (next) {
-        // Kiểm tra xem có chỉ định includeDeleted không
-        const includeDeleted = this.getQuery().includeDeleted;
+        // Lấy options từ query hoặc từ options
+        const includeDeleted =
+          this.getOptions().includeDeleted || this.getQuery().includeDeleted;
 
         // Nếu không chỉ định includeDeleted, chỉ lấy các record chưa xóa
-        if (includeDeleted === undefined) {
+        if (!includeDeleted) {
           this.where({ deletedAt: null });
         }
 
-        // Xóa trường includeDeleted vì không phải một trường MongoDB
-        if (includeDeleted !== undefined) {
+        // Xóa trường includeDeleted khỏi query vì không phải field trong MongoDB
+        if (this.getQuery().includeDeleted !== undefined) {
           delete this.getQuery().includeDeleted;
         }
 
@@ -57,17 +56,20 @@ module.exports = function softDeletePlugin(schema, options) {
     }
   );
 
-  // Middleware cho update methods
+  // CẢI TIẾN: Middleware cho update operations
   ["updateOne", "updateMany", "findOneAndUpdate", "findByIdAndUpdate"].forEach(
     (method) => {
       schema.pre(method, function (next) {
-        const includeDeleted = this.getQuery().includeDeleted;
+        // Lấy options từ query hoặc từ options
+        const includeDeleted =
+          this.getOptions().includeDeleted || this.getQuery().includeDeleted;
 
-        if (includeDeleted === undefined) {
+        if (!includeDeleted) {
           this.where({ deletedAt: null });
         }
 
-        if (includeDeleted !== undefined) {
+        // Xóa trường includeDeleted khỏi query
+        if (this.getQuery().includeDeleted !== undefined) {
           delete this.getQuery().includeDeleted;
         }
 
@@ -101,16 +103,32 @@ module.exports = function softDeletePlugin(schema, options) {
 
   // Thêm phương thức tĩnh để tìm tất cả các mục kể cả đã xóa
   schema.statics.findWithDeleted = function (query = {}) {
-    return this.find({ ...query, includeDeleted: true });
+    return this.find(query).setOptions({ includeDeleted: true });
   };
 
-  // Thêm phương thức tĩnh để đếm các mục đã bị xóa mềm
+  // Thêm phương thức tĩnh để tìm chỉ các mục đã bị xóa mềm
+  schema.statics.findDeleted = function (query = {}, options = {}) {
+    const { sort, page, limit } = options;
+    const paginationOptions = {};
+
+    if (sort) paginationOptions.sort = sort;
+    if (page && limit) {
+      paginationOptions.skip = (parseInt(page) - 1) * parseInt(limit);
+      paginationOptions.limit = parseInt(limit);
+    }
+
+    return this.find({
+      ...query,
+      deletedAt: { $ne: null },
+    }).setOptions({ includeDeleted: true, ...paginationOptions });
+  };
+
+  // Thêm phương thức đếm các mục đã bị xóa mềm
   schema.statics.countDeleted = function (query = {}) {
     return this.countDocuments({
       ...query,
       deletedAt: { $ne: null },
-      includeDeleted: true,
-    });
+    }).setOptions({ includeDeleted: true });
   };
 
   // Thêm phương thức tĩnh để xóa mềm nhiều mục cùng lúc
@@ -123,25 +141,40 @@ module.exports = function softDeletePlugin(schema, options) {
     });
   };
 
+  // Thêm phương thức tĩnh để khôi phục một document đã xóa mềm theo ID
+  schema.statics.restoreById = async function (id) {
+    try {
+      // Tìm document đã xóa
+      const doc = await this.findOne({ _id: id })
+        .setOptions({ includeDeleted: true })
+        .where("deletedAt")
+        .ne(null);
+
+      if (!doc) {
+        throw new Error(`Không tìm thấy document hoặc document chưa bị xóa`);
+      }
+
+      // Khôi phục
+      doc.deletedAt = null;
+      doc.deletedBy = null;
+      await doc.save();
+      return doc;
+    } catch (error) {
+      throw error; // Re-throw để service xử lý
+    }
+  };
+
   // Thêm phương thức tĩnh để khôi phục nhiều mục cùng lúc
   schema.statics.restoreMany = async function (filter = {}) {
     return await this.updateMany(
-      { ...filter, deletedAt: { $ne: null }, includeDeleted: true },
+      { ...filter, deletedAt: { $ne: null } },
       {
         $set: {
           deletedAt: null,
           deletedBy: null,
         },
-      }
+      },
+      { includeDeleted: true }
     );
-  };
-
-  // Thêm phương thức tĩnh để tìm các mục đã bị xóa mềm
-  schema.statics.findDeleted = function (query = {}) {
-    return this.find({
-      ...query,
-      deletedAt: { $ne: null },
-      includeDeleted: true,
-    });
   };
 };

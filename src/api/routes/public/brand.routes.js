@@ -16,7 +16,11 @@ const validate = (validators) => [
  * @desc    Lấy tất cả thương hiệu đang active và chưa xóa
  * @access  Public
  */
-router.get("/", validate(brandValidator.validatePublicBrandQuery));
+router.get(
+  "/",
+  validate(brandValidator.validatePublicBrandQuery),
+  brandController.getPublicAllBrands
+);
 
 /**
  * @route   GET /api/brands/slug/:slug
@@ -37,7 +41,7 @@ router.get(
 router.get(
   "/:id",
   validate(brandValidator.validateBrandId),
-  brandController.getBrandById
+  brandController.getPublicBrandById
 );
 
 module.exports = router;

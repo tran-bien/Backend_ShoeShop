@@ -6,7 +6,7 @@ const brandController = {
    * @route GET /api/brands
    * @desc Lấy danh sách thương hiệu (chỉ lấy active và không xóa)
    */
-  getAllBrands: asyncHandler(async (req, res) => {
+  getPublicAllBrands: asyncHandler(async (req, res) => {
     const result = await brandService.getPublicAllBrands(req.query);
     return res.json(result);
   }),
@@ -15,7 +15,7 @@ const brandController = {
    * @route GET /api/brands/:id
    * @desc Lấy chi tiết thương hiệu theo ID
    */
-  getBrandById: asyncHandler(async (req, res) => {
+  getPublicBrandById: asyncHandler(async (req, res) => {
     const brand = await brandService.getPublicBrandById(req.params.id);
     return res.json({
       success: true,

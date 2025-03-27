@@ -19,7 +19,7 @@ const validate = (validators) => [
 router.get(
   "/",
   validate(categoryValidator.validatePublicCategoryQuery),
-  categoryController.getAllCategories
+  categoryController.getPublicAllCategories
 );
 
 /**
@@ -41,7 +41,7 @@ router.get(
 router.get(
   "/:id",
   validate(categoryValidator.validateCategoryId),
-  categoryController.getCategoryById
+  categoryController.getPublicCategoryById
 );
 
 module.exports = router;

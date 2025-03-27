@@ -6,7 +6,7 @@ const categoryController = {
    * @route GET /api/categories
    * @desc Lấy danh sách danh mục (chỉ lấy active và không xóa)
    */
-  getAllCategories: asyncHandler(async (req, res) => {
+  getPublicAllCategories: asyncHandler(async (req, res) => {
     const result = await categoryService.getPublicAllCategories(req.query);
     return res.json(result);
   }),
@@ -15,7 +15,7 @@ const categoryController = {
    * @route GET /api/categories/:id
    * @desc Lấy chi tiết danh mục theo ID
    */
-  getCategoryById: asyncHandler(async (req, res) => {
+  getPublicCategoryById: asyncHandler(async (req, res) => {
     const category = await categoryService.getPublicCategoryById(req.params.id);
     return res.json({
       success: true,

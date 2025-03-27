@@ -32,8 +32,10 @@ const brandService = {
    * [ADMIN] Lấy brand theo ID (bao gồm cả inactive và đã xóa)
    */
   getAdminBrandById: async (brandId) => {
-    // Sử dụng findById để tìm cả items chưa xóa và đã xóa
-    const brand = await Brand.findById(brandId);
+    // Sử dụng setOptions để bao gồm cả brand đã xóa
+    const brand = await Brand.findById(brandId).setOptions({
+      includeDeleted: true,
+    });
 
     if (!brand) {
       throw new Error("Không tìm thấy thương hiệu");
@@ -46,22 +48,46 @@ const brandService = {
    * [ADMIN] Lấy danh sách brand đã xóa mềm
    */
   getDeletedBrands: async (query) => {
-    const { page = 1, limit = 10, name, sort } = query;
-    const filter = {
-      deletedAt: { $ne: null }, // Lấy các brand đã xóa
-    };
+    try {
+      const { page = 1, limit = 10, name, sort } = query;
 
-    if (name) {
-      filter.name = { $regex: name, $options: "i" };
+      // Chuẩn bị filter
+      let filter = {};
+
+      if (name) {
+        filter.name = { $regex: name, $options: "i" };
+      }
+
+      // Sử dụng phương thức cải tiến findDeleted
+      const sortOption = sort ? JSON.parse(sort) : { deletedAt: -1 };
+
+      // Lấy danh sách brand đã xóa với phân trang
+      const brands = await Brand.findDeleted(filter, {
+        page,
+        limit,
+        sort: sortOption,
+      });
+
+      // Đếm tổng số brand đã xóa
+      const totalItems = await Brand.countDeleted(filter);
+      const totalPages = Math.ceil(totalItems / parseInt(limit));
+
+      return {
+        success: true,
+        data: brands,
+        pagination: {
+          totalItems,
+          currentPage: parseInt(page),
+          pageSize: parseInt(limit),
+          totalPages,
+          hasNext: parseInt(page) < totalPages,
+          hasPrev: parseInt(page) > 1,
+        },
+      };
+    } catch (error) {
+      console.error("Lỗi khi lấy danh sách brand đã xóa:", error);
+      throw new Error("Không thể lấy danh sách thương hiệu đã xóa");
     }
-
-    const options = {
-      page,
-      limit,
-      sort: sort ? JSON.parse(sort) : { deletedAt: -1 },
-    };
-
-    return await paginate(Brand, filter, options);
   },
 
   // === PUBLIC API METHODS ===
@@ -188,10 +214,8 @@ const brandService = {
       throw new Error("Thương hiệu đã bị xóa trước đó");
     }
 
-    // Logic xóa mềm
-    brand.deletedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
-    brand.deletedBy = userId;
-    await brand.save();
+    // Sử dụng phương thức softDelete từ plugin
+    await brand.softDelete(userId);
 
     return { message: "Xóa thương hiệu thành công" };
   },
@@ -200,25 +224,18 @@ const brandService = {
    * Khôi phục brand đã xóa mềm (chuyển method từ model vào service)
    */
   restoreBrand: async (brandId) => {
-    const brand = await Brand.findById(brandId);
+    try {
+      // Sử dụng phương thức restoreById từ plugin
+      const brand = await Brand.restoreById(brandId);
 
-    if (!brand) {
+      return {
+        message: "Khôi phục thương hiệu thành công",
+        brand,
+      };
+    } catch (error) {
+      console.error("Lỗi khôi phục brand:", error);
       throw new Error("Không tìm thấy thương hiệu");
     }
-
-    if (!brand.deletedAt) {
-      throw new Error("Thương hiệu chưa bị xóa");
-    }
-
-    // Logic khôi phục
-    brand.deletedAt = null;
-    brand.deletedBy = null;
-    await brand.save();
-
-    return {
-      message: "Khôi phục thương hiệu thành công",
-      brand,
-    };
   },
 
   /**

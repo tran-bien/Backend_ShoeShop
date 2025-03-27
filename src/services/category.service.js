@@ -32,8 +32,10 @@ const categoryService = {
    * [ADMIN] Lấy category theo ID (bao gồm cả inactive và đã xóa)
    */
   getAdminCategoryById: async (categoryId) => {
-    // Sử dụng findById để tìm cả items chưa xóa và đã xóa
-    const category = await Category.findById(categoryId);
+    // Sử dụng setOptions để bao gồm cả category đã xóa
+    const category = await Category.findById(categoryId).setOptions({
+      includeDeleted: true,
+    });
 
     if (!category) {
       throw new Error("Không tìm thấy danh mục");
@@ -46,22 +48,46 @@ const categoryService = {
    * [ADMIN] Lấy danh sách category đã xóa mềm
    */
   getDeletedCategories: async (query) => {
-    const { page = 1, limit = 10, name, sort } = query;
-    const filter = {
-      deletedAt: { $ne: null }, // Lấy các category đã xóa
-    };
+    try {
+      const { page = 1, limit = 10, name, sort } = query;
 
-    if (name) {
-      filter.name = { $regex: name, $options: "i" };
+      // Chuẩn bị filter
+      let filter = {};
+
+      if (name) {
+        filter.name = { $regex: name, $options: "i" };
+      }
+
+      // Sử dụng phương thức cải tiến findDeleted
+      const sortOption = sort ? JSON.parse(sort) : { deletedAt: -1 };
+
+      // Lấy danh sách category đã xóa với phân trang
+      const categories = await Category.findDeleted(filter, {
+        page,
+        limit,
+        sort: sortOption,
+      });
+
+      // Đếm tổng số category đã xóa
+      const totalItems = await Category.countDeleted(filter);
+      const totalPages = Math.ceil(totalItems / parseInt(limit));
+
+      return {
+        success: true,
+        data: categories,
+        pagination: {
+          totalItems,
+          currentPage: parseInt(page),
+          pageSize: parseInt(limit),
+          totalPages,
+          hasNext: parseInt(page) < totalPages,
+          hasPrev: parseInt(page) > 1,
+        },
+      };
+    } catch (error) {
+      console.error("Lỗi khi lấy danh sách category đã xóa:", error);
+      throw new Error("Không thể lấy danh sách danh mục đã xóa");
     }
-
-    const options = {
-      page,
-      limit,
-      sort: sort ? JSON.parse(sort) : { deletedAt: -1 },
-    };
-
-    return await paginate(Category, filter, options);
   },
 
   // === PUBLIC API METHODS ===
@@ -188,13 +214,8 @@ const categoryService = {
       throw new Error("Danh mục đã bị xóa trước đó");
     }
 
-    // Logic xóa mềm
-    category.deletedAt = new Date()
-      .toISOString()
-      .slice(0, 19)
-      .replace("T", " ");
-    category.deletedBy = userId;
-    await category.save();
+    // Sử dụng phương thức softDelete từ plugin
+    await category.softDelete(userId);
 
     return { message: "Xóa danh mục thành công" };
   },
@@ -203,25 +224,18 @@ const categoryService = {
    * Khôi phục category đã xóa mềm (chuyển method từ model vào service)
    */
   restoreCategory: async (categoryId) => {
-    const category = await Category.findById(categoryId);
+    try {
+      // Sử dụng phương thức restoreById từ plugin
+      const category = await Category.restoreById(categoryId);
 
-    if (!category) {
+      return {
+        message: "Khôi phục danh mục thành công",
+        category,
+      };
+    } catch (error) {
+      console.error("Lỗi khôi phục category:", error);
       throw new Error("Không tìm thấy danh mục");
     }
-
-    if (!category.deletedAt) {
-      throw new Error("Danh mục chưa bị xóa");
-    }
-
-    // Logic khôi phục
-    category.deletedAt = null;
-    category.deletedBy = null;
-    await category.save();
-
-    return {
-      message: "Khôi phục danh mục thành công",
-      category,
-    };
   },
 
   /**
