@@ -11,7 +11,7 @@ const socketIo = require("socket.io");
 // Sử dụng đường dẫn mới theo cấu trúc thư mục trong src
 const connectDB = require("@config/db");
 const errorHandler = require("@middlewares/error.middleware");
-const { cleanExpiredSessions } = require("@services/session.service");
+const { cleanSessions } = require("@services/session.service");
 const routes = require("@routes");
 
 // Load biến môi trường từ file .env
@@ -20,21 +20,20 @@ dotenv.config();
 // Kết nối đến CSDL
 connectDB();
 
-// Dọn dẹp session hết hạn khi khởi động server
 const cleanupSessions = async () => {
   try {
-    await cleanExpiredSessions();
+    await cleanSessions();
 
-    // Thiết lập job định kỳ để dọn dẹp session hết hạn mỗi giờ
+    // Thiết lập job định kỳ để dọn dẹp session
     setInterval(async () => {
       try {
-        await cleanExpiredSessions();
+        await cleanSessions();
       } catch (error) {
-        console.error("Lỗi khi dọn dẹp session hết hạn:", error);
+        console.error("Lỗi khi dọn dẹp session:", error);
       }
     }, 60 * 60 * 1000); // Mỗi giờ
   } catch (error) {
-    console.error("Lỗi khi dọn dẹp session hết hạn:", error);
+    console.error("Lỗi khi dọn dẹp session ban đầu:", error);
   }
 };
 

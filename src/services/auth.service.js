@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const emailUtils = require("@utils/email");
 const bcrypt = require("bcryptjs");
 const uaParser = require("ua-parser-js");
+const { limitActiveSessions } = require("./session.service");
 
 const authService = {
   /**
@@ -90,6 +91,7 @@ const authService = {
         30
       )}...`
     );
+    await limitActiveSessions(userId, 5); // Giới hạn tối đa 5 session active
     return { token, refreshToken, session: newSession };
   },
 
