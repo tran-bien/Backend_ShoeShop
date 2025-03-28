@@ -1,15 +1,9 @@
 const express = require("express");
 const categoryController = require("@controllers/public/category.controller");
 const categoryValidator = require("@validators/category.validator");
-const { validateRequest } = require("@middlewares/validateRequest");
+const validate = require("@utils/validatehelper");
 
 const router = express.Router();
-
-// Gom nhóm validators + validateRequest để code ngắn gọn
-const validate = (validators) => [
-  ...(Array.isArray(validators) ? validators : [validators]),
-  validateRequest,
-];
 
 /**
  * @route   GET /api/categories

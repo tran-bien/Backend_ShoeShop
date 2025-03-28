@@ -10,34 +10,25 @@ const adminBrandRoutes = require("@routes/admin/brand.routes");
 const adminCategoryRoutes = require("@routes/admin/category.routes");
 const userBrandRoutes = require("@routes/public/brand.routes");
 const userCategoryRoutes = require("@routes/public/category.routes");
+const adminColorRoutes = require("@routes/admin/color.routes");
+const userColorRoutes = require("@routes/public/color.routes");
+const adminSizeRoutes = require("@routes/admin/size.routes");
+const userSizeRoutes = require("@routes/public/size.routes");
 
 // Sử dụng các routes cho người dùng
 router.use("/auth", authRoutes);
 router.use("/images", userImageRoutes);
 router.use("/brands", userBrandRoutes);
 router.use("/categories", userCategoryRoutes);
-
-// router.use("/products", productRoutes);
-// router.use("/categories", categoryRoutes);
-// router.use("/brands", brandRoutes);
-// router.use("/users", userRoutes);
-// router.use("/orders", orderRoutes);
-// router.use("/cart", cartRoutes);
-// router.use("/reviews", reviewRoutes);
-// router.use("/colors", colorRoutes);
-// router.use("/sizes", sizeRoutes);
-// router.use("/coupons", couponRoutes);
-// router.use("/notifications", notificationRoutes);
+router.use("/colors", userColorRoutes);
+router.use("/sizes", userSizeRoutes);
 
 // Sử dụng các routes cho admin
 router.use("/admin/auth", adminAuthRoutes);
 router.use("/admin/images", adminImageRoutes);
 router.use("/admin/brands", adminBrandRoutes);
 router.use("/admin/categories", adminCategoryRoutes);
-// router.use("/admin/products", adminProductRoutes);
-// router.use("/admin/categories", adminCategoryRoutes);
-// router.use("/admin/brands", adminBrandRoutes);
-// router.use("/admin/users", adminUserRoutes);
-// router.use("/admin/orders", adminOrderRoutes);
+router.use("/admin/colors", adminColorRoutes);
+router.use("/admin/sizes", adminSizeRoutes);
 
 module.exports = router;

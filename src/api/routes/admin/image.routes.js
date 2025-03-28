@@ -3,9 +3,13 @@ const { protect, admin } = require("@middlewares/auth.middleware");
 const imageController = require("@controllers/admin/image.controller");
 const uploadMiddleware = require("@middlewares/upload.middleware");
 const uploadValidator = require("@validators/upload.validator");
-const { validateRequest } = require("@middlewares/validateRequest");
+const validate = require("@utils/validatehelper");
 
 const router = express.Router();
+
+// Áp dụng middleware auth cho tất cả routes
+router.use(protect);
+router.use(admin);
 
 /**
  * @route   POST /api/admin/images/brand/:brandId/logo
@@ -14,15 +18,13 @@ const router = express.Router();
  */
 router.post(
   "/brand/:brandId/logo",
-  protect,
-  admin,
-  uploadValidator.validateBrandId,
-  validateRequest,
+  validate(uploadValidator.validateBrandId),
   uploadMiddleware.handleBrandLogoUpload,
-  uploadValidator.validateSingleFileExists,
-  uploadValidator.validateImageFileType,
-  uploadValidator.validateImageFileSize,
-  validateRequest,
+  validate([
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
   imageController.uploadBrandLogo
 );
 
@@ -33,10 +35,7 @@ router.post(
  */
 router.delete(
   "/brand/:brandId/logo",
-  protect,
-  admin,
-  uploadValidator.validateBrandId,
-  validateRequest,
+  validate(uploadValidator.validateBrandId),
   imageController.removeBrandLogo
 );
 
@@ -47,16 +46,14 @@ router.delete(
  */
 router.post(
   "/product/:productId",
-  protect,
-  admin,
-  uploadValidator.validateProductId,
-  validateRequest,
+  validate(uploadValidator.validateProductId),
   uploadMiddleware.handleProductImagesUpload,
-  uploadValidator.validateMultipleFilesExist,
-  uploadValidator.validateMultipleImageFileTypes,
-  uploadValidator.validateMultipleImageFileSizes,
-  uploadValidator.validateMaxFileCount,
-  validateRequest,
+  validate([
+    uploadValidator.validateMultipleFilesExist,
+    uploadValidator.validateMultipleImageFileTypes,
+    uploadValidator.validateMultipleImageFileSizes,
+    uploadValidator.validateMaxFileCount,
+  ]),
   imageController.uploadProductImages
 );
 
@@ -67,11 +64,10 @@ router.post(
  */
 router.delete(
   "/product/:productId",
-  protect,
-  admin,
-  uploadValidator.validateProductId,
-  uploadValidator.validateImageIds,
-  validateRequest,
+  validate([
+    uploadValidator.validateProductId,
+    uploadValidator.validateImageIds,
+  ]),
   imageController.removeProductImages
 );
 
@@ -82,16 +78,14 @@ router.delete(
  */
 router.post(
   "/variant/:variantId",
-  protect,
-  admin,
-  uploadValidator.validateVariantId,
-  validateRequest,
+  validate(uploadValidator.validateVariantId),
   uploadMiddleware.handleVariantImagesUpload,
-  uploadValidator.validateMultipleFilesExist,
-  uploadValidator.validateMultipleImageFileTypes,
-  uploadValidator.validateMultipleImageFileSizes,
-  uploadValidator.validateMaxFileCount,
-  validateRequest,
+  validate([
+    uploadValidator.validateMultipleFilesExist,
+    uploadValidator.validateMultipleImageFileTypes,
+    uploadValidator.validateMultipleImageFileSizes,
+    uploadValidator.validateMaxFileCount,
+  ]),
   imageController.uploadVariantImages
 );
 
@@ -102,11 +96,10 @@ router.post(
  */
 router.delete(
   "/variant/:variantId",
-  protect,
-  admin,
-  uploadValidator.validateVariantId,
-  uploadValidator.validateImageIds,
-  validateRequest,
+  validate([
+    uploadValidator.validateVariantId,
+    uploadValidator.validateImageIds,
+  ]),
   imageController.removeVariantImages
 );
 
@@ -117,11 +110,10 @@ router.delete(
  */
 router.put(
   "/product/:productId/reorder",
-  protect,
-  admin,
-  uploadValidator.validateProductId,
-  uploadValidator.validateImageOrders,
-  validateRequest,
+  validate([
+    uploadValidator.validateProductId,
+    uploadValidator.validateImageOrders,
+  ]),
   imageController.reorderProductImages
 );
 
@@ -132,11 +124,10 @@ router.put(
  */
 router.put(
   "/variant/:variantId/reorder",
-  protect,
-  admin,
-  uploadValidator.validateVariantId,
-  uploadValidator.validateImageOrders,
-  validateRequest,
+  validate([
+    uploadValidator.validateVariantId,
+    uploadValidator.validateImageOrders,
+  ]),
   imageController.reorderVariantImages
 );
 
@@ -147,11 +138,10 @@ router.put(
  */
 router.put(
   "/product/:productId/set-main",
-  protect,
-  admin,
-  uploadValidator.validateProductId,
-  uploadValidator.validateMainImage,
-  validateRequest,
+  validate([
+    uploadValidator.validateProductId,
+    uploadValidator.validateMainImage,
+  ]),
   imageController.setProductMainImage
 );
 
@@ -162,11 +152,10 @@ router.put(
  */
 router.put(
   "/variant/:variantId/set-main",
-  protect,
-  admin,
-  uploadValidator.validateVariantId,
-  uploadValidator.validateMainImage,
-  validateRequest,
+  validate([
+    uploadValidator.validateVariantId,
+    uploadValidator.validateMainImage,
+  ]),
   imageController.setVariantMainImage
 );
 
@@ -177,10 +166,7 @@ router.put(
  */
 router.delete(
   "/cloudinary",
-  protect,
-  admin,
-  uploadValidator.validateCloudinaryDelete,
-  validateRequest,
+  validate(uploadValidator.validateCloudinaryDelete),
   imageController.deleteFromCloudinary
 );
 

@@ -3,7 +3,7 @@ const { protect } = require("@middlewares/auth.middleware");
 const imageController = require("@controllers/user/image.controller");
 const uploadMiddleware = require("@middlewares/upload.middleware");
 const uploadValidator = require("@validators/upload.validator");
-const { validateRequest } = require("@middlewares/validateRequest");
+const validate = require("@utils/validatehelper");
 
 const router = express.Router();
 
@@ -16,10 +16,11 @@ router.post(
   "/avatar",
   protect,
   uploadMiddleware.handleAvatarUpload,
-  uploadValidator.validateSingleFileExists,
-  uploadValidator.validateImageFileType,
-  uploadValidator.validateImageFileSize,
-  validateRequest,
+  validate([
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
   imageController.uploadAvatar
 );
 

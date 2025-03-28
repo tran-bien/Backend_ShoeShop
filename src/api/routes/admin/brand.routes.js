@@ -2,15 +2,8 @@ const express = require("express");
 const { protect, admin } = require("@middlewares/auth.middleware");
 const brandController = require("@controllers/admin/brand.controller");
 const brandValidator = require("@validators/brand.validator");
-const { validateRequest } = require("@middlewares/validateRequest");
-
+const validate = require("@utils/validatehelper");
 const router = express.Router();
-
-// Gom nhóm validators + validateRequest để code ngắn gọn
-const validate = (validators) => [
-  ...(Array.isArray(validators) ? validators : [validators]),
-  validateRequest,
-];
 
 /**
  * @route   GET /api/admin/brands

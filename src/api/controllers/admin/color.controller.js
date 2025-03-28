@@ -1,63 +1,101 @@
 const asyncHandler = require("express-async-handler");
-const colorService = require("../../services/color.service");
+const colorService = require("@services/color.service");
 
-// Lấy danh sách màu sắc
-exports.getAllColors = asyncHandler(async (req, res) => {
-  const colors = await colorService.getAllColors();
-  res.json({
-    success: true,
-    data: colors,
-  });
-});
+const colorController = {
+  /**
+   * @desc    Lấy danh sách tất cả màu sắc (admin)
+   * @route   GET /api/admin/colors
+   * @access  Admin
+   */
+  getAllColors: asyncHandler(async (req, res) => {
+    const result = await colorService.getColors(req.query);
+    res.json(result);
+  }),
 
-// Tạo màu sắc mới (Admin)
-exports.createColor = asyncHandler(async (req, res) => {
-  const color = await colorService.createColor(req.body);
-  res.status(201).json({
-    success: true,
-    data: color,
-  });
-});
+  /**
+   * @desc    Lấy danh sách màu sắc đã xóa
+   * @route   GET /api/admin/colors/deleted
+   * @access  Admin
+   */
+  getDeletedColors: asyncHandler(async (req, res) => {
+    const result = await colorService.getDeletedColors(req.query);
+    res.json(result);
+  }),
 
-// Cập nhật màu sắc (Admin)
-exports.updateColor = asyncHandler(async (req, res) => {
-  const color = await colorService.updateColor(req.params.colorId, req.body);
-  res.json({
-    success: true,
-    data: color,
-  });
-});
+  /**
+   * @desc    Lấy thông tin chi tiết màu sắc theo ID
+   * @route   GET /api/admin/colors/:id
+   * @access  Admin
+   */
+  getColorById: asyncHandler(async (req, res) => {
+    const result = await colorService.getColorById(req.params.id);
 
-// Xóa màu sắc (Admin)
-exports.deleteColor = asyncHandler(async (req, res) => {
-  await colorService.deleteColorWithCheck(req.params.colorId);
-  res.json({
-    success: true,
-    message: "Xóa màu sắc thành công",
-  });
-});
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
 
-// Kiểm tra xem màu sắc có thể xóa được không
-exports.checkDeletableColor = asyncHandler(async (req, res) => {
-  try {
-    const { colorId } = req.params;
-    const result = await colorService.checkDeletableColor(colorId);
-    res.json({
-      success: true,
-      ...result,
-    });
-  } catch (error) {
-    res.status(error.message === "Không tìm thấy màu sắc" ? 404 : 500).json({
-      success: false,
-      message: error.message || "Lỗi khi kiểm tra màu sắc trước khi xóa",
-    });
-  }
-});
+    res.json(result);
+  }),
 
-exports.getColorDetails = asyncHandler(async (req, res) => {
-  const color = await colorService.getColorDetails(req.params.colorId);
-  res.json({
-    success: true,
-    data: color,
-  });
-});
+  /**
+   * @desc    Tạo màu sắc mới
+   * @route   POST /api/admin/colors
+   * @access  Admin
+   */
+  createColor: asyncHandler(async (req, res) => {
+    const result = await colorService.createColor(req.body);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.status(201).json(result);
+  }),
+
+  /**
+   * @desc    Cập nhật màu sắc
+   * @route   PUT /api/admin/colors/:id
+   * @access  Admin
+   */
+  updateColor: asyncHandler(async (req, res) => {
+    const result = await colorService.updateColor(req.params.id, req.body);
+
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+
+    res.json(result);
+  }),
+
+  /**
+   * @desc    Xóa màu sắc (soft delete)
+   * @route   DELETE /api/admin/colors/:id
+   * @access  Admin
+   */
+  deleteColor: asyncHandler(async (req, res) => {
+    const result = await colorService.deleteColor(req.params.id, req.user._id);
+
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+
+    res.json(result);
+  }),
+
+  /**
+   * @desc    Khôi phục màu sắc đã xóa
+   * @route   PUT /api/admin/colors/:id/restore
+   * @access  Admin
+   */
+  restoreColor: asyncHandler(async (req, res) => {
+    const result = await colorService.restoreColor(req.params.id);
+
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+
+    res.json(result);
+  }),
+};
+
+module.exports = colorController;

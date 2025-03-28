@@ -10,7 +10,6 @@ const SizeSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    // Thêm trường cho xóa mềm
     deletedAt: {
       type: Date,
       default: null,
