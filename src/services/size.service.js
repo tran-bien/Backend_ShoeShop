@@ -212,10 +212,6 @@ const sizeService = {
       throw new Error("Không tìm thấy kích thước");
     }
 
-    if (size.deletedAt) {
-      throw new Error("Kích thước đã bị xóa trước đó");
-    }
-
     // Thực hiện xóa mềm
     await size.softDelete(userId);
 

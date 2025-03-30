@@ -23,7 +23,6 @@ module.exports = function softDeletePlugin(schema, options) {
     });
   }
 
-  // Nếu bạn không muốn plugin tự thêm index, hãy kiểm tra option index
   if (options.index !== false) {
     schema.index({ deletedAt: 1 });
   }
@@ -33,7 +32,7 @@ module.exports = function softDeletePlugin(schema, options) {
     return this.deletedAt !== null;
   });
 
-  // CẢI TIẾN: Middleware cho find operations
+  // Middleware cho find operations
   ["find", "findOne", "findById", "countDocuments", "count"].forEach(
     (method) => {
       schema.pre(method, function (next) {
@@ -56,7 +55,7 @@ module.exports = function softDeletePlugin(schema, options) {
     }
   );
 
-  // CẢI TIẾN: Middleware cho update operations
+  // Middleware cho update operations
   ["updateOne", "updateMany", "findOneAndUpdate", "findByIdAndUpdate"].forEach(
     (method) => {
       schema.pre(method, function (next) {
@@ -87,13 +86,6 @@ module.exports = function softDeletePlugin(schema, options) {
     return await this.save();
   };
 
-  // Tạo phương thức cho instance để khôi phục một mục đã xóa mềm
-  schema.methods.restore = async function () {
-    this.deletedAt = null;
-    this.deletedBy = null;
-    return await this.save();
-  };
-
   // PHƯƠNG THỨC TĨNH
   // Thêm phương thức tĩnh để tìm chỉ các mục đã bị xóa mềm
   schema.statics.findDeleted = function (query = {}, options = {}) {
@@ -120,16 +112,6 @@ module.exports = function softDeletePlugin(schema, options) {
     }).setOptions({ includeDeleted: true });
   };
 
-  // Thêm phương thức tĩnh để xóa mềm nhiều mục cùng lúc
-  schema.statics.softDeleteMany = async function (filter = {}, userId = null) {
-    return await this.updateMany(filter, {
-      $set: {
-        deletedAt: new Date(),
-        deletedBy: userId || null,
-      },
-    });
-  };
-
   // Thêm phương thức tĩnh để khôi phục một document đã xóa mềm theo ID
   schema.statics.restoreById = async function (id) {
     try {
@@ -140,7 +122,7 @@ module.exports = function softDeletePlugin(schema, options) {
         .ne(null);
 
       if (!doc) {
-        throw new Error(`Không tìm thấy document hoặc document chưa bị xóa`);
+        throw new Error(`Không tìm thấy dữ liệu khôi phục`);
       }
 
       // Khôi phục
@@ -151,19 +133,5 @@ module.exports = function softDeletePlugin(schema, options) {
     } catch (error) {
       throw error; // Re-throw để service xử lý
     }
-  };
-
-  // Thêm phương thức tĩnh để khôi phục nhiều mục cùng lúc
-  schema.statics.restoreMany = async function (filter = {}) {
-    return await this.updateMany(
-      { ...filter, deletedAt: { $ne: null } },
-      {
-        $set: {
-          deletedAt: null,
-          deletedBy: null,
-        },
-      },
-      { includeDeleted: true }
-    );
   };
 };

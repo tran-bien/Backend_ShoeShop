@@ -206,10 +206,6 @@ const brandService = {
       throw new Error("Không tìm thấy thương hiệu");
     }
 
-    if (brand.deletedAt) {
-      throw new Error("Thương hiệu đã bị xóa trước đó");
-    }
-
     // Sử dụng phương thức softDelete từ plugin
     await brand.softDelete(userId);
 

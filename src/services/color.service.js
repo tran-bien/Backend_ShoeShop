@@ -302,10 +302,6 @@ const colorService = {
       throw new Error("Không tìm thấy màu sắc");
     }
 
-    if (color.deletedAt) {
-      throw new Error("Màu sắc đã bị xóa trước đó");
-    }
-
     // Thực hiện xóa mềm
     await color.softDelete(userId);
 

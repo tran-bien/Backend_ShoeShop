@@ -204,11 +204,6 @@ const categoryService = {
     if (!category) {
       throw new Error("Không tìm thấy danh mục");
     }
-
-    if (category.deletedAt) {
-      throw new Error("Danh mục đã bị xóa trước đó");
-    }
-
     // Sử dụng phương thức softDelete từ plugin
     await category.softDelete(userId);
 
