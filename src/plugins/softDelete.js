@@ -95,17 +95,6 @@ module.exports = function softDeletePlugin(schema, options) {
   };
 
   // PHƯƠNG THỨC TĨNH
-
-  // Tạo phương thức tĩnh để tìm các mục chưa bị xóa
-  schema.statics.findNotDeleted = function (query = {}) {
-    return this.find({ ...query, deletedAt: null });
-  };
-
-  // Thêm phương thức tĩnh để tìm tất cả các mục kể cả đã xóa
-  schema.statics.findWithDeleted = function (query = {}) {
-    return this.find(query).setOptions({ includeDeleted: true });
-  };
-
   // Thêm phương thức tĩnh để tìm chỉ các mục đã bị xóa mềm
   schema.statics.findDeleted = function (query = {}, options = {}) {
     const { sort, page, limit } = options;

@@ -14,7 +14,6 @@ const ColorSchema = new mongoose.Schema(
     },
     colors: { type: [String], default: [] }, // Mảng chứa 2 màu nếu là half
     type: { type: String, enum: ["solid", "half"], required: true }, // solid hoặc half
-    // Thêm trường cho xóa mềm
     deletedAt: {
       type: Date,
       default: null,

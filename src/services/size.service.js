@@ -1,140 +1,128 @@
 const { Size } = require("@models");
 const paginate = require("@utils/pagination");
+const paginateDeleted = require("@utils/paginationDeleted");
 
 const sizeService = {
+  // === ADMIN API METHODS ===
+
   /**
-   * Lấy danh sách kích thước
-   * @param {Object} queryOptions - Các tham số truy vấn
-   * @param {boolean} includeDeleted - Có bao gồm các kích thước đã xóa không
+   * [ADMIN] Lấy tất cả kích thước (bao gồm cả đã xóa nếu chỉ định)
+   * @param {Object} query - Các tham số truy vấn
    */
-  getSizes: async (queryOptions, includeDeleted = false) => {
-    try {
-      const { page = 1, limit = 10, value, description, sort } = queryOptions;
+  getAdminSizes: async (query) => {
+    const { page = 1, limit = 10, value, description, sort } = query;
+    const filter = { deletedAt: null }; // Mặc định chỉ lấy các kích thước chưa xóa
 
-      // Xây dựng query
-      const query = {};
-
-      // Chỉ lấy những kích thước chưa bị xóa trừ khi có yêu cầu bao gồm cả đã xóa
-      if (!includeDeleted) {
-        query.deletedAt = null;
-      }
-
-      // Tìm theo giá trị
-      if (value !== undefined) {
-        query.value = Number(value);
-      }
-
-      // Tìm theo mô tả
-      if (description) {
-        query.description = { $regex: description, $options: "i" };
-      }
-
-      // Xử lý sắp xếp
-      let sortOptions;
-      try {
-        sortOptions = sort ? JSON.parse(sort) : { value: 1 };
-      } catch (error) {
-        console.error("Error parsing sort:", error);
-        sortOptions = { value: 1 };
-      }
-
-      // Các tùy chọn phân trang
-      const options = {
-        page,
-        limit,
-        sort: sortOptions,
-      };
-
-      // Thực hiện phân trang - sử dụng hàm paginate chung
-      return await paginate(Size, query, options);
-    } catch (error) {
-      console.error("Error in getSizes:", error);
-      return {
-        success: false,
-        message: error.message || "Lỗi khi lấy danh sách kích thước",
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      };
+    // Tìm theo giá trị
+    if (value !== undefined) {
+      filter.value = Number(value);
     }
+
+    // Tìm theo mô tả
+    if (description) {
+      filter.description = { $regex: description, $options: "i" };
+    }
+
+    const options = {
+      page,
+      limit,
+      sort: sort ? JSON.parse(sort) : { createdAt: -1 },
+    };
+
+    return await paginate(Size, filter, options);
   },
 
   /**
-   * Lấy danh sách kích thước đã xóa
-   * @param {Object} queryOptions - Các tham số truy vấn
-   */
-  getDeletedSizes: async (queryOptions) => {
-    try {
-      const { page = 1, limit = 10, value, description, sort } = queryOptions;
-
-      // Xây dựng query
-      let filter = {};
-
-      // Tìm theo giá trị
-      if (value !== undefined) {
-        filter.value = Number(value);
-      }
-
-      // Tìm theo mô tả
-      if (description) {
-        filter.description = { $regex: description, $options: "i" };
-      }
-
-      // Xử lý sắp xếp
-      let sortOptions;
-      try {
-        sortOptions = sort ? JSON.parse(sort) : { deletedAt: -1 };
-      } catch (error) {
-        console.error("Error parsing sort:", error);
-        sortOptions = { deletedAt: -1 };
-      }
-
-      // Lấy danh sách kích thước đã xóa với phân trang
-      const sizes = await Size.findDeleted(filter, {
-        page,
-        limit,
-        sort: sortOptions,
-      });
-
-      // Đếm tổng số kích thước đã xóa
-      const totalItems = await Size.countDeleted(filter);
-      const totalPages = Math.ceil(totalItems / parseInt(limit));
-
-      return {
-        success: true,
-        data: sizes,
-        pagination: {
-          totalItems,
-          currentPage: parseInt(page),
-          pageSize: parseInt(limit),
-          totalPages,
-          hasNext: parseInt(page) < totalPages,
-          hasPrev: parseInt(page) > 1,
-        },
-      };
-    } catch (error) {
-      console.error("Error in getDeletedSizes:", error);
-      return {
-        success: false,
-        message: error.message || "Lỗi khi lấy danh sách kích thước đã xóa",
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      };
-    }
-  },
-
-  /**
-   * Lấy chi tiết kích thước theo ID
+   * [ADMIN] Lấy kích thước theo ID (bao gồm cả đã xóa mềm)
    * @param {string} id - ID của kích thước
-   * @param {boolean} includeDeleted - Có bao gồm kích thước đã xóa không
    */
-  getSizeById: async (id, includeDeleted = false) => {
-    const options = includeDeleted ? { includeDeleted: true } : {};
-    const size = await Size.findById(id, null, options);
+  getAdminSizeById: async (id) => {
+    // Sử dụng setOptions để bao gồm cả kích thước đã xóa
+    const size = await Size.findById(id).setOptions({
+      includeDeleted: true,
+    });
 
     if (!size) {
-      return { success: false, message: "Không tìm thấy kích thước" };
+      throw new Error("Không tìm thấy kích thước");
     }
 
     return { success: true, size };
   },
+
+  /**
+   * [ADMIN] Lấy danh sách kích thước đã xóa
+   * @param {Object} query - Các tham số truy vấn
+   */
+  getDeletedSizes: async (query) => {
+    const { page = 1, limit = 10, value, description, sort } = query;
+    const filter = {};
+
+    if (value !== undefined) {
+      filter.value = Number(value);
+    }
+
+    if (description) {
+      filter.description = { $regex: description, $options: "i" };
+    }
+
+    const options = {
+      page,
+      limit,
+      sort: sort ? JSON.parse(sort) : { deletedAt: -1 },
+    };
+
+    return await paginateDeleted(Size, filter, options);
+  },
+
+  // === PUBLIC API METHODS ===
+
+  /**
+   * [PUBLIC] Lấy tất cả kích thước (chỉ chưa xóa)
+   * @param {Object} query - Các tham số truy vấn
+   */
+  getPublicSizes: async (query) => {
+    const { page = 1, limit = 10, value, description, sort } = query;
+    const filter = {
+      deletedAt: null, // Đảm bảo chỉ lấy các kích thước chưa xóa
+    };
+
+    // Tìm theo giá trị
+    if (value !== undefined) {
+      filter.value = Number(value);
+    }
+
+    // Tìm theo mô tả
+    if (description) {
+      filter.description = { $regex: description, $options: "i" };
+    }
+
+    const options = {
+      page,
+      limit,
+      sort: sort ? JSON.parse(sort) : { createdAt: -1 },
+    };
+
+    return await paginate(Size, filter, options);
+  },
+
+  /**
+   * [PUBLIC] Lấy kích thước theo ID (chỉ chưa xóa)
+   * @param {string} id - ID của kích thước
+   */
+  getPublicSizeById: async (id) => {
+    const size = await Size.findOne({
+      _id: id,
+      deletedAt: null, // Đảm bảo chỉ lấy kích thước chưa xóa
+    });
+
+    if (!size) {
+      throw new Error("Không tìm thấy kích thước");
+    }
+
+    return { success: true, size };
+  },
+
+  // === COMMON OPERATIONS ===
 
   /**
    * Tạo kích thước mới
@@ -148,7 +136,7 @@ const sizeService = {
     });
 
     if (existingSize) {
-      return { success: false, message: "Kích thước này đã tồn tại" };
+      throw new Error("Kích thước này đã tồn tại");
     }
 
     // Tạo kích thước mới
@@ -171,7 +159,7 @@ const sizeService = {
     const size = await Size.findById(id);
 
     if (!size) {
-      return { success: false, message: "Không tìm thấy kích thước" };
+      throw new Error("Không tìm thấy kích thước");
     }
 
     // Kiểm tra xem kích thước sau khi cập nhật có trùng với kích thước khác không
@@ -193,7 +181,7 @@ const sizeService = {
       });
 
       if (existingSize) {
-        return { success: false, message: "Kích thước này đã tồn tại" };
+        throw new Error("Kích thước này đã tồn tại");
       }
     }
 
@@ -217,29 +205,24 @@ const sizeService = {
    * @param {string} userId - ID người dùng thực hiện xóa
    */
   deleteSize: async (id, userId) => {
-    try {
-      // Kiểm tra kích thước tồn tại
-      const size = await Size.findById(id);
+    // Kiểm tra kích thước tồn tại
+    const size = await Size.findById(id);
 
-      if (!size) {
-        return { success: false, message: "Không tìm thấy kích thước" };
-      }
-
-      // Thực hiện xóa mềm
-      await size.softDelete(userId);
-
-      return {
-        success: true,
-        message: "Xóa kích thước thành công",
-      };
-    } catch (error) {
-      console.error("Error in deleteSize:", error);
-      return {
-        success: false,
-        message: error.message || "Lỗi khi xóa kích thước",
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      };
+    if (!size) {
+      throw new Error("Không tìm thấy kích thước");
     }
+
+    if (size.deletedAt) {
+      throw new Error("Kích thước đã bị xóa trước đó");
+    }
+
+    // Thực hiện xóa mềm
+    await size.softDelete(userId);
+
+    return {
+      success: true,
+      message: "Xóa kích thước thành công",
+    };
   },
 
   /**
@@ -247,23 +230,14 @@ const sizeService = {
    * @param {string} id - ID kích thước
    */
   restoreSize: async (id) => {
-    try {
-      // Sử dụng phương thức tĩnh restoreById từ plugin
-      const size = await Size.restoreById(id);
+    // Sử dụng phương thức tĩnh restoreById từ plugin
+    const size = await Size.restoreById(id);
 
-      return {
-        success: true,
-        message: "Khôi phục kích thước thành công",
-        size,
-      };
-    } catch (error) {
-      console.error("Error in restoreSize:", error);
-      return {
-        success: false,
-        message: error.message || "Lỗi khi khôi phục kích thước",
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      };
-    }
+    return {
+      success: true,
+      message: "Khôi phục kích thước thành công",
+      size,
+    };
   },
 };
 

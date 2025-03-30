@@ -1,5 +1,6 @@
 const { Brand, Product, Variant } = require("@models");
 const paginate = require("@utils/pagination");
+const paginateDeleted = require("@utils/paginationDeleted");
 
 const brandService = {
   // === ADMIN API METHODS ===
@@ -15,8 +16,9 @@ const brandService = {
       filter.name = { $regex: name, $options: "i" };
     }
 
-    if (isActive !== undefined) {
-      filter.isActive = isActive;
+    // Nếu query truyền vào isActive dưới dạng "true" hoặc "false", ta chuyển đổi sang boolean và thêm vào filter
+    if (isActive === "true" || isActive === "false") {
+      filter.isActive = isActive === "true";
     }
 
     const options = {
@@ -41,53 +43,28 @@ const brandService = {
       throw new Error("Không tìm thấy thương hiệu");
     }
 
-    return brand;
+    return { success: true, brand };
   },
 
   /**
    * [ADMIN] Lấy danh sách brand đã xóa mềm
    */
   getDeletedBrands: async (query) => {
-    try {
-      const { page = 1, limit = 10, name, sort } = query;
+    const { page = 1, limit = 10, name, sort } = query;
+    // Chuẩn bị filter
+    const filter = {};
 
-      // Chuẩn bị filter
-      let filter = {};
-
-      if (name) {
-        filter.name = { $regex: name, $options: "i" };
-      }
-
-      // Sử dụng phương thức cải tiến findDeleted
-      const sortOption = sort ? JSON.parse(sort) : { deletedAt: -1 };
-
-      // Lấy danh sách brand đã xóa với phân trang
-      const brands = await Brand.findDeleted(filter, {
-        page,
-        limit,
-        sort: sortOption,
-      });
-
-      // Đếm tổng số brand đã xóa
-      const totalItems = await Brand.countDeleted(filter);
-      const totalPages = Math.ceil(totalItems / parseInt(limit));
-
-      return {
-        success: true,
-        data: brands,
-        pagination: {
-          totalItems,
-          currentPage: parseInt(page),
-          pageSize: parseInt(limit),
-          totalPages,
-          hasNext: parseInt(page) < totalPages,
-          hasPrev: parseInt(page) > 1,
-        },
-      };
-    } catch (error) {
-      console.error("Lỗi khi lấy danh sách brand đã xóa:", error);
-      throw new Error("Không thể lấy danh sách thương hiệu đã xóa");
+    if (name) {
+      filter.name = { $regex: name, $options: "i" };
     }
+
+    const options = {
+      page,
+      limit,
+      sort: sort ? JSON.parse(sort) : { deletedAt: -1 },
+    };
+
+    return await paginateDeleted(Brand, filter, options);
   },
 
   // === PUBLIC API METHODS ===
@@ -129,7 +106,7 @@ const brandService = {
       throw new Error("Không tìm thấy thương hiệu");
     }
 
-    return brand;
+    return { success: true, brand };
   },
 
   /**
@@ -146,7 +123,7 @@ const brandService = {
       throw new Error("Không tìm thấy thương hiệu");
     }
 
-    return brand;
+    return { success: true, brand };
   },
 
   // === COMMON OPERATIONS ===
@@ -155,57 +132,74 @@ const brandService = {
    * Tạo brand mới
    */
   createBrand: async (brandData) => {
-    try {
-      // Đảm bảo isActive mặc định là true nếu không được cung cấp
-      if (brandData.isActive === undefined) {
-        brandData.isActive = true;
-      }
-
-      const brand = new Brand(brandData);
-      await brand.save();
-      return brand;
-    } catch (error) {
-      if (error.code === 11000) {
-        throw new Error("Tên thương hiệu đã tồn tại");
-      }
-      throw error;
+    // Đảm bảo isActive mặc định là true nếu không được cung cấp
+    if (brandData.isActive === undefined) {
+      brandData.isActive = true;
     }
+
+    // Kiểm tra tên thương hiệu tồn tại
+    const existingBrand = await Brand.findOne({ name: brandData.name });
+
+    if (existingBrand) {
+      throw new Error("Tên thương hiệu đã tồn tại");
+    }
+
+    const brand = new Brand(brandData);
+    await brand.save();
+
+    return {
+      success: true,
+      message: "Tạo thương hiệu thành công",
+      brand,
+    };
   },
 
   /**
    * Cập nhật brand
    */
   updateBrand: async (brandId, brandData) => {
-    try {
-      const brand = await Brand.findById(brandId);
-      if (!brand) {
-        throw new Error("Không tìm thấy thương hiệu");
-      }
+    const brand = await Brand.findById(brandId);
 
-      // Cập nhật từng trường thay vì Object.assign để xử lý thêm logic nếu cần
-      if (brandData.name !== undefined) brand.name = brandData.name;
-      if (brandData.description !== undefined)
-        brand.description = brandData.description;
-      if (brandData.isActive !== undefined) brand.isActive = brandData.isActive;
-      if (brandData.logo !== undefined) brand.logo = brandData.logo;
+    if (!brand) {
+      throw new Error("Không tìm thấy thương hiệu");
+    }
 
-      // Các trường audit được thêm tự động bởi middleware
+    // Kiểm tra xem có cập nhật tên không và tên mới có trùng không
+    if (brandData.name && brandData.name !== brand.name) {
+      const existingBrand = await Brand.findOne({
+        name: brandData.name,
+        _id: { $ne: brandId },
+      });
 
-      await brand.save();
-      return brand;
-    } catch (error) {
-      if (error.code === 11000) {
+      if (existingBrand) {
         throw new Error("Tên thương hiệu đã tồn tại");
       }
-      throw error;
     }
+
+    // Cập nhật từng trường thay vì Object.assign để xử lý thêm logic nếu cần
+    if (brandData.name !== undefined) brand.name = brandData.name;
+    if (brandData.description !== undefined)
+      brand.description = brandData.description;
+    if (brandData.isActive !== undefined) brand.isActive = brandData.isActive;
+    if (brandData.logo !== undefined) brand.logo = brandData.logo;
+
+    // Các trường audit được thêm tự động bởi middleware
+
+    await brand.save();
+
+    return {
+      success: true,
+      message: "Cập nhật thương hiệu thành công",
+      brand,
+    };
   },
 
   /**
-   * Xóa mềm brand (chuyển method từ model vào service)
+   * Xóa mềm brand
    */
   deleteBrand: async (brandId, userId) => {
     const brand = await Brand.findById(brandId);
+
     if (!brand) {
       throw new Error("Không tìm thấy thương hiệu");
     }
@@ -217,25 +211,24 @@ const brandService = {
     // Sử dụng phương thức softDelete từ plugin
     await brand.softDelete(userId);
 
-    return { message: "Xóa thương hiệu thành công" };
+    return {
+      success: true,
+      message: "Xóa thương hiệu thành công",
+    };
   },
 
   /**
-   * Khôi phục brand đã xóa mềm (chuyển method từ model vào service)
+   * Khôi phục brand đã xóa mềm
    */
   restoreBrand: async (brandId) => {
-    try {
-      // Sử dụng phương thức restoreById từ plugin
-      const brand = await Brand.restoreById(brandId);
+    // Sử dụng phương thức tĩnh restoreById từ plugin
+    const brand = await Brand.restoreById(brandId);
 
-      return {
-        message: "Khôi phục thương hiệu thành công",
-        brand,
-      };
-    } catch (error) {
-      console.error("Lỗi khôi phục brand:", error);
-      throw new Error("Không tìm thấy thương hiệu");
-    }
+    return {
+      success: true,
+      message: "Khôi phục thương hiệu thành công",
+      brand,
+    };
   },
 
   /**
@@ -244,6 +237,7 @@ const brandService = {
    */
   updateBrandStatus: async (brandId, isActive, cascade = true) => {
     const brand = await Brand.findById(brandId);
+
     if (!brand) {
       throw new Error("Không tìm thấy thương hiệu");
     }
@@ -275,6 +269,7 @@ const brandService = {
 
     const statusMsg = isActive ? "kích hoạt" : "vô hiệu hóa";
     return {
+      success: true,
       message: cascade
         ? `Thương hiệu đã được ${statusMsg}. Đã ${statusMsg} ${affectedProducts} sản phẩm liên quan.`
         : `Thương hiệu đã được ${statusMsg} mà không ảnh hưởng đến sản phẩm.`,

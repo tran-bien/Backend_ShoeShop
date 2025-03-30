@@ -8,7 +8,7 @@ const sizeController = {
    * @access  Admin
    */
   getAllSizes: asyncHandler(async (req, res) => {
-    const result = await sizeService.getSizes(req.query);
+    const result = await sizeService.getAdminSizes(req.query);
     res.json(result);
   }),
 
@@ -28,7 +28,7 @@ const sizeController = {
    * @access  Admin
    */
   getSizeById: asyncHandler(async (req, res) => {
-    const result = await sizeService.getSizeById(req.params.id);
+    const result = await sizeService.getAdminSizeById(req.params.id);
 
     if (!result.success) {
       return res.status(404).json(result);

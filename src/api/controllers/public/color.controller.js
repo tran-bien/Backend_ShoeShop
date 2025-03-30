@@ -8,7 +8,7 @@ const colorController = {
    * @access  Public
    */
   getAllColors: asyncHandler(async (req, res) => {
-    const result = await colorService.getColors(req.query);
+    const result = await colorService.getPublicColors(req.query);
     res.json(result);
   }),
 
@@ -18,7 +18,7 @@ const colorController = {
    * @access  Public
    */
   getColorById: asyncHandler(async (req, res) => {
-    const result = await colorService.getColorById(req.params.id);
+    const result = await colorService.getPublicColorById(req.params.id);
 
     if (!result.success) {
       return res.status(404).json(result);

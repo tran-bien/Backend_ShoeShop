@@ -1,140 +1,131 @@
 const { Color } = require("@models");
 const paginate = require("@utils/pagination");
-
+const paginateDeleted = require("@utils/paginationDeleted");
 const colorService = {
+  // === ADMIN API METHODS ===
+
   /**
-   * Lấy danh sách màu sắc
-   * @param {Object} queryOptions - Các tham số truy vấn
-   * @param {boolean} includeDeleted - Có bao gồm các màu đã xóa không
+   * [ADMIN] Lấy tất cả màu sắc (bao gồm cả đã xóa)
+   * @param {Object} query - Các tham số truy vấn
    */
-  getColors: async (queryOptions, includeDeleted = false) => {
-    try {
-      const { page = 1, limit = 10, name, type, sort } = queryOptions;
+  getAdminColors: async (query) => {
+    const { page = 1, limit = 10, name, type, sort } = query;
+    const filter = { deletedAt: null }; // Mặc định chỉ lấy các màu chưa xóa
 
-      // Xây dựng query
-      const query = {};
-
-      // Chỉ lấy những màu chưa bị xóa trừ khi có yêu cầu bao gồm cả đã xóa
-      if (!includeDeleted) {
-        query.deletedAt = null;
-      }
-
-      // Tìm theo tên
-      if (name) {
-        query.name = { $regex: name, $options: "i" };
-      }
-
-      // Tìm theo loại
-      if (type) {
-        query.type = type;
-      }
-
-      // Xử lý sắp xếp
-      let sortOptions;
-      try {
-        sortOptions = sort ? JSON.parse(sort) : { createdAt: -1 };
-      } catch (error) {
-        console.error("Error parsing sort:", error);
-        sortOptions = { createdAt: -1 };
-      }
-
-      // Các tùy chọn phân trang
-      const options = {
-        page,
-        limit,
-        sort: sortOptions,
-      };
-
-      // Thực hiện phân trang - sử dụng hàm paginate chung
-      return await paginate(Color, query, options);
-    } catch (error) {
-      console.error("Error in getColors:", error);
-      return {
-        success: false,
-        message: error.message || "Lỗi khi lấy danh sách màu sắc",
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      };
+    // Tìm theo tên
+    if (name) {
+      filter.name = { $regex: name, $options: "i" };
     }
+
+    // Tìm theo loại
+    if (type) {
+      filter.type = type;
+    }
+
+    const options = {
+      page,
+      limit,
+      sort: sort ? JSON.parse(sort) : { createdAt: -1 },
+    };
+
+    return await paginate(Color, filter, options);
   },
 
   /**
-   * Lấy danh sách màu sắc đã xóa
-   * @param {Object} queryOptions - Các tham số truy vấn
-   */
-  getDeletedColors: async (queryOptions) => {
-    try {
-      const { page = 1, limit = 10, name, type, sort } = queryOptions;
-
-      // Xây dựng query
-      let filter = {};
-
-      // Tìm theo tên
-      if (name) {
-        filter.name = { $regex: name, $options: "i" };
-      }
-
-      // Tìm theo loại
-      if (type) {
-        filter.type = type;
-      }
-
-      // Xử lý sắp xếp
-      let sortOptions;
-      try {
-        sortOptions = sort ? JSON.parse(sort) : { deletedAt: -1 };
-      } catch (error) {
-        console.error("Error parsing sort:", error);
-        sortOptions = { deletedAt: -1 };
-      }
-
-      // Lấy danh sách màu đã xóa với phân trang
-      const colors = await Color.findDeleted(filter, {
-        page,
-        limit,
-        sort: sortOptions,
-      });
-
-      // Đếm tổng số màu đã xóa
-      const totalItems = await Color.countDeleted(filter);
-      const totalPages = Math.ceil(totalItems / parseInt(limit));
-
-      return {
-        success: true,
-        data: colors,
-        pagination: {
-          totalItems,
-          currentPage: parseInt(page),
-          pageSize: parseInt(limit),
-          totalPages,
-          hasNext: parseInt(page) < totalPages,
-          hasPrev: parseInt(page) > 1,
-        },
-      };
-    } catch (error) {
-      console.error("Error in getDeletedColors:", error);
-      return {
-        success: false,
-        message: error.message || "Lỗi khi lấy danh sách màu đã xóa",
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      };
-    }
-  },
-
-  /**
-   * Lấy chi tiết màu sắc theo ID
+   * [ADMIN] Lấy màu sắc theo ID (bao gồm cả đã xóa mềm)
    * @param {string} id - ID của màu sắc
-   * @param {boolean} includeDeleted - Có bao gồm màu đã xóa không
    */
-  getColorById: async (id, includeDeleted = false) => {
-    const options = includeDeleted ? { includeDeleted: true } : {};
-    const color = await Color.findById(id, null, options);
+  getAdminColorById: async (id) => {
+    // Sử dụng setOptions để bao gồm cả màu đã xóa
+    const color = await Color.findById(id).setOptions({
+      includeDeleted: true,
+    });
 
     if (!color) {
-      return { success: false, message: "Không tìm thấy màu sắc" };
+      throw new Error("Không tìm thấy màu sắc");
     }
 
     return { success: true, color };
   },
+
+  /**
+   * [ADMIN] Lấy danh sách màu sắc đã xóa
+   * @param {Object} query - Các tham số truy vấn
+   */
+  getDeletedColors: async (query) => {
+    const { page = 1, limit = 10, name, type, sort } = query;
+
+    // Xây dựng query
+    const filter = {};
+
+    // Tìm theo tên
+    if (name) {
+      filter.name = { $regex: name, $options: "i" };
+    }
+
+    // Tìm theo loại
+    if (type) {
+      filter.type = type;
+    }
+
+    const options = {
+      page,
+      limit,
+      sort: sort ? JSON.parse(sort) : { deletedAt: -1 },
+    };
+
+    return await paginateDeleted(Color, filter, options);
+  },
+
+  // === PUBLIC API METHODS ===
+
+  /**
+   * [PUBLIC] Lấy tất cả màu sắc (chỉ chưa xóa)
+   * @param {Object} query - Các tham số truy vấn
+   */
+  getPublicColors: async (query) => {
+    const { page = 1, limit = 10, name, type, sort } = query;
+    const filter = {
+      deletedAt: null, // Đảm bảo chỉ lấy các màu chưa xóa
+    };
+
+    // Tìm theo tên
+    if (name) {
+      filter.name = { $regex: name, $options: "i" };
+    }
+
+    // Tìm theo loại
+    if (type) {
+      filter.type = type;
+    }
+
+    const options = {
+      page,
+      limit,
+      sort: sort ? JSON.parse(sort) : { createdAt: -1 },
+    };
+
+    return await paginate(Color, filter, options);
+  },
+
+  /**
+   * [PUBLIC] Lấy màu sắc theo ID (chỉ chưa xóa)
+   * @param {string} id - ID của màu sắc
+   */
+  getPublicColorById: async (id) => {
+    const color = await Color.findOne({
+      _id: id,
+      deletedAt: null, // Đảm bảo chỉ lấy màu chưa xóa
+    });
+
+    if (!color) {
+      throw new Error("Không tìm thấy màu sắc");
+    }
+
+    return { success: true, color };
+  },
+
+  // === COMMON OPERATIONS ===
 
   /**
    * Tạo màu sắc mới
@@ -144,21 +135,20 @@ const colorService = {
     // Kiểm tra xem màu sắc có tồn tại chưa theo tên
     const existingColorName = await Color.findOne({ name: colorData.name });
     if (existingColorName) {
-      return { success: false, message: "Tên màu đã tồn tại" };
+      throw new Error("Tên màu đã tồn tại");
     }
 
     // Kiểm tra trùng mã màu cho màu solid
     if (colorData.type === "solid" && colorData.code) {
       const existingColorCode = await Color.findOne({
-        code: colorData.code.toUpperCase(), // Đảm bảo so khớp in hoa
+        code: colorData.code.toUpperCase(),
         type: "solid",
       });
 
       if (existingColorCode) {
-        return {
-          success: false,
-          message: `Mã màu ${colorData.code} đã được sử dụng bởi màu "${existingColorCode.name}"`,
-        };
+        throw new Error(
+          `Mã màu ${colorData.code} đã được sử dụng bởi màu "${existingColorCode.name}"`
+        );
       }
     }
 
@@ -176,7 +166,7 @@ const colorService = {
       // Tìm tất cả màu half
       const halfColors = await Color.find({ type: "half" });
 
-      // Kiểm tra từng màu half xem có bộ màu giống nhau không (bất kể thứ tự)
+      // Kiểm tra từng màu half xem có bộ màu giống nhau không
       for (const halfColor of halfColors) {
         if (!halfColor.colors || halfColor.colors.length !== 2) continue;
 
@@ -191,10 +181,9 @@ const colorService = {
           (normalizedColors[0] === existingColors[1] &&
             normalizedColors[1] === existingColors[0])
         ) {
-          return {
-            success: false,
-            message: `Bộ màu này đã được sử dụng bởi màu "${halfColor.name}"`,
-          };
+          throw new Error(
+            `Bộ màu này đã được sử dụng bởi màu "${halfColor.name}"`
+          );
         }
       }
     }
@@ -219,7 +208,7 @@ const colorService = {
     const color = await Color.findById(id);
 
     if (!color) {
-      return { success: false, message: "Không tìm thấy màu sắc" };
+      throw new Error("Không tìm thấy màu sắc");
     }
 
     // Kiểm tra nếu đang cập nhật tên, xem tên đã tồn tại chưa
@@ -227,7 +216,7 @@ const colorService = {
       const existingColor = await Color.findOne({ name: updateData.name });
 
       if (existingColor) {
-        return { success: false, message: "Tên màu đã tồn tại" };
+        throw new Error("Tên màu đã tồn tại");
       }
     }
 
@@ -236,14 +225,13 @@ const colorService = {
       const existingColorCode = await Color.findOne({
         code: updateData.code.toUpperCase(),
         type: "solid",
-        _id: { $ne: id }, // Loại trừ chính màu hiện tại
+        _id: { $ne: id },
       });
 
       if (existingColorCode) {
-        return {
-          success: false,
-          message: `Mã màu ${updateData.code} đã được sử dụng bởi màu "${existingColorCode.name}"`,
-        };
+        throw new Error(
+          `Mã màu ${updateData.code} đã được sử dụng bởi màu "${existingColorCode.name}"`
+        );
       }
     }
 
@@ -262,7 +250,7 @@ const colorService = {
       // Tìm tất cả màu half
       const halfColors = await Color.find({
         type: "half",
-        _id: { $ne: id }, // Loại trừ chính màu hiện tại
+        _id: { $ne: id },
       });
 
       // Kiểm tra từng màu half xem có bộ màu giống nhau không
@@ -280,10 +268,9 @@ const colorService = {
           (normalizedColors[0] === existingColors[1] &&
             normalizedColors[1] === existingColors[0])
         ) {
-          return {
-            success: false,
-            message: `Bộ màu này đã được sử dụng bởi màu "${halfColor.name}"`,
-          };
+          throw new Error(
+            `Bộ màu này đã được sử dụng bởi màu "${halfColor.name}"`
+          );
         }
       }
     }
@@ -308,29 +295,24 @@ const colorService = {
    * @param {string} userId - ID người dùng thực hiện xóa
    */
   deleteColor: async (id, userId) => {
-    try {
-      // Kiểm tra màu sắc tồn tại
-      const color = await Color.findById(id);
+    // Kiểm tra màu sắc tồn tại
+    const color = await Color.findById(id);
 
-      if (!color) {
-        return { success: false, message: "Không tìm thấy màu sắc" };
-      }
-
-      // Thực hiện xóa mềm
-      await color.softDelete(userId);
-
-      return {
-        success: true,
-        message: "Xóa màu sắc thành công",
-      };
-    } catch (error) {
-      console.error("Error in deleteColor:", error);
-      return {
-        success: false,
-        message: error.message || "Lỗi khi xóa màu sắc",
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      };
+    if (!color) {
+      throw new Error("Không tìm thấy màu sắc");
     }
+
+    if (color.deletedAt) {
+      throw new Error("Màu sắc đã bị xóa trước đó");
+    }
+
+    // Thực hiện xóa mềm
+    await color.softDelete(userId);
+
+    return {
+      success: true,
+      message: "Xóa màu sắc thành công",
+    };
   },
 
   /**
@@ -338,23 +320,14 @@ const colorService = {
    * @param {string} id - ID màu sắc
    */
   restoreColor: async (id) => {
-    try {
-      // Sử dụng phương thức tĩnh restoreById từ plugin
-      const color = await Color.restoreById(id);
+    // Sử dụng phương thức tĩnh restoreById từ plugin
+    const color = await Color.restoreById(id);
 
-      return {
-        success: true,
-        message: "Khôi phục màu sắc thành công",
-        color,
-      };
-    } catch (error) {
-      console.error("Error in restoreColor:", error);
-      return {
-        success: false,
-        message: error.message || "Lỗi khi khôi phục màu sắc",
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-      };
-    }
+    return {
+      success: true,
+      message: "Khôi phục màu sắc thành công",
+      color,
+    };
   },
 };
 

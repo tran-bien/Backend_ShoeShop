@@ -1,5 +1,6 @@
 const { Category, Product, Variant } = require("@models");
 const paginate = require("@utils/pagination");
+const paginateDeleted = require("@utils/paginationDeleted");
 
 const categoryService = {
   // === ADMIN API METHODS ===
@@ -15,8 +16,9 @@ const categoryService = {
       filter.name = { $regex: name, $options: "i" };
     }
 
-    if (isActive !== undefined) {
-      filter.isActive = isActive;
+    // Nếu query truyền vào isActive dưới dạng "true" hoặc "false", ta chuyển đổi sang boolean và thêm vào filter
+    if (isActive === "true" || isActive === "false") {
+      filter.isActive = isActive === "true";
     }
 
     const options = {
@@ -48,46 +50,22 @@ const categoryService = {
    * [ADMIN] Lấy danh sách category đã xóa mềm
    */
   getDeletedCategories: async (query) => {
-    try {
-      const { page = 1, limit = 10, name, sort } = query;
+    const { page = 1, limit = 10, name, sort } = query;
 
-      // Chuẩn bị filter
-      let filter = {};
+    // Chuẩn bị filter
+    const filter = {};
 
-      if (name) {
-        filter.name = { $regex: name, $options: "i" };
-      }
-
-      // Sử dụng phương thức cải tiến findDeleted
-      const sortOption = sort ? JSON.parse(sort) : { deletedAt: -1 };
-
-      // Lấy danh sách category đã xóa với phân trang
-      const categories = await Category.findDeleted(filter, {
-        page,
-        limit,
-        sort: sortOption,
-      });
-
-      // Đếm tổng số category đã xóa
-      const totalItems = await Category.countDeleted(filter);
-      const totalPages = Math.ceil(totalItems / parseInt(limit));
-
-      return {
-        success: true,
-        data: categories,
-        pagination: {
-          totalItems,
-          currentPage: parseInt(page),
-          pageSize: parseInt(limit),
-          totalPages,
-          hasNext: parseInt(page) < totalPages,
-          hasPrev: parseInt(page) > 1,
-        },
-      };
-    } catch (error) {
-      console.error("Lỗi khi lấy danh sách category đã xóa:", error);
-      throw new Error("Không thể lấy danh sách danh mục đã xóa");
+    if (name) {
+      filter.name = { $regex: name, $options: "i" };
     }
+
+    const options = {
+      page,
+      limit,
+      sort: sort ? JSON.parse(sort) : { deletedAt: -1 },
+    };
+
+    return await paginateDeleted(Category, filter, options);
   },
 
   // === PUBLIC API METHODS ===
@@ -155,50 +133,65 @@ const categoryService = {
    * Tạo category mới
    */
   createCategory: async (categoryData) => {
-    try {
-      // Đảm bảo isActive mặc định là true nếu không được cung cấp
-      if (categoryData.isActive === undefined) {
-        categoryData.isActive = true;
-      }
-
-      const category = new Category(categoryData);
-      await category.save();
-      return category;
-    } catch (error) {
-      if (error.code === 11000) {
-        throw new Error("Tên danh mục đã tồn tại");
-      }
-      throw error;
+    // Đảm bảo isActive mặc định là true nếu không được cung cấp
+    if (categoryData.isActive === undefined) {
+      categoryData.isActive = true;
     }
+
+    // Kiểm tra tên danh mục tồn tại
+    const existingCategory = await Category.findOne({
+      name: categoryData.name,
+    });
+
+    if (existingCategory) {
+      throw new Error("Tên danh mục đã tồn tại");
+    }
+
+    const category = new Category(categoryData);
+
+    // Lỗi unique key sẽ được xử lý bởi error handler
+    await category.save();
+    return {
+      success: true,
+      message: "Tạo danh mục thành công",
+      category,
+    };
   },
 
   /**
    * Cập nhật category
    */
   updateCategory: async (categoryId, categoryData) => {
-    try {
-      const category = await Category.findById(categoryId);
-      if (!category) {
-        throw new Error("Không tìm thấy danh mục");
-      }
+    const category = await Category.findById(categoryId);
 
-      // Cập nhật từng trường thay vì Object.assign để xử lý thêm logic nếu cần
-      if (categoryData.name !== undefined) category.name = categoryData.name;
-      if (categoryData.description !== undefined)
-        category.description = categoryData.description;
-      if (categoryData.isActive !== undefined)
-        category.isActive = categoryData.isActive;
+    if (!category) {
+      throw new Error("Không tìm thấy danh mục");
+    }
 
-      // Các trường audit được thêm tự động bởi middleware
-
-      await category.save();
-      return category;
-    } catch (error) {
-      if (error.code === 11000) {
+    // Kiểm tra xem có cập nhật tên không và tên mới có trùng không
+    if (categoryData.name && categoryData.name !== category.name) {
+      const existingCategory = await Category.findOne({
+        name: categoryData.name,
+        _id: { $ne: categoryId },
+      });
+      if (existingCategory) {
         throw new Error("Tên danh mục đã tồn tại");
       }
-      throw error;
     }
+
+    // Cập nhật từng trường thay vì Object.assign để xử lý thêm logic nếu cần
+    if (categoryData.name !== undefined) category.name = categoryData.name;
+    if (categoryData.description !== undefined)
+      category.description = categoryData.description;
+    if (categoryData.isActive !== undefined)
+      category.isActive = categoryData.isActive;
+
+    await category.save();
+    return {
+      success: true,
+      message: "Cập nhật danh mục thành công",
+      category,
+    };
   },
 
   /**
@@ -217,25 +210,24 @@ const categoryService = {
     // Sử dụng phương thức softDelete từ plugin
     await category.softDelete(userId);
 
-    return { message: "Xóa danh mục thành công" };
+    return {
+      success: true,
+      message: "Xóa danh mục thành công",
+    };
   },
 
   /**
    * Khôi phục category đã xóa mềm (chuyển method từ model vào service)
    */
   restoreCategory: async (categoryId) => {
-    try {
-      // Sử dụng phương thức restoreById từ plugin
-      const category = await Category.restoreById(categoryId);
+    // Sử dụng phương thức restoreById từ plugin
+    const category = await Category.restoreById(categoryId);
 
-      return {
-        message: "Khôi phục danh mục thành công",
-        category,
-      };
-    } catch (error) {
-      console.error("Lỗi khôi phục category:", error);
-      throw new Error("Không tìm thấy danh mục");
-    }
+    return {
+      success: true,
+      message: "Khôi phục danh mục thành công",
+      category,
+    };
   },
 
   /**
@@ -244,6 +236,7 @@ const categoryService = {
    */
   updateCategoryStatus: async (categoryId, isActive, cascade = true) => {
     const category = await Category.findById(categoryId);
+
     if (!category) {
       throw new Error("Không tìm thấy danh mục");
     }
@@ -275,6 +268,7 @@ const categoryService = {
 
     const statusMsg = isActive ? "kích hoạt" : "vô hiệu hóa";
     return {
+      success: true,
       message: cascade
         ? `Danh mục đã được ${statusMsg}. Đã ${statusMsg} ${affectedProducts} sản phẩm liên quan.`
         : `Danh mục đã được ${statusMsg} mà không ảnh hưởng đến sản phẩm.`,

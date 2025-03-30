@@ -8,7 +8,7 @@ const sizeController = {
    * @access  Public
    */
   getAllSizes: asyncHandler(async (req, res) => {
-    const result = await sizeService.getSizes(req.query);
+    const result = await sizeService.getPublicSizes(req.query);
     res.json(result);
   }),
 
@@ -18,7 +18,7 @@ const sizeController = {
    * @access  Public
    */
   getSizeById: asyncHandler(async (req, res) => {
-    const result = await sizeService.getSizeById(req.params.id);
+    const result = await sizeService.getPublicSizeById(req.params.id);
 
     if (!result.success) {
       return res.status(404).json(result);

@@ -27,7 +27,7 @@ const authService = {
     return jwt.sign(
       { id },
       process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET,
-      { expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "60d" }
+      { expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "30d" }
     );
   },
 
@@ -113,46 +113,39 @@ const authService = {
    * @returns {Object} - Đối tượng phiên
    */
   createSession: async (userId, token, refreshToken, req = {}) => {
-    try {
-      const existingSession = await Session.findOne({ user: userId, token });
-
-      if (existingSession) {
-        existingSession.isActive = true;
-        existingSession.lastActive = Date.now();
-        await existingSession.save();
-        return existingSession;
-      }
-
-      const userAgent = req.headers["user-agent"] || "Không xác định";
-      const ip = req.ip || req.connection.remoteAddress || "Không xác định";
-      const parsedDevice = uaParser(userAgent) || {
-        ua: "Không xác định",
-        browser: { name: "Không xác định", version: "Không xác định" },
-        os: { name: "Không xác định", version: "Không xác định" },
-        device: {
-          type: "Không xác định",
-          model: "Không xác định",
-          vendor: "Không xác định",
-        },
-      };
-
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-      return await Session.create({
-        user: userId,
-        token,
-        refreshToken,
-        userAgent,
-        ip,
-        device: parsedDevice,
-        expiresAt,
-        isActive: true,
-        lastActive: new Date(),
-      });
-    } catch (error) {
-      console.error("Lỗi khi tạo phiên đăng nhập:", error);
-      throw new Error("Không thể tạo phiên đăng nhập. Vui lòng thử lại sau.");
+    const existingSession = await Session.findOne({ user: userId, token });
+    if (existingSession) {
+      existingSession.isActive = true;
+      existingSession.lastActive = Date.now();
+      await existingSession.save();
+      return existingSession;
     }
+
+    const userAgent = req.headers["user-agent"] || "Không xác định";
+    const ip = req.ip || req.connection.remoteAddress || "Không xác định";
+    const parsedDevice = uaParser(userAgent) || {
+      ua: "Không xác định",
+      browser: { name: "Không xác định", version: "Không xác định" },
+      os: { name: "Không xác định", version: "Không xác định" },
+      device: {
+        type: "Không xác định",
+        model: "Không xác định",
+        vendor: "Không xác định",
+      },
+    };
+
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    return await Session.create({
+      user: userId,
+      token,
+      refreshToken,
+      userAgent,
+      ip,
+      device: parsedDevice,
+      expiresAt,
+      isActive: true,
+      lastActive: new Date(),
+    });
   },
 
   /**
@@ -602,27 +595,22 @@ const authService = {
    * @returns {Object} - Kết quả đăng xuất
    */
   logout: async (userId, token) => {
-    try {
-      // Kiểm tra xem có phiên hiện tại không
-      const session = await Session.findOne({
-        user: userId,
-        token: token,
-        isActive: true,
-      });
+    // Kiểm tra xem có phiên hiện tại không
+    const session = await Session.findOne({
+      user: userId,
+      token: token,
+      isActive: true,
+    });
 
-      if (!session) {
-        return { success: true, message: "Đã đăng xuất thành công" };
-      }
-
-      // Vô hiệu hóa session
-      session.isActive = false;
-      await session.save();
-
-      return { success: true, message: "Đăng xuất thành công" };
-    } catch (error) {
-      console.error("Lỗi trong service logout:", error);
-      throw new Error("Không thể đăng xuất. Vui lòng thử lại sau.");
+    if (!session) {
+      return { success: true, message: "Đã đăng xuất thành công" };
     }
+
+    // Vô hiệu hóa session
+    session.isActive = false;
+    await session.save();
+
+    return { success: true, message: "Đăng xuất thành công" };
   },
 
   /**
