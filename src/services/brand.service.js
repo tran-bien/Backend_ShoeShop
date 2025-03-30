@@ -16,9 +16,11 @@ const brandService = {
       filter.name = { $regex: name, $options: "i" };
     }
 
-    // Nếu query truyền vào isActive dưới dạng "true" hoặc "false", ta chuyển đổi sang boolean và thêm vào filter
-    if (isActive === "true" || isActive === "false") {
-      filter.isActive = isActive === "true";
+    // Sửa điều kiện lọc isActive để xử lý cả chuỗi lẫn boolean
+    if (isActive === "true" || isActive === true) {
+      filter.isActive = true;
+    } else if (isActive === "false" || isActive === false) {
+      filter.isActive = false;
     }
 
     const options = {
