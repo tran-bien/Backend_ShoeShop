@@ -1,0 +1,65 @@
+const express = require("express");
+const router = express.Router();
+const productController = require("@controllers/public/product.controller");
+const productValidator = require("@validators/product.validator");
+const validate = require("@utils/validatehelper");
+
+/**
+ * @route   GET /api/products
+ * @desc    Lấy danh sách sản phẩm với bộ lọc phức tạp
+ * @access  Public
+ */
+router.get(
+  "/",
+  validate(productValidator.validatePublicProductQuery),
+  productController.getProducts
+);
+
+/**
+ * @route   GET /api/products/featured
+ * @desc    Lấy danh sách sản phẩm nổi bật
+ * @access  Public
+ */
+router.get("/featured", productController.getFeaturedProducts);
+
+/**
+ * @route   GET /api/products/new-arrivals
+ * @desc    Lấy danh sách sản phẩm mới nhất
+ * @access  Public
+ */
+router.get("/new-arrivals", productController.getNewArrivals);
+
+/**
+ * @route   GET /api/products/related/:id
+ * @desc    Lấy danh sách sản phẩm liên quan
+ * @access  Public
+ */
+router.get(
+  "/related/:id",
+  validate(productValidator.validateProductId),
+  productController.getRelatedProducts
+);
+
+/**
+ * @route   GET /api/products/:id
+ * @desc    Lấy chi tiết sản phẩm theo ID
+ * @access  Public
+ */
+router.get(
+  "/:id",
+  validate(productValidator.validateProductId),
+  productController.getProductById
+);
+
+/**
+ * @route   GET /api/products/slug/:slug
+ * @desc    Lấy chi tiết sản phẩm theo slug
+ * @access  Public
+ */
+router.get(
+  "/slug/:slug",
+  validate(productValidator.validateProductSlug),
+  productController.getProductBySlug
+);
+
+module.exports = router;
