@@ -54,7 +54,7 @@ router.post(
   "/",
   protect,
   admin,
-  validate(categoryValidator.validateCategoryData), // Bao gồm middleware addAuditInfo
+  validate(categoryValidator.validateCategoryData),
   categoryController.createCategory
 );
 
@@ -109,7 +109,7 @@ router.patch(
   "/:id/status",
   protect,
   admin,
-  validate(categoryValidator.validateStatusUpdate), // Bao gồm middleware addAuditInfo
+  validate(categoryValidator.validateStatusUpdate),
   categoryController.updateCategoryStatus
 );
 

@@ -10,11 +10,7 @@ const router = express.Router();
  * @desc    Lấy tất cả thương hiệu đang active và chưa xóa
  * @access  Public
  */
-router.get(
-  "/",
-  validate(brandValidator.validatePublicBrandQuery),
-  brandController.getPublicAllBrands
-);
+router.get("/", brandController.getPublicAllBrands);
 
 /**
  * @route   GET /api/brands/slug/:slug

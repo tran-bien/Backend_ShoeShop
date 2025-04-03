@@ -53,7 +53,7 @@ router.post(
   "/",
   protect,
   admin,
-  validate(brandValidator.validateBrandData), // Bao gồm middleware addAuditInfo
+  validate(brandValidator.validateBrandData),
   brandController.createBrand
 );
 
@@ -108,7 +108,7 @@ router.patch(
   "/:id/status",
   protect,
   admin,
-  validate(brandValidator.validateStatusUpdate), // Bao gồm middleware addAuditInfo
+  validate(brandValidator.validateStatusUpdate),
   brandController.updateBrandStatus
 );
 

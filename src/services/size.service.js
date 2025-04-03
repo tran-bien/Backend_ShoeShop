@@ -74,54 +74,6 @@ const sizeService = {
     return await paginateDeleted(Size, filter, options);
   },
 
-  // === PUBLIC API METHODS ===
-
-  /**
-   * [PUBLIC] Lấy tất cả kích thước (chỉ chưa xóa)
-   * @param {Object} query - Các tham số truy vấn
-   */
-  getPublicSizes: async (query) => {
-    const { page = 1, limit = 10, value, description, sort } = query;
-    const filter = {
-      deletedAt: null, // Đảm bảo chỉ lấy các kích thước chưa xóa
-    };
-
-    // Tìm theo giá trị
-    if (value !== undefined) {
-      filter.value = Number(value);
-    }
-
-    // Tìm theo mô tả
-    if (description) {
-      filter.description = { $regex: description, $options: "i" };
-    }
-
-    const options = {
-      page,
-      limit,
-      sort: sort ? JSON.parse(sort) : { createdAt: -1 },
-    };
-
-    return await paginate(Size, filter, options);
-  },
-
-  /**
-   * [PUBLIC] Lấy kích thước theo ID (chỉ chưa xóa)
-   * @param {string} id - ID của kích thước
-   */
-  getPublicSizeById: async (id) => {
-    const size = await Size.findOne({
-      _id: id,
-      deletedAt: null, // Đảm bảo chỉ lấy kích thước chưa xóa
-    });
-
-    if (!size) {
-      throw new Error("Không tìm thấy kích thước");
-    }
-
-    return { success: true, size };
-  },
-
   // === COMMON OPERATIONS ===
 
   /**

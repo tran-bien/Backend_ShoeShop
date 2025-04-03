@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 /**
  * Hàm tự tạo SKU cho một size dựa trên:
  * - Mã sản phẩm (nếu có field productId, dùng field đó; nếu không dùng _id)
@@ -7,17 +9,20 @@
  */
 function generateSkuForSize(variant, sizeObj) {
   // Sử dụng productId nếu có, ngược lại dùng _id của variant
-  const productId = variant.productId
-    ? variant.productId.toString()
-    : variant._id.toString();
+  const variantId = variant._id.toString().substring(0, 6);
+
+  // Lấy ID sản phẩm nếu có
+  const productId = variant.product
+    ? variant.product.toString().substring(0, 6)
+    : variantId;
 
   // Lấy tên của màu: nếu tồn tại, sử dụng giá trị của variant.color (đã chuyển thành chữ in hoa); nếu không có thì 'NC'
   let colorName = "NC";
   if (variant.color) {
-    colorName = variant.color.toString().toUpperCase();
+    colorName = variant.color.toString().substring(0, 4).toUpperCase();
   }
 
-  // Lấy viết tắt của giới tính: chuyển "male" thành "M", "female" thành "F"; nếu không có dữ liệu, lấy ký tự đầu của variant.gender (viết hoa), nếu không có thì 'NG'
+  // Lấy viết tắt của giới tính
   let genderAbbr = "NG";
   if (variant.gender) {
     const genderLower = variant.gender.toLowerCase();
@@ -30,18 +35,42 @@ function generateSkuForSize(variant, sizeObj) {
     }
   }
 
-  // Lấy kích cỡ: nếu đã được populate (có thuộc tính value) thì lấy value, nếu không, chuyển đổi trực tiếp sang chuỗi
+  // Lấy kích cỡ
   let sizeStr = "NS";
   if (sizeObj.size) {
     if (typeof sizeObj.size === "object" && sizeObj.size.value !== undefined) {
       sizeStr = sizeObj.size.value.toString();
     } else {
-      sizeStr = sizeObj.size.toString();
+      sizeStr = sizeObj.size.toString().substring(0, 4);
     }
   }
 
-  // Trả về SKU theo định dạng: productId-colorName-genderAbbr-sizeStr
-  return `${productId}-${colorName}-${genderAbbr}-${sizeStr}`;
+  // Timestamp để đảm bảo không trùng SKU
+  const timestamp = Date.now().toString().substring(9, 13);
+
+  // Trả về SKU theo định dạng: productId-colorName-genderAbbr-sizeStr-timestamp
+  return `${productId}-${colorName}-${genderAbbr}-${sizeStr}-${timestamp}`;
+}
+
+/**
+ * Cập nhật thông tin số lượng và trạng thái tồn kho của sản phẩm
+ * @param {string} productId - ID của sản phẩm cần cập nhật
+ */
+async function updateProductStock(productId) {
+  if (!productId) return;
+
+  try {
+    const Product = mongoose.model("Product");
+    // Import hàm cập nhật stock từ product middlewares
+    const { updateProductStockInfo } = require("../product/middlewares");
+
+    const product = await Product.findById(productId);
+    if (product) {
+      await updateProductStockInfo(product);
+    }
+  } catch (error) {
+    console.error(`Lỗi cập nhật tồn kho sản phẩm ${productId}:`, error);
+  }
 }
 
 /**
@@ -50,40 +79,66 @@ function generateSkuForSize(variant, sizeObj) {
  */
 const applyMiddlewares = (schema) => {
   // Pre-save hook: Khi lưu mới, xử lý tự động tạo SKU cho từng size nếu chưa có và tính toán các trường liên quan
-  schema.pre("save", function (next) {
-    // Duyệt qua mảng sizes của variant
-    if (this.sizes && Array.isArray(this.sizes)) {
-      this.sizes.forEach((sizeObj) => {
-        if (!sizeObj.sku) {
-          sizeObj.sku = generateSkuForSize(this, sizeObj);
-        }
-        // Cập nhật thuộc tính isSizeAvailable dựa trên quantity
-        if (sizeObj.quantity !== undefined) {
-          sizeObj.isSizeAvailable = sizeObj.quantity > 0;
-        }
-      });
+  schema.pre("save", async function (next) {
+    try {
+      // Duyệt qua mảng sizes của variant
+      if (this.sizes && Array.isArray(this.sizes)) {
+        this.sizes.forEach((sizeObj) => {
+          if (!sizeObj.sku) {
+            sizeObj.sku = generateSkuForSize(this, sizeObj);
+          }
+          // Cập nhật thuộc tính isSizeAvailable dựa trên quantity
+          if (sizeObj.quantity !== undefined) {
+            sizeObj.isSizeAvailable = sizeObj.quantity > 0;
+          }
+        });
+      }
+
+      // Tính toán lại các trường: profit, profitPercentage, priceFinal
+      this.profit = this.price - this.costPrice;
+      this.profitPercentage = this.costPrice
+        ? ((this.price - this.costPrice) / this.costPrice) * 100
+        : 0;
+      this.priceFinal =
+        this.percentDiscount > 0
+          ? this.price - (this.price * this.percentDiscount) / 100
+          : this.price;
+
+      next();
+    } catch (error) {
+      next(error);
     }
-    // Tính toán lại các trường: profit, profitPercentage, priceFinal
-    this.profit = this.price - this.costPrice;
-    this.profitPercentage = this.costPrice
-      ? ((this.price - this.costPrice) / this.costPrice) * 100
-      : 0;
-    this.priceFinal =
-      this.percentDiscount > 0
-        ? this.price - (this.price * this.percentDiscount) / 100
-        : this.price;
-    next();
+  });
+
+  // Post-save hook: Sau khi lưu, cập nhật thông tin sản phẩm liên quan
+  schema.post("save", async function () {
+    try {
+      if (this.product) {
+        await updateProductStock(this.product);
+      }
+    } catch (error) {
+      console.error("Lỗi khi cập nhật tồn kho sau lưu variant:", error);
+    }
   });
 
   // Pre-findOneAndUpdate hook: Khi sử dụng findOneAndUpdate để cập nhật document Variant
   schema.pre("findOneAndUpdate", async function (next) {
-    const update = this.getUpdate();
-    if (update) {
+    try {
+      const update = this.getUpdate();
+      if (!update) return next();
+
+      // Lưu productId để cập nhật sau khi update
+      const doc = await this.model.findOne(this.getQuery());
+      if (doc && doc.product) {
+        this._productId = doc.product;
+      }
+
       // Nếu có cập nhật mảng sizes, xử lý tạo SKU cho các phần tử chưa có SKU
       const sizesData = update.$set ? update.$set.sizes : update.sizes;
       if (sizesData && Array.isArray(sizesData)) {
-        // Lấy document hiện tại để có thông tin (productId, color, gender, createdAt) cần thiết
         const doc = await this.model.findOne(this.getQuery());
+        if (!doc) return next();
+
         sizesData.forEach((sizeObj, index) => {
           if (!sizeObj.sku) {
             sizesData[index].sku = generateSkuForSize(doc, sizeObj);
@@ -92,12 +147,14 @@ const applyMiddlewares = (schema) => {
             sizesData[index].isSizeAvailable = sizeObj.quantity > 0;
           }
         });
+
         if (update.$set) {
           update.$set.sizes = sizesData;
         } else {
           update.sizes = sizesData;
         }
       }
+
       // Tính toán lại các trường nếu có cập nhật các trường price, costPrice, percentDiscount
       const newPrice =
         update.price !== undefined
@@ -111,19 +168,36 @@ const applyMiddlewares = (schema) => {
         update.percentDiscount !== undefined
           ? update.percentDiscount
           : update.$set && update.$set.percentDiscount;
-      if (newPrice !== undefined && newCostPrice !== undefined) {
-        const newProfit = newPrice - newCostPrice;
-        const newProfitPercentage = newCostPrice
-          ? ((newPrice - newCostPrice) / newCostPrice) * 100
-          : 0;
-        const newPriceFinal =
-          newPercentDiscount !== undefined && newPercentDiscount > 0
-            ? newPrice - (newPrice * newPercentDiscount) / 100
-            : newPrice;
-        if (!update.$set) update.$set = {};
-        update.$set.profit = newProfit;
-        update.$set.profitPercentage = newProfitPercentage;
-        update.$set.priceFinal = newPriceFinal;
+
+      if (
+        newPrice !== undefined ||
+        newCostPrice !== undefined ||
+        newPercentDiscount !== undefined
+      ) {
+        // Lấy giá trị hiện tại để tính toán nếu không có giá trị mới
+        const currentDoc = await this.model.findOne(this.getQuery());
+        if (currentDoc) {
+          const price = newPrice !== undefined ? newPrice : currentDoc.price;
+          const costPrice =
+            newCostPrice !== undefined ? newCostPrice : currentDoc.costPrice;
+          const percentDiscount =
+            newPercentDiscount !== undefined
+              ? newPercentDiscount
+              : currentDoc.percentDiscount;
+
+          const newProfit = price - costPrice;
+          const newProfitPercentage =
+            costPrice > 0 ? ((price - costPrice) / costPrice) * 100 : 0;
+          const newPriceFinal =
+            percentDiscount > 0
+              ? price - (price * percentDiscount) / 100
+              : price;
+
+          if (!update.$set) update.$set = {};
+          update.$set.profit = newProfit;
+          update.$set.profitPercentage = newProfitPercentage;
+          update.$set.priceFinal = newPriceFinal;
+        }
       }
 
       // Xử lý khi khôi phục variant (đặt deletedAt thành null)
@@ -135,7 +209,7 @@ const applyMiddlewares = (schema) => {
 
           if (doc && doc.sizes && Array.isArray(doc.sizes)) {
             // Kiểm tra xem có SKU nào bị trùng khi khôi phục không
-            const skus = doc.sizes.map((size) => size.sku);
+            const skus = doc.sizes.map((size) => size.sku).filter(Boolean);
 
             // Tìm tất cả variant có SKU trùng với các SKU của variant đang khôi phục
             const duplicateSKUs = [];
@@ -164,11 +238,10 @@ const applyMiddlewares = (schema) => {
               const updatedSizes = JSON.parse(JSON.stringify(doc.sizes));
 
               // Tạo SKU mới cho các size bị trùng
-              const timestamp = Date.now();
               updatedSizes.forEach((size, index) => {
-                if (duplicateSKUs.includes(size.sku)) {
-                  // Tạo SKU mới bằng cách thêm timestamp
-                  updatedSizes[index].sku = `${size.sku}-${timestamp}`;
+                if (size.sku && duplicateSKUs.includes(size.sku)) {
+                  // Tạo SKU mới
+                  updatedSizes[index].sku = generateSkuForSize(doc, size);
                   console.log(`Đã tạo SKU mới: ${updatedSizes[index].sku}`);
                 }
               });
@@ -180,7 +253,7 @@ const applyMiddlewares = (schema) => {
           }
 
           // Đặt trạng thái mặc định khi khôi phục là inactive
-          if (!update.$set.isActive) {
+          if (update.$set.isActive === undefined) {
             update.$set.isActive = false;
           }
         } catch (error) {
@@ -190,9 +263,56 @@ const applyMiddlewares = (schema) => {
           );
         }
       }
+
+      next();
+    } catch (error) {
+      next(error);
     }
-    next();
+  });
+
+  // Post-findOneAndUpdate hook: Sau khi cập nhật, cập nhật thông tin sản phẩm liên quan
+  schema.post("findOneAndUpdate", async function (doc) {
+    try {
+      // Sử dụng productId đã lưu trữ hoặc từ document cập nhật
+      const productId = this._productId || (doc && doc.product);
+      if (productId) {
+        await updateProductStock(productId);
+        // Xóa biến tạm để tránh rò rỉ bộ nhớ
+        delete this._productId;
+      }
+    } catch (error) {
+      console.error("Lỗi khi cập nhật tồn kho sau cập nhật variant:", error);
+    }
+  });
+
+  // Pre-deleteOne/findOneAndDelete hook: Trước khi xóa, lưu productId
+  schema.pre(/deleteOne|findOneAndDelete/, async function (next) {
+    try {
+      const doc = await this.model.findOne(this.getQuery());
+      if (doc && doc.product) {
+        this._productId = doc.product;
+      }
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Post-deleteOne/findOneAndDelete hook: Sau khi xóa, cập nhật thông tin sản phẩm liên quan
+  schema.post(/deleteOne|findOneAndDelete/, async function () {
+    try {
+      if (this._productId) {
+        await updateProductStock(this._productId);
+        delete this._productId;
+      }
+    } catch (error) {
+      console.error("Lỗi khi cập nhật tồn kho sau xóa variant:", error);
+    }
   });
 };
 
-module.exports = { applyMiddlewares };
+module.exports = {
+  applyMiddlewares,
+  generateSkuForSize,
+  updateProductStock,
+};

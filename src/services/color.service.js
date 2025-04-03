@@ -77,54 +77,6 @@ const colorService = {
     return await paginateDeleted(Color, filter, options);
   },
 
-  // === PUBLIC API METHODS ===
-
-  /**
-   * [PUBLIC] Lấy tất cả màu sắc (chỉ chưa xóa)
-   * @param {Object} query - Các tham số truy vấn
-   */
-  getPublicColors: async (query) => {
-    const { page = 1, limit = 10, name, type, sort } = query;
-    const filter = {
-      deletedAt: null, // Đảm bảo chỉ lấy các màu chưa xóa
-    };
-
-    // Tìm theo tên
-    if (name) {
-      filter.name = { $regex: name, $options: "i" };
-    }
-
-    // Tìm theo loại
-    if (type) {
-      filter.type = type;
-    }
-
-    const options = {
-      page,
-      limit,
-      sort: sort ? JSON.parse(sort) : { createdAt: -1 },
-    };
-
-    return await paginate(Color, filter, options);
-  },
-
-  /**
-   * [PUBLIC] Lấy màu sắc theo ID (chỉ chưa xóa)
-   * @param {string} id - ID của màu sắc
-   */
-  getPublicColorById: async (id) => {
-    const color = await Color.findOne({
-      _id: id,
-      deletedAt: null, // Đảm bảo chỉ lấy màu chưa xóa
-    });
-
-    if (!color) {
-      throw new Error("Không tìm thấy màu sắc");
-    }
-
-    return { success: true, color };
-  },
-
   // === COMMON OPERATIONS ===
 
   /**

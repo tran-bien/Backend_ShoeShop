@@ -7,7 +7,7 @@ const brandController = {
    * @desc Lấy danh sách thương hiệu (chỉ lấy active và không xóa)
    */
   getPublicAllBrands: asyncHandler(async (req, res) => {
-    const result = await brandService.getPublicAllBrands(req.query);
+    const result = await brandService.getPublicAllBrands();
     return res.json(result);
   }),
 

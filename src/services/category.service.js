@@ -9,7 +9,7 @@ const categoryService = {
    * [ADMIN] Lấy tất cả category (bao gồm cả inactive)
    */
   getAdminAllCategories: async (query) => {
-    const { page = 1, limit = 10, name, isActive, sort } = query;
+    const { page = 1, limit = 10, name, sort, isActive } = query;
     const filter = { deletedAt: null }; // Mặc định chỉ lấy các category chưa xóa
 
     if (name) {
@@ -75,24 +75,11 @@ const categoryService = {
   /**
    * [PUBLIC] Lấy tất cả category (chỉ active và chưa xóa)
    */
-  getPublicAllCategories: async (query) => {
-    const { page = 1, limit = 10, name, sort } = query;
-    const filter = {
+  getPublicAllCategories: async () => {
+    return await Category.find({
       isActive: true,
-      deletedAt: null, // Đảm bảo chỉ lấy các category chưa xóa
-    };
-
-    if (name) {
-      filter.name = { $regex: name, $options: "i" };
-    }
-
-    const options = {
-      page,
-      limit,
-      sort: sort ? JSON.parse(sort) : { createdAt: -1 },
-    };
-
-    return await paginate(Category, filter, options);
+      deletedAt: null, // Đảm bảo chỉ lấy category chưa xóa
+    });
   },
 
   /**

@@ -74,24 +74,8 @@ const brandService = {
   /**
    * [PUBLIC] Lấy tất cả brand (chỉ active và chưa xóa)
    */
-  getPublicAllBrands: async (query) => {
-    const { page = 1, limit = 10, name, sort } = query;
-    const filter = {
-      isActive: true,
-      deletedAt: null, // Đảm bảo chỉ lấy các brand chưa xóa
-    };
-
-    if (name) {
-      filter.name = { $regex: name, $options: "i" };
-    }
-
-    const options = {
-      page,
-      limit,
-      sort: sort ? JSON.parse(sort) : { createdAt: -1 },
-    };
-
-    return await paginate(Brand, filter, options);
+  getPublicAllBrands: async () => {
+    return await Brand.find({ isActive: true, deletedAt: null });
   },
 
   /**

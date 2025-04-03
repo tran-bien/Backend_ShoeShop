@@ -10,11 +10,7 @@ const router = express.Router();
  * @desc    Lấy tất cả danh mục đang active và chưa xóa
  * @access  Public
  */
-router.get(
-  "/",
-  validate(categoryValidator.validatePublicCategoryQuery),
-  categoryController.getPublicAllCategories
-);
+router.get("/", categoryController.getPublicAllCategories);
 
 /**
  * @route   GET /api/categories/slug/:slug

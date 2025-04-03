@@ -7,7 +7,7 @@ const categoryController = {
    * @desc Lấy danh sách danh mục (chỉ lấy active và không xóa)
    */
   getPublicAllCategories: asyncHandler(async (req, res) => {
-    const result = await categoryService.getPublicAllCategories(req.query);
+    const result = await categoryService.getPublicAllCategories();
     return res.json(result);
   }),
 

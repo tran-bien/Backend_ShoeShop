@@ -1,5 +1,4 @@
 const { body, param, query } = require("express-validator");
-const mongoose = require("mongoose");
 
 const sizeValidator = {
   validateSizeId: [

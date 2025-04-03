@@ -2,23 +2,6 @@ const { body, param } = require("express-validator");
 const mongoose = require("mongoose");
 const User = require("@models/user");
 
-// Thêm thông tin audit vào dữ liệu
-const addAuditInfo = (req, res, next) => {
-  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
-    const now = new Date();
-    const formattedDate = now.toISOString().slice(0, 19).replace("T", " ");
-    const username = req.user ? req.user.username || req.user.email : "system";
-
-    if (req.method === "POST") {
-      req.body.createdAt = formattedDate;
-      req.body.createdBy = username;
-    }
-    req.body.updatedAt = formattedDate;
-    req.body.updatedBy = username;
-  }
-  next();
-};
-
 // Validator cho đăng ký user
 const validateRegisterInput = [
   body("name").trim().notEmpty().withMessage("Tên không được để trống"),
@@ -27,7 +10,6 @@ const validateRegisterInput = [
     .withMessage("Vui lòng cung cấp email")
     .isEmail()
     .withMessage("Email không hợp lệ"),
-  addAuditInfo,
 ];
 
 // Validator cho mật khẩu (để dùng trong đăng ký hoặc đổi mật khẩu)
@@ -52,7 +34,6 @@ const validateForgotPassword = [
     .withMessage("Vui lòng cung cấp email")
     .isEmail()
     .withMessage("Email không hợp lệ"),
-  addAuditInfo,
 ];
 
 // Validator cho đặt lại mật khẩu
@@ -77,7 +58,6 @@ const validateResetPassword = [
     }
     return true;
   }),
-  addAuditInfo,
 ];
 
 // Validator cho thay đổi mật khẩu
@@ -111,7 +91,6 @@ const validateChangePassword = [
       }
       return true;
     }),
-  addAuditInfo,
 ];
 
 // Validator cho đăng nhập
@@ -122,7 +101,6 @@ const validateLoginInput = [
     .isEmail()
     .withMessage("Email không hợp lệ"),
   body("password").notEmpty().withMessage("Vui lòng cung cấp mật khẩu"),
-  addAuditInfo,
 ];
 
 // Validator cho admin logout user
@@ -140,7 +118,6 @@ const validateAdminLogoutUser = [
       }
       return true;
     }),
-  addAuditInfo,
 ];
 
 // Validator cho xác thực OTP
@@ -164,7 +141,6 @@ const validateVerifyOTP = [
     }
     return true;
   }),
-  addAuditInfo,
 ];
 
 // Validator cho refresh token
@@ -172,7 +148,6 @@ const validateRefreshToken = [
   body("refreshToken")
     .notEmpty()
     .withMessage("Vui lòng cung cấp refresh token"),
-  addAuditInfo,
 ];
 
 // Validator cho logout session
@@ -186,7 +161,6 @@ const validateLogoutSession = [
       }
       return true;
     }),
-  addAuditInfo,
 ];
 
 module.exports = {

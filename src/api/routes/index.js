@@ -11,17 +11,13 @@ const adminCategoryRoutes = require("@routes/admin/category.routes");
 const userBrandRoutes = require("@routes/public/brand.routes");
 const userCategoryRoutes = require("@routes/public/category.routes");
 const adminColorRoutes = require("@routes/admin/color.routes");
-const userColorRoutes = require("@routes/public/color.routes");
 const adminSizeRoutes = require("@routes/admin/size.routes");
-const userSizeRoutes = require("@routes/public/size.routes");
 
 // Sử dụng các routes cho người dùng
 router.use("/auth", authRoutes);
 router.use("/images", userImageRoutes);
 router.use("/brands", userBrandRoutes);
 router.use("/categories", userCategoryRoutes);
-router.use("/colors", userColorRoutes);
-router.use("/sizes", userSizeRoutes);
 
 // Sử dụng các routes cho admin
 router.use("/admin/auth", adminAuthRoutes);
