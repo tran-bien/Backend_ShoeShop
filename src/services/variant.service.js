@@ -89,10 +89,6 @@ const variantService = {
    * @param {String} id ID của biến thể
    */
   getAdminVariantById: async (id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID biến thể không hợp lệ");
-    }
-
     const variant = await Variant.findById(id)
       .populate("color", "name code type colors")
       .populate("sizes.size", "value description")
@@ -161,6 +157,10 @@ const variantService = {
       if (minPrice !== undefined) {
         filter.priceFinal.$gte = Number(minPrice);
       }
+
+      if (maxPrice !== undefined) {
+        filter.priceFinal.$lte = Number(maxPrice);
+      }
     }
 
     // Lọc theo trạng thái active
@@ -189,19 +189,11 @@ const variantService = {
   createVariant: async (variantData) => {
     // Kiểm tra sản phẩm tồn tại
     const productId = variantData.product;
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-      throw new Error("ID sản phẩm không hợp lệ");
-    }
+    const colorId = variantData.color;
 
     const product = await Product.findById(productId);
     if (!product) {
       throw new Error("Không tìm thấy sản phẩm");
-    }
-
-    // Kiểm tra màu sắc tồn tại
-    const colorId = variantData.color;
-    if (!mongoose.Types.ObjectId.isValid(colorId)) {
-      throw new Error("ID màu sắc không hợp lệ");
     }
 
     const color = await Color.findById(colorId);
@@ -218,12 +210,19 @@ const variantService = {
       throw new Error("Phải có ít nhất một kích thước");
     }
 
+    // Kiểm tra xem sản phẩm đã có biến thể với màu này chưa
+    const existingVariantWithColor = await Variant.findOne({
+      product: productId,
+      color: colorId,
+      deletedAt: null,
+    });
+
+    if (existingVariantWithColor) {
+      throw new Error("Sản phẩm đã có biến thể với màu sắc này");
+    }
+
     const sizesData = [];
     for (const sizeData of variantData.sizes) {
-      if (!mongoose.Types.ObjectId.isValid(sizeData.size)) {
-        throw new Error("ID kích thước không hợp lệ");
-      }
-
       const sizeExists = await Size.findById(sizeData.size);
       if (!sizeExists) {
         throw new Error(`Không tìm thấy kích thước với ID: ${sizeData.size}`);
@@ -292,6 +291,20 @@ const variantService = {
       const colorExists = await Color.findById(updateData.color);
       if (!colorExists) {
         throw new Error("Không tìm thấy màu sắc");
+      }
+
+      // Kiểm tra xem sản phẩm đã có biến thể với màu này chưa (nếu đang thay đổi màu)
+      if (updateData.color.toString() !== variant.color.toString()) {
+        const existingVariantWithColor = await Variant.findOne({
+          product: variant.product,
+          color: updateData.color,
+          _id: { $ne: id },
+          deletedAt: null,
+        });
+
+        if (existingVariantWithColor) {
+          throw new Error("Sản phẩm đã có biến thể với màu sắc này");
+        }
       }
     }
 
@@ -415,6 +428,20 @@ const variantService = {
     const variant = await Variant.restoreById(id);
     if (!variant) {
       throw new Error("Không tìm thấy biến thể để khôi phục");
+    }
+
+    // Kiểm tra xem sản phẩm đã có biến thể với màu này chưa
+    const existingVariantWithColor = await Variant.findOne({
+      product: variant.product,
+      color: variant.color,
+      _id: { $ne: id },
+      deletedAt: null,
+    });
+
+    if (existingVariantWithColor) {
+      // Nếu tồn tại thì xóa lại biến thể vừa khôi phục
+      await Variant.findByIdAndUpdate(id, { deletedAt: new Date() });
+      throw new Error("Sản phẩm đã có biến thể với màu sắc này");
     }
 
     // Cập nhật thông tin tồn kho của sản phẩm sau khi khôi phục biến thể

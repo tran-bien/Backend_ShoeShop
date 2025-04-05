@@ -1,6 +1,24 @@
 const { body, param, query } = require("express-validator");
 const mongoose = require("mongoose");
 
+const checkDuplicateSizes = (sizes) => {
+  if (!sizes || !Array.isArray(sizes)) return true;
+
+  const sizeIds = [];
+  for (const item of sizes) {
+    if (item && item.size) {
+      sizeIds.push(String(item.size));
+    }
+  }
+
+  const uniqueIds = new Set(sizeIds);
+  if (uniqueIds.size !== sizeIds.length) {
+    throw new Error("Mỗi kích thước chỉ được xuất hiện một lần trong biến thể");
+  }
+
+  return true;
+};
+
 const variantValidator = {
   // Kiểm tra ID biến thể
   validateVariantId: [
@@ -87,6 +105,9 @@ const variantValidator = {
     body("sizes.*.quantity")
       .isInt({ min: 0 })
       .withMessage("Số lượng phải là số nguyên không âm"),
+
+    // Kiểm tra trùng lặp size trong biến thể
+    body("sizes").custom(checkDuplicateSizes),
   ],
 
   // Kiểm tra dữ liệu cập nhật biến thể
@@ -142,7 +163,7 @@ const variantValidator = {
     body("isActive")
       .optional()
       .isBoolean()
-      .withMessage("Trạng thái active phải là boolean"),
+      .withMessage("Trạng thái active phải là true hoặc false"),
 
     body("sizes")
       .optional()
@@ -164,6 +185,9 @@ const variantValidator = {
       .optional()
       .isInt({ min: 0 })
       .withMessage("Số lượng phải là số nguyên không âm"),
+
+    // Kiểm tra trùng lặp size trong cập nhật biến thể
+    body("sizes").custom(checkDuplicateSizes),
   ],
 
   // Kiểm tra query lấy danh sách biến thể
@@ -231,7 +255,7 @@ const variantValidator = {
           JSON.parse(value);
           return true;
         } catch (error) {
-          throw new Error("Chuỗi sắp xếp không hợp lệ, phải là JSON");
+          throw new Error("Chuỗi sắp xếp không hợp lệ");
         }
       }),
   ],
@@ -248,9 +272,11 @@ const variantValidator = {
         return true;
       }),
 
-    body().isArray().withMessage("Dữ liệu phải là một mảng các kích thước"),
+    body("sizes")
+      .isArray()
+      .withMessage("Dữ liệu phải là một mảng các kích thước"),
 
-    body("*.sizeId")
+    body("sizes.*.sizeId")
       .notEmpty()
       .withMessage("ID kích thước không được để trống")
       .custom((value) => {
@@ -260,9 +286,30 @@ const variantValidator = {
         return true;
       }),
 
-    body("*.quantity")
+    body("sizes.*.quantity")
       .isInt({ min: 0 })
       .withMessage("Số lượng phải là số nguyên không âm"),
+
+    // Kiểm tra trùng lặp sizeId trong cập nhật tồn kho
+    body("sizes").custom((sizes) => {
+      if (!sizes || !Array.isArray(sizes)) return true;
+
+      const sizeIds = [];
+      for (const item of sizes) {
+        if (item && item.sizeId) {
+          sizeIds.push(String(item.sizeId));
+        }
+      }
+
+      const uniqueIds = new Set(sizeIds);
+      if (uniqueIds.size !== sizeIds.length) {
+        throw new Error(
+          "Mỗi kích thước chỉ được xuất hiện một lần trong cập nhật tồn kho"
+        );
+      }
+
+      return true;
+    }),
   ],
 
   // Kiểm tra trạng thái active
@@ -281,7 +328,7 @@ const variantValidator = {
       .notEmpty()
       .withMessage("Trạng thái active không được để trống")
       .isBoolean()
-      .withMessage("Trạng thái active phải là boolean"),
+      .withMessage("Trạng thái active phải là true hoặc false"),
   ],
 };
 

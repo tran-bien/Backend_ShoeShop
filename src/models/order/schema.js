@@ -23,6 +23,11 @@ const OrderSchema = new mongoose.Schema(
           ref: "Variant",
           required: [true, "ID biến thể là bắt buộc"],
         },
+        size: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Size",
+          required: [true, "ID kích thước là bắt buộc"],
+        },
         quantity: {
           type: Number,
           required: [true, "Số lượng là bắt buộc"],

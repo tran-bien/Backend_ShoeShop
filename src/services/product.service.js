@@ -1,14 +1,267 @@
-const { Product, Variant, Category, Brand, Size, Color } = require("@models");
+const { Product, Variant, Category, Brand } = require("@models");
 const mongoose = require("mongoose");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
 const { updateProductStockInfo } = require("@models/product/middlewares");
 
+/**
+ * Helper: Tạo biến thể tóm tắt cho các sản phẩm
+ */
+const createVariantSummary = (variants) => {
+  // Khởi tạo thông tin tóm tắt
+  const variantSummary = {
+    total: 0,
+    active: 0,
+    colors: [],
+    colorCount: 0,
+    sizeCount: 0,
+    priceRange: { min: null, max: null, isSinglePrice: true },
+    discount: { hasDiscount: false, maxPercent: 0 },
+  };
+
+  // Tập hợp để lưu trữ các ID duy nhất
+  const colorSet = new Set();
+  const sizeSet = new Set();
+
+  // Xử lý thông tin từ variants nếu có
+  if (variants && variants.length > 0) {
+    variantSummary.total = variants.length;
+
+    variants.forEach((variant) => {
+      // Đếm variants active
+      if (variant.isActive) {
+        variantSummary.active++;
+      }
+
+      // Thu thập thông tin màu sắc
+      if (variant.color && variant.color._id) {
+        colorSet.add(variant.color._id.toString());
+        // Lưu lại thông tin màu để hiển thị
+        if (
+          !variantSummary.colors.some(
+            (c) => c._id?.toString() === variant.color._id.toString()
+          )
+        ) {
+          variantSummary.colors.push({
+            _id: variant.color._id,
+            name: variant.color.name,
+            code: variant.color.code,
+            type: variant.color.type,
+            colors: variant.color.colors || [],
+          });
+        }
+      }
+
+      // Thu thập thông tin kích thước
+      if (variant.sizes && Array.isArray(variant.sizes)) {
+        variant.sizes.forEach((sizeObj) => {
+          if (sizeObj.size && sizeObj.size._id) {
+            sizeSet.add(sizeObj.size._id.toString());
+          }
+        });
+      }
+
+      // Cập nhật thông tin giá
+      if (variant.priceFinal !== undefined) {
+        // Cập nhật giá thấp nhất
+        if (
+          variantSummary.priceRange.min === null ||
+          variant.priceFinal < variantSummary.priceRange.min
+        ) {
+          variantSummary.priceRange.min = variant.priceFinal;
+        }
+
+        // Cập nhật giá cao nhất
+        if (
+          variantSummary.priceRange.max === null ||
+          variant.priceFinal > variantSummary.priceRange.max
+        ) {
+          variantSummary.priceRange.max = variant.priceFinal;
+        }
+      }
+
+      // Kiểm tra giảm giá
+      if (variant.percentDiscount > 0) {
+        variantSummary.discount.hasDiscount = true;
+        if (variant.percentDiscount > variantSummary.discount.maxPercent) {
+          variantSummary.discount.maxPercent = variant.percentDiscount;
+        }
+      }
+    });
+
+    // Cập nhật số lượng màu và kích thước
+    variantSummary.colorCount = colorSet.size;
+    variantSummary.sizeCount = sizeSet.size;
+
+    // Kiểm tra xem tất cả các biến thể có cùng một mức giá hay không
+    variantSummary.priceRange.isSinglePrice =
+      variantSummary.priceRange.min === variantSummary.priceRange.max;
+  }
+
+  return variantSummary;
+};
+
+/**
+ * Helper: Chuyển đổi dữ liệu sản phẩm cho Admin
+ * - Giữ lại thông tin quản trị
+ */
+const transformProductForAdmin = (product) => {
+  const productObj = product.toObject ? product.toObject() : { ...product };
+  return productObj;
+};
+
+/**
+ * Helper: Chuyển đổi dữ liệu sản phẩm cho Public
+ * - Loại bỏ thông tin quản trị nhạy cảm
+ */
+const transformProductForPublic = (product) => {
+  const productObj = product.toObject ? product.toObject() : { ...product };
+
+  // Loại bỏ thông tin nhạy cảm, chỉ giữ lại những gì cần thiết cho client
+  const publicData = {
+    id: productObj._id,
+    name: productObj.name,
+    slug: productObj.slug,
+    description: productObj.description,
+    category: productObj.category
+      ? {
+          id: productObj.category._id,
+          name: productObj.category.name,
+        }
+      : null,
+    brand: productObj.brand
+      ? {
+          id: productObj.brand._id,
+          name: productObj.brand.name,
+          logo: productObj.brand.logo?.url,
+        }
+      : null,
+    images: productObj.images,
+    rating: productObj.rating,
+    numReviews: productObj.numReviews,
+    stockStatus: productObj.stockStatus,
+    totalQuantity: productObj.totalQuantity,
+    isActive: productObj.isActive,
+    createdAt: productObj.createdAt,
+  };
+
+  // Xử lý variants cho public
+  if (productObj.variants && productObj.variants.length > 0) {
+    publicData.variants = productObj.variants
+      .filter((v) => v.isActive)
+      .map((variant) => ({
+        id: variant._id,
+        color: {
+          id: variant.color?._id,
+          name: variant.color?.name,
+          code: variant.color?.code,
+          type: variant.color?.type,
+          colors: variant.color?.colors || [], // Thêm mảng colors vào đây
+        },
+        price: variant.price,
+        percentDiscount: variant.percentDiscount,
+        priceFinal: variant.priceFinal,
+        gender: variant.gender,
+        images: variant.imagesvariant,
+        sizes: variant.sizes?.map((size) => ({
+          id: size._id,
+          sizeInfo: size.size
+            ? {
+                id: size.size._id,
+                value: size.size.value,
+                description: size.size.description,
+              }
+            : null,
+          quantity: size.quantity,
+          sku: size.sku,
+          isAvailable: size.isSizeAvailable,
+        })),
+      }));
+
+    // Tính toán thông tin giá
+    const priceInfo = productObj.variants.reduce(
+      (info, variant) => {
+        if (!info.minPrice || variant.priceFinal < info.minPrice) {
+          info.minPrice = variant.priceFinal;
+          info.originalPrice = variant.price;
+          info.discountPercent = variant.percentDiscount;
+        }
+
+        if (variant.percentDiscount > info.maxDiscountPercent) {
+          info.maxDiscountPercent = variant.percentDiscount;
+        }
+
+        return info;
+      },
+      {
+        minPrice: null,
+        originalPrice: null,
+        discountPercent: 0,
+        maxDiscountPercent: 0,
+      }
+    );
+
+    publicData.price = priceInfo.minPrice || 0;
+    publicData.originalPrice = priceInfo.originalPrice || 0;
+    publicData.discountPercent = priceInfo.discountPercent || 0;
+    publicData.hasDiscount = priceInfo.discountPercent > 0;
+    publicData.maxDiscountPercent = priceInfo.maxDiscountPercent || 0;
+
+    // Tìm ảnh chính
+    if (!publicData.images || publicData.images.length === 0) {
+      const variantWithImages = productObj.variants.find(
+        (v) => v.imagesvariant && v.imagesvariant.length > 0
+      );
+
+      if (variantWithImages) {
+        const mainImage =
+          variantWithImages.imagesvariant.find((img) => img.isMain) ||
+          variantWithImages.imagesvariant[0];
+        publicData.mainImage = mainImage.url;
+      }
+    } else if (publicData.images && publicData.images.length > 0) {
+      const mainImage =
+        publicData.images.find((img) => img.isMain) || publicData.images[0];
+      publicData.mainImage = mainImage.url;
+    }
+  }
+
+  return publicData;
+};
+
+/**
+ * Helper: Chuyển đổi dữ liệu sản phẩm cho danh sách public
+ * - Loại bỏ chi tiết variants, chỉ giữ thông tin tóm tắt
+ */
+const transformProductForPublicList = (product) => {
+  const publicData = transformProductForPublic(product);
+
+  // Với danh sách, loại bỏ chi tiết variants để giảm kích thước dữ liệu
+  if (publicData.variants && publicData.variants.length > 0) {
+    // Tạo variantSummary giống như API admin để đồng nhất
+    publicData.variantSummary = createVariantSummary(product.variants);
+    delete publicData.variants;
+  } else {
+    // Nếu không có variants, tạo một variantSummary rỗng nhưng đầy đủ cấu trúc
+    publicData.variantSummary = {
+      total: 0,
+      active: 0,
+      colors: [],
+      colorCount: 0,
+      sizeCount: 0,
+      priceRange: { min: null, max: null, isSinglePrice: true },
+      discount: { hasDiscount: false, maxPercent: 0 },
+    };
+  }
+
+  return publicData;
+};
+
 const productService = {
   // === ADMIN API METHODS ===
 
   /**
-   * [ADMIN] Lấy danh sách sản phẩm (có phân trang, filter)
+   * [ADMIN] Lấy danh sách sản phẩm (có phân trang, filter) kèm thông tin tóm tắt về variants
    * @param {Object} query Tham số truy vấn
    */
   getAdminProducts: async (query) => {
@@ -61,10 +314,36 @@ const productService = {
       populate: [
         { path: "category", select: "name" },
         { path: "brand", select: "name logo" },
+        // Populate variants với các trường cần thiết cho thông tin tóm tắt
+        {
+          path: "variants",
+          select:
+            "color sizes isActive price priceFinal percentDiscount gender",
+          populate: [
+            { path: "color", select: "name code type colors" },
+            { path: "sizes.size", select: "value" },
+          ],
+        },
       ],
     };
 
-    return await paginate(Product, filter, options);
+    // Lấy kết quả từ database với variants được populate
+    const results = await paginate(Product, filter, options);
+
+    // Xử lý kết quả để thêm thông tin tóm tắt về variants
+    results.data = results.data.map((product) => {
+      const productObj = product.toObject ? product.toObject() : { ...product };
+
+      // Thêm thông tin tóm tắt về variants
+      productObj.variantSummary = createVariantSummary(productObj.variants);
+
+      // Xóa chi tiết variants để giảm dung lượng dữ liệu
+      delete productObj.variants;
+
+      return productObj;
+    });
+
+    return results;
   },
 
   /**
@@ -72,10 +351,6 @@ const productService = {
    * @param {String} id ID của sản phẩm
    */
   getAdminProductById: async (id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID sản phẩm không hợp lệ");
-    }
-
     const product = await Product.findById(id)
       .populate("category", "name")
       .populate("brand", "name logo")
@@ -95,7 +370,7 @@ const productService = {
 
     return {
       success: true,
-      product,
+      product: transformProductForAdmin(product),
     };
   },
 
@@ -135,7 +410,24 @@ const productService = {
       ],
     };
 
-    return await paginateDeleted(Product, filter, options);
+    const results = await paginateDeleted(Product, filter, options);
+
+    // Xử lý thông tin tóm tắt cho các sản phẩm đã xóa
+    results.data = results.data.map((product) => {
+      const productObj = product.toObject ? product.toObject() : { ...product };
+
+      // Thêm thông tin về người xóa nếu có
+      if (productObj.deletedBy) {
+        productObj.deletedByName = `${productObj.deletedBy.firstName || ""} ${
+          productObj.deletedBy.lastName || ""
+        }`.trim();
+        productObj.deletedByEmail = productObj.deletedBy.email;
+      }
+
+      return productObj;
+    });
+
+    return results;
   },
 
   /**
@@ -182,7 +474,7 @@ const productService = {
     return {
       success: true,
       message: "Tạo sản phẩm thành công",
-      product,
+      product: transformProductForAdmin(product),
     };
   },
 
@@ -192,10 +484,6 @@ const productService = {
    * @param {Object} updateData Dữ liệu cập nhật
    */
   updateProduct: async (id, updateData) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID sản phẩm không hợp lệ");
-    }
-
     const product = await Product.findById(id);
     if (!product) {
       throw new Error("Không tìm thấy sản phẩm");
@@ -238,7 +526,7 @@ const productService = {
     return {
       success: true,
       message: "Cập nhật sản phẩm thành công",
-      product,
+      product: transformProductForAdmin(product),
     };
   },
 
@@ -248,10 +536,6 @@ const productService = {
    * @param {String} userId ID người xóa
    */
   deleteProduct: async (id, userId) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID sản phẩm không hợp lệ");
-    }
-
     const product = await Product.findById(id);
     if (!product) {
       throw new Error("Không tìm thấy sản phẩm");
@@ -261,10 +545,7 @@ const productService = {
     await product.softDelete(userId);
 
     // Tắt trạng thái active của các variant liên quan
-    await Variant.updateMany(
-      { _id: { $in: product.variants } },
-      { $set: { isActive: false } }
-    );
+    await Variant.updateMany({ product: id }, { $set: { isActive: false } });
 
     return {
       success: true,
@@ -277,10 +558,6 @@ const productService = {
    * @param {String} id ID sản phẩm
    */
   restoreProduct: async (id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID sản phẩm không hợp lệ");
-    }
-
     // Khôi phục sản phẩm - middleware sẽ kiểm tra slug trùng lặp và tạo slug mới nếu cần
     const product = await Product.restoreById(id);
     if (!product) {
@@ -290,7 +567,7 @@ const productService = {
     return {
       success: true,
       message: "Khôi phục sản phẩm thành công",
-      product,
+      product: transformProductForAdmin(product),
     };
   },
 
@@ -301,10 +578,6 @@ const productService = {
    * @param {Boolean} cascade Cập nhật cả variants
    */
   updateProductStatus: async (id, isActive, cascade = true) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID sản phẩm không hợp lệ");
-    }
-
     const product = await Product.findById(id);
     if (!product) {
       throw new Error("Không tìm thấy sản phẩm");
@@ -317,9 +590,9 @@ const productService = {
     let affectedVariants = 0;
 
     // CASCADE: Chỉ cập nhật variants khi cascade = true
-    if (cascade && product.variants.length > 0) {
+    if (cascade && product.variants?.length > 0) {
       const result = await Variant.updateMany(
-        { _id: { $in: product.variants } },
+        { product: id, deletedAt: null },
         { $set: { isActive: isActive } }
       );
       affectedVariants = result.modifiedCount;
@@ -331,7 +604,7 @@ const productService = {
       message: cascade
         ? `Sản phẩm đã được ${statusMsg}. Đã ${statusMsg} ${affectedVariants} biến thể liên quan.`
         : `Sản phẩm đã được ${statusMsg} mà không ảnh hưởng đến biến thể.`,
-      product,
+      product: transformProductForAdmin(product),
     };
   },
 
@@ -340,10 +613,6 @@ const productService = {
    * @param {String} id ID sản phẩm
    */
   updateProductStockStatus: async (id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID sản phẩm không hợp lệ");
-    }
-
     const product = await Product.findById(id).populate({
       path: "variants",
       select: "sizes",
@@ -359,15 +628,12 @@ const productService = {
 
     // Lấy sản phẩm đã cập nhật
     const updatedProduct = await Product.findById(id);
-
     return {
       success: true,
       message: "Cập nhật trạng thái tồn kho thành công",
-      product: updatedProduct,
+      product: transformProductForAdmin(updatedProduct),
     };
   },
-
-  // Các phương thức xử lý ảnh đã được di chuyển qua image.service.js,
 
   // === PUBLIC API METHODS ===
 
@@ -378,7 +644,7 @@ const productService = {
   getPublicProducts: async (query) => {
     const {
       page = 1,
-      limit = 12,
+      limit = 18,
       name,
       category,
       brand,
@@ -389,7 +655,6 @@ const productService = {
       gender,
       sort = "newest",
     } = query;
-
     // Chỉ lấy sản phẩm active và chưa xóa
     const filter = {
       isActive: true,
@@ -491,6 +756,17 @@ const productService = {
       populate: [
         { path: "category", select: "name" },
         { path: "brand", select: "name logo" },
+        // Thêm populate variants để lấy thông tin giá
+        {
+          path: "variants",
+          match: { isActive: true, deletedAt: null },
+          select:
+            "price priceFinal percentDiscount color gender imagesvariant sizes isActive",
+          populate: [
+            { path: "color", select: "name code type colors" },
+            { path: "sizes.size", select: "value description" },
+          ],
+        },
       ],
     };
 
@@ -521,7 +797,14 @@ const productService = {
       }
     }
 
-    return await paginate(Product, filter, options);
+    // Lấy kết quả từ database
+    const results = await paginate(Product, filter, options);
+
+    // Xử lý kết quả để tối ưu cho client
+    results.data = results.data.map((product) =>
+      transformProductForPublicList(product)
+    );
+    return results;
   },
 
   /**
@@ -529,10 +812,6 @@ const productService = {
    * @param {String} id ID của sản phẩm
    */
   getPublicProductById: async (id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID sản phẩm không hợp lệ");
-    }
-
     const product = await Product.findOne({
       _id: id,
       isActive: true,
@@ -553,10 +832,12 @@ const productService = {
       throw new Error("Không tìm thấy sản phẩm");
     }
 
-    return {
+    const result = {
       success: true,
-      product,
+      product: transformProductForPublic(product),
     };
+
+    return result;
   },
 
   /**
@@ -584,10 +865,12 @@ const productService = {
       throw new Error("Không tìm thấy sản phẩm");
     }
 
-    return {
+    const result = {
       success: true,
-      product,
+      product: transformProductForPublic(product),
     };
+
+    return result;
   },
 
   /**
@@ -603,12 +886,24 @@ const productService = {
       .sort({ rating: -1, numReviews: -1 })
       .limit(Number(limit))
       .populate("category", "name")
-      .populate("brand", "name logo");
+      .populate("brand", "name logo")
+      .populate({
+        path: "variants",
+        match: { isActive: true, deletedAt: null },
+        select:
+          "price priceFinal percentDiscount color imagesvariant sizes isActive",
+        populate: [
+          { path: "color", select: "name code type colors" },
+          { path: "sizes.size", select: "value description" },
+        ],
+      });
 
-    return {
+    const result = {
       success: true,
-      products,
+      products: products.map(transformProductForPublicList),
     };
+
+    return result;
   },
 
   /**
@@ -623,12 +918,24 @@ const productService = {
       .sort({ createdAt: -1 })
       .limit(Number(limit))
       .populate("category", "name")
-      .populate("brand", "name logo");
+      .populate("brand", "name logo")
+      .populate({
+        path: "variants",
+        match: { isActive: true, deletedAt: null },
+        select:
+          "price priceFinal percentDiscount color imagesvariant sizes isActive",
+        populate: [
+          { path: "color", select: "name code type colors" },
+          { path: "sizes.size", select: "value description" },
+        ],
+      });
 
-    return {
+    const result = {
       success: true,
-      products,
+      products: products.map(transformProductForPublicList),
     };
+
+    return result;
   },
 
   /**
@@ -644,12 +951,23 @@ const productService = {
       .sort({ totalQuantity: -1 }) // Tạm thời dùng totalQuantity, sau này có thể thay bằng totalSold
       .limit(Number(limit))
       .populate("category", "name")
-      .populate("brand", "name logo");
+      .populate("brand", "name logo")
+      .populate({
+        path: "variants",
+        match: { isActive: true, deletedAt: null },
+        select:
+          "price priceFinal percentDiscount color imagesvariant sizes isActive",
+        populate: [
+          { path: "color", select: "name code type colors" },
+          { path: "sizes.size", select: "value description" },
+        ],
+      });
 
-    return {
+    const result = {
       success: true,
-      products,
+      products: products.map(transformProductForPublicList),
     };
+    return result;
   },
 
   /**
@@ -658,10 +976,6 @@ const productService = {
    * @param {Number} limit Số lượng sản phẩm trả về
    */
   getRelatedProducts: async (id, limit = 4) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      throw new Error("ID sản phẩm không hợp lệ");
-    }
-
     const product = await Product.findById(id);
     if (!product) {
       throw new Error("Không tìm thấy sản phẩm");
@@ -676,53 +990,24 @@ const productService = {
       .sort({ rating: -1 })
       .limit(Number(limit))
       .populate("category", "name")
-      .populate("brand", "name logo");
+      .populate("brand", "name logo")
+      .populate({
+        path: "variants",
+        match: { isActive: true, deletedAt: null },
+        select:
+          "price priceFinal percentDiscount color imagesvariant sizes isActive",
+        populate: [
+          { path: "color", select: "name code type colors" },
+          { path: "sizes.size", select: "value description" },
+        ],
+      });
 
-    return {
+    const result = {
       success: true,
-      products: relatedProducts,
+      products: relatedProducts.map(transformProductForPublicList),
     };
-  },
 
-  /**
-   * [PUBLIC] Lấy thuộc tính lọc cho sản phẩm
-   */
-  getFilterAttributes: async () => {
-    const categories = await Category.find({ isActive: true }).select("name");
-    const brands = await Brand.find({ isActive: true }).select("name logo");
-    const colors = await Color.find({ isActive: true }).select(
-      "name code type"
-    );
-    const sizes = await Size.find({ isActive: true }).select(
-      "value description"
-    );
-
-    // Tính khoảng giá từ variants có sẵn
-    const priceRange = await Variant.aggregate([
-      { $match: { isActive: true, deletedAt: null } },
-      {
-        $group: {
-          _id: null,
-          minPrice: { $min: "$priceFinal" },
-          maxPrice: { $max: "$priceFinal" },
-        },
-      },
-    ]);
-
-    const minPrice = priceRange.length > 0 ? priceRange[0].minPrice : 0;
-    const maxPrice = priceRange.length > 0 ? priceRange[0].maxPrice : 10000000;
-
-    return {
-      success: true,
-      filters: {
-        categories,
-        brands,
-        colors,
-        sizes,
-        priceRange: { min: minPrice, max: maxPrice },
-        genders: ["male", "female"],
-      },
-    };
+    return result;
   },
 };
 

@@ -1,55 +1,55 @@
 const mongoose = require("mongoose");
 
 /**
- * Hàm tự tạo SKU cho một size dựa trên:
- * - Mã sản phẩm (nếu có field productId, dùng field đó; nếu không dùng _id)
- * - Tên màu (color) viết in hoa
- * - Viết tắt giới tính
- * - Viết tắt kích cỡ
+ * Tạo SKU cho một size dựa trên thông tin biến thể
+ * @param {Object} variant Biến thể cần tạo SKU
+ * @param {Object} sizeObj Đối tượng kích thước
  */
 function generateSkuForSize(variant, sizeObj) {
-  // Sử dụng productId nếu có, ngược lại dùng _id của variant
-  const variantId = variant._id.toString().substring(0, 6);
-
-  // Lấy ID sản phẩm nếu có
+  // Lấy ID sản phẩm và biến thể, rút gọn thành 6 ký tự
   const productId = variant.product
     ? variant.product.toString().substring(0, 6)
-    : variantId;
+    : "";
+  const variantId = variant._id.toString().substring(0, 6);
 
-  // Lấy tên của màu: nếu tồn tại, sử dụng giá trị của variant.color (đã chuyển thành chữ in hoa); nếu không có thì 'NC'
-  let colorName = "NC";
+  // Lấy ID của size, đảm bảo mỗi size có SKU khác nhau
+  const sizeId = sizeObj.size
+    ? sizeObj.size.toString().substring(0, 6)
+    : "NOSIZE";
+
+  // Lấy thông tin màu sắc
+  let colorCode = "NC";
   if (variant.color) {
-    colorName = variant.color.toString().substring(0, 4).toUpperCase();
+    colorCode = variant.color.toString().substring(0, 4).toUpperCase();
   }
 
-  // Lấy viết tắt của giới tính
-  let genderAbbr = "NG";
-  if (variant.gender) {
-    const genderLower = variant.gender.toLowerCase();
-    if (genderLower === "male") {
-      genderAbbr = "M";
-    } else if (genderLower === "female") {
-      genderAbbr = "F";
-    } else {
-      genderAbbr = variant.gender.charAt(0).toUpperCase();
-    }
-  }
+  // Lấy viết tắt giới tính
+  const genderMap = {
+    male: "M",
+    female: "F",
+  };
+  const genderCode =
+    genderMap[variant.gender] || variant.gender?.charAt(0).toUpperCase() || "U";
 
-  // Lấy kích cỡ
-  let sizeStr = "NS";
+  // Lấy giá trị của size
+  let sizeValue = "NS";
   if (sizeObj.size) {
     if (typeof sizeObj.size === "object" && sizeObj.size.value !== undefined) {
-      sizeStr = sizeObj.size.value.toString();
+      sizeValue = sizeObj.size.value.toString();
     } else {
-      sizeStr = sizeObj.size.toString().substring(0, 4);
+      const size = sizeObj.size.toString();
+      sizeValue = size.substring(Math.max(0, size.length - 4));
     }
   }
 
-  // Timestamp để đảm bảo không trùng SKU
-  const timestamp = Date.now().toString().substring(9, 13);
+  // Thêm một giá trị ngẫu nhiên để đảm bảo tính duy nhất
+  const randomVal = Math.floor(Math.random() * 1000)
+    .toString()
+    .padStart(3, "0");
 
-  // Trả về SKU theo định dạng: productId-colorName-genderAbbr-sizeStr-timestamp
-  return `${productId}-${colorName}-${genderAbbr}-${sizeStr}-${timestamp}`;
+  // Format: PPPPPP-VVVVVV-C-G-SSSID-SZVAL-RRR
+  // P: Product ID, V: Variant ID, C: Color, G: Gender, S: Size ID, SZ: Size Value, R: Random
+  return `${productId}-${variantId}-${colorCode}-${genderCode}-${sizeId}-${sizeValue}-${randomVal}`;
 }
 
 /**
@@ -69,7 +69,9 @@ async function updateProductStock(productId) {
       await updateProductStockInfo(product);
     }
   } catch (error) {
-    console.error(`Lỗi cập nhật tồn kho sản phẩm ${productId}:`, error);
+    console.error(
+      `[variant/middlewares] Lỗi cập nhật tồn kho: ${error.message}`
+    );
   }
 }
 
@@ -94,15 +96,19 @@ const applyMiddlewares = (schema) => {
         });
       }
 
-      // Tính toán lại các trường: profit, profitPercentage, priceFinal
-      this.profit = this.price - this.costPrice;
-      this.profitPercentage = this.costPrice
-        ? ((this.price - this.costPrice) / this.costPrice) * 100
-        : 0;
+      // Tính priceFinal trước để dùng cho việc tính profit
       this.priceFinal =
         this.percentDiscount > 0
           ? this.price - (this.price * this.percentDiscount) / 100
           : this.price;
+
+      // Tính profit dựa trên priceFinal thay vì price
+      this.profit = this.priceFinal - this.costPrice;
+
+      // Tính profitPercentage dựa trên profit mới
+      this.profitPercentage = this.costPrice
+        ? (this.profit / this.costPrice) * 100
+        : 0;
 
       next();
     } catch (error) {
@@ -117,7 +123,10 @@ const applyMiddlewares = (schema) => {
         await updateProductStock(this.product);
       }
     } catch (error) {
-      console.error("Lỗi khi cập nhật tồn kho sau lưu variant:", error);
+      console.error(
+        "[POST-SAVE] Lỗi khi cập nhật tồn kho sau lưu variant:",
+        error
+      );
     }
   });
 
@@ -185,18 +194,23 @@ const applyMiddlewares = (schema) => {
               ? newPercentDiscount
               : currentDoc.percentDiscount;
 
-          const newProfit = price - costPrice;
-          const newProfitPercentage =
-            costPrice > 0 ? ((price - costPrice) / costPrice) * 100 : 0;
+          // Tính priceFinal trước
           const newPriceFinal =
             percentDiscount > 0
               ? price - (price * percentDiscount) / 100
               : price;
 
+          // Tính profit dựa trên priceFinal
+          const newProfit = newPriceFinal - costPrice;
+
+          // Tính profitPercentage dựa trên profit mới
+          const newProfitPercentage =
+            costPrice > 0 ? (newProfit / costPrice) * 100 : 0;
+
           if (!update.$set) update.$set = {};
+          update.$set.priceFinal = newPriceFinal;
           update.$set.profit = newProfit;
           update.$set.profitPercentage = newProfitPercentage;
-          update.$set.priceFinal = newPriceFinal;
         }
       }
 
@@ -281,7 +295,10 @@ const applyMiddlewares = (schema) => {
         delete this._productId;
       }
     } catch (error) {
-      console.error("Lỗi khi cập nhật tồn kho sau cập nhật variant:", error);
+      console.error(
+        "[POST-FINDONEANDUPDATE] Lỗi khi cập nhật tồn kho sau cập nhật variant:",
+        error
+      );
     }
   });
 
@@ -306,7 +323,61 @@ const applyMiddlewares = (schema) => {
         delete this._productId;
       }
     } catch (error) {
-      console.error("Lỗi khi cập nhật tồn kho sau xóa variant:", error);
+      console.error(
+        "[POST-DELETE] Lỗi khi cập nhật tồn kho sau xóa variant:",
+        error
+      );
+    }
+  });
+
+  // Post-updateMany hook: Sau khi cập nhật nhiều variant, cập nhật các sản phẩm liên quan
+  schema.post("updateMany", async function () {
+    try {
+      const filter = this.getQuery();
+
+      // Nếu là cập nhật theo productId cụ thể
+      if (filter.product) {
+        await updateProductStock(filter.product);
+      }
+      // Nếu cập nhật theo nhiều variant
+      else if (filter._id && filter._id.$in) {
+        // Lấy danh sách productId từ các variant bị ảnh hưởng
+        const Variant = mongoose.model("Variant");
+        const variants = await Variant.find({
+          _id: { $in: filter._id.$in },
+        }).distinct("product");
+
+        // Cập nhật tất cả các sản phẩm liên quan
+        for (const productId of variants) {
+          await updateProductStock(productId);
+        }
+      }
+    } catch (error) {
+      console.error(
+        "[POST-UPDATEMANY] Lỗi khi cập nhật tồn kho sau updateMany:",
+        error
+      );
+    }
+  });
+
+  // Middleware POST-SOFTDELETE và POST-RESTORE: Cập nhật stock sau khi xóa mềm hoặc khôi phục
+  schema.post("softDelete", async function () {
+    try {
+      if (this.product) {
+        await updateProductStock(this.product);
+      }
+    } catch (error) {
+      console.error("[POST-SOFTDELETE] Lỗi cập nhật tồn kho:", error);
+    }
+  });
+
+  schema.post("restore", async function () {
+    try {
+      if (this.product) {
+        await updateProductStock(this.product);
+      }
+    } catch (error) {
+      console.error("[POST-RESTORE] Lỗi cập nhật tồn kho:", error);
     }
   });
 };

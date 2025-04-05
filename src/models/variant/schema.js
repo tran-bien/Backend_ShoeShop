@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 
 const VariantSchema = new mongoose.Schema(
   {
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
+      required: [true, "Sản phẩm là bắt buộc"],
+    },
     imagesvariant: [
       {
         url: {
@@ -36,18 +41,6 @@ const VariantSchema = new mongoose.Schema(
         message: "Giá gốc không được lớn hơn giá bán",
       },
     },
-    profit: {
-      type: Number,
-      default: function () {
-        return this.price - this.costPrice;
-      },
-    },
-    profitPercentage: {
-      type: Number,
-      default: function () {
-        return ((this.price - this.costPrice) / this.costPrice) * 100;
-      },
-    },
     percentDiscount: {
       type: Number,
       default: 0,
@@ -62,6 +55,28 @@ const VariantSchema = new mongoose.Schema(
           : this.price;
       },
       min: 0,
+    },
+    profit: {
+      type: Number,
+      default: function () {
+        const finalPrice =
+          this.percentDiscount > 0
+            ? this.price - (this.price * this.percentDiscount) / 100
+            : this.price;
+        return finalPrice - this.costPrice;
+      },
+    },
+    profitPercentage: {
+      type: Number,
+      default: function () {
+        const finalPrice =
+          this.percentDiscount > 0
+            ? this.price - (this.price * this.percentDiscount) / 100
+            : this.price;
+        return this.costPrice
+          ? ((finalPrice - this.costPrice) / this.costPrice) * 100
+          : 0;
+      },
     },
     gender: {
       type: String,

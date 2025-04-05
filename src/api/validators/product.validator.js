@@ -117,7 +117,7 @@ const productValidator = {
     body("isActive")
       .optional()
       .isBoolean()
-      .withMessage("Trạng thái active phải là boolean"),
+      .withMessage("Trạng thái active phải là true hoặc false"),
   ],
 
   // Kiểm tra query admin products
@@ -190,7 +190,7 @@ const productValidator = {
           JSON.parse(value);
           return true;
         } catch (error) {
-          throw new Error("Chuỗi sắp xếp không hợp lệ, phải là JSON");
+          throw new Error("Chuỗi sắp xếp không hợp lệ");
         }
       }),
   ],
@@ -301,12 +301,12 @@ const productValidator = {
       .notEmpty()
       .withMessage("Trạng thái active không được để trống")
       .isBoolean()
-      .withMessage("Trạng thái active phải là boolean"),
+      .withMessage("Trạng thái active phải là true hoặc false"),
 
     body("cascade")
       .optional()
       .isBoolean()
-      .withMessage("Cascade phải là boolean"),
+      .withMessage("Cascade phải là true hoặc false"),
   ],
 };
 

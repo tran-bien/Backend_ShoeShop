@@ -1,6 +1,55 @@
 const mongoose = require("mongoose");
 
 /**
+ * Cập nhật số lượng tồn kho từ đơn hàng
+ * @param {Object} orderItem Mặt hàng trong đơn hàng
+ * @param {String} action 'decrement' hoặc 'increment'
+ */
+const updateInventory = async (orderItem, action) => {
+  try {
+    const Variant = mongoose.model("Variant");
+
+    if (!orderItem.variant || !orderItem.size || !orderItem.quantity) return;
+
+    // Tìm biến thể
+    const variant = await Variant.findById(orderItem.variant);
+    if (!variant) return;
+
+    // Tìm size trong biến thể
+    const sizeIndex = variant.sizes.findIndex(
+      (s) => s.size.toString() === orderItem.size.toString()
+    );
+
+    if (sizeIndex === -1) return;
+
+    // Cập nhật số lượng
+    if (action === "decrement") {
+      variant.sizes[sizeIndex].quantity = Math.max(
+        0,
+        variant.sizes[sizeIndex].quantity - orderItem.quantity
+      );
+    } else {
+      variant.sizes[sizeIndex].quantity += orderItem.quantity;
+    }
+
+    // Cập nhật trạng thái available
+    variant.sizes[sizeIndex].isSizeAvailable =
+      variant.sizes[sizeIndex].quantity > 0;
+
+    // Lưu biến thể (middleware sau save sẽ cập nhật stock sản phẩm)
+    await variant.save();
+
+    console.log(
+      `[order/middlewares] Đã ${action === "decrement" ? "giảm" : "tăng"} ${
+        orderItem.quantity
+      } sản phẩm cho variant ${variant._id}`
+    );
+  } catch (error) {
+    console.error(`[order/middlewares] Lỗi cập nhật tồn kho: ${error.message}`);
+  }
+};
+
+/**
  * Áp dụng middleware cho Order Schema
  * @param {mongoose.Schema} schema - Schema để áp dụng middleware
  */
@@ -91,67 +140,48 @@ const applyMiddlewares = (schema) => {
     }
   });
 
-  // Cập nhật kho sau khi đơn hàng được tạo
-  schema.post("save", async function () {
-    try {
-      if (this.isNew) {
-        const Product = mongoose.model("Product");
-
-        // Giảm số lượng tồn kho cho mỗi sản phẩm trong đơn hàng
-        const updatePromises = this.orderItems.map(async (item) => {
-          if (item.product && item.variant && item.quantity) {
-            const product = await Product.findById(item.product);
-            if (product) {
-              await product.updateVariantStock(item.variant, -item.quantity);
-            }
-          }
-        });
-
-        await Promise.all(updatePromises);
-      }
-    } catch (error) {
-      console.error("Lỗi khi cập nhật kho sau khi tạo đơn hàng:", error);
-    }
-  });
-
-  // Cập nhật kho khi đơn hàng bị hủy
-  schema.post("save", async function () {
-    try {
-      // Kiểm tra nếu trạng thái vừa được cập nhật thành cancelled
-      const statusChanged = this.isModified("status");
-      const newStatus = this.status;
-      const previousStatus = this._previousStatus;
-
-      if (
-        statusChanged &&
-        newStatus === "cancelled" &&
-        previousStatus !== "cancelled"
-      ) {
-        const Product = mongoose.model("Product");
-
-        // Tăng số lượng tồn kho cho mỗi sản phẩm trong đơn hàng
-        const updatePromises = this.orderItems.map(async (item) => {
-          if (item.product && item.variant && item.quantity) {
-            const product = await Product.findById(item.product);
-            if (product) {
-              await product.updateVariantStock(item.variant, item.quantity);
-            }
-          }
-        });
-
-        await Promise.all(updatePromises);
-      }
-    } catch (error) {
-      console.error("Lỗi khi cập nhật kho sau khi hủy đơn hàng:", error);
-    }
-  });
-
   // Lưu trạng thái trước khi cập nhật
   schema.pre("save", function (next) {
     if (this.isModified("status")) {
       this._previousStatus = this.get("status", String);
     }
     next();
+  });
+
+  // Cải tiến middleware sau khi lưu đơn hàng
+  schema.post("save", async function () {
+    try {
+      if (this.isNew) {
+        // Đơn hàng mới tạo - giảm số lượng tồn kho
+        for (const item of this.orderItems) {
+          await updateInventory(item, "decrement");
+        }
+        console.log(
+          `[order/middlewares] Đơn hàng mới #${this.code}: đã cập nhật tồn kho`
+        );
+      } else if (this.isModified("status")) {
+        // Đơn hàng thay đổi trạng thái
+        const newStatus = this.status;
+        const prevStatus = this._previousStatus;
+
+        // Nếu hủy đơn hàng - khôi phục số lượng tồn kho
+        if (
+          newStatus === "cancelled" &&
+          ["pending", "confirmed", "shipping"].includes(prevStatus)
+        ) {
+          for (const item of this.orderItems) {
+            await updateInventory(item, "increment");
+          }
+          console.log(
+            `[order/middlewares] Đơn hàng #${this.code} bị hủy: đã khôi phục tồn kho`
+          );
+        }
+      }
+    } catch (error) {
+      console.error(
+        `[order/middlewares] Lỗi xử lý sau khi lưu đơn hàng: ${error.message}`
+      );
+    }
   });
 
   // Kiểm tra tính hợp lệ của trạng thái
@@ -185,42 +215,77 @@ const applyMiddlewares = (schema) => {
     next();
   });
 
-  // Xử lý khi khôi phục đơn hàng (đặt deletedAt thành null)
+  // Xử lý khi cập nhật đơn hàng
   schema.pre("findOneAndUpdate", async function (next) {
-    const update = this.getUpdate();
+    try {
+      const update = this.getUpdate();
+      if (update.$set && update.$set.status) {
+        const doc = await this.model.findOne(this.getQuery());
+        this._oldStatus = doc ? doc.status : null;
+        this._orderId = doc ? doc._id : null;
+      }
 
-    // Nếu đang khôi phục đơn hàng (đặt deletedAt thành null)
-    if (update && update.$set && update.$set.deletedAt === null) {
-      try {
-        const doc = await this.model.findOne(this.getFilter(), {
-          includeDeleted: true,
-        });
-
-        if (doc && doc.code) {
-          // Kiểm tra xem có đơn hàng nào khác đang dùng code này không
-          const duplicate = await this.model.findOne({
-            code: doc.code,
-            _id: { $ne: doc._id },
-            deletedAt: null,
+      // Nếu đang khôi phục đơn hàng (đặt deletedAt thành null)
+      if (update && update.$set && update.$set.deletedAt === null) {
+        try {
+          const doc = await this.model.findOne(this.getFilter(), {
+            includeDeleted: true,
           });
 
-          if (duplicate) {
-            // Nếu có, tạo một code mới bằng cách thêm hậu tố thời gian
-            const parts = doc.code.split("-");
-            const newCode = `${parts[0]}-${parts[1]}-${Date.now()}`;
-            update.$set.code = newCode;
-            console.log(
-              `Code bị trùng khi khôi phục, đã tạo code mới: ${newCode}`
-            );
-          }
-        }
-      } catch (error) {
-        console.error("Lỗi khi kiểm tra code khi khôi phục đơn hàng:", error);
-      }
-    }
+          if (doc && doc.code) {
+            // Kiểm tra xem có đơn hàng nào khác đang dùng code này không
+            const duplicate = await this.model.findOne({
+              code: doc.code,
+              _id: { $ne: doc._id },
+              deletedAt: null,
+            });
 
-    next();
+            if (duplicate) {
+              // Nếu có, tạo một code mới bằng cách thêm hậu tố thời gian
+              const parts = doc.code.split("-");
+              const newCode = `${parts[0]}-${parts[1]}-${Date.now()}`;
+              update.$set.code = newCode;
+              console.log(
+                `Code bị trùng khi khôi phục, đã tạo code mới: ${newCode}`
+              );
+            }
+          }
+        } catch (error) {
+          console.error("Lỗi khi kiểm tra code khi khôi phục đơn hàng:", error);
+        }
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  schema.post("findOneAndUpdate", async function (doc) {
+    try {
+      if (doc && this._oldStatus && doc.status !== this._oldStatus) {
+        // Xử lý khi hủy đơn hàng
+        if (
+          doc.status === "cancelled" &&
+          ["pending", "confirmed", "shipping"].includes(this._oldStatus)
+        ) {
+          for (const item of doc.orderItems) {
+            await updateInventory(item, "increment");
+          }
+          console.log(
+            `[order/middlewares] Đơn hàng #${doc.code} bị hủy: đã khôi phục tồn kho`
+          );
+        }
+      }
+    } catch (error) {
+      console.error(
+        `[order/middlewares] Lỗi xử lý sau khi cập nhật đơn hàng: ${error.message}`
+      );
+    }
   });
 };
 
-module.exports = { applyMiddlewares };
+module.exports = {
+  applyMiddlewares,
+  updateInventory,
+};

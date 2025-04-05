@@ -2,62 +2,66 @@ const mongoose = require("mongoose");
 const { createSlug } = require("@utils/slugify");
 
 /**
- * Cập nhật tổng số lượng và trạng thái tồn kho của sản phẩm
- * @param {Object} product - Document sản phẩm hoặc ID sản phẩm
- * @returns {Promise<void>}
+ * Cập nhật thông tin tồn kho của sản phẩm
+ * @param {Object|String} product Đối tượng sản phẩm hoặc ID sản phẩm
  */
-async function updateProductStockInfo(product) {
+const updateProductStockInfo = async (product) => {
   try {
     const Product = mongoose.model("Product");
     const Variant = mongoose.model("Variant");
 
-    // Nếu là ID, lấy đối tượng sản phẩm
+    // Kiểm tra nếu là ID thì lấy sản phẩm
     const productId =
       typeof product === "string" || product instanceof mongoose.Types.ObjectId
         ? product
         : product._id;
 
-    // Tìm tất cả variant của sản phẩm
+    // Lấy tất cả các biến thể active của sản phẩm
     const variants = await Variant.find({
-      _id: { $in: product.variants || [] },
-      deletedAt: null,
+      product: productId,
       isActive: true,
-    });
+      deletedAt: null,
+    }).select("sizes");
 
-    // Tính tổng số lượng
+    // Tính tổng số lượng từ tất cả các biến thể
     let totalQuantity = 0;
+    let hasAvailableSize = false;
+
     variants.forEach((variant) => {
       if (variant.sizes && Array.isArray(variant.sizes)) {
-        variant.sizes.forEach((sizeObj) => {
-          if (sizeObj && sizeObj.quantity && sizeObj.quantity > 0) {
-            totalQuantity += sizeObj.quantity;
+        variant.sizes.forEach((size) => {
+          totalQuantity += size.quantity || 0;
+          if (size.quantity > 0) {
+            hasAvailableSize = true;
           }
         });
       }
     });
 
-    // Cập nhật trạng thái tồn kho
+    // Xác định trạng thái tồn kho
     let stockStatus = "out_of_stock";
     if (totalQuantity > 0) {
-      stockStatus = totalQuantity <= 10 ? "low_stock" : "in_stock";
+      stockStatus = totalQuantity < 5 ? "low_stock" : "in_stock";
     }
 
-    // Cập nhật sản phẩm (sử dụng findByIdAndUpdate để không kích hoạt middleware này lại)
-    await Product.findByIdAndUpdate(
-      productId,
-      {
+    // Cập nhật sản phẩm
+    await Product.findByIdAndUpdate(productId, {
+      $set: {
         totalQuantity,
         stockStatus,
       },
-      {
-        new: true,
-        runValidators: false,
-      }
+    });
+
+    console.log(
+      `[ProductStockInfo] Cập nhật thành công: ${productId}, Số lượng: ${totalQuantity}, Trạng thái: ${stockStatus}`
     );
+
+    return { totalQuantity, stockStatus };
   } catch (error) {
-    console.error("Lỗi khi cập nhật thông tin tồn kho:", error);
+    console.error("[UpdateProductStockInfo] Lỗi:", error);
+    throw error;
   }
-}
+};
 
 /**
  * Áp dụng middleware cho Product Schema

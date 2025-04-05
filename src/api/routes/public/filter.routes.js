@@ -27,10 +27,6 @@ router.get(
  * @desc    Lấy gợi ý tìm kiếm
  * @access  Public
  */
-router.get(
-  "/suggestions",
-  validate(filterValidator.validateSuggestionQuery),
-  filterController.getSuggestions
-);
+router.get("/suggestions", filterController.getSuggestions);
 
 module.exports = router;
