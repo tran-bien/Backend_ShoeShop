@@ -202,7 +202,9 @@ const authService = {
         return user;
       }
       // Nếu người dùng đã xác thực, trả về lỗi
-      throw new Error("Email đã được đăng ký");
+      const error = new Error("Email đã được đăng ký");
+      error.statusCode = 409; // Conflict
+      throw error;
     }
 
     // Nếu email chưa tồn tại, tạo mới người dùng
@@ -243,12 +245,16 @@ const authService = {
 
     // Kiểm tra email có tồn tại không
     if (!user) {
-      throw new Error("Email không tồn tại");
+      const error = new Error("Email không tồn tại");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra người dùng đã bị xóa mềm chưa
     if (user.deletedAt) {
-      throw new Error("Tài khoản đã bị xóa khỏi hệ thống");
+      const error = new Error("Tài khoản đã bị xóa khỏi hệ thống");
+      error.statusCode = 403; // Forbidden
+      throw error;
     }
 
     // Kiểm tra email có được xác thực không
@@ -276,9 +282,11 @@ const authService = {
         user.otp.code
       );
 
-      throw new Error(
+      const error = new Error(
         "Email chưa được xác thực. Vui lòng kiểm tra email để xác thực"
       );
+      error.statusCode = 403; // Forbidden
+      throw error;
     }
 
     // Kiểm tra mật khẩu có đúng không
@@ -287,7 +295,9 @@ const authService = {
       user.password
     );
     if (!isPasswordMatch) {
-      throw new Error("Mật khẩu không đúng");
+      const error = new Error("Mật khẩu không đúng");
+      error.statusCode = 401; // Unauthorized
+      throw error;
     }
 
     const { token, refreshToken } = await authService.manageUserSession(
@@ -317,7 +327,9 @@ const authService = {
     // Kiểm tra refresh token
     const session = await Session.findOne({ refreshToken, isActive: true });
     if (!session) {
-      throw new Error("Refresh token không hợp lệ hoặc đã hết hạn");
+      const error = new Error("Refresh token không hợp lệ hoặc đã hết hạn");
+      error.statusCode = 401; // Unauthorized
+      throw error;
     }
 
     // Tìm người dùng kể cả đã xóa mềm
@@ -327,7 +339,9 @@ const authService = {
     });
 
     if (!user) {
-      throw new Error("Người dùng không tồn tại");
+      const error = new Error("Người dùng không tồn tại");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra người dùng đã bị xóa mềm chưa
@@ -336,7 +350,9 @@ const authService = {
       session.isActive = false;
       await session.save();
 
-      throw new Error("Tài khoản đã bị xóa khỏi hệ thống");
+      const error = new Error("Tài khoản đã bị xóa khỏi hệ thống");
+      error.statusCode = 403; // Forbidden
+      throw error;
     }
 
     // Tạo token mới
@@ -360,14 +376,18 @@ const authService = {
     const user = await User.findOne({ email, includeDeleted: true });
 
     if (!user) {
-      throw new Error("Không tìm thấy tài khoản với email này");
+      const error = new Error("Không tìm thấy tài khoản với email này");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra người dùng đã bị xóa mềm chưa
     if (user.deletedAt) {
-      throw new Error(
+      const error = new Error(
         "Tài khoản đã bị xóa khỏi hệ thống, không thể đặt lại mật khẩu"
       );
+      error.statusCode = 403; // Forbidden
+      throw error;
     }
 
     // Tạo reset token và thiết lập thời gian hết hạn
@@ -405,7 +425,11 @@ const authService = {
     });
 
     if (!user) {
-      throw new Error("Token đặt lại mật khẩu không hợp lệ hoặc đã hết hạn");
+      const error = new Error(
+        "Token đặt lại mật khẩu không hợp lệ hoặc đã hết hạn"
+      );
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     console.log("Đã tìm thấy người dùng:", user.email);
@@ -413,9 +437,11 @@ const authService = {
     // Kiểm tra mật khẩu mới trùng với mật khẩu cũ không
     const isSamePassword = await bcrypt.compare(newPassword, user.password);
     if (isSamePassword) {
-      throw new Error(
+      const error = new Error(
         "Mật khẩu mới trùng với mật khẩu cũ. Vui lòng chọn mật khẩu khác!"
       );
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     // Gán mật khẩu mới trực tiếp (middleware sẽ hash khi save)
@@ -451,7 +477,9 @@ const authService = {
     // Kiểm tra người dùng
     const user = await User.findById(userId);
     if (!user) {
-      throw new Error("Không tìm thấy người dùng");
+      const error = new Error("Không tìm thấy người dùng");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra mật khẩu hiện tại
@@ -460,9 +488,11 @@ const authService = {
       user.password
     );
     if (!isPasswordMatch) {
-      throw new Error(
+      const error = new Error(
         "Mật khẩu hiện tại không đúng, không thể thay đổi mật khẩu"
       );
+      error.statusCode = 401; // Unauthorized
+      throw error;
     }
 
     // Gán mật khẩu mới (middleware sẽ hash khi save)
@@ -487,12 +517,16 @@ const authService = {
     // Kiểm tra phiên tồn tại
     const session = await Session.findById(sessionId);
     if (!session) {
-      throw new Error("Phiên đăng nhập không tồn tại");
+      const error = new Error("Phiên đăng nhập không tồn tại");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra quyền (chỉ có thể đăng xuất khỏi phiên của chính mình)
     if (session.user.toString() !== userId.toString()) {
-      throw new Error("Bạn không có quyền đăng xuất khỏi phiên này");
+      const error = new Error("Bạn không có quyền đăng xuất khỏi phiên này");
+      error.statusCode = 403; // Forbidden
+      throw error;
     }
 
     // Đánh dấu phiên là không còn hoạt động
@@ -538,20 +572,28 @@ const authService = {
     }
 
     if (!user) {
-      throw new Error("Người dùng không tồn tại");
+      const error = new Error("Người dùng không tồn tại");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra người dùng đã bị xóa mềm chưa
     if (user.deletedAt) {
-      throw new Error("Tài khoản đã bị xóa khỏi hệ thống");
+      const error = new Error("Tài khoản đã bị xóa khỏi hệ thống");
+      error.statusCode = 403; // Forbidden
+      throw error;
     }
 
     if (!user.otp || user.otp.code !== otp) {
-      throw new Error("Mã OTP không hợp lệ");
+      const error = new Error("Mã OTP không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     if (new Date() > new Date(user.otp.expiredAt)) {
-      throw new Error("Mã OTP đã hết hạn");
+      const error = new Error("Mã OTP đã hết hạn");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     user.isVerified = true;
