@@ -76,10 +76,14 @@ const uploadValidator = {
    * Validator cho sắp xếp ảnh
    */
   validateImageOrders: [
+    // Kiểm tra imageOrders tồn tại và là mảng
     body("imageOrders")
-      .isArray({ min: 1 })
+      .notEmpty()
+      .withMessage("Vui lòng cung cấp thông tin sắp xếp ảnh")
+      .isArray()
       .withMessage("Vui lòng cung cấp ít nhất một thứ tự ảnh"),
 
+    // Kiểm tra từng phần tử trong mảng
     body("imageOrders.*.displayOrder")
       .isInt({ min: 0 })
       .withMessage("Thứ tự hiển thị phải là số nguyên không âm"),

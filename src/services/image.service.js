@@ -1,6 +1,5 @@
 const cloudinary = require("cloudinary").v2;
 const { Product, Variant, Brand, User } = require("@models");
-const mongoose = require("mongoose");
 
 const imageService = {
   /**
@@ -27,12 +26,6 @@ const imageService = {
    * @returns {Promise<Object>} - Kết quả cập nhật
    */
   updateUserAvatar: async (userId, avatarData) => {
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      const error = new Error("ID người dùng không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     // Tìm user
     const user = await User.findById(userId);
     if (!user) {
@@ -72,12 +65,6 @@ const imageService = {
    * @returns {Promise<Object>} - Kết quả xóa
    */
   removeUserAvatar: async (userId) => {
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      const error = new Error("ID người dùng không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     // Tìm user
     const user = await User.findById(userId);
     if (!user) {
@@ -117,12 +104,6 @@ const imageService = {
    * @returns {Promise<Object>} - Kết quả cập nhật
    */
   updateBrandLogo: async (brandId, logoData) => {
-    if (!mongoose.Types.ObjectId.isValid(brandId)) {
-      const error = new Error("ID thương hiệu không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     // Tìm brand
     const brand = await Brand.findById(brandId);
     if (!brand) {
@@ -159,12 +140,6 @@ const imageService = {
    * @returns {Promise<Object>} - Kết quả xóa
    */
   removeBrandLogo: async (brandId) => {
-    if (!mongoose.Types.ObjectId.isValid(brandId)) {
-      const error = new Error("ID thương hiệu không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     // Tìm brand
     const brand = await Brand.findById(brandId);
     if (!brand) {
@@ -204,12 +179,6 @@ const imageService = {
    * @returns {Promise<Object>} - Kết quả cập nhật
    */
   addProductImages: async (productId, images) => {
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-      const error = new Error("ID sản phẩm không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     const product = await Product.findById(productId);
     if (!product) {
       const error = new Error("Không tìm thấy sản phẩm");
@@ -217,10 +186,28 @@ const imageService = {
       throw error;
     }
 
-    // Kiểm tra nếu ảnh đầu tiên có isMain và không có ảnh chính nào trước đó
+    // Tìm giá trị displayOrder lớn nhất trong mảng hiện tại
+    let maxDisplayOrder = -1;
+    if (product.images && product.images.length > 0) {
+      maxDisplayOrder = Math.max(
+        ...product.images.map((img) => img.displayOrder)
+      );
+    }
+
+    // Cập nhật displayOrder cho các ảnh mới bắt đầu từ (maxDisplayOrder + 1)
+    images.forEach((img, index) => {
+      img.displayOrder = maxDisplayOrder + 1 + index;
+    });
+
+    // Nếu chưa có ảnh chính, đặt ảnh đầu tiên của ảnh mới làm ảnh chính
     const hasMainImage = product.images.some((img) => img.isMain);
     if (!hasMainImage && images.length > 0) {
       images[0].isMain = true;
+    } else {
+      // Đảm bảo các ảnh mới không được đánh dấu là ảnh chính nếu đã có ảnh chính
+      images.forEach((img) => {
+        img.isMain = false;
+      });
     }
 
     // Thêm ảnh mới vào mảng ảnh hiện có
@@ -242,12 +229,6 @@ const imageService = {
    * @returns {Promise<Object>} - Kết quả xóa
    */
   removeProductImages: async (productId, imageIds) => {
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-      const error = new Error("ID sản phẩm không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     const product = await Product.findById(productId);
     if (!product) {
       const error = new Error("Không tìm thấy sản phẩm");
@@ -285,6 +266,12 @@ const imageService = {
       product.images[0].isMain = true;
     }
 
+    // Đánh lại thứ tự hiển thị cho các ảnh còn lại
+    product.images.sort((a, b) => a.displayOrder - b.displayOrder);
+    product.images.forEach((img, index) => {
+      img.displayOrder = index;
+    });
+
     await product.save();
 
     return {
@@ -301,12 +288,6 @@ const imageService = {
    * @returns {Promise<Object>} - Kết quả cập nhật
    */
   addVariantImages: async (variantId, images) => {
-    if (!mongoose.Types.ObjectId.isValid(variantId)) {
-      const error = new Error("ID biến thể không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     const variant = await Variant.findById(variantId);
     if (!variant) {
       const error = new Error("Không tìm thấy biến thể");
@@ -314,10 +295,28 @@ const imageService = {
       throw error;
     }
 
+    // Tìm giá trị displayOrder lớn nhất trong mảng hiện tại
+    let maxDisplayOrder = -1;
+    if (variant.imagesvariant && variant.imagesvariant.length > 0) {
+      maxDisplayOrder = Math.max(
+        ...variant.imagesvariant.map((img) => img.displayOrder)
+      );
+    }
+
+    // Cập nhật displayOrder cho các ảnh mới bắt đầu từ (maxDisplayOrder + 1)
+    images.forEach((img, index) => {
+      img.displayOrder = maxDisplayOrder + 1 + index;
+    });
+
     // Kiểm tra nếu ảnh đầu tiên có isMain và không có ảnh chính nào trước đó
     const hasMainImage = variant.imagesvariant.some((img) => img.isMain);
     if (!hasMainImage && images.length > 0) {
       images[0].isMain = true;
+    } else {
+      // Đảm bảo các ảnh mới không được đánh dấu là ảnh chính nếu đã có ảnh chính
+      images.forEach((img) => {
+        img.isMain = false;
+      });
     }
 
     // Thêm ảnh mới vào mảng ảnh hiện có
@@ -339,12 +338,6 @@ const imageService = {
    * @returns {Promise<Object>} - Kết quả xóa
    */
   removeVariantImages: async (variantId, imageIds) => {
-    if (!mongoose.Types.ObjectId.isValid(variantId)) {
-      const error = new Error("ID biến thể không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     const variant = await Variant.findById(variantId);
     if (!variant) {
       const error = new Error("Không tìm thấy biến thể");
@@ -382,6 +375,12 @@ const imageService = {
       variant.imagesvariant[0].isMain = true;
     }
 
+    // Đánh lại thứ tự hiển thị cho các ảnh còn lại
+    variant.imagesvariant.sort((a, b) => a.displayOrder - b.displayOrder);
+    variant.imagesvariant.forEach((img, index) => {
+      img.displayOrder = index;
+    });
+
     await variant.save();
 
     return {
@@ -398,12 +397,6 @@ const imageService = {
    * @returns {Promise<Object>} - Kết quả cập nhật
    */
   reorderProductImages: async (productId, imageOrders) => {
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-      const error = new Error("ID sản phẩm không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     const product = await Product.findById(productId);
     if (!product) {
       const error = new Error("Không tìm thấy sản phẩm");
@@ -438,12 +431,6 @@ const imageService = {
    * @returns {Promise<Object>} - Kết quả cập nhật
    */
   reorderVariantImages: async (variantId, imageOrders) => {
-    if (!mongoose.Types.ObjectId.isValid(variantId)) {
-      const error = new Error("ID biến thể không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     const variant = await Variant.findById(variantId);
     if (!variant) {
       const error = new Error("Không tìm thấy biến thể");
@@ -478,12 +465,6 @@ const imageService = {
    * @returns {Promise<Object>} - Kết quả cập nhật
    */
   setProductMainImage: async (productId, imageId) => {
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-      const error = new Error("ID sản phẩm không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     const product = await Product.findById(productId);
     if (!product) {
       const error = new Error("Không tìm thấy sản phẩm");
@@ -522,12 +503,6 @@ const imageService = {
    * @returns {Promise<Object>} - Kết quả cập nhật
    */
   setVariantMainImage: async (variantId, imageId) => {
-    if (!mongoose.Types.ObjectId.isValid(variantId)) {
-      const error = new Error("ID biến thể không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     const variant = await Variant.findById(variantId);
     if (!variant) {
       const error = new Error("Không tìm thấy biến thể");
