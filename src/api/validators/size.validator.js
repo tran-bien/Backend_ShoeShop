@@ -14,7 +14,9 @@ const sizeValidator = {
       .custom((value) => {
         // Đảm bảo giá trị là số dương
         if (Number(value) <= 0) {
-          throw new Error("Giá trị kích thước phải lớn hơn 0");
+          const error = new Error("Giá trị kích thước phải lớn hơn 0");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -39,7 +41,9 @@ const sizeValidator = {
       .custom((value) => {
         // Đảm bảo giá trị là số dương
         if (Number(value) <= 0) {
-          throw new Error("Giá trị kích thước phải lớn hơn 0");
+          const error = new Error("Giá trị kích thước phải lớn hơn 0");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),

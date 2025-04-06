@@ -42,7 +42,9 @@ const colorService = {
     });
 
     if (!color) {
-      throw new Error("Không tìm thấy màu sắc");
+      const error = new Error("Không tìm thấy màu sắc");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     return { success: true, color };
@@ -87,7 +89,9 @@ const colorService = {
     // Kiểm tra xem màu sắc có tồn tại chưa theo tên
     const existingColorName = await Color.findOne({ name: colorData.name });
     if (existingColorName) {
-      throw new Error("Tên màu đã tồn tại");
+      const error = new Error("Tên màu đã tồn tại");
+      error.statusCode = 409; // Conflict
+      throw error;
     }
 
     // Kiểm tra trùng mã màu cho màu solid
@@ -98,9 +102,11 @@ const colorService = {
       });
 
       if (existingColorCode) {
-        throw new Error(
+        const error = new Error(
           `Mã màu ${colorData.code} đã được sử dụng bởi màu "${existingColorCode.name}"`
         );
+        error.statusCode = 409; // Conflict
+        throw error;
       }
     }
 
@@ -160,7 +166,9 @@ const colorService = {
     const color = await Color.findById(id);
 
     if (!color) {
-      throw new Error("Không tìm thấy màu sắc");
+      const error = new Error("Không tìm thấy màu sắc");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra nếu đang cập nhật tên, xem tên đã tồn tại chưa
@@ -168,7 +176,9 @@ const colorService = {
       const existingColor = await Color.findOne({ name: updateData.name });
 
       if (existingColor) {
-        throw new Error("Tên màu đã tồn tại");
+        const error = new Error("Tên màu đã tồn tại");
+        error.statusCode = 409; // Conflict
+        throw error;
       }
     }
 
@@ -181,9 +191,11 @@ const colorService = {
       });
 
       if (existingColorCode) {
-        throw new Error(
+        const error = new Error(
           `Mã màu ${updateData.code} đã được sử dụng bởi màu "${existingColorCode.name}"`
         );
+        error.statusCode = 409; // Conflict
+        throw error;
       }
     }
 
@@ -251,7 +263,9 @@ const colorService = {
     const color = await Color.findById(id);
 
     if (!color) {
-      throw new Error("Không tìm thấy màu sắc");
+      const error = new Error("Không tìm thấy màu sắc");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Thực hiện xóa mềm

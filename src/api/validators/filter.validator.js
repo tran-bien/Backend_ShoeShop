@@ -9,7 +9,9 @@ const filterValidator = {
       .withMessage("ID sản phẩm không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID sản phẩm không hợp lệ");
+          const error = new Error("ID sản phẩm không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),

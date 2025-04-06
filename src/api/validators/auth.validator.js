@@ -54,7 +54,9 @@ const validateResetPassword = [
     .withMessage("Mật khẩu phải có ít nhất 1 ký tự đặc biệt"),
   body("confirmPassword").custom((value, { req }) => {
     if (value !== req.body.password) {
-      throw new Error("Mật khẩu mới và xác nhận mật khẩu không khớp");
+      const error = new Error("Mật khẩu mới và xác nhận mật khẩu không khớp");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
     return true;
   }),
@@ -78,7 +80,9 @@ const validateChangePassword = [
     .withMessage("Mật khẩu mới phải có ít nhất 1 ký tự đặc biệt")
     .custom((value, { req }) => {
       if (value === req.body.currentPassword) {
-        throw new Error("Mật khẩu mới phải khác mật khẩu hiện tại");
+        const error = new Error("Mật khẩu mới phải khác mật khẩu hiện tại");
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -87,7 +91,9 @@ const validateChangePassword = [
     .withMessage("Vui lòng xác nhận mật khẩu")
     .custom((value, { req }) => {
       if (value !== req.body.newPassword) {
-        throw new Error("Mật khẩu mới và xác nhận mật khẩu không khớp");
+        const error = new Error("Mật khẩu mới và xác nhận mật khẩu không khớp");
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -110,11 +116,15 @@ const validateAdminLogoutUser = [
     .withMessage("Vui lòng cung cấp userId")
     .custom(async (value) => {
       if (!mongoose.Types.ObjectId.isValid(value)) {
-        throw new Error("User ID không hợp lệ");
+        const error = new Error("User ID không hợp lệ");
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       const user = await User.findById(value);
       if (!user) {
-        throw new Error("User không tồn tại");
+        const error = new Error("User không tồn tại");
+        error.statusCode = 404; // Not Found
+        throw error;
       }
       return true;
     }),
@@ -131,13 +141,19 @@ const validateVerifyOTP = [
     .withMessage("Mã OTP phải là số"),
   body().custom((_, { req }) => {
     if (!req.body.userId && !req.body.email) {
-      throw new Error("Vui lòng cung cấp userId hoặc email");
+      const error = new Error("Vui lòng cung cấp userId hoặc email");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
     if (req.body.email && !req.body.email.match(/^\S+@\S+\.\S+$/)) {
-      throw new Error("Email không hợp lệ");
+      const error = new Error("Email không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
     if (req.body.userId && !mongoose.Types.ObjectId.isValid(req.body.userId)) {
-      throw new Error("User ID không hợp lệ");
+      const error = new Error("User ID không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
     return true;
   }),
@@ -157,7 +173,9 @@ const validateLogoutSession = [
     .withMessage("Vui lòng cung cấp sessionId")
     .custom((value) => {
       if (!mongoose.Types.ObjectId.isValid(value)) {
-        throw new Error("Session ID không hợp lệ");
+        const error = new Error("Session ID không hợp lệ");
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),

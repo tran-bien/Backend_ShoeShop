@@ -13,7 +13,11 @@ const checkDuplicateSizes = (sizes) => {
 
   const uniqueIds = new Set(sizeIds);
   if (uniqueIds.size !== sizeIds.length) {
-    throw new Error("Mỗi kích thước chỉ được xuất hiện một lần trong biến thể");
+    const error = new Error(
+      "Mỗi kích thước chỉ được xuất hiện một lần trong biến thể"
+    );
+    error.statusCode = 400; // Bad Request
+    throw error;
   }
 
   return true;
@@ -27,7 +31,9 @@ const variantValidator = {
       .withMessage("ID biến thể không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID biến thể không hợp lệ");
+          const error = new Error("ID biến thể không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -40,7 +46,9 @@ const variantValidator = {
       .withMessage("ID sản phẩm không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID sản phẩm không hợp lệ");
+          const error = new Error("ID sản phẩm không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -50,7 +58,9 @@ const variantValidator = {
       .withMessage("ID màu sắc không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID màu sắc không hợp lệ");
+          const error = new Error("ID màu sắc không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -68,7 +78,9 @@ const variantValidator = {
       .withMessage("Giá gốc phải là số dương")
       .custom((value, { req }) => {
         if (parseFloat(value) > parseFloat(req.body.price)) {
-          throw new Error("Giá gốc không được lớn hơn giá bán");
+          const error = new Error("Giá gốc không được lớn hơn giá bán");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -97,7 +109,9 @@ const variantValidator = {
       .withMessage("ID kích thước không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID kích thước không hợp lệ");
+          const error = new Error("ID kích thước không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -117,7 +131,9 @@ const variantValidator = {
       .withMessage("ID biến thể không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID biến thể không hợp lệ");
+          const error = new Error("ID biến thể không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -126,7 +142,9 @@ const variantValidator = {
       .optional()
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID màu sắc không hợp lệ");
+          const error = new Error("ID màu sắc không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -145,7 +163,9 @@ const variantValidator = {
           req.body.price !== undefined &&
           parseFloat(value) > parseFloat(req.body.price)
         ) {
-          throw new Error("Giá gốc không được lớn hơn giá bán");
+          const error = new Error("Giá gốc không được lớn hơn giá bán");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -176,7 +196,9 @@ const variantValidator = {
       .withMessage("ID kích thước không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID kích thước không hợp lệ");
+          const error = new Error("ID kích thước không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -206,7 +228,9 @@ const variantValidator = {
       .optional()
       .custom((value) => {
         if (value && !mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID sản phẩm không hợp lệ");
+          const error = new Error("ID sản phẩm không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -215,7 +239,9 @@ const variantValidator = {
       .optional()
       .custom((value) => {
         if (value && !mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID màu sắc không hợp lệ");
+          const error = new Error("ID màu sắc không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -236,7 +262,11 @@ const variantValidator = {
       .withMessage("Giá tối đa phải là số nguyên không âm")
       .custom((value, { req }) => {
         if (req.query.minPrice && Number(value) < Number(req.query.minPrice)) {
-          throw new Error("Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu");
+          const error = new Error(
+            "Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu"
+          );
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -255,7 +285,9 @@ const variantValidator = {
           JSON.parse(value);
           return true;
         } catch (error) {
-          throw new Error("Chuỗi sắp xếp không hợp lệ");
+          const customError = new Error("Chuỗi sắp xếp không hợp lệ");
+          customError.statusCode = 400; // Bad Request
+          throw customError;
         }
       }),
   ],
@@ -267,7 +299,9 @@ const variantValidator = {
       .withMessage("ID biến thể không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID biến thể không hợp lệ");
+          const error = new Error("ID biến thể không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -281,7 +315,9 @@ const variantValidator = {
       .withMessage("ID kích thước không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID kích thước không hợp lệ");
+          const error = new Error("ID kích thước không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -303,9 +339,11 @@ const variantValidator = {
 
       const uniqueIds = new Set(sizeIds);
       if (uniqueIds.size !== sizeIds.length) {
-        throw new Error(
+        const error = new Error(
           "Mỗi kích thước chỉ được xuất hiện một lần trong cập nhật tồn kho"
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
 
       return true;
@@ -319,7 +357,9 @@ const variantValidator = {
       .withMessage("ID biến thể không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID biến thể không hợp lệ");
+          const error = new Error("ID biến thể không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),

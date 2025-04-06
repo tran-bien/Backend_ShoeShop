@@ -9,7 +9,9 @@ const productValidator = {
       .withMessage("ID sản phẩm không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID sản phẩm không hợp lệ");
+          const error = new Error("ID sản phẩm không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -49,7 +51,9 @@ const productValidator = {
       .withMessage("Danh mục sản phẩm không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID danh mục không hợp lệ");
+          const error = new Error("ID danh mục không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -59,7 +63,9 @@ const productValidator = {
       .withMessage("Thương hiệu sản phẩm không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID thương hiệu không hợp lệ");
+          const error = new Error("ID thương hiệu không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -77,7 +83,9 @@ const productValidator = {
       .withMessage("ID sản phẩm không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID sản phẩm không hợp lệ");
+          const error = new Error("ID sản phẩm không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -100,7 +108,9 @@ const productValidator = {
       .optional()
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID danh mục không hợp lệ");
+          const error = new Error("ID danh mục không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -109,7 +119,9 @@ const productValidator = {
       .optional()
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID thương hiệu không hợp lệ");
+          const error = new Error("ID thương hiệu không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -141,7 +153,9 @@ const productValidator = {
       .optional()
       .custom((value) => {
         if (value && !mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID danh mục không hợp lệ");
+          const error = new Error("ID danh mục không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -150,7 +164,9 @@ const productValidator = {
       .optional()
       .custom((value) => {
         if (value && !mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID thương hiệu không hợp lệ");
+          const error = new Error("ID thương hiệu không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -166,7 +182,11 @@ const productValidator = {
       .withMessage("Giá tối đa phải là số nguyên không âm")
       .custom((value, { req }) => {
         if (req.query.minPrice && Number(value) < Number(req.query.minPrice)) {
-          throw new Error("Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu");
+          const error = new Error(
+            "Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu"
+          );
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -190,7 +210,9 @@ const productValidator = {
           JSON.parse(value);
           return true;
         } catch (error) {
-          throw new Error("Chuỗi sắp xếp không hợp lệ");
+          const customError = new Error("Chuỗi sắp xếp không hợp lệ");
+          customError.statusCode = 400; // Bad Request
+          throw customError;
         }
       }),
   ],
@@ -216,7 +238,9 @@ const productValidator = {
       .optional()
       .custom((value) => {
         if (value && !mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID danh mục không hợp lệ");
+          const error = new Error("ID danh mục không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -225,7 +249,9 @@ const productValidator = {
       .optional()
       .custom((value) => {
         if (value && !mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID thương hiệu không hợp lệ");
+          const error = new Error("ID thương hiệu không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -241,7 +267,11 @@ const productValidator = {
       .withMessage("Giá tối đa phải là số nguyên không âm")
       .custom((value, { req }) => {
         if (req.query.minPrice && Number(value) < Number(req.query.minPrice)) {
-          throw new Error("Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu");
+          const error = new Error(
+            "Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu"
+          );
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),
@@ -254,7 +284,9 @@ const productValidator = {
         const colorIds = value.split(",");
         for (const id of colorIds) {
           if (!mongoose.Types.ObjectId.isValid(id)) {
-            throw new Error("ID màu sắc không hợp lệ");
+            const error = new Error("ID màu sắc không hợp lệ");
+            error.statusCode = 400; // Bad Request
+            throw error;
           }
         }
         return true;
@@ -268,7 +300,9 @@ const productValidator = {
         const sizeIds = value.split(",");
         for (const id of sizeIds) {
           if (!mongoose.Types.ObjectId.isValid(id)) {
-            throw new Error("ID kích thước không hợp lệ");
+            const error = new Error("ID kích thước không hợp lệ");
+            error.statusCode = 400; // Bad Request
+            throw error;
           }
         }
         return true;
@@ -292,7 +326,9 @@ const productValidator = {
       .withMessage("ID sản phẩm không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new Error("ID sản phẩm không hợp lệ");
+          const error = new Error("ID sản phẩm không hợp lệ");
+          error.statusCode = 400; // Bad Request
+          throw error;
         }
         return true;
       }),

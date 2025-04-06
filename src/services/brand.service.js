@@ -42,7 +42,9 @@ const brandService = {
     });
 
     if (!brand) {
-      throw new Error("Không tìm thấy thương hiệu");
+      const error = new Error("Không tìm thấy thương hiệu");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     return { success: true, brand };
@@ -89,7 +91,9 @@ const brandService = {
     });
 
     if (!brand) {
-      throw new Error("Không tìm thấy thương hiệu");
+      const error = new Error("Không tìm thấy thương hiệu");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     return { success: true, brand };
@@ -106,7 +110,9 @@ const brandService = {
     });
 
     if (!brand) {
-      throw new Error("Không tìm thấy thương hiệu");
+      const error = new Error("Không tìm thấy thương hiệu");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     return { success: true, brand };
@@ -127,7 +133,9 @@ const brandService = {
     const existingBrand = await Brand.findOne({ name: brandData.name });
 
     if (existingBrand) {
-      throw new Error("Tên thương hiệu đã tồn tại");
+      const error = new Error("Tên thương hiệu đã tồn tại");
+      error.statusCode = 409; // Conflict
+      throw error;
     }
 
     const brand = new Brand(brandData);
@@ -147,7 +155,9 @@ const brandService = {
     const brand = await Brand.findById(brandId);
 
     if (!brand) {
-      throw new Error("Không tìm thấy thương hiệu");
+      const error = new Error("Không tìm thấy thương hiệu");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra xem có cập nhật tên không và tên mới có trùng không
@@ -158,7 +168,9 @@ const brandService = {
       });
 
       if (existingBrand) {
-        throw new Error("Tên thương hiệu đã tồn tại");
+        const error = new Error("Tên thương hiệu đã tồn tại");
+        error.statusCode = 409; // Conflict
+        throw error;
       }
     }
 
@@ -187,7 +199,9 @@ const brandService = {
     const brand = await Brand.findById(brandId);
 
     if (!brand) {
-      throw new Error("Không tìm thấy thương hiệu");
+      const error = new Error("Không tìm thấy thương hiệu");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Sử dụng phương thức softDelete từ plugin
@@ -221,7 +235,9 @@ const brandService = {
     const brand = await Brand.findById(brandId);
 
     if (!brand) {
-      throw new Error("Không tìm thấy thương hiệu");
+      const error = new Error("Không tìm thấy thương hiệu");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Cập nhật trạng thái brand

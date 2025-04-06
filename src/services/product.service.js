@@ -365,7 +365,9 @@ const productService = {
       .setOptions({ includeDeleted: true });
 
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     return {
@@ -438,12 +440,16 @@ const productService = {
     // Kiểm tra category và brand tồn tại
     const categoryExists = await Category.findById(productData.category);
     if (!categoryExists) {
-      throw new Error("Danh mục không tồn tại");
+      const error = new Error("Danh mục không tồn tại");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     const brandExists = await Brand.findById(productData.brand);
     if (!brandExists) {
-      throw new Error("Thương hiệu không tồn tại");
+      const error = new Error("Thương hiệu không tồn tại");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra sản phẩm đã tồn tại (trùng hết tất cả các thông tin)
@@ -454,7 +460,9 @@ const productService = {
       brand: productData.brand,
     });
     if (duplicate) {
-      throw new Error("Sản phẩm đã tồn tại với thông tin này");
+      const error = new Error("Sản phẩm đã tồn tại với thông tin này");
+      error.statusCode = 409; // Conflict
+      throw error;
     }
 
     // Tạo sản phẩm mới
@@ -486,14 +494,18 @@ const productService = {
   updateProduct: async (id, updateData) => {
     const product = await Product.findById(id);
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra nếu cập nhật category
     if (updateData.category) {
       const categoryExists = await Category.findById(updateData.category);
       if (!categoryExists) {
-        throw new Error("Danh mục không tồn tại");
+        const error = new Error("Danh mục không tồn tại");
+        error.statusCode = 404; // Not Found
+        throw error;
       }
     }
 
@@ -501,7 +513,9 @@ const productService = {
     if (updateData.brand) {
       const brandExists = await Brand.findById(updateData.brand);
       if (!brandExists) {
-        throw new Error("Thương hiệu không tồn tại");
+        const error = new Error("Thương hiệu không tồn tại");
+        error.statusCode = 404; // Not Found
+        throw error;
       }
     }
 
@@ -538,7 +552,9 @@ const productService = {
   deleteProduct: async (id, userId) => {
     const product = await Product.findById(id);
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Soft delete sản phẩm sử dụng plugin softDelete
@@ -561,7 +577,9 @@ const productService = {
     // Khôi phục sản phẩm - middleware sẽ kiểm tra slug trùng lặp và tạo slug mới nếu cần
     const product = await Product.restoreById(id);
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm để khôi phục");
+      const error = new Error("Không tìm thấy sản phẩm để khôi phục");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     return {
@@ -580,7 +598,9 @@ const productService = {
   updateProductStatus: async (id, isActive, cascade = true) => {
     const product = await Product.findById(id);
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Cập nhật trạng thái product
@@ -620,7 +640,9 @@ const productService = {
     });
 
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Cập nhật thông tin tồn kho sử dụng hàm từ middleware
@@ -829,7 +851,9 @@ const productService = {
       });
 
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     const result = {
@@ -862,7 +886,9 @@ const productService = {
       });
 
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     const result = {
@@ -978,7 +1004,9 @@ const productService = {
   getRelatedProducts: async (id, limit = 4) => {
     const product = await Product.findById(id);
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     const relatedProducts = await Product.find({

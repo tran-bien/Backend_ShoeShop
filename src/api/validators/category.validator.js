@@ -6,7 +6,9 @@ const mongoose = require("mongoose");
  */
 const isValidObjectId = (value) => {
   if (!mongoose.Types.ObjectId.isValid(value)) {
-    throw new Error("ID không hợp lệ");
+    const error = new Error("ID không hợp lệ");
+    error.statusCode = 400; // Bad Request
+    throw error;
   }
   return true;
 };
@@ -16,7 +18,11 @@ const isValidObjectId = (value) => {
  */
 const isValidSlug = (value) => {
   if (value && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) {
-    throw new Error("Slug phải chỉ chứa chữ thường, số và dấu gạch ngang");
+    const error = new Error(
+      "Slug phải chỉ chứa chữ thường, số và dấu gạch ngang"
+    );
+    error.statusCode = 400; // Bad Request
+    throw error;
   }
   return true;
 };

@@ -43,7 +43,9 @@ const sizeService = {
     });
 
     if (!size) {
-      throw new Error("Không tìm thấy kích thước");
+      const error = new Error("Không tìm thấy kích thước");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     return { success: true, size };
@@ -88,7 +90,9 @@ const sizeService = {
     });
 
     if (existingSize) {
-      throw new Error("Kích thước này đã tồn tại");
+      const error = new Error("Kích thước này đã tồn tại");
+      error.statusCode = 409; // Conflict
+      throw error;
     }
 
     // Tạo kích thước mới
@@ -111,7 +115,9 @@ const sizeService = {
     const size = await Size.findById(id);
 
     if (!size) {
-      throw new Error("Không tìm thấy kích thước");
+      const error = new Error("Không tìm thấy kích thước");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra xem kích thước sau khi cập nhật có trùng với kích thước khác không
@@ -133,7 +139,9 @@ const sizeService = {
       });
 
       if (existingSize) {
-        throw new Error("Kích thước này đã tồn tại");
+        const error = new Error("Kích thước này đã tồn tại");
+        error.statusCode = 409; // Conflict
+        throw error;
       }
     }
 
@@ -161,7 +169,9 @@ const sizeService = {
     const size = await Size.findById(id);
 
     if (!size) {
-      throw new Error("Không tìm thấy kích thước");
+      const error = new Error("Không tìm thấy kích thước");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Thực hiện xóa mềm

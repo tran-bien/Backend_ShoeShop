@@ -122,7 +122,9 @@ module.exports = function softDeletePlugin(schema, options) {
         .ne(null);
 
       if (!doc) {
-        throw new Error(`Không tìm thấy dữ liệu khôi phục`);
+        const error = new Error(`Không tìm thấy dữ liệu khôi phục`);
+        error.statusCode = 404; // Not Found
+        throw error;
       }
 
       // Khôi phục

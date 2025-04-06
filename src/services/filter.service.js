@@ -67,10 +67,6 @@ const filterService = {
    * @param {String} productId - ID của sản phẩm
    */
   getProductAttributes: async (productId) => {
-    if (!mongoose.Types.ObjectId.isValid(productId)) {
-      throw new Error("ID sản phẩm không hợp lệ");
-    }
-
     // Lấy thông tin sản phẩm kèm theo variants
     const product = await Product.findOne({
       _id: productId,
@@ -89,7 +85,9 @@ const filterService = {
       });
 
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Trích xuất các màu sắc có sẵn cho sản phẩm

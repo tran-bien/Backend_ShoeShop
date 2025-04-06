@@ -28,13 +28,17 @@ const imageService = {
    */
   updateUserAvatar: async (userId, avatarData) => {
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      throw new Error("ID người dùng không hợp lệ");
+      const error = new Error("ID người dùng không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     // Tìm user
     const user = await User.findById(userId);
     if (!user) {
-      throw new Error("Không tìm thấy người dùng");
+      const error = new Error("Không tìm thấy người dùng");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Nếu người dùng đã có ảnh đại diện, xóa ảnh cũ
@@ -69,13 +73,17 @@ const imageService = {
    */
   removeUserAvatar: async (userId) => {
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      throw new Error("ID người dùng không hợp lệ");
+      const error = new Error("ID người dùng không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     // Tìm user
     const user = await User.findById(userId);
     if (!user) {
-      throw new Error("Không tìm thấy người dùng");
+      const error = new Error("Không tìm thấy người dùng");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Nếu người dùng có ảnh đại diện, xóa nó
@@ -110,13 +118,17 @@ const imageService = {
    */
   updateBrandLogo: async (brandId, logoData) => {
     if (!mongoose.Types.ObjectId.isValid(brandId)) {
-      throw new Error("ID thương hiệu không hợp lệ");
+      const error = new Error("ID thương hiệu không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     // Tìm brand
     const brand = await Brand.findById(brandId);
     if (!brand) {
-      throw new Error("Không tìm thấy thương hiệu");
+      const error = new Error("Không tìm thấy thương hiệu");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Nếu brand đã có logo, xóa logo cũ
@@ -148,13 +160,17 @@ const imageService = {
    */
   removeBrandLogo: async (brandId) => {
     if (!mongoose.Types.ObjectId.isValid(brandId)) {
-      throw new Error("ID thương hiệu không hợp lệ");
+      const error = new Error("ID thương hiệu không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     // Tìm brand
     const brand = await Brand.findById(brandId);
     if (!brand) {
-      throw new Error("Không tìm thấy thương hiệu");
+      const error = new Error("Không tìm thấy thương hiệu");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Nếu brand có logo, xóa nó
@@ -189,12 +205,16 @@ const imageService = {
    */
   addProductImages: async (productId, images) => {
     if (!mongoose.Types.ObjectId.isValid(productId)) {
-      throw new Error("ID sản phẩm không hợp lệ");
+      const error = new Error("ID sản phẩm không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     const product = await Product.findById(productId);
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra nếu ảnh đầu tiên có isMain và không có ảnh chính nào trước đó
@@ -223,12 +243,16 @@ const imageService = {
    */
   removeProductImages: async (productId, imageIds) => {
     if (!mongoose.Types.ObjectId.isValid(productId)) {
-      throw new Error("ID sản phẩm không hợp lệ");
+      const error = new Error("ID sản phẩm không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     const product = await Product.findById(productId);
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Lọc ra những ảnh cần xóa
@@ -237,7 +261,9 @@ const imageService = {
     );
 
     if (imagesToDelete.length === 0) {
-      throw new Error("Không tìm thấy ảnh cần xóa");
+      const error = new Error("Không tìm thấy ảnh cần xóa");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Lấy public_id để xóa trên Cloudinary
@@ -276,12 +302,16 @@ const imageService = {
    */
   addVariantImages: async (variantId, images) => {
     if (!mongoose.Types.ObjectId.isValid(variantId)) {
-      throw new Error("ID biến thể không hợp lệ");
+      const error = new Error("ID biến thể không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     const variant = await Variant.findById(variantId);
     if (!variant) {
-      throw new Error("Không tìm thấy biến thể");
+      const error = new Error("Không tìm thấy biến thể");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra nếu ảnh đầu tiên có isMain và không có ảnh chính nào trước đó
@@ -310,12 +340,16 @@ const imageService = {
    */
   removeVariantImages: async (variantId, imageIds) => {
     if (!mongoose.Types.ObjectId.isValid(variantId)) {
-      throw new Error("ID biến thể không hợp lệ");
+      const error = new Error("ID biến thể không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     const variant = await Variant.findById(variantId);
     if (!variant) {
-      throw new Error("Không tìm thấy biến thể");
+      const error = new Error("Không tìm thấy biến thể");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Lọc ra những ảnh cần xóa
@@ -324,7 +358,9 @@ const imageService = {
     );
 
     if (imagesToDelete.length === 0) {
-      throw new Error("Không tìm thấy ảnh cần xóa");
+      const error = new Error("Không tìm thấy ảnh cần xóa");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Lấy public_id để xóa trên Cloudinary
@@ -363,12 +399,16 @@ const imageService = {
    */
   reorderProductImages: async (productId, imageOrders) => {
     if (!mongoose.Types.ObjectId.isValid(productId)) {
-      throw new Error("ID sản phẩm không hợp lệ");
+      const error = new Error("ID sản phẩm không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     const product = await Product.findById(productId);
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Cập nhật thứ tự
@@ -399,12 +439,16 @@ const imageService = {
    */
   reorderVariantImages: async (variantId, imageOrders) => {
     if (!mongoose.Types.ObjectId.isValid(variantId)) {
-      throw new Error("ID biến thể không hợp lệ");
+      const error = new Error("ID biến thể không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     const variant = await Variant.findById(variantId);
     if (!variant) {
-      throw new Error("Không tìm thấy biến thể");
+      const error = new Error("Không tìm thấy biến thể");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Cập nhật thứ tự
@@ -435,12 +479,16 @@ const imageService = {
    */
   setProductMainImage: async (productId, imageId) => {
     if (!mongoose.Types.ObjectId.isValid(productId)) {
-      throw new Error("ID sản phẩm không hợp lệ");
+      const error = new Error("ID sản phẩm không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     const product = await Product.findById(productId);
     if (!product) {
-      throw new Error("Không tìm thấy sản phẩm");
+      const error = new Error("Không tìm thấy sản phẩm");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Bỏ đánh dấu ảnh chính cũ
@@ -451,7 +499,9 @@ const imageService = {
     // Đánh dấu ảnh mới làm ảnh chính
     const mainImage = product.images.id(imageId);
     if (!mainImage) {
-      throw new Error("Không tìm thấy ảnh cần đặt làm ảnh chính");
+      const error = new Error("Không tìm thấy ảnh cần đặt làm ảnh chính");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     mainImage.isMain = true;
@@ -473,12 +523,16 @@ const imageService = {
    */
   setVariantMainImage: async (variantId, imageId) => {
     if (!mongoose.Types.ObjectId.isValid(variantId)) {
-      throw new Error("ID biến thể không hợp lệ");
+      const error = new Error("ID biến thể không hợp lệ");
+      error.statusCode = 400; // Bad Request
+      throw error;
     }
 
     const variant = await Variant.findById(variantId);
     if (!variant) {
-      throw new Error("Không tìm thấy biến thể");
+      const error = new Error("Không tìm thấy biến thể");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Bỏ đánh dấu ảnh chính cũ
@@ -489,7 +543,9 @@ const imageService = {
     // Đánh dấu ảnh mới làm ảnh chính
     const mainImage = variant.imagesvariant.id(imageId);
     if (!mainImage) {
-      throw new Error("Không tìm thấy ảnh cần đặt làm ảnh chính");
+      const error = new Error("Không tìm thấy ảnh cần đặt làm ảnh chính");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     mainImage.isMain = true;

@@ -42,7 +42,9 @@ const categoryService = {
     });
 
     if (!category) {
-      throw new Error("Không tìm thấy danh mục");
+      const error = new Error("Không tìm thấy danh mục");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     return category;
@@ -93,7 +95,9 @@ const categoryService = {
     });
 
     if (!category) {
-      throw new Error("Không tìm thấy danh mục");
+      const error = new Error("Không tìm thấy danh mục");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     return category;
@@ -110,7 +114,9 @@ const categoryService = {
     });
 
     if (!category) {
-      throw new Error("Không tìm thấy danh mục");
+      const error = new Error("Không tìm thấy danh mục");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     return category;
@@ -133,7 +139,9 @@ const categoryService = {
     });
 
     if (existingCategory) {
-      throw new Error("Tên danh mục đã tồn tại");
+      const error = new Error("Tên danh mục đã tồn tại");
+      error.statusCode = 409; // Conflict
+      throw error;
     }
 
     const category = new Category(categoryData);
@@ -154,7 +162,9 @@ const categoryService = {
     const category = await Category.findById(categoryId);
 
     if (!category) {
-      throw new Error("Không tìm thấy danh mục");
+      const error = new Error("Không tìm thấy danh mục");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Kiểm tra xem có cập nhật tên không và tên mới có trùng không
@@ -164,7 +174,9 @@ const categoryService = {
         _id: { $ne: categoryId },
       });
       if (existingCategory) {
-        throw new Error("Tên danh mục đã tồn tại");
+        const error = new Error("Tên danh mục đã tồn tại");
+        error.statusCode = 409; // Conflict
+        throw error;
       }
     }
 
@@ -189,7 +201,9 @@ const categoryService = {
   deleteCategory: async (categoryId, userId) => {
     const category = await Category.findById(categoryId);
     if (!category) {
-      throw new Error("Không tìm thấy danh mục");
+      const error = new Error("Không tìm thấy danh mục");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
     // Sử dụng phương thức softDelete từ plugin
     await category.softDelete(userId);
@@ -222,7 +236,9 @@ const categoryService = {
     const category = await Category.findById(categoryId);
 
     if (!category) {
-      throw new Error("Không tìm thấy danh mục");
+      const error = new Error("Không tìm thấy danh mục");
+      error.statusCode = 404; // Not Found
+      throw error;
     }
 
     // Cập nhật trạng thái category

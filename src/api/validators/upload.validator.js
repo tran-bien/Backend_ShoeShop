@@ -6,7 +6,9 @@ const mongoose = require("mongoose");
  */
 const isValidObjectId = (value) => {
   if (!mongoose.Types.ObjectId.isValid(value)) {
-    throw new Error("ID không hợp lệ");
+    const error = new Error("ID không hợp lệ");
+    error.statusCode = 400; // Bad Request
+    throw error;
   }
   return true;
 };
@@ -16,11 +18,15 @@ const isValidObjectId = (value) => {
  */
 const areValidObjectIds = (value) => {
   if (!Array.isArray(value)) {
-    throw new Error("Phải là một mảng các ID");
+    const error = new Error("Phải là một mảng các ID");
+    error.statusCode = 400; // Bad Request
+    throw error;
   }
 
   if (!value.every((id) => mongoose.Types.ObjectId.isValid(id))) {
-    throw new Error("Có ID không hợp lệ trong danh sách");
+    const error = new Error("Có ID không hợp lệ trong danh sách");
+    error.statusCode = 400; // Bad Request
+    throw error;
   }
 
   return true;
@@ -100,7 +106,9 @@ const uploadValidator = {
   validateSingleFileExists: [
     body().custom((_, { req }) => {
       if (!req.file) {
-        throw new Error("Không có file nào được tải lên");
+        const error = new Error("Không có file nào được tải lên");
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -112,7 +120,9 @@ const uploadValidator = {
   validateMultipleFilesExist: [
     body().custom((_, { req }) => {
       if (!req.files || req.files.length === 0) {
-        throw new Error("Không có file nào được tải lên");
+        const error = new Error("Không có file nào được tải lên");
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -150,7 +160,11 @@ const uploadValidator = {
         (!req.body.publicIds || req.body.publicIds.length === 0) &&
         !req.body.publicId
       ) {
-        throw new Error("Vui lòng cung cấp ít nhất một mã file cần xóa");
+        const error = new Error(
+          "Vui lòng cung cấp ít nhất một mã file cần xóa"
+        );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -171,9 +185,11 @@ const uploadValidator = {
         "image/svg+xml",
       ];
       if (!validMimeTypes.includes(req.file.mimetype)) {
-        throw new Error(
+        const error = new Error(
           "Chỉ chấp nhận file hình ảnh (jpeg, png, gif, webp, svg)"
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -199,9 +215,11 @@ const uploadValidator = {
 
       if (invalidFiles.length > 0) {
         const invalidNames = invalidFiles.map((f) => f.originalname).join(", ");
-        throw new Error(
+        const error = new Error(
           `Các file không hợp lệ: ${invalidNames}. Chỉ chấp nhận file hình ảnh (jpeg, png, gif, webp, svg)`
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -216,12 +234,14 @@ const uploadValidator = {
 
       const maxSize = 5 * 1024 * 1024; // 5MB
       if (req.file.size > maxSize) {
-        throw new Error(
+        const error = new Error(
           `Kích thước file không được vượt quá 5MB. File hiện tại: ${(
             req.file.size /
             (1024 * 1024)
           ).toFixed(2)}MB`
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -243,9 +263,11 @@ const uploadValidator = {
             (f) => `${f.originalname}: ${(f.size / (1024 * 1024)).toFixed(2)}MB`
           )
           .join(", ");
-        throw new Error(
+        const error = new Error(
           `Các file vượt quá kích thước cho phép (5MB): ${oversizedDetails}`
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -260,9 +282,11 @@ const uploadValidator = {
 
       const maxFileCount = 10; // Số file tối đa cho phép
       if (req.files.length > maxFileCount) {
-        throw new Error(
+        const error = new Error(
           `Chỉ được phép tải lên tối đa ${maxFileCount} file. Bạn đang tải lên ${req.files.length} file.`
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -279,12 +303,14 @@ const uploadValidator = {
       const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
 
       if (totalSize > maxTotalSize) {
-        throw new Error(
+        const error = new Error(
           `Tổng kích thước các file không được vượt quá 20MB. Hiện tại: ${(
             totalSize /
             (1024 * 1024)
           ).toFixed(2)}MB`
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -297,7 +323,9 @@ const uploadValidator = {
     // Kiểm tra tồn tại
     body().custom((_, { req }) => {
       if (!req.file) {
-        throw new Error("Không có file nào được tải lên");
+        const error = new Error("Không có file nào được tải lên");
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -314,9 +342,11 @@ const uploadValidator = {
         "image/svg+xml",
       ];
       if (!validMimeTypes.includes(req.file.mimetype)) {
-        throw new Error(
+        const error = new Error(
           "Chỉ chấp nhận file hình ảnh (jpeg, png, gif, webp, svg)"
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -327,12 +357,14 @@ const uploadValidator = {
 
       const maxSize = 5 * 1024 * 1024; // 5MB
       if (req.file.size > maxSize) {
-        throw new Error(
+        const error = new Error(
           `Kích thước file không được vượt quá 5MB. File hiện tại: ${(
             req.file.size /
             (1024 * 1024)
           ).toFixed(2)}MB`
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -345,7 +377,9 @@ const uploadValidator = {
     // Kiểm tra tồn tại
     body().custom((_, { req }) => {
       if (!req.files || req.files.length === 0) {
-        throw new Error("Không có file nào được tải lên");
+        const error = new Error("Không có file nào được tải lên");
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -356,9 +390,11 @@ const uploadValidator = {
 
       const maxFileCount = 10; // Số file tối đa cho phép
       if (req.files.length > maxFileCount) {
-        throw new Error(
+        const error = new Error(
           `Chỉ được phép tải lên tối đa ${maxFileCount} file. Bạn đang tải lên ${req.files.length} file.`
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -380,9 +416,11 @@ const uploadValidator = {
 
       if (invalidFiles.length > 0) {
         const invalidNames = invalidFiles.map((f) => f.originalname).join(", ");
-        throw new Error(
+        const error = new Error(
           `Các file không hợp lệ: ${invalidNames}. Chỉ chấp nhận file hình ảnh (jpeg, png, gif, webp, svg)`
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -400,9 +438,11 @@ const uploadValidator = {
             (f) => `${f.originalname}: ${(f.size / (1024 * 1024)).toFixed(2)}MB`
           )
           .join(", ");
-        throw new Error(
+        const error = new Error(
           `Các file vượt quá kích thước cho phép (5MB): ${oversizedDetails}`
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
@@ -415,12 +455,14 @@ const uploadValidator = {
       const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
 
       if (totalSize > maxTotalSize) {
-        throw new Error(
+        const error = new Error(
           `Tổng kích thước các file không được vượt quá 20MB. Hiện tại: ${(
             totalSize /
             (1024 * 1024)
           ).toFixed(2)}MB`
         );
+        error.statusCode = 400; // Bad Request
+        throw error;
       }
       return true;
     }),
