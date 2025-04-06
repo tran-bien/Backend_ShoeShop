@@ -34,12 +34,6 @@ const VariantSchema = new mongoose.Schema(
       type: Number,
       required: [true, "Vui lòng nhập giá gốc sản phẩm"],
       min: [0, "Giá gốc sản phẩm không được âm"],
-      validate: {
-        validator: function (value) {
-          return value <= this.price;
-        },
-        message: "Giá gốc không được lớn hơn giá bán",
-      },
     },
     percentDiscount: {
       type: Number,

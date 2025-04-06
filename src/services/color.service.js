@@ -1,6 +1,36 @@
 const { Color } = require("@models");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
+
+// Hàm hỗ trợ xử lý các case sắp xếp
+const getSortOption = (sortParam) => {
+  let sortOption = { createdAt: -1 };
+  if (sortParam) {
+    switch (sortParam) {
+      case "created_at_asc":
+        sortOption = { createdAt: 1 };
+        break;
+      case "created_at_desc":
+        sortOption = { createdAt: -1 };
+        break;
+      case "name_asc":
+        sortOption = { name: 1 };
+        break;
+      case "name_desc":
+        sortOption = { name: -1 };
+        break;
+      default:
+        try {
+          sortOption = JSON.parse(sortParam);
+        } catch (err) {
+          sortOption = { createdAt: -1 };
+        }
+        break;
+    }
+  }
+  return sortOption;
+};
+
 const colorService = {
   // === ADMIN API METHODS ===
 
@@ -25,7 +55,7 @@ const colorService = {
     const options = {
       page,
       limit,
-      sort: sort ? JSON.parse(sort) : { createdAt: -1 },
+      sort: sort ? getSortOption(sort) : { createdAt: -1 },
     };
 
     return await paginate(Color, filter, options);
@@ -73,7 +103,7 @@ const colorService = {
     const options = {
       page,
       limit,
-      sort: sort ? JSON.parse(sort) : { deletedAt: -1 },
+      sort: sort ? getSortOption(sort) : { deletedAt: -1 },
     };
 
     return await paginateDeleted(Color, filter, options);

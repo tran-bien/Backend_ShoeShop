@@ -3,6 +3,35 @@ const mongoose = require("mongoose");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
 
+// Hàm hỗ trợ xử lý các case sắp xếp
+const getSortOption = (sortParam) => {
+  let sortOption = { createdAt: -1 };
+  if (sortParam) {
+    switch (sortParam) {
+      case "created_at_asc":
+        sortOption = { createdAt: 1 };
+        break;
+      case "created_at_desc":
+        sortOption = { createdAt: -1 };
+        break;
+      case "price_asc":
+        sortOption = { priceFinal: 1 };
+        break;
+      case "price_desc":
+        sortOption = { priceFinal: -1 };
+        break;
+      default:
+        try {
+          sortOption = JSON.parse(sortParam);
+        } catch (err) {
+          sortOption = { createdAt: -1 };
+        }
+        break;
+    }
+  }
+  return sortOption;
+};
+
 const variantService = {
   /**
    * [ADMIN] Lấy danh sách biến thể (có phân trang, filter)
@@ -63,9 +92,9 @@ const variantService = {
     const options = {
       page,
       limit,
-      sort: sort ? JSON.parse(sort) : { createdAt: -1 },
+      sort: getSortOption(sort),
       populate: [
-        { path: "color", select: "name code type" },
+        { path: "color", select: "name code type colors" },
         {
           path: "sizes.size",
           select: "value description",
@@ -173,9 +202,9 @@ const variantService = {
     const options = {
       page,
       limit,
-      sort: sort ? JSON.parse(sort) : { createdAt: -1 },
+      sort: getSortOption(sort),
       populate: [
-        { path: "color", select: "name code type" },
+        { path: "color", select: "name code type colors" },
         { path: "sizes.size", select: "value description" },
         { path: "product", select: "name category brand" },
       ],
@@ -274,10 +303,16 @@ const variantService = {
       { new: true }
     );
 
+    // Thêm populate cho các trường liên quan trước khi trả về
+    const populatedVariant = await Variant.findById(variant._id)
+      .populate({ path: "color", select: "name code type colors" })
+      .populate({ path: "sizes.size", select: "value description" })
+      .populate({ path: "product", select: "name category brand" });
+
     return {
       success: true,
       message: "Tạo biến thể thành công",
-      variant,
+      variant: populatedVariant,
     };
   },
 
@@ -390,7 +425,7 @@ const variantService = {
       { $set: updateFields },
       { new: true, runValidators: true }
     )
-      .populate("color", "name code type")
+      .populate("color", "name code type colors")
       .populate("sizes.size", "value description")
       .populate({
         path: "product",
@@ -508,12 +543,6 @@ const variantService = {
    * @param {Array} sizesData Dữ liệu cập nhật số lượng theo kích thước
    */
   updateVariantInventory: async (id, sizesData) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      const error = new Error("ID biến thể không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     const variant = await Variant.findById(id);
     if (!variant) {
       const error = new Error("Không tìm thấy biến thể");
@@ -553,7 +582,7 @@ const variantService = {
       { $set: { sizes: updatedSizes } },
       { new: true, runValidators: true }
     )
-      .populate("color", "name code type")
+      .populate("color", "name code type colors")
       .populate("sizes.size", "value description");
 
     // Cập nhật thông tin tồn kho của sản phẩm
@@ -598,7 +627,7 @@ const variantService = {
       id,
       { $set: { isActive: isActive } },
       { new: true }
-    );
+    ).populate("color", "name code type colors");
 
     // Cập nhật thông tin tồn kho của sản phẩm
     if (variant.product) {

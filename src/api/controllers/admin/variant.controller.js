@@ -73,7 +73,7 @@ const variantController = {
   updateInventory: asyncHandler(async (req, res) => {
     const result = await variantService.updateVariantInventory(
       req.params.id,
-      req.body
+      req.body.sizes
     );
     res.json(result);
   }),

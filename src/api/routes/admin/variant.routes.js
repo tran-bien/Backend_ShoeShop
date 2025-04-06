@@ -21,6 +21,17 @@ router.get(
 );
 
 /**
+ * @route   GET /api/admin/variants/deleted
+ * @desc    Lấy danh sách biến thể đã xóa
+ * @access  Admin
+ */
+router.get(
+  "/deleted",
+  validate(variantValidator.validateVariantQuery),
+  variantController.getDeletedVariants
+);
+
+/**
  * @route   GET /api/admin/variants/:id
  * @desc    Lấy chi tiết biến thể theo ID
  * @access  Admin
@@ -95,17 +106,6 @@ router.patch(
   "/:id/status",
   validate(variantValidator.validateStatusUpdate),
   variantController.updateVariantStatus
-);
-
-/**
- * @route   GET /api/admin/variants/deleted
- * @desc    Lấy danh sách biến thể đã xóa
- * @access  Admin
- */
-router.get(
-  "/deleted",
-  validate(variantValidator.validateVariantQuery),
-  variantController.getDeletedVariants
 );
 
 module.exports = router;
