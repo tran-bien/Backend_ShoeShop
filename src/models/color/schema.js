@@ -4,7 +4,7 @@ const ColorSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, "Tên màu là bắt buộc"],
+      required: true,
       trim: true,
       unique: true,
     },

@@ -4,7 +4,7 @@ const CategorySchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, "Tên danh mục là bắt buộc"],
+      required: true,
       trim: true,
       unique: true,
     },
@@ -14,7 +14,7 @@ const CategorySchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      maxlength: [500, "Mô tả không được vượt quá 500 ký tự"],
+      maxlength: 500,
     },
     isActive: {
       type: Boolean,

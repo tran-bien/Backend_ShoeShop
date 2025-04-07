@@ -33,7 +33,7 @@ const CartSchema = new mongoose.Schema(
           type: Number,
           required: true,
           default: 1,
-          min: [1, "Số lượng phải ít nhất là 1"],
+          min: 1,
           validate: {
             validator: Number.isInteger,
             message: "Số lượng phải là số nguyên",
@@ -42,7 +42,7 @@ const CartSchema = new mongoose.Schema(
         price: {
           type: Number,
           required: true,
-          min: [0, "Giá sản phẩm không được âm"],
+          min: 0,
         },
       },
     ],

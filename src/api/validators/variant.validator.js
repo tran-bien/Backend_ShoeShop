@@ -251,19 +251,68 @@ const variantValidator = {
       .isIn(["male", "female"])
       .withMessage("Giới tính phải là 'male' hoặc 'female'"),
 
-    query("minPrice")
+    // === Validator cho giá nhập (costPrice) ===
+    query("costPriceMin")
       .optional()
       .isInt({ min: 0 })
-      .withMessage("Giá tối thiểu phải là số nguyên không âm"),
+      .withMessage("Giá nhập tối thiểu phải là số nguyên không âm"),
 
-    query("maxPrice")
+    query("costPriceMax")
       .optional()
       .isInt({ min: 0 })
-      .withMessage("Giá tối đa phải là số nguyên không âm")
+      .withMessage("Giá nhập tối đa phải là số nguyên không âm")
       .custom((value, { req }) => {
-        if (req.query.minPrice && Number(value) < Number(req.query.minPrice)) {
+        if (
+          req.query.costPriceMin &&
+          Number(value) < Number(req.query.costPriceMin)
+        ) {
           const error = new Error(
-            "Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu"
+            "Giá nhập tối đa phải lớn hơn hoặc bằng giá nhập tối thiểu"
+          );
+          error.statusCode = 400; // Bad Request
+          throw error;
+        }
+        return true;
+      }),
+
+    // === Validator cho giá bán gốc (price) ===
+    query("priceMin")
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage("Giá bán gốc tối thiểu phải là số nguyên không âm"),
+
+    query("priceMax")
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage("Giá bán gốc tối đa phải là số nguyên không âm")
+      .custom((value, { req }) => {
+        if (req.query.priceMin && Number(value) < Number(req.query.priceMin)) {
+          const error = new Error(
+            "Giá bán gốc tối đa phải lớn hơn hoặc bằng giá bán gốc tối thiểu"
+          );
+          error.statusCode = 400; // Bad Request
+          throw error;
+        }
+        return true;
+      }),
+
+    // === Validator cho giá bán cuối (priceFinal) ===
+    query("finalPriceMin")
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage("Giá cuối tối thiểu phải là số nguyên không âm"),
+
+    query("finalPriceMax")
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage("Giá cuối tối đa phải là số nguyên không âm")
+      .custom((value, { req }) => {
+        if (
+          req.query.finalPriceMin &&
+          Number(value) < Number(req.query.finalPriceMin)
+        ) {
+          const error = new Error(
+            "Giá cuối tối đa phải lớn hơn hoặc bằng giá cuối tối thiểu"
           );
           error.statusCode = 400; // Bad Request
           throw error;

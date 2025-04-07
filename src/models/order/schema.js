@@ -16,55 +16,55 @@ const OrderSchema = new mongoose.Schema(
         product: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Product",
-          required: [true, "ID sản phẩm là bắt buộc"],
+          required: true,
         },
         variant: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Variant",
-          required: [true, "ID biến thể là bắt buộc"],
+          required: true,
         },
         size: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Size",
-          required: [true, "ID kích thước là bắt buộc"],
+          required: true,
         },
         quantity: {
           type: Number,
-          required: [true, "Số lượng là bắt buộc"],
-          min: [1, "Số lượng phải lớn hơn 0"],
+          required: true,
+          min: 1,
         },
         price: {
           type: Number,
-          required: [true, "Giá sản phẩm là bắt buộc"],
-          min: [0, "Giá sản phẩm không được âm"],
+          required: true,
+          min: 0,
         },
       },
     ],
     shippingAddress: {
       name: {
         type: String,
-        required: [true, "Tên người nhận hàng là bắt buộc"],
+        required: true,
       },
       phone: {
         type: String,
-        required: [true, "Số điện thoại người nhận hàng là bắt buộc"],
-        match: [/^[0-9]{10}$/, "Số điện thoại không hợp lệ"],
+        required: true,
+        match: /^[0-9]{10}$/,
       },
       province: {
         type: String,
-        required: [true, "Vui lòng nhập tỉnh/thành phố"],
+        required: true,
       },
       district: {
         type: String,
-        required: [true, "Vui lòng nhập quận/huyện"],
+        required: true,
       },
       ward: {
         type: String,
-        required: [true, "Vui lòng nhập phường/xã"],
+        required: true,
       },
       detail: {
         type: String,
-        required: [true, "Vui lòng nhập địa chỉ chi tiết"],
+        required: true,
       },
     },
     note: {
@@ -86,7 +86,7 @@ const OrderSchema = new mongoose.Schema(
     payment: {
       method: {
         type: String,
-        required: [true, "Phương thức thanh toán là bắt buộc"],
+        required: true,
         enum: ["COD", "VNPAY"],
       },
       paymentStatus: {

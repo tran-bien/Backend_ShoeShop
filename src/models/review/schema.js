@@ -5,32 +5,32 @@ const ReviewSchema = new mongoose.Schema(
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: [true, "Người đánh giá là bắt buộc"],
+      required: true,
     },
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
-      required: [true, "Sản phẩm là bắt buộc"],
+      required: true,
     },
     variant: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Variant",
-      required: [true, "Biến thể là bắt buộc"],
+      required: true,
     },
     order: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Order",
-      required: [true, "Đơn hàng là bắt buộc"],
+      required: true,
     },
     rating: {
       type: Number,
-      required: [true, "Đánh giá sao là bắt buộc"],
-      min: [1, "Đánh giá tối thiểu là 1 sao"],
-      max: [5, "Đánh giá tối đa là 5 sao"],
+      required: true,
+      min: 1,
+      max: 5,
     },
     content: {
       type: String,
-      maxlength: [1500, "Nội dung không được vượt quá 1500 ký tự"],
+      maxlength: 1500,
     },
     images: [
       {

@@ -4,7 +4,7 @@ const CouponSchema = new mongoose.Schema(
   {
     code: {
       type: String,
-      required: [true, "Mã giảm giá là bắt buộc"],
+      required: true,
       unique: true,
       uppercase: true,
       trim: true,
@@ -12,20 +12,20 @@ const CouponSchema = new mongoose.Schema(
     discountType: {
       type: String,
       enum: ["percent", "fixed"],
-      required: [true, "Loại giảm giá là bắt buộc"],
+      required: true,
     },
     discountValue: {
       type: Number,
-      required: [true, "Giá trị giảm giá là bắt buộc"],
-      min: [0, "Giá trị giảm giá không được âm"],
+      required: true,
+      min: 0,
     },
     maxDiscount: {
       type: Number,
-      min: [0, "Giảm giá tối đa không được âm"],
+      min: 0,
     },
     minimumPurchase: {
       type: Number,
-      min: [0, "Giá trị đơn hàng tối thiểu không được âm"],
+      min: 0,
       default: 0,
     },
     description: String,
@@ -35,11 +35,11 @@ const CouponSchema = new mongoose.Schema(
     },
     expiryDate: {
       type: Date,
-      required: [true, "Ngày hết hạn là bắt buộc"],
+      required: true,
     },
     usageLimit: {
       type: Number,
-      min: [0, "Giới hạn sử dụng không được âm"],
+      min: 0,
     },
     usageCount: {
       type: Number,

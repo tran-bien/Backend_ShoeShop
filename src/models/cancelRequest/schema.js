@@ -14,8 +14,8 @@ const CancelRequestSchema = new mongoose.Schema(
     },
     reason: {
       type: String,
-      required: [true, "Lý do hủy đơn là bắt buộc"],
-      maxlength: [500, "Lý do không được vượt quá 500 ký tự"],
+      required: true,
+      maxlength: 500,
     },
     status: {
       type: String,

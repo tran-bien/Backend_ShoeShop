@@ -4,9 +4,9 @@ const ProductSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, "Tên sản phẩm là bắt buộc"],
+      required: true,
       trim: true,
-      maxlength: [1000, "Tên sản phẩm không được vượt quá 1000 ký tự"],
+      maxlength: 1000,
     },
     slug: {
       type: String,
@@ -14,8 +14,8 @@ const ProductSchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      required: [true, "Mô tả sản phẩm là bắt buộc"],
-      maxlength: [1000, "Mô tả sản phẩm không được vượt quá 1000 ký tự"],
+      required: true,
+      maxlength: 1000,
     },
     images: [
       {
@@ -38,12 +38,12 @@ const ProductSchema = new mongoose.Schema(
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
-      required: [true, "Danh mục sản phẩm là bắt buộc"],
+      required: true,
     },
     brand: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Brand",
-      required: [true, "Thương hiệu sản phẩm là bắt buộc"],
+      required: true,
     },
     variants: [
       {

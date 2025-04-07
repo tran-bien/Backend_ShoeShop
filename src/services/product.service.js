@@ -311,7 +311,6 @@ const productService = {
     if (name) {
       filter.name = { $regex: name, $options: "i" };
     }
-
     // Lọc theo danh mục
     if (category) {
       filter.category = mongoose.Types.ObjectId.isValid(category)
@@ -325,7 +324,6 @@ const productService = {
         ? new mongoose.Types.ObjectId(String(brand))
         : null;
     }
-
     // Lọc theo trạng thái tồn kho
     if (stockStatus) {
       filter.stockStatus = stockStatus;
@@ -376,21 +374,15 @@ const productService = {
   },
 
   /**
-   * [ADMIN] Lấy chi tiết sản phẩm theo ID (kèm variants)
+   * [ADMIN] Lấy chi tiết sản phẩm theo ID (kèm variants kể cả đã xóa)
    * @param {String} id ID của sản phẩm
    */
   getAdminProductById: async (id) => {
+    // Đầu tiên tìm sản phẩm, bao gồm cả đã xóa mềm
     const product = await Product.findById(id)
       .populate("category", "name")
       .populate("brand", "name logo")
-      .populate({
-        path: "variants",
-        select: "-deletedAt -deletedBy",
-        populate: [
-          { path: "color", select: "name type code colors" },
-          { path: "sizes.size", select: "value description" },
-        ],
-      })
+      .populate("deletedBy", "firstName lastName email")
       .setOptions({ includeDeleted: true });
 
     if (!product) {
@@ -399,9 +391,66 @@ const productService = {
       throw error;
     }
 
+    // Tìm tất cả variants của sản phẩm này, bao gồm cả đã xóa
+    const variants = await Variant.find({ product: id })
+      .populate("color", "name type code colors")
+      .populate("sizes.size", "value description")
+      .populate("deletedBy", "firstName lastName email")
+      .setOptions({ includeDeleted: true });
+
+    // Gán variants vào product
+    product.variants = variants;
+
+    // Tạo thống kê về variants
+    const variantStats = {
+      total: variants.length,
+      active: 0,
+      inactive: 0,
+      deleted: 0,
+    };
+
+    // Thống kê theo trạng thái
+    variants.forEach((variant) => {
+      if (variant.deletedAt) {
+        variantStats.deleted++;
+
+        // Thêm thông tin người xóa hiển thị dễ đọc
+        if (variant.deletedBy) {
+          variant._doc.deletedByInfo = {
+            name: `${variant.deletedBy.firstName || ""} ${
+              variant.deletedBy.lastName || ""
+            }`.trim(),
+            email: variant.deletedBy.email,
+          };
+        }
+      } else if (variant.isActive) {
+        variantStats.active++;
+      } else {
+        variantStats.inactive++;
+      }
+    });
+
+    // Thêm thông tin người xóa sản phẩm (nếu sản phẩm đã bị xóa)
+    if (product.deletedAt && product.deletedBy) {
+      product._doc.deletedByInfo = {
+        name: `${product.deletedBy.firstName || ""} ${
+          product.deletedBy.lastName || ""
+        }`.trim(),
+        email: product.deletedBy.email,
+        deletedAt: product.deletedAt,
+      };
+    }
+
+    // Chuyển đổi product và thêm thống kê
+    const productData = transformProductForAdmin(product);
+    productData.variantStats = variantStats;
+
+    // Thêm trạng thái xóa
+    productData.isDeleted = !!product.deletedAt;
+
     return {
       success: true,
-      product: transformProductForAdmin(product),
+      product: productData,
     };
   },
 

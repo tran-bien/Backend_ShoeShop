@@ -27,19 +27,19 @@ const VariantSchema = new mongoose.Schema(
     ],
     price: {
       type: Number,
-      required: [true, "Giá bán sản phẩm là bắt buộc"],
-      min: [0, "Giá bán sản phẩm không được âm"],
+      required: true,
+      min: 0,
     },
     costPrice: {
       type: Number,
-      required: [true, "Vui lòng nhập giá gốc sản phẩm"],
-      min: [0, "Giá gốc sản phẩm không được âm"],
+      required: true,
+      min: 0,
     },
     percentDiscount: {
       type: Number,
       default: 0,
-      min: [0, "Phần trăm giảm giá không được âm"],
-      max: [100, "Phần trăm giảm giá không được vượt quá 100%"],
+      min: 0,
+      max: 100,
     },
     priceFinal: {
       type: Number,
@@ -80,19 +80,19 @@ const VariantSchema = new mongoose.Schema(
     color: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Color",
-      required: [true, "Màu sắc là bắt buộc"],
+      required: true,
     },
     sizes: [
       {
         size: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Size",
-          required: [true, "Kích thước là bắt buộc"],
+          required: true,
         },
         quantity: {
           type: Number,
-          required: [true, "Số lượng là bắt buộc"],
-          min: [0, "Số lượng không được âm"],
+          required: true,
+          min: 0,
           default: 0,
         },
         sku: {

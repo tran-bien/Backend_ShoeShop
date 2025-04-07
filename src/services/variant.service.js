@@ -44,8 +44,15 @@ const variantService = {
       productId,
       color,
       gender,
-      minPrice,
-      maxPrice,
+      // Các tham số lọc giá nhập
+      costPriceMin,
+      costPriceMax,
+      // Các tham số lọc giá bán gốc
+      priceMin,
+      priceMax,
+      // Các tham số lọc giá cuối
+      finalPriceMin,
+      finalPriceMax,
       isActive,
       sort,
     } = query;
@@ -71,16 +78,36 @@ const variantService = {
       filter.gender = gender;
     }
 
-    // Lọc theo khoảng giá
-    if (minPrice !== undefined || maxPrice !== undefined) {
-      filter.priceFinal = {};
-
-      if (minPrice !== undefined) {
-        filter.priceFinal.$gte = Number(minPrice);
+    // === LỌC THEO GIÁ NHẬP (COST PRICE) ===
+    if (costPriceMin !== undefined || costPriceMax !== undefined) {
+      filter.costPrice = {};
+      if (costPriceMin !== undefined) {
+        filter.costPrice.$gte = Number(costPriceMin);
       }
+      if (costPriceMax !== undefined) {
+        filter.costPrice.$lte = Number(costPriceMax);
+      }
+    }
 
-      if (maxPrice !== undefined) {
-        filter.priceFinal.$lte = Number(maxPrice);
+    // === LỌC THEO GIÁ BÁN GỐC (PRICE) ===
+    if (priceMin !== undefined || priceMax !== undefined) {
+      filter.price = {};
+      if (priceMin !== undefined) {
+        filter.price.$gte = Number(priceMin);
+      }
+      if (priceMax !== undefined) {
+        filter.price.$lte = Number(priceMax);
+      }
+    }
+
+    // === LỌC THEO GIÁ BÁN CUỐI (PRICE FINAL) ===
+    if (finalPriceMin !== undefined || finalPriceMax !== undefined) {
+      filter.priceFinal = {};
+      if (finalPriceMin !== undefined) {
+        filter.priceFinal.$gte = Number(finalPriceMin);
+      }
+      if (finalPriceMax !== undefined) {
+        filter.priceFinal.$lte = Number(finalPriceMax);
       }
     }
 
@@ -154,8 +181,15 @@ const variantService = {
       productId,
       color,
       gender,
-      minPrice,
-      maxPrice,
+      // Các tham số lọc giá nhập
+      costPriceMin,
+      costPriceMax,
+      // Các tham số lọc giá bán gốc
+      priceMin,
+      priceMax,
+      // Các tham số lọc giá cuối
+      finalPriceMin,
+      finalPriceMax,
       isActive,
       sort,
     } = query;
@@ -181,16 +215,36 @@ const variantService = {
       filter.gender = gender;
     }
 
-    // Lọc theo khoảng giá
-    if (minPrice !== undefined || maxPrice !== undefined) {
-      filter.priceFinal = {};
-
-      if (minPrice !== undefined) {
-        filter.priceFinal.$gte = Number(minPrice);
+    // === LỌC THEO GIÁ NHẬP (COST PRICE) ===
+    if (costPriceMin !== undefined || costPriceMax !== undefined) {
+      filter.costPrice = {};
+      if (costPriceMin !== undefined) {
+        filter.costPrice.$gte = Number(costPriceMin);
       }
+      if (costPriceMax !== undefined) {
+        filter.costPrice.$lte = Number(costPriceMax);
+      }
+    }
 
-      if (maxPrice !== undefined) {
-        filter.priceFinal.$lte = Number(maxPrice);
+    // === LỌC THEO GIÁ BÁN GỐC (PRICE) ===
+    if (priceMin !== undefined || priceMax !== undefined) {
+      filter.price = {};
+      if (priceMin !== undefined) {
+        filter.price.$gte = Number(priceMin);
+      }
+      if (priceMax !== undefined) {
+        filter.price.$lte = Number(priceMax);
+      }
+    }
+
+    // === LỌC THEO GIÁ BÁN CUỐI (PRICE FINAL) ===
+    if (finalPriceMin !== undefined || finalPriceMax !== undefined) {
+      filter.priceFinal = {};
+      if (finalPriceMin !== undefined) {
+        filter.priceFinal.$gte = Number(finalPriceMin);
+      }
+      if (finalPriceMax !== undefined) {
+        filter.priceFinal.$lte = Number(finalPriceMax);
       }
     }
 

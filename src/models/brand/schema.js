@@ -5,7 +5,7 @@ const BrandSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, "Tên thương hiệu là bắt buộc"],
+      required: true,
       trim: true,
       unique: true,
     },
@@ -15,7 +15,7 @@ const BrandSchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      maxlength: [1000, "Mô tả không được vượt quá 1000 ký tự"],
+      maxlength: 1000,
     },
     logo: {
       url: String,
