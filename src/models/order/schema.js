@@ -2,15 +2,20 @@ const mongoose = require("mongoose");
 
 const OrderSchema = new mongoose.Schema(
   {
+    // Mã đơn hàng tự động sinh
     code: {
       type: String,
       unique: true,
     },
+
+    // Thông tin người dùng
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+
+    // Chi tiết các sản phẩm trong đơn hàng
     orderItems: [
       {
         product: {
@@ -28,6 +33,21 @@ const OrderSchema = new mongoose.Schema(
           ref: "Size",
           required: true,
         },
+        // Lưu tên sản phẩm để tránh reference khi sản phẩm thay đổi
+        productName: {
+          type: String,
+          required: true,
+        },
+        // Lưu thông tin variant
+        variantName: {
+          type: String,
+          required: true,
+        },
+        // Lưu thông tin size
+        sizeName: {
+          type: String,
+          required: true,
+        },
         quantity: {
           type: Number,
           required: true,
@@ -38,8 +58,15 @@ const OrderSchema = new mongoose.Schema(
           required: true,
           min: 0,
         },
+        // Lưu ảnh sản phẩm
+        image: {
+          type: String,
+          default: "",
+        },
       },
     ],
+
+    // Thông tin địa chỉ giao hàng
     shippingAddress: {
       name: {
         type: String,
@@ -48,7 +75,7 @@ const OrderSchema = new mongoose.Schema(
       phone: {
         type: String,
         required: true,
-        match: /^[0-9]{10}$/,
+        match: /^(0[2-9]|84[2-9])[0-9]{8}$/,
       },
       province: {
         type: String,
@@ -67,14 +94,20 @@ const OrderSchema = new mongoose.Schema(
         required: true,
       },
     },
+
+    // Ghi chú đơn hàng
     note: {
       type: String,
       default: "",
     },
+
+    // Tổng tiền hàng (chưa tính giảm giá và phí ship)
     subTotal: {
       type: Number,
       required: true,
     },
+
+    // Trạng thái đơn hàng
     status: {
       type: String,
       default: "pending",
@@ -83,6 +116,27 @@ const OrderSchema = new mongoose.Schema(
         message: "Trạng thái đơn hàng không hợp lệ",
       },
     },
+
+    // Lịch sử trạng thái
+    statusHistory: [
+      {
+        status: {
+          type: String,
+          enum: ["pending", "confirmed", "shipping", "delivered", "cancelled"],
+        },
+        updatedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        updatedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        note: String,
+      },
+    ],
+
+    // Thông tin thanh toán
     payment: {
       method: {
         type: String,
@@ -106,22 +160,65 @@ const OrderSchema = new mongoose.Schema(
         default: null,
       },
     },
+
+    // Lịch sử thanh toán
+    paymentHistory: [
+      {
+        status: {
+          type: String,
+          enum: ["pending", "paid", "failed"],
+        },
+        transactionId: String,
+        amount: Number,
+        method: String,
+        updatedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        responseData: Object, // Dữ liệu phản hồi từ VNPAY
+      },
+    ],
+
+    // Thông tin mã giảm giá
     coupon: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Coupon",
     },
+
+    // Chi tiết mã giảm giá (lưu để tránh reference)
+    couponDetail: {
+      code: String,
+      discountType: {
+        type: String,
+        enum: ["fixed", "percent"],
+      },
+      discountValue: Number,
+    },
+
+    // Phí ship
     shippingFee: {
       type: Number,
       default: 0,
     },
+
+    // Giảm giá
     discount: {
       type: Number,
       default: 0,
     },
+
+    // Tổng tiền sau khi tính giảm giá và phí ship
     totalAfterDiscountAndShipping: {
       type: Number,
       required: true,
-    }
+    },
+
+    // Tham chiếu đến yêu cầu hủy đơn (nếu có)
+    cancelRequestId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CancelRequest",
+      default: null,
+    },
   },
   {
     timestamps: true,

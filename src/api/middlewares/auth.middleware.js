@@ -20,11 +20,8 @@ exports.protect = asyncHandler(async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Tìm người dùng kể cả đã xóa mềm để phân biệt thông báo lỗi
-    const user = await User.findOne({
-      _id: decoded.id,
-      includeDeleted: true, // Cho phép tìm cả người dùng đã xóa mềm
-    }).select("-password");
+    // Tìm người dùng
+    const user = await User.findById(decoded.id).select("-password");
 
     // Không tìm thấy người dùng
     if (!user) {
@@ -34,19 +31,15 @@ exports.protect = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // Người dùng đã bị xóa mềm
-    if (user.deletedAt) {
-      return res.status(401).json({
-        success: false,
-        message: "Tài khoản đã bị xóa khỏi hệ thống",
-      });
-    }
-
     // Người dùng bị khóa
-    if (!user.isActive) {
+    if (!user.isActive || user.blockedAt) {
+      const blockReason = user.blockReason
+        ? `Lý do: ${user.blockReason}`
+        : "Vui lòng liên hệ quản trị viên để được hỗ trợ";
+
       return res.status(401).json({
         success: false,
-        message: "Tài khoản của bạn đã bị vô hiệu hóa",
+        message: `Tài khoản của bạn đã bị vô hiệu hóa. ${blockReason}`,
       });
     }
 
@@ -98,7 +91,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
   }
 });
 
-// Middleware cho Admin (không cần thay đổi)
+// Middleware cho Admin
 exports.admin = (req, res, next) => {
   if (req.user && req.user.role === "admin") {
     return next();
@@ -107,4 +100,15 @@ exports.admin = (req, res, next) => {
     success: false,
     message: "Bạn không có quyền admin",
   });
+};
+
+// Middleware kiểm tra xác thực
+exports.isAuthenticated = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: "Bạn cần đăng nhập để thực hiện chức năng này",
+    });
+  }
+  next();
 };

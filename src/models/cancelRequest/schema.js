@@ -7,7 +7,7 @@ const CancelRequestSchema = new mongoose.Schema(
       ref: "Order",
       required: true,
     },
-    userId: {
+    user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
@@ -24,18 +24,14 @@ const CancelRequestSchema = new mongoose.Schema(
     },
     adminResponse: {
       type: String,
+      default: "",
+    },
+    processedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
     },
     resolvedAt: {
       type: Date,
-    },
-    deletedAt: {
-      type: Date,
-      default: null,
-    },
-    deletedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
     },
   },
   {

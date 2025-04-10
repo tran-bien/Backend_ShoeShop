@@ -6,6 +6,7 @@ const CartSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      unique: true,
     },
     cartItems: [
       {
@@ -17,11 +18,6 @@ const CartSchema = new mongoose.Schema(
         variant: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Variant",
-          required: true,
-        },
-        color: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Color",
           required: true,
         },
         size: {
@@ -44,9 +40,51 @@ const CartSchema = new mongoose.Schema(
           required: true,
           min: 0,
         },
+        // Lưu thông tin để hiển thị trên giỏ hàng mà không cần joins
+        productName: {
+          type: String,
+        },
+        variantName: {
+          type: String,
+        },
+        sizeName: {
+          type: String,
+        },
+        image: {
+          type: String,
+        },
+        isAvailable: {
+          type: Boolean,
+          default: true,
+        },
+        addedAt: {
+          type: Date,
+          default: Date.now,
+        },
       },
     ],
+    coupon: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Coupon",
+    },
+    couponData: {
+      code: String,
+      discountType: {
+        type: String,
+        enum: ["fixed", "percent"],
+      },
+      discountValue: Number,
+      maxDiscountAmount: Number,
+    },
     totalItems: {
+      type: Number,
+      default: 0,
+    },
+    subTotal: {
+      type: Number,
+      default: 0,
+    },
+    discount: {
       type: Number,
       default: 0,
     },

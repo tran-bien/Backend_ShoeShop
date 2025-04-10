@@ -240,8 +240,8 @@ const authService = {
    * @returns {Object} - Thông tin người dùng và token
    */
   loginUser: async (email, password, req = {}) => {
-    // Tìm user theo email kể cả đã xóa mềm
-    const user = await User.findOne({ email, includeDeleted: true });
+    // Tìm user theo email
+    const user = await User.findOne({ email });
 
     // Kiểm tra email có tồn tại không
     if (!user) {
@@ -250,9 +250,13 @@ const authService = {
       throw error;
     }
 
-    // Kiểm tra người dùng đã bị xóa mềm chưa
-    if (user.deletedAt) {
-      const error = new Error("Tài khoản đã bị xóa khỏi hệ thống");
+    // Kiểm tra tài khoản có bị khóa không
+    if (!user.isActive || user.blockedAt) {
+      const blockReason = user.blockReason
+        ? `Lý do: ${user.blockReason}`
+        : "Vui lòng liên hệ quản trị viên để được hỗ trợ";
+
+      const error = new Error(`Tài khoản đã bị vô hiệu hóa. ${blockReason}`);
       error.statusCode = 403; // Forbidden
       throw error;
     }
@@ -312,7 +316,7 @@ const authService = {
       phone: user.phone,
       role: user.role,
       isVerified: user.isVerified,
-      image: user.image,
+      avatar: user.avatar,
       token,
       refreshToken,
     };
@@ -332,11 +336,8 @@ const authService = {
       throw error;
     }
 
-    // Tìm người dùng kể cả đã xóa mềm
-    const user = await User.findOne({
-      _id: session.user,
-      includeDeleted: true,
-    });
+    // Tìm người dùng
+    const user = await User.findById(session.user);
 
     if (!user) {
       const error = new Error("Người dùng không tồn tại");
@@ -344,13 +345,13 @@ const authService = {
       throw error;
     }
 
-    // Kiểm tra người dùng đã bị xóa mềm chưa
-    if (user.deletedAt) {
+    // Kiểm tra tài khoản có bị khóa không
+    if (!user.isActive || user.blockedAt) {
       // Vô hiệu hóa session
       session.isActive = false;
       await session.save();
 
-      const error = new Error("Tài khoản đã bị xóa khỏi hệ thống");
+      const error = new Error("Tài khoản đã bị vô hiệu hóa");
       error.statusCode = 403; // Forbidden
       throw error;
     }
@@ -372,8 +373,8 @@ const authService = {
    * @returns {Object} - Thông tin token đặt lại mật khẩu
    */
   forgotPassword: async (email) => {
-    // Tìm user kể cả đã xóa mềm
-    const user = await User.findOne({ email, includeDeleted: true });
+    // Tìm user
+    const user = await User.findOne({ email });
 
     if (!user) {
       const error = new Error("Không tìm thấy tài khoản với email này");
@@ -381,10 +382,10 @@ const authService = {
       throw error;
     }
 
-    // Kiểm tra người dùng đã bị xóa mềm chưa
-    if (user.deletedAt) {
+    // Kiểm tra tài khoản có bị khóa không
+    if (!user.isActive || user.blockedAt) {
       const error = new Error(
-        "Tài khoản đã bị xóa khỏi hệ thống, không thể đặt lại mật khẩu"
+        "Tài khoản đã bị vô hiệu hóa, không thể đặt lại mật khẩu"
       );
       error.statusCode = 403; // Forbidden
       throw error;
@@ -564,11 +565,11 @@ const authService = {
     const { userId, email, otp, req } = data;
 
     let user;
-    // Tìm người dùng kể cả đã xóa mềm
+    // Tìm người dùng
     if (userId) {
-      user = await User.findOne({ _id: userId, includeDeleted: true });
+      user = await User.findById(userId);
     } else if (email) {
-      user = await User.findOne({ email, includeDeleted: true });
+      user = await User.findOne({ email });
     }
 
     if (!user) {
@@ -577,9 +578,9 @@ const authService = {
       throw error;
     }
 
-    // Kiểm tra người dùng đã bị xóa mềm chưa
-    if (user.deletedAt) {
-      const error = new Error("Tài khoản đã bị xóa khỏi hệ thống");
+    // Kiểm tra tài khoản có bị khóa không
+    if (!user.isActive || user.blockedAt) {
+      const error = new Error("Tài khoản đã bị vô hiệu hóa");
       error.statusCode = 403; // Forbidden
       throw error;
     }

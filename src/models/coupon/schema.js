@@ -9,6 +9,10 @@ const CouponSchema = new mongoose.Schema(
       uppercase: true,
       trim: true,
     },
+    description: {
+      type: String,
+      required: true,
+    },
     discountType: {
       type: String,
       enum: ["percent", "fixed"],
@@ -19,21 +23,21 @@ const CouponSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
-    maxDiscount: {
+    maxDiscountAmount: {
       type: Number,
       min: 0,
     },
-    minimumPurchase: {
+    minOrderAmount: {
       type: Number,
       min: 0,
       default: 0,
     },
-    description: String,
     startDate: {
       type: Date,
       default: Date.now,
+      required: true,
     },
-    expiryDate: {
+    endDate: {
       type: Date,
       required: true,
     },
@@ -41,7 +45,7 @@ const CouponSchema = new mongoose.Schema(
       type: Number,
       min: 0,
     },
-    usageCount: {
+    usedCount: {
       type: Number,
       default: 0,
     },
@@ -49,10 +53,34 @@ const CouponSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    isValid: {
+    isPublic: {
       type: Boolean,
-      default: true,
+      default: true, // true: hiển thị cho tất cả, false: chỉ cho người dùng đã thu thập
     },
+    users: [
+      {
+        // Danh sách người dùng đã thu thập mã
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    appliesTo: {
+      type: String,
+      enum: ["all", "categories", "products"],
+      default: "all",
+    },
+    eligibleCategories: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Category",
+      },
+    ],
+    eligibleProducts: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+      },
+    ],
     deletedAt: {
       type: Date,
       default: null,

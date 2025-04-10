@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+// const { createNotification } = require("../services/notification.service");
 
 /**
  * Cập nhật số lượng tồn kho từ đơn hàng
@@ -50,8 +51,59 @@ const updateInventory = async (orderItem, action) => {
 };
 
 /**
+ * Gửi thông báo cho người dùng về trạng thái đơn hàng
+ * Hiện tại đã được comment để triển khai sau
+ */
+/*
+const sendOrderStatusNotification = async (
+  order,
+  previousStatus,
+  newStatus
+) => {
+  try {
+    if (!order.user) return;
+
+    let title, content;
+    switch (newStatus) {
+      case "confirmed":
+        title = "Đơn hàng đã được xác nhận";
+        content = `Đơn hàng #${order.code} của bạn đã được xác nhận và đang được chuẩn bị.`;
+        break;
+      case "shipping":
+        title = "Đơn hàng đang được giao";
+        content = `Đơn hàng #${order.code} của bạn đang được giao đến địa chỉ của bạn.`;
+        break;
+      case "delivered":
+        title = "Đơn hàng đã giao thành công";
+        content = `Đơn hàng #${order.code} đã được giao thành công. Cảm ơn bạn đã mua hàng!`;
+        break;
+      case "cancelled":
+        title = "Đơn hàng đã bị hủy";
+        content = `Đơn hàng #${order.code} của bạn đã bị hủy.`;
+        break;
+      default:
+        return;
+    }
+
+    await createNotification(order.user, {
+      type: "order_status",
+      title,
+      content,
+      refId: order._id,
+      refModel: "Order",
+    });
+
+    console.log(
+      `[order/middlewares] Đã gửi thông báo về đơn hàng ${order.code}`
+    );
+  } catch (error) {
+    console.error(`[order/middlewares] Lỗi gửi thông báo: ${error.message}`);
+  }
+};
+*/
+
+/**
  * Áp dụng middleware cho Order Schema
- * @param {mongoose.Schema} schema - Schema để áp dụng middleware
  */
 const applyMiddlewares = (schema) => {
   // Tạo mã đơn hàng trước khi lưu
@@ -78,10 +130,20 @@ const applyMiddlewares = (schema) => {
 
         this.code = `ORD-${dateStr}-${sequence.toString().padStart(4, "0")}`;
 
-        // Thiết lập trạng thái ban đầu
+        // Thiết lập trạng thái ban đầu và thêm vào lịch sử
         if (!this.status) {
           this.status = "pending";
         }
+
+        // Thêm trạng thái ban đầu vào lịch sử
+        this.statusHistory = [
+          {
+            status: this.status,
+            updatedAt: new Date(),
+            updatedBy: this.user, // Người dùng tạo đơn
+            note: "Đơn hàng được tạo",
+          },
+        ];
       }
       next();
     } catch (error) {
@@ -105,12 +167,23 @@ const applyMiddlewares = (schema) => {
       if (this.coupon) {
         const Coupon = mongoose.model("Coupon");
         const coupon = await Coupon.findById(this.coupon);
-        if (coupon && coupon.isValid) {
-          // Giả sử coupon có các field discountType và discountValue
+        if (coupon && coupon.isActive) {
+          // Lưu chi tiết coupon để tránh reference
+          this.couponDetail = {
+            code: coupon.code,
+            discountType: coupon.discountType,
+            discountValue: coupon.discountValue,
+            maxDiscountAmount: coupon.maxDiscountAmount,
+          };
+
+          // Tính discount
           if (coupon.discountType === "percent") {
-            this.discount = (this.subTotal * coupon.discountValue) / 100;
+            this.discount = Math.min(
+              (this.subTotal * coupon.discountValue) / 100,
+              coupon.maxDiscountAmount || Infinity
+            );
           } else {
-            this.discount = coupon.discountValue;
+            this.discount = Math.min(coupon.discountValue, this.subTotal);
           }
         } else {
           this.discount = 0;
@@ -120,11 +193,14 @@ const applyMiddlewares = (schema) => {
       }
 
       // Tính phí ship: mặc định là 30000, miễn ship nếu có > 2 sản phẩm và subTotal >= 1,000,000
-      if (
-        this.orderItems &&
-        this.orderItems.length > 2 &&
-        this.subTotal >= 1000000
-      ) {
+      let totalItems = 0;
+      if (this.orderItems) {
+        this.orderItems.forEach((item) => {
+          totalItems += item.quantity;
+        });
+      }
+
+      if (totalItems > 2 && this.subTotal >= 1000000) {
         this.shippingFee = 0;
       } else {
         this.shippingFee = 30000;
@@ -143,12 +219,43 @@ const applyMiddlewares = (schema) => {
   // Lưu trạng thái trước khi cập nhật
   schema.pre("save", function (next) {
     if (this.isModified("status")) {
-      this._previousStatus = this.get("status", String);
+      this._previousStatus = this.getOldValue
+        ? this.getOldValue("status")
+        : this._previousStatus;
     }
+
+    // Xử lý cập nhật trạng thái thanh toán
+    if (this.isModified("payment.paymentStatus")) {
+      const newStatus = this.payment.paymentStatus;
+      const oldStatus = this.getOldValue
+        ? this.getOldValue("payment.paymentStatus")
+        : null;
+
+      // Thêm vào lịch sử thanh toán
+      if (newStatus !== oldStatus) {
+        if (!this.paymentHistory) {
+          this.paymentHistory = [];
+        }
+
+        this.paymentHistory.push({
+          status: newStatus,
+          transactionId: this.payment.transactionId,
+          amount: this.totalAfterDiscountAndShipping,
+          method: this.payment.method,
+          updatedAt: new Date(),
+        });
+
+        // Cập nhật thời gian thanh toán nếu đã thanh toán
+        if (newStatus === "paid" && !this.payment.paidAt) {
+          this.payment.paidAt = new Date();
+        }
+      }
+    }
+
     next();
   });
 
-  // Cải tiến middleware sau khi lưu đơn hàng
+  // Middleware sau khi lưu đơn hàng
   schema.post("save", async function () {
     try {
       if (this.isNew) {
@@ -159,7 +266,7 @@ const applyMiddlewares = (schema) => {
         console.log(
           `[order/middlewares] Đơn hàng mới #${this.code}: đã cập nhật tồn kho`
         );
-      } else if (this.isModified("status")) {
+      } else if (this.isModified && this.isModified("status")) {
         // Đơn hàng thay đổi trạng thái
         const newStatus = this.status;
         const prevStatus = this._previousStatus;
@@ -176,6 +283,26 @@ const applyMiddlewares = (schema) => {
             `[order/middlewares] Đơn hàng #${this.code} bị hủy: đã khôi phục tồn kho`
           );
         }
+
+        // Thêm vào lịch sử trạng thái nếu có thay đổi
+        if (newStatus !== prevStatus) {
+          if (!this.statusHistory) {
+            this.statusHistory = [];
+          }
+
+          // Thêm trạng thái mới vào lịch sử
+          this.statusHistory.push({
+            status: newStatus,
+            updatedAt: new Date(),
+            updatedBy: this._updatedBy || null,
+            note:
+              this._statusNote ||
+              `Trạng thái đơn hàng thay đổi từ ${prevStatus} sang ${newStatus}`,
+          });
+
+          // COMMENT: Gửi thông báo cho người dùng - sẽ bật khi triển khai notification
+          // await sendOrderStatusNotification(this, prevStatus, newStatus);
+        }
       }
     } catch (error) {
       console.error(
@@ -184,74 +311,71 @@ const applyMiddlewares = (schema) => {
     }
   });
 
-  // Kiểm tra tính hợp lệ của trạng thái
-  schema.pre("validate", function (next) {
-    const validStatuses = [
-      "pending",
-      "confirmed",
-      "shipping",
-      "delivered",
-      "cancelled",
-    ];
-
-    if (this.status && !validStatuses.includes(this.status)) {
-      this.invalidate("status", `Trạng thái không hợp lệ: ${this.status}`);
-      return next(new Error(`Trạng thái không hợp lệ: ${this.status}`));
-    }
-
-    next();
-  });
-
-  // Tự động cập nhật trạng thái đơn hàng dựa trên thời gian
-  schema.pre("save", function (next) {
-    // Nếu trạng thái thanh toán (paid) và chưa có thời gian thanh toán, cập nhật vào payment.paidAt
-    if (
-      this.payment &&
-      this.payment.paymentStatus === "paid" &&
-      !this.payment.paidAt
-    ) {
-      this.payment.paidAt = new Date();
-    }
-    next();
-  });
-
   // Xử lý khi cập nhật đơn hàng
   schema.pre("findOneAndUpdate", async function (next) {
     try {
       const update = this.getUpdate();
+
+      // Lưu thông tin trạng thái cũ
       if (update.$set && update.$set.status) {
         const doc = await this.model.findOne(this.getQuery());
         this._oldStatus = doc ? doc.status : null;
         this._orderId = doc ? doc._id : null;
+
+        // Lưu thông tin người cập nhật và ghi chú
+        if (update.$set.updatedBy) {
+          this._updatedBy = update.$set.updatedBy;
+          delete update.$set.updatedBy; // Xóa để không lưu vào trường không tồn tại
+        }
+
+        if (update.$set.statusNote) {
+          this._statusNote = update.$set.statusNote;
+          delete update.$set.statusNote; // Xóa để không lưu vào trường không tồn tại
+        }
+
+        // Thêm vào lịch sử trạng thái
+        if (this._oldStatus !== update.$set.status) {
+          const historyEntry = {
+            status: update.$set.status,
+            updatedAt: new Date(),
+            updatedBy: this._updatedBy,
+            note:
+              this._statusNote ||
+              `Trạng thái đơn hàng thay đổi từ ${this._oldStatus} sang ${update.$set.status}`,
+          };
+
+          // Sử dụng $push để thêm vào mảng statusHistory
+          if (!update.$push) update.$push = {};
+          update.$push.statusHistory = historyEntry;
+        }
       }
 
-      // Nếu đang khôi phục đơn hàng (đặt deletedAt thành null)
-      if (update && update.$set && update.$set.deletedAt === null) {
-        try {
-          const doc = await this.model.findOne(this.getFilter(), {
-            includeDeleted: true,
-          });
+      // Xử lý cập nhật trạng thái thanh toán
+      if (update.$set && update.$set["payment.paymentStatus"]) {
+        const doc = await this.model.findOne(this.getQuery());
+        this._oldPaymentStatus = doc?.payment?.paymentStatus;
 
-          if (doc && doc.code) {
-            // Kiểm tra xem có đơn hàng nào khác đang dùng code này không
-            const duplicate = await this.model.findOne({
-              code: doc.code,
-              _id: { $ne: doc._id },
-              deletedAt: null,
-            });
+        if (this._oldPaymentStatus !== update.$set["payment.paymentStatus"]) {
+          const paymentHistoryEntry = {
+            status: update.$set["payment.paymentStatus"],
+            transactionId:
+              update.$set["payment.transactionId"] ||
+              doc?.payment?.transactionId,
+            amount: doc?.totalAfterDiscountAndShipping,
+            method: doc?.payment?.method,
+            updatedAt: new Date(),
+          };
 
-            if (duplicate) {
-              // Nếu có, tạo một code mới bằng cách thêm hậu tố thời gian
-              const parts = doc.code.split("-");
-              const newCode = `${parts[0]}-${parts[1]}-${Date.now()}`;
-              update.$set.code = newCode;
-              console.log(
-                `Code bị trùng khi khôi phục, đã tạo code mới: ${newCode}`
-              );
+          // Sử dụng $push để thêm vào mảng paymentHistory
+          if (!update.$push) update.$push = {};
+          update.$push.paymentHistory = paymentHistoryEntry;
+
+          // Cập nhật thời gian thanh toán nếu đã thanh toán
+          if (update.$set["payment.paymentStatus"] === "paid") {
+            if (!update.$set["payment.paidAt"]) {
+              update.$set["payment.paidAt"] = new Date();
             }
           }
-        } catch (error) {
-          console.error("Lỗi khi kiểm tra code khi khôi phục đơn hàng:", error);
         }
       }
 
@@ -263,9 +387,11 @@ const applyMiddlewares = (schema) => {
 
   schema.post("findOneAndUpdate", async function (doc) {
     try {
-      if (doc && this._oldStatus && doc.status !== this._oldStatus) {
+      if (doc) {
         // Xử lý khi hủy đơn hàng
         if (
+          this._oldStatus &&
+          doc.status !== this._oldStatus &&
           doc.status === "cancelled" &&
           ["pending", "confirmed", "shipping"].includes(this._oldStatus)
         ) {
@@ -276,6 +402,13 @@ const applyMiddlewares = (schema) => {
             `[order/middlewares] Đơn hàng #${doc.code} bị hủy: đã khôi phục tồn kho`
           );
         }
+
+        // COMMENT: Gửi thông báo cho người dùng - sẽ bật khi triển khai notification
+        /*
+        if (this._oldStatus && doc.status !== this._oldStatus) {
+          await sendOrderStatusNotification(doc, this._oldStatus, doc.status);
+        }
+        */
       }
     } catch (error) {
       console.error(
