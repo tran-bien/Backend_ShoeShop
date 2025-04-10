@@ -13,21 +13,21 @@ const CouponSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    discountType: {
+    type: {
       type: String,
       enum: ["percent", "fixed"],
       required: true,
     },
-    discountValue: {
+    value: {
       type: Number,
       required: true,
       min: 0,
     },
-    maxDiscountAmount: {
+    maxDiscount: {
       type: Number,
       min: 0,
     },
-    minOrderAmount: {
+    minOrderValue: {
       type: Number,
       min: 0,
       default: 0,
@@ -41,17 +41,19 @@ const CouponSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
-    usageLimit: {
+    maxUses: {
       type: Number,
       min: 0,
     },
-    usedCount: {
+    currentUses: {
       type: Number,
       default: 0,
     },
-    isActive: {
-      type: Boolean,
-      default: true,
+    // Thay isActive bằng status chi tiết hơn
+    status: {
+      type: String,
+      enum: ["active", "inactive", "expired", "archived"],
+      default: "active",
     },
     isPublic: {
       type: Boolean,
@@ -64,31 +66,30 @@ const CouponSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
-    appliesTo: {
+    applyFor: {
       type: String,
       enum: ["all", "categories", "products"],
       default: "all",
     },
-    eligibleCategories: [
+    categoryIds: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Category",
       },
     ],
-    eligibleProducts: [
+    productIds: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Product",
       },
     ],
-    deletedAt: {
-      type: Date,
-      default: null,
-    },
-    deletedBy: {
+    createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      default: null,
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
     },
   },
   {

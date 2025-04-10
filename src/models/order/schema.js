@@ -185,14 +185,15 @@ const OrderSchema = new mongoose.Schema(
       ref: "Coupon",
     },
 
-    // Chi tiết mã giảm giá (lưu để tránh reference)
+    // Chi tiết mã giảm giá
     couponDetail: {
       code: String,
-      discountType: {
+      type: {
         type: String,
-        enum: ["fixed", "percent"],
+        enum: ["percent", "fixed"],
       },
-      discountValue: Number,
+      value: Number,
+      maxDiscount: Number,
     },
 
     // Phí ship

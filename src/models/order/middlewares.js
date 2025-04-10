@@ -167,26 +167,35 @@ const applyMiddlewares = (schema) => {
       if (this.coupon) {
         const Coupon = mongoose.model("Coupon");
         const coupon = await Coupon.findById(this.coupon);
-        if (coupon && coupon.isActive) {
+
+        // Kiểm tra coupon có hợp lệ (status = active)
+        if (coupon && coupon.status === "active") {
           // Lưu chi tiết coupon để tránh reference
           this.couponDetail = {
             code: coupon.code,
-            discountType: coupon.discountType,
-            discountValue: coupon.discountValue,
-            maxDiscountAmount: coupon.maxDiscountAmount,
+            type: coupon.type,
+            value: coupon.value,
+            maxDiscount: coupon.maxDiscount,
           };
 
           // Tính discount
-          if (coupon.discountType === "percent") {
+          if (coupon.type === "percent") {
             this.discount = Math.min(
-              (this.subTotal * coupon.discountValue) / 100,
-              coupon.maxDiscountAmount || Infinity
+              (this.subTotal * coupon.value) / 100,
+              coupon.maxDiscount || Infinity
             );
           } else {
-            this.discount = Math.min(coupon.discountValue, this.subTotal);
+            this.discount = Math.min(coupon.value, this.subTotal);
           }
+
+          // Cập nhật số lần sử dụng coupon
+          await Coupon.findByIdAndUpdate(coupon._id, {
+            $inc: { currentUses: 1 },
+          });
         } else {
           this.discount = 0;
+          this.coupon = undefined;
+          this.couponDetail = undefined;
         }
       } else {
         this.discount = 0;
