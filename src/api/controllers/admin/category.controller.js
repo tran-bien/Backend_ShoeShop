@@ -61,10 +61,7 @@ const categoryController = {
       req.params.id,
       req.user._id
     );
-    return res.json({
-      success: true,
-      message: result.message,
-    });
+    return res.json(result);
   }),
 
   /**
@@ -78,15 +75,11 @@ const categoryController = {
 
   /**
    * @route PUT /api/admin/categories/:id/restore
-   * @desc Khôi phục danh mục đã xóa
+   * @desc Khôi phục danh mục đã xóa kèm sản phẩm liên quan
    */
   restoreCategory: asyncHandler(async (req, res) => {
-    const result = await categoryService.restoreCategory(req.params.id);
-    return res.json({
-      success: true,
-      message: result.message,
-      category: result.category,
-    });
+    const result = await categoryService.restoreCategory(req.params.id, true);
+    return res.json(result);
   }),
 
   /**

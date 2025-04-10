@@ -284,7 +284,7 @@ const colorService = {
   },
 
   /**
-   * Xóa mềm màu sắc
+   * Xóa mềm màu sắc - với kiểm tra ràng buộc
    * @param {string} id - ID màu sắc
    * @param {string} userId - ID người dùng thực hiện xóa
    */
@@ -294,16 +294,30 @@ const colorService = {
 
     if (!color) {
       const error = new Error("Không tìm thấy màu sắc");
-      error.statusCode = 404; // Not Found
+      error.statusCode = 404;
       throw error;
     }
 
-    // Thực hiện xóa mềm
+    // Kiểm tra xem màu sắc có được sử dụng trong biến thể nào không
+    const variantCount = await Variant.countDocuments({ color: id });
+
+    // Nếu có biến thể liên kết, thông báo lỗi và không cho xóa
+    if (variantCount > 0) {
+      const error = new Error(
+        `Màu sắc đang được sử dụng trong ${variantCount} biến thể sản phẩm nên không thể xóa.`
+      );
+      error.statusCode = 409; // Conflict
+      error.variantCount = variantCount;
+      throw error;
+    }
+
+    // Nếu không có biến thể liên kết, tiến hành xóa mềm
     await color.softDelete(userId);
 
     return {
       success: true,
       message: "Xóa màu sắc thành công",
+      isDeleted: true,
     };
   },
 

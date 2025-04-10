@@ -498,17 +498,11 @@ const variantService = {
   },
 
   /**
-   * Xóa mềm biến thể
+   * Xóa mềm biến thể - với kiểm tra ràng buộc đơn hàng
    * @param {String} id ID biến thể
    * @param {String} userId ID người xóa
    */
   deleteVariant: async (id, userId) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      const error = new Error("ID biến thể không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
     const variant = await Variant.findById(id);
     if (!variant) {
       const error = new Error("Không tìm thấy biến thể");
@@ -519,6 +513,34 @@ const variantService = {
     // Lưu lại ID sản phẩm để cập nhật tồn kho sau khi xóa
     const productId = variant.product;
 
+    // Kiểm tra xem biến thể có đang được sử dụng trong bất kỳ đơn hàng nào
+    const hasOrderItems = await Order.exists({
+      "orderItems.variant": id,
+      // Không lọc theo trạng thái đơn hàng - tính hết với mọi đơn
+    });
+
+    // Nếu có đơn hàng liên quan, chỉ vô hiệu hóa thay vì xóa
+    if (hasOrderItems) {
+      // Vô hiệu hóa biến thể
+      variant.isActive = false;
+      await variant.save();
+
+      // Cập nhật thông tin tồn kho của sản phẩm
+      if (productId) {
+        const product = await Product.findById(productId);
+        if (product) {
+          await updateProductStockInfo(product);
+        }
+      }
+
+      return {
+        success: true,
+        message:
+          "Biến thể đang được sử dụng trong đơn hàng nên đã được vô hiệu hóa thay vì xóa.",
+        isDeactivatedInstead: true,
+      };
+    }
+
     // Soft delete biến thể
     await variant.softDelete(userId);
 
@@ -526,9 +548,6 @@ const variantService = {
     if (productId) {
       const product = await Product.findById(productId);
       if (product) {
-        const {
-          updateProductStockInfo,
-        } = require("@models/product/middlewares");
         await updateProductStockInfo(product);
       }
     }
@@ -536,22 +555,20 @@ const variantService = {
     return {
       success: true,
       message: "Xóa biến thể thành công",
+      isDeleted: true,
     };
   },
 
   /**
-   * Khôi phục biến thể đã xóa
+   * Khôi phục biến thể đã xóa - với kiểm tra ràng buộc màu sắc
    * @param {String} id ID biến thể
    */
   restoreVariant: async (id) => {
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      const error = new Error("ID biến thể không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
-    }
-
-    const variant = await Variant.restoreById(id);
-    if (!variant) {
+    // Tìm biến thể đã xóa
+    const variant = await Variant.findById(id).setOptions({
+      includeDeleted: true,
+    });
+    if (!variant || !variant.deletedAt) {
       const error = new Error("Không tìm thấy biến thể để khôi phục");
       error.statusCode = 404; // Not Found
       throw error;
@@ -566,20 +583,28 @@ const variantService = {
     });
 
     if (existingVariantWithColor) {
-      // Nếu tồn tại thì xóa lại biến thể vừa khôi phục
-      await Variant.findByIdAndUpdate(id, { deletedAt: new Date() });
-      const error = new Error("Sản phẩm đã có biến thể với màu sắc này");
+      const error = new Error(
+        "Sản phẩm đã có biến thể với màu sắc này nên không thể khôi phục biến thể đã xóa."
+      );
       error.statusCode = 409; // Conflict
+      error.existingVariant = {
+        id: existingVariantWithColor._id,
+        colorName: existingVariantWithColor.color
+          ? existingVariantWithColor.color.name
+          : "Unknown",
+      };
       throw error;
     }
+
+    // Khôi phục biến thể
+    variant.deletedAt = null;
+    variant.isActive = true; // Kích hoạt lại khi khôi phục
+    await variant.save();
 
     // Cập nhật thông tin tồn kho của sản phẩm sau khi khôi phục biến thể
     if (variant.product) {
       const product = await Product.findById(variant.product);
       if (product) {
-        const {
-          updateProductStockInfo,
-        } = require("@models/product/middlewares");
         await updateProductStockInfo(product);
       }
     }

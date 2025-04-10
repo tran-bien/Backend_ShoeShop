@@ -225,35 +225,98 @@ const categoryService = {
   },
 
   /**
-   * Xóa mềm category (chuyển method từ model vào service)
+   * Xóa mềm category - với kiểm tra và tự động vô hiệu hóa
    */
   deleteCategory: async (categoryId, userId) => {
     const category = await Category.findById(categoryId);
+
     if (!category) {
       const error = new Error("Không tìm thấy danh mục");
-      error.statusCode = 404; // Not Found
+      error.statusCode = 404;
       throw error;
     }
-    // Sử dụng phương thức softDelete từ plugin
+
+    // Kiểm tra xem category có được sử dụng trong sản phẩm nào không
+    const productCount = await Product.countDocuments({ category: categoryId });
+
+    // Nếu có sản phẩm liên kết, tự động vô hiệu hóa thay vì xóa
+    if (productCount > 0) {
+      // Vô hiệu hóa category và cập nhật cascade
+      await categoryService.updateCategoryStatus(categoryId, false, true);
+
+      return {
+        success: true,
+        message: `Danh mục được sử dụng trong ${productCount} sản phẩm nên đã được vô hiệu hóa thay vì xóa.`,
+        isDeactivatedInstead: true,
+        affectedProducts: productCount,
+      };
+    }
+
+    // Nếu không có sản phẩm liên kết, tiến hành xóa mềm
     await category.softDelete(userId);
 
     return {
       success: true,
       message: "Xóa danh mục thành công",
+      isDeleted: true,
     };
   },
 
   /**
-   * Khôi phục category đã xóa mềm (chuyển method từ model vào service)
+   * Khôi phục category đã xóa mềm - với hỗ trợ khôi phục cascade
    */
-  restoreCategory: async (categoryId) => {
-    // Sử dụng phương thức restoreById từ plugin
+  restoreCategory: async (categoryId, cascade = true) => {
+    // Sử dụng phương thức tĩnh restoreById từ plugin
     const category = await Category.restoreById(categoryId);
+
+    if (!category) {
+      const error = new Error(
+        "Không tìm thấy danh mục hoặc danh mục không bị xóa"
+      );
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Kích hoạt trạng thái category (vì restore chỉ xóa deletedAt mà không đổi isActive)
+    category.isActive = true;
+    await category.save();
+
+    let affectedProducts = 0;
+    let affectedVariants = 0;
+
+    // CASCADE RESTORE: Kích hoạt các sản phẩm và biến thể liên quan
+    if (cascade) {
+      // Cập nhật sản phẩm thuộc category này
+      const productResult = await Product.updateMany(
+        { category: categoryId },
+        { isActive: true }
+      );
+      affectedProducts = productResult.modifiedCount;
+
+      // Cập nhật biến thể của sản phẩm thuộc category này
+      const products = await Product.find({ category: categoryId }, { _id: 1 });
+      const productIds = products.map((product) => product._id);
+
+      if (productIds.length > 0) {
+        const variantResult = await Variant.updateMany(
+          { product: { $in: productIds } },
+          { isActive: true }
+        );
+        affectedVariants = variantResult.modifiedCount;
+      }
+    }
 
     return {
       success: true,
-      message: "Khôi phục danh mục thành công",
+      message: cascade
+        ? `Khôi phục danh mục thành công. Đã kích hoạt ${affectedProducts} sản phẩm và ${affectedVariants} biến thể liên quan.`
+        : "Khôi phục danh mục thành công mà không ảnh hưởng đến sản phẩm liên quan.",
       category,
+      cascade: {
+        applied: cascade,
+        productsActivated: affectedProducts,
+        variantsActivated: affectedVariants,
+      },
     };
   },
 

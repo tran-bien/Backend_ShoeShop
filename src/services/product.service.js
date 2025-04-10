@@ -623,7 +623,7 @@ const productService = {
   },
 
   /**
-   * Xóa mềm sản phẩm
+   * Xóa mềm sản phẩm - với kiểm tra ràng buộc đơn hàng
    * @param {String} id ID sản phẩm
    * @param {String} userId ID người xóa
    */
@@ -635,6 +635,28 @@ const productService = {
       throw error;
     }
 
+    // Kiểm tra xem sản phẩm có đang được sử dụng trong bất kỳ đơn hàng nào
+    const hasOrderItems = await Order.exists({
+      "orderItems.product": id,
+    });
+
+    // Nếu có đơn hàng liên quan, chỉ vô hiệu hóa thay vì xóa
+    if (hasOrderItems) {
+      // Vô hiệu hóa sản phẩm
+      product.isActive = false;
+      await product.save();
+
+      // Vô hiệu hóa các biến thể
+      await Variant.updateMany({ product: id }, { $set: { isActive: false } });
+
+      return {
+        success: true,
+        message:
+          "Sản phẩm đang được sử dụng trong đơn hàng nên đã được vô hiệu hóa thay vì xóa.",
+        isDeactivatedInstead: true,
+      };
+    }
+
     // Soft delete sản phẩm sử dụng plugin softDelete
     await product.softDelete(userId);
 
@@ -644,14 +666,16 @@ const productService = {
     return {
       success: true,
       message: "Xóa sản phẩm thành công",
+      isDeleted: true,
     };
   },
 
   /**
-   * Khôi phục sản phẩm đã xóa
+   * Khôi phục sản phẩm đã xóa - với hỗ trợ khôi phục cascade
    * @param {String} id ID sản phẩm
+   * @param {Boolean} restoreVariants Có khôi phục các variant không
    */
-  restoreProduct: async (id) => {
+  restoreProduct: async (id, restoreVariants = true) => {
     // Khôi phục sản phẩm - middleware sẽ kiểm tra slug trùng lặp và tạo slug mới nếu cần
     const product = await Product.restoreById(id);
     if (!product) {
@@ -660,10 +684,59 @@ const productService = {
       throw error;
     }
 
+    // Kích hoạt trạng thái sản phẩm
+    product.isActive = true;
+    await product.save();
+
+    let restoredVariants = 0;
+
+    // CASCADE RESTORE: Khôi phục các biến thể liên quan
+    if (restoreVariants) {
+      // Lấy danh sách các biến thể đã xóa của sản phẩm này
+      const deletedVariants = await Variant.find({
+        product: id,
+        deletedAt: { $ne: null },
+      }).setOptions({ includeDeleted: true });
+
+      // Khôi phục từng biến thể
+      for (const variant of deletedVariants) {
+        try {
+          // Kiểm tra xem có biến thể trùng màu không
+          const existingVariant = await Variant.findOne({
+            product: id,
+            color: variant.color,
+            _id: { $ne: variant._id },
+            deletedAt: null,
+          });
+
+          if (!existingVariant) {
+            await Variant.findByIdAndUpdate(variant._id, {
+              $set: {
+                deletedAt: null,
+                isActive: true,
+              },
+            });
+            restoredVariants++;
+          }
+        } catch (error) {
+          console.error(
+            `Không thể khôi phục biến thể ${variant._id}:`,
+            error.message
+          );
+        }
+      }
+
+      // Cập nhật thông tin tồn kho
+      await updateProductStockInfo(product);
+    }
+
     return {
       success: true,
-      message: "Khôi phục sản phẩm thành công",
+      message: restoreVariants
+        ? `Khôi phục sản phẩm thành công. Đã khôi phục ${restoredVariants} biến thể liên quan.`
+        : "Khôi phục sản phẩm thành công mà không khôi phục các biến thể.",
       product: transformProductForAdmin(product),
+      restoredVariants,
     };
   },
 

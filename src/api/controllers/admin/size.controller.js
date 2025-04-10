@@ -29,11 +29,6 @@ const sizeController = {
    */
   getSizeById: asyncHandler(async (req, res) => {
     const result = await sizeService.getAdminSizeById(req.params.id);
-
-    if (!result.success) {
-      return res.status(404).json(result);
-    }
-
     res.json(result);
   }),
 
@@ -44,11 +39,6 @@ const sizeController = {
    */
   createSize: asyncHandler(async (req, res) => {
     const result = await sizeService.createSize(req.body);
-
-    if (!result.success) {
-      return res.status(400).json(result);
-    }
-
     res.status(201).json(result);
   }),
 
@@ -59,26 +49,16 @@ const sizeController = {
    */
   updateSize: asyncHandler(async (req, res) => {
     const result = await sizeService.updateSize(req.params.id, req.body);
-
-    if (!result.success) {
-      return res.status(404).json(result);
-    }
-
     res.json(result);
   }),
 
   /**
-   * @desc    Xóa kích thước (soft delete)
+   * @desc    Xóa kích thước (soft delete) nếu không có biến thể liên quan
    * @route   DELETE /api/admin/sizes/:id
    * @access  Admin
    */
   deleteSize: asyncHandler(async (req, res) => {
     const result = await sizeService.deleteSize(req.params.id, req.user._id);
-
-    if (!result.success) {
-      return res.status(404).json(result);
-    }
-
     res.json(result);
   }),
 
@@ -89,11 +69,6 @@ const sizeController = {
    */
   restoreSize: asyncHandler(async (req, res) => {
     const result = await sizeService.restoreSize(req.params.id);
-
-    if (!result.success) {
-      return res.status(404).json(result);
-    }
-
     res.json(result);
   }),
 };

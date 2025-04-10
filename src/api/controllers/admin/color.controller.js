@@ -29,11 +29,6 @@ const colorController = {
    */
   getColorById: asyncHandler(async (req, res) => {
     const result = await colorService.getAdminColorById(req.params.id);
-
-    if (!result.success) {
-      return res.status(404).json(result);
-    }
-
     res.json(result);
   }),
 
@@ -44,11 +39,6 @@ const colorController = {
    */
   createColor: asyncHandler(async (req, res) => {
     const result = await colorService.createColor(req.body);
-
-    if (!result.success) {
-      return res.status(400).json(result);
-    }
-
     res.status(201).json(result);
   }),
 
@@ -59,26 +49,16 @@ const colorController = {
    */
   updateColor: asyncHandler(async (req, res) => {
     const result = await colorService.updateColor(req.params.id, req.body);
-
-    if (!result.success) {
-      return res.status(404).json(result);
-    }
-
     res.json(result);
   }),
 
   /**
-   * @desc    Xóa màu sắc (soft delete)
+   * @desc    Xóa màu sắc (soft delete) nếu không có biến thể liên quan
    * @route   DELETE /api/admin/colors/:id
    * @access  Admin
    */
   deleteColor: asyncHandler(async (req, res) => {
     const result = await colorService.deleteColor(req.params.id, req.user._id);
-
-    if (!result.success) {
-      return res.status(404).json(result);
-    }
-
     res.json(result);
   }),
 
@@ -89,11 +69,6 @@ const colorController = {
    */
   restoreColor: asyncHandler(async (req, res) => {
     const result = await colorService.restoreColor(req.params.id);
-
-    if (!result.success) {
-      return res.status(404).json(result);
-    }
-
     res.json(result);
   }),
 };

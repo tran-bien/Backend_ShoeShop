@@ -51,14 +51,12 @@ const brandController = {
 
   /**
    * @route DELETE /api/admin/brands/:id
-   * @desc Xóa mềm thương hiệu
+   * @desc Xóa mềm thương hiệu hoặc vô hiệu hóa nếu có sản phẩm liên quan
    */
   deleteBrand: asyncHandler(async (req, res) => {
     const result = await brandService.deleteBrand(req.params.id, req.user._id);
-    return res.json({
-      success: true,
-      message: result.message,
-    });
+
+    return res.json(result);
   }),
 
   /**
@@ -72,17 +70,13 @@ const brandController = {
 
   /**
    * @route PUT /api/admin/brands/:id/restore
-   * @desc Khôi phục thương hiệu đã xóa
+   * @desc Khôi phục thương hiệu đã xóa kèm sản phẩm liên quan
    */
   restoreBrand: asyncHandler(async (req, res) => {
-    const result = await brandService.restoreBrand(req.params.id);
-    return res.json({
-      success: true,
-      message: result.message,
-      brand: result.brand,
-    });
-  }),
+    const result = await brandService.restoreBrand(req.params.id, true);
 
+    return res.json(result);
+  }),
   /**
    * @route PATCH /api/admin/brands/:id/status
    * @desc Cập nhật trạng thái active của thương hiệu

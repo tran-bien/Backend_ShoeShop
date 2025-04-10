@@ -189,7 +189,7 @@ const sizeService = {
   },
 
   /**
-   * Xóa mềm kích thước
+   * Xóa mềm kích thước - với kiểm tra ràng buộc
    * @param {string} id - ID kích thước
    * @param {string} userId - ID người dùng thực hiện xóa
    */
@@ -199,16 +199,30 @@ const sizeService = {
 
     if (!size) {
       const error = new Error("Không tìm thấy kích thước");
-      error.statusCode = 404; // Not Found
+      error.statusCode = 404;
       throw error;
     }
 
-    // Thực hiện xóa mềm
+    // Kiểm tra xem kích thước có được sử dụng trong biến thể nào không
+    const variantCount = await Variant.countDocuments({ size: id });
+
+    // Nếu có biến thể liên kết, thông báo lỗi và không cho xóa
+    if (variantCount > 0) {
+      const error = new Error(
+        `Kích thước đang được sử dụng trong ${variantCount} biến thể sản phẩm nên không thể xóa.`
+      );
+      error.statusCode = 409; // Conflict
+      error.variantCount = variantCount;
+      throw error;
+    }
+
+    // Nếu không có biến thể liên kết, tiến hành xóa mềm
     await size.softDelete(userId);
 
     return {
       success: true,
       message: "Xóa kích thước thành công",
+      isDeleted: true,
     };
   },
 

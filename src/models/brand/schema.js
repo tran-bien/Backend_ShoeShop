@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const softDelete = require("@plugins/softDelete");
 
 const BrandSchema = new mongoose.Schema(
   {
@@ -39,7 +38,5 @@ const BrandSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
-
-BrandSchema.plugin(softDelete, { index: false });
 
 module.exports = BrandSchema;

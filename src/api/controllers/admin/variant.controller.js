@@ -43,28 +43,39 @@ const variantController = {
   }),
 
   /**
-   * @desc    Xóa mềm biến thể
-   * @route   DELETE /api/admin/variants/:id
-   * @access  Admin
+   * @route DELETE /api/admin/variants/:id
+   * @desc Xóa mềm biến thể hoặc vô hiệu hóa nếu có đơn hàng liên quan
    */
   deleteVariant: asyncHandler(async (req, res) => {
     const result = await variantService.deleteVariant(
       req.params.id,
       req.user._id
     );
-    res.json(result);
+    return res.json(result);
   }),
 
   /**
-   * @desc    Khôi phục biến thể đã xóa
-   * @route   POST /api/admin/variants/:id/restore
-   * @access  Admin
+   * @route PUT /api/admin/variants/:id/restore
+   * @desc Khôi phục biến thể đã xóa nếu không có biến thể cùng màu
    */
   restoreVariant: asyncHandler(async (req, res) => {
-    const result = await variantService.restoreVariant(req.params.id);
-    res.json(result);
-  }),
+    try {
+      const result = await variantService.restoreVariant(req.params.id);
+      return res.json(result);
+    } catch (error) {
+      // Xử lý trường hợp đặc biệt khi không thể khôi phục do trùng màu
+      if (error.existingVariant) {
+        return res.status(409).json({
+          success: false,
+          message: error.message,
+          existingVariant: error.existingVariant,
+        });
+      }
 
+      // Đối với các lỗi khác, middleware xử lý lỗi sẽ tiếp quản
+      throw error;
+    }
+  }),
   /**
    * @desc    Cập nhật số lượng tồn kho của biến thể
    * @route   PATCH /api/admin/variants/:id/inventory

@@ -221,37 +221,98 @@ const brandService = {
   },
 
   /**
-   * Xóa mềm brand
+   * Xóa mềm brand - với kiểm tra và tự động vô hiệu hóa
    */
   deleteBrand: async (brandId, userId) => {
     const brand = await Brand.findById(brandId);
 
     if (!brand) {
       const error = new Error("Không tìm thấy thương hiệu");
-      error.statusCode = 404; // Not Found
+      error.statusCode = 404;
       throw error;
     }
 
-    // Sử dụng phương thức softDelete từ plugin
+    // Kiểm tra xem brand có được sử dụng trong sản phẩm nào không
+    const productCount = await Product.countDocuments({ brand: brandId });
+
+    // Nếu có sản phẩm liên kết, tự động vô hiệu hóa thay vì xóa
+    if (productCount > 0) {
+      // Vô hiệu hóa brand và cập nhật cascade
+      await brandService.updateBrandStatus(brandId, false, true);
+
+      return {
+        success: true,
+        message: `Thương hiệu được sử dụng trong ${productCount} sản phẩm nên đã được vô hiệu hóa thay vì xóa.`,
+        isDeactivatedInstead: true,
+        affectedProducts: productCount,
+      };
+    }
+
+    // Nếu không có sản phẩm liên kết, tiến hành xóa mềm
     await brand.softDelete(userId);
 
     return {
       success: true,
       message: "Xóa thương hiệu thành công",
+      isDeleted: true,
     };
   },
 
   /**
-   * Khôi phục brand đã xóa mềm
+   * Khôi phục brand đã xóa mềm - với hỗ trợ khôi phục cascade
    */
-  restoreBrand: async (brandId) => {
+  restoreBrand: async (brandId, cascade = true) => {
     // Sử dụng phương thức tĩnh restoreById từ plugin
     const brand = await Brand.restoreById(brandId);
 
+    if (!brand) {
+      const error = new Error(
+        "Không tìm thấy thương hiệu hoặc thương hiệu không bị xóa"
+      );
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Kích hoạt trạng thái brand (vì restore chỉ xóa deletedAt mà không đổi isActive)
+    brand.isActive = true;
+    await brand.save();
+
+    let affectedProducts = 0;
+    let affectedVariants = 0;
+
+    // CASCADE RESTORE: Kích hoạt các sản phẩm và biến thể liên quan
+    if (cascade) {
+      // Cập nhật sản phẩm thuộc brand này
+      const productResult = await Product.updateMany(
+        { brand: brandId },
+        { isActive: true }
+      );
+      affectedProducts = productResult.modifiedCount;
+
+      // Cập nhật biến thể của sản phẩm thuộc brand này
+      const products = await Product.find({ brand: brandId }, { _id: 1 });
+      const productIds = products.map((product) => product._id);
+
+      if (productIds.length > 0) {
+        const variantResult = await Variant.updateMany(
+          { product: { $in: productIds } },
+          { isActive: true }
+        );
+        affectedVariants = variantResult.modifiedCount;
+      }
+    }
+
     return {
       success: true,
-      message: "Khôi phục thương hiệu thành công",
+      message: cascade
+        ? `Khôi phục thương hiệu thành công. Đã kích hoạt ${affectedProducts} sản phẩm và ${affectedVariants} biến thể liên quan.`
+        : "Khôi phục thương hiệu thành công mà không ảnh hưởng đến sản phẩm liên quan.",
       brand,
+      cascade: {
+        applied: cascade,
+        productsActivated: affectedProducts,
+        variantsActivated: affectedVariants,
+      },
     };
   },
 
@@ -273,6 +334,7 @@ const brandService = {
     await brand.save();
 
     let affectedProducts = 0;
+    let affectedVariants = 0;
 
     // CASCADE: Chỉ cập nhật sản phẩm và biến thể khi cascade = true
     if (cascade) {
@@ -284,23 +346,38 @@ const brandService = {
       affectedProducts = updateProductResult.modifiedCount;
 
       // CASCADE: Cập nhật trạng thái tất cả biến thể của các sản phẩm thuộc brand này
-      const products = await Product.find({ brand: brandId });
+      const products = await Product.find({ brand: brandId }, { _id: 1 });
       const productIds = products.map((product) => product._id);
 
-      await Variant.updateMany(
-        { product: { $in: productIds } },
-        { isActive: isActive }
-      );
+      if (productIds.length > 0) {
+        const variantResult = await Variant.updateMany(
+          { product: { $in: productIds } },
+          { isActive: isActive }
+        );
+        affectedVariants = variantResult.modifiedCount;
+      }
     }
 
     const statusMsg = isActive ? "kích hoạt" : "vô hiệu hóa";
     return {
       success: true,
       message: cascade
-        ? `Thương hiệu đã được ${statusMsg}. Đã ${statusMsg} ${affectedProducts} sản phẩm liên quan.`
+        ? `Thương hiệu đã được ${statusMsg}. Đã ${statusMsg} ${affectedProducts} sản phẩm và ${affectedVariants} biến thể liên quan.`
         : `Thương hiệu đã được ${statusMsg} mà không ảnh hưởng đến sản phẩm.`,
       brand,
+      cascade: {
+        applied: cascade,
+        productsAffected: affectedProducts,
+        variantsAffected: affectedVariants,
+      },
     };
+  },
+
+  /**
+   * Vô hiệu hóa brand thay vì xóa (dùng cho các brand đã có sản phẩm)
+   */
+  deactivateBrand: async (brandId, cascade = true) => {
+    return await brandService.updateBrandStatus(brandId, false, cascade);
   },
 };
 

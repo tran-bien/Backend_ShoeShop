@@ -43,19 +43,6 @@ const productController = {
   }),
 
   /**
-   * @desc    Xóa mềm sản phẩm
-   * @route   DELETE /api/admin/products/:id
-   * @access  Admin
-   */
-  deleteProduct: asyncHandler(async (req, res) => {
-    const result = await productService.deleteProduct(
-      req.params.id,
-      req.user._id
-    );
-    res.json(result);
-  }),
-
-  /**
    * @desc    Lấy danh sách sản phẩm đã xóa
    * @route   GET /api/admin/products/deleted
    * @access  Admin
@@ -66,13 +53,25 @@ const productController = {
   }),
 
   /**
-   * @desc    Khôi phục sản phẩm đã xóa
-   * @route   PUT /api/admin/products/:id/restore
-   * @access  Admin
+   * @route DELETE /api/admin/products/:id
+   * @desc Xóa mềm sản phẩm hoặc vô hiệu hóa nếu có đơn hàng liên quan
+   */
+  deleteProduct: asyncHandler(async (req, res) => {
+    const result = await productService.deleteProduct(
+      req.params.id,
+      req.user._id
+    );
+    return res.json(result);
+  }),
+
+  /**
+   * @route PUT /api/admin/products/:id/restore
+   * @desc Khôi phục sản phẩm đã xóa kèm các biến thể liên quan
    */
   restoreProduct: asyncHandler(async (req, res) => {
-    const result = await productService.restoreProduct(req.params.id);
-    res.json(result);
+    // Mặc định khôi phục cả biến thể (restoreVariants = true)
+    const result = await productService.restoreProduct(req.params.id, true);
+    return res.json(result);
   }),
 
   /**
