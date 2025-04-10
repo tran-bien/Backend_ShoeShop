@@ -60,7 +60,7 @@ const productController = {
    * @access  Public
    */
   getRelatedProducts: asyncHandler(async (req, res) => {
-    const limit = req.query.limit || 4;
+    const limit = req.query.limit || 8;
     const result = await productService.getRelatedProducts(
       req.params.id,
       limit

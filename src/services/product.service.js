@@ -1,4 +1,4 @@
-const { Product, Variant, Category, Brand } = require("@models");
+const { Product, Variant, Category, Brand, Order } = require("@models");
 const mongoose = require("mongoose");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
@@ -1043,17 +1043,48 @@ const productService = {
   },
 
   /**
-   * [PUBLIC] Lấy sản phẩm bán chạy (dựa trên tổng số lượng đã bán)
+   * [PUBLIC] Lấy sản phẩm bán chạy (dựa trên tổng số lượng đã bán từ đơn hàng)
    * @param {Number} limit Số lượng sản phẩm trả về
    */
   getBestSellers: async (limit = 8) => {
-    // Giả sử có một trường totalSold trong model Product
+    // 1. Tính tổng số lượng sản phẩm đã bán từ các đơn hàng thành công
+    const productSales = await Order.aggregate([
+      // Chỉ lấy đơn hàng đã giao hoặc đã xác nhận
+      {
+        $match: {
+          status: { $in: ["delivered", "confirmed"] },
+          deletedAt: null,
+        },
+      },
+      // Tách mỗi sản phẩm trong orderItems thành một document riêng
+      { $unwind: "$orderItems" },
+      // Nhóm theo sản phẩm và tính tổng số lượng đã bán
+      {
+        $group: {
+          _id: "$orderItems.product",
+          totalSold: { $sum: "$orderItems.quantity" },
+        },
+      },
+      // Sắp xếp theo số lượng bán giảm dần
+      { $sort: { totalSold: -1 } },
+      // Giới hạn số lượng kết quả
+      { $limit: Number(limit) },
+    ]);
+
+    // 2. Lấy thông tin chi tiết của những sản phẩm bán chạy
+    const productIds = productSales.map((item) => item._id);
+
+    if (productIds.length === 0) {
+      // Nếu không có dữ liệu bán hàng, lấy sản phẩm mới nhất thay thế
+      return await productService.getNewArrivals(limit);
+    }
+
+    // Lấy thông tin chi tiết các sản phẩm bán chạy
     const products = await Product.find({
+      _id: { $in: productIds },
       isActive: true,
       deletedAt: null,
     })
-      .sort({ totalQuantity: -1 }) // Tạm thời dùng totalQuantity, sau này có thể thay bằng totalSold
-      .limit(Number(limit))
       .populate("category", "name")
       .populate("brand", "name logo")
       .populate({
@@ -1067,10 +1098,31 @@ const productService = {
         ],
       });
 
+    // 3. Sắp xếp lại đúng thứ tự theo số lượng bán
+    // Tạo map để tra cứu nhanh số lượng bán của mỗi sản phẩm
+    const salesMap = {};
+    productSales.forEach((item) => {
+      salesMap[item._id.toString()] = item.totalSold;
+    });
+
+    // Sắp xếp sản phẩm theo đúng thứ tự số lượng bán
+    const sortedProducts = products.sort((a, b) => {
+      const aSold = salesMap[a._id.toString()] || 0;
+      const bSold = salesMap[b._id.toString()] || 0;
+      return bSold - aSold;
+    });
+
+    // 4. Chuyển đổi và trả về kết quả
     const result = {
       success: true,
-      products: products.map(transformProductForPublicList),
+      products: sortedProducts.map((product) => {
+        const transformedProduct = transformProductForPublicList(product);
+        // Thêm thông tin số lượng đã bán vào kết quả để frontend có thể hiển thị
+        transformedProduct.totalSold = salesMap[product._id.toString()] || 0;
+        return transformedProduct;
+      }),
     };
+
     return result;
   },
 
@@ -1079,7 +1131,7 @@ const productService = {
    * @param {String} id ID sản phẩm
    * @param {Number} limit Số lượng sản phẩm trả về
    */
-  getRelatedProducts: async (id, limit = 4) => {
+  getRelatedProducts: async (id, limit = 8) => {
     const product = await Product.findById(id);
     if (!product) {
       const error = new Error("Không tìm thấy sản phẩm");
