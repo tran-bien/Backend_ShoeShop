@@ -1,6 +1,7 @@
 const { Brand, Product, Variant } = require("@models");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
+const ApiError = require("@utils/ApiError");
 // Hàm hỗ trợ xử lý các case sắp xếp
 const getSortOption = (sortParam) => {
   let sortOption = { createdAt: -1 };
@@ -70,9 +71,7 @@ const brandService = {
     });
 
     if (!brand) {
-      const error = new Error("Không tìm thấy thương hiệu");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy thương hiệu");
     }
 
     return { success: true, brand };
@@ -119,9 +118,7 @@ const brandService = {
     });
 
     if (!brand) {
-      const error = new Error("Không tìm thấy thương hiệu");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy thương hiệu");
     }
 
     return { success: true, brand };
@@ -138,9 +135,7 @@ const brandService = {
     });
 
     if (!brand) {
-      const error = new Error("Không tìm thấy thương hiệu");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy thương hiệu");
     }
 
     return { success: true, brand };
@@ -161,9 +156,7 @@ const brandService = {
     const existingBrand = await Brand.findOne({ name: brandData.name });
 
     if (existingBrand) {
-      const error = new Error("Tên thương hiệu đã tồn tại");
-      error.statusCode = 409; // Conflict
-      throw error;
+      throw new ApiError(409, "Tên thương hiệu đã tồn tại");
     }
 
     const brand = new Brand(brandData);
@@ -183,9 +176,7 @@ const brandService = {
     const brand = await Brand.findById(brandId);
 
     if (!brand) {
-      const error = new Error("Không tìm thấy thương hiệu");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy thương hiệu");
     }
 
     // Kiểm tra xem có cập nhật tên không và tên mới có trùng không
@@ -196,9 +187,7 @@ const brandService = {
       });
 
       if (existingBrand) {
-        const error = new Error("Tên thương hiệu đã tồn tại");
-        error.statusCode = 409; // Conflict
-        throw error;
+        throw new ApiError(409, "Tên thương hiệu đã tồn tại");
       }
     }
 
@@ -227,9 +216,7 @@ const brandService = {
     const brand = await Brand.findById(brandId);
 
     if (!brand) {
-      const error = new Error("Không tìm thấy thương hiệu");
-      error.statusCode = 404;
-      throw error;
+      throw new ApiError(404, "Không tìm thấy thương hiệu");
     }
 
     // Kiểm tra xem brand có được sử dụng trong sản phẩm nào không
@@ -266,11 +253,7 @@ const brandService = {
     const brand = await Brand.restoreById(brandId);
 
     if (!brand) {
-      const error = new Error(
-        "Không tìm thấy thương hiệu hoặc thương hiệu không bị xóa"
-      );
-      error.statusCode = 404;
-      throw error;
+      throw new ApiError(404, "Không tìm thấy thương hiệu hoặc thương hiệu không bị xóa");
     }
 
     // Kích hoạt trạng thái brand (vì restore chỉ xóa deletedAt mà không đổi isActive)
@@ -324,9 +307,7 @@ const brandService = {
     const brand = await Brand.findById(brandId);
 
     if (!brand) {
-      const error = new Error("Không tìm thấy thương hiệu");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy thương hiệu");
     }
 
     // Cập nhật trạng thái brand

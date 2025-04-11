@@ -1,6 +1,7 @@
 const { Size } = require("@models");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
+const ApiError = require("@utils/ApiError");
 
 // Hàm hỗ trợ xử lý các case sắp xếp
 const getSortOption = (sortParam) => {
@@ -72,9 +73,7 @@ const sizeService = {
     });
 
     if (!size) {
-      const error = new Error("Không tìm thấy kích thước");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy kích thước");
     }
 
     return { success: true, size };
@@ -119,9 +118,7 @@ const sizeService = {
     });
 
     if (existingSize) {
-      const error = new Error("Kích thước này đã tồn tại");
-      error.statusCode = 409; // Conflict
-      throw error;
+      throw new ApiError(409, "Kích thước này đã tồn tại");
     }
 
     // Tạo kích thước mới
@@ -144,9 +141,7 @@ const sizeService = {
     const size = await Size.findById(id);
 
     if (!size) {
-      const error = new Error("Không tìm thấy kích thước");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy kích thước");
     }
 
     // Kiểm tra xem kích thước sau khi cập nhật có trùng với kích thước khác không
@@ -168,9 +163,7 @@ const sizeService = {
       });
 
       if (existingSize) {
-        const error = new Error("Kích thước này đã tồn tại");
-        error.statusCode = 409; // Conflict
-        throw error;
+        throw new ApiError(409, "Kích thước này đã tồn tại");
       }
     }
 
@@ -198,9 +191,7 @@ const sizeService = {
     const size = await Size.findById(id);
 
     if (!size) {
-      const error = new Error("Không tìm thấy kích thước");
-      error.statusCode = 404;
-      throw error;
+      throw new ApiError(404, "Không tìm thấy kích thước");
     }
 
     // Kiểm tra xem kích thước có được sử dụng trong biến thể nào không
@@ -208,12 +199,10 @@ const sizeService = {
 
     // Nếu có biến thể liên kết, thông báo lỗi và không cho xóa
     if (variantCount > 0) {
-      const error = new Error(
+      throw new ApiError(
+        409,
         `Kích thước đang được sử dụng trong ${variantCount} biến thể sản phẩm nên không thể xóa.`
       );
-      error.statusCode = 409; // Conflict
-      error.variantCount = variantCount;
-      throw error;
     }
 
     // Nếu không có biến thể liên kết, tiến hành xóa mềm

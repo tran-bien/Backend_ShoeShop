@@ -1,32 +1,34 @@
-// Import tất cả các model từ các thư mục con
-const Product = require("./product");
-const Category = require("./category");
-const Brand = require("./brand");
-const User = require("./user");
-const Review = require("./review");
-const Order = require("./order");
-const Cart = require("./cart");
-const Color = require("./color");
-const Size = require("./size");
-const Coupon = require("./coupon");
-const CancelRequest = require("./cancelRequest");
-const Session = require("./session");
-const Notification = require("./notification");
-const Variant = require("./variant");
+/**
+ * Export các models để sử dụng trong toàn bộ ứng dụng
+ * Sử dụng lazy loading để tránh circular dependency
+ */
+const path = require("path");
 
-module.exports = {
-  Product,
-  Category,
-  Brand,
-  User,
-  Review,
-  Order,
-  Cart,
-  Color,
-  Size,
-  Coupon,
-  CancelRequest,
-  Session,
-  Notification,
-  Variant,
-};
+// Cache cho các models đã load
+const modelCache = {};
+
+// Hàm helper để lazy load các models khi cần
+function getModel(modelName) {
+  if (!modelCache[modelName]) {
+    try {
+      modelCache[modelName] = require(path.join(
+        __dirname,
+        modelName.toLowerCase()
+      ));
+    } catch (error) {
+      console.error(`Error loading model ${modelName}:`, error);
+      return null;
+    }
+  }
+  return modelCache[modelName];
+}
+
+// Export một proxy thay vì trực tiếp export các models
+module.exports = new Proxy(
+  {},
+  {
+    get(target, prop) {
+      return getModel(prop);
+    },
+  }
+);

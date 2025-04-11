@@ -6,19 +6,39 @@ const { Session } = require("@models");
  */
 async function cleanSessions() {
   try {
+    // Kiểm tra xem model Session có tồn tại không
+    if (!Session) {
+      console.error(
+        "Model Session không tồn tại hoặc không được import đúng cách"
+      );
+      return;
+    }
+
     const now = new Date();
 
     // 1. Xóa các session đã hết hạn
-    const expiredResult = await Session.deleteMany({
-      expiresAt: { $lte: now },
-    });
+    let expiredResult = null;
+    try {
+      expiredResult = await Session.deleteMany({
+        expiresAt: { $lte: now },
+      });
+    } catch (error) {
+      console.error("Lỗi khi xóa session hết hạn:", error);
+      expiredResult = { deletedCount: 0 };
+    }
 
     // 2. Xóa các session không còn active sau 2 ngày
     const TWO_DAYS_AGO = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-    const inactiveResult = await Session.deleteMany({
-      isActive: false,
-      updatedAt: { $lte: TWO_DAYS_AGO },
-    });
+    let inactiveResult = null;
+    try {
+      inactiveResult = await Session.deleteMany({
+        isActive: false,
+        updatedAt: { $lte: TWO_DAYS_AGO },
+      });
+    } catch (error) {
+      console.error("Lỗi khi xóa session không hoạt động:", error);
+      inactiveResult = { deletedCount: 0 };
+    }
 
     console.log(
       `[${now.toISOString().replace("T", " ").substring(0, 19)}] ` +
@@ -26,8 +46,8 @@ async function cleanSessions() {
         `${inactiveResult.deletedCount} session không hoạt động.`
     );
   } catch (error) {
-    console.error("Lỗi khi dọn dẹp session:", error);
-    throw error;
+    console.error("Lỗi tổng thể khi dọn dẹp session:", error);
+    // Xử lý lỗi mà không throw để tránh crash ứng dụng
   }
 }
 
@@ -38,6 +58,14 @@ async function cleanSessions() {
  */
 async function limitActiveSessions(userId, maxSessions = 5) {
   try {
+    // Kiểm tra xem model Session có tồn tại không
+    if (!Session) {
+      console.error(
+        "Model Session không tồn tại hoặc không được import đúng cách"
+      );
+      return;
+    }
+
     // Lấy tất cả session active của user, sắp xếp theo thời gian hoạt động mới nhất
     const activeSessions = await Session.find({
       user: userId,
@@ -65,8 +93,10 @@ async function limitActiveSessions(userId, maxSessions = 5) {
 }
 
 // Xuất tất cả các hàm
-module.exports = {
+const sessionService = {
   cleanSessions,
   limitActiveSessions,
   cleanExpiredSessions: cleanSessions, // Giữ tương thích với code cũ
 };
+
+module.exports = sessionService;

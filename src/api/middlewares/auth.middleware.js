@@ -1,6 +1,9 @@
 const jwt = require("jsonwebtoken");
-const { User, Session } = require("@models");
+// Tránh circular dependency bằng cách import trực tiếp
+const User = require("../../models/user");
+const Session = require("../../models/session");
 const asyncHandler = require("express-async-handler");
+const ApiError = require("@utils/ApiError");
 
 // Bảo vệ các route yêu cầu đăng nhập
 exports.protect = asyncHandler(async (req, res, next) => {
@@ -10,10 +13,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
 
   // Kiểm tra token
   if (!token) {
-    return res.status(401).json({
-      success: false,
-      message: "Không có quyền truy cập, vui lòng đăng nhập",
-    });
+    throw new ApiError(401, "Không có quyền truy cập, vui lòng đăng nhập");
   }
 
   try {
@@ -25,10 +25,7 @@ exports.protect = asyncHandler(async (req, res, next) => {
 
     // Không tìm thấy người dùng
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Không tìm thấy người dùng",
-      });
+      throw new ApiError(401, "Không tìm thấy người dùng");
     }
 
     // Người dùng bị khóa
@@ -37,10 +34,10 @@ exports.protect = asyncHandler(async (req, res, next) => {
         ? `Lý do: ${user.blockReason}`
         : "Vui lòng liên hệ quản trị viên để được hỗ trợ";
 
-      return res.status(401).json({
-        success: false,
-        message: `Tài khoản của bạn đã bị vô hiệu hóa. ${blockReason}`,
-      });
+      throw new ApiError(
+        401,
+        `Tài khoản của bạn đã bị vô hiệu hóa. ${blockReason}`
+      );
     }
 
     // Tìm session theo token chính xác
@@ -52,20 +49,20 @@ exports.protect = asyncHandler(async (req, res, next) => {
 
     // Nếu không có session hợp lệ
     if (!session) {
-      return res.status(401).json({
-        success: false,
-        message: "Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại",
-      });
+      throw new ApiError(
+        401,
+        "Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại"
+      );
     }
 
     // Kiểm tra hết hạn
     if (new Date() > new Date(session.expiresAt)) {
       session.isActive = false;
       await session.save();
-      return res.status(401).json({
-        success: false,
-        message: "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại",
-      });
+      throw new ApiError(
+        401,
+        "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại"
+      );
     }
 
     // Cập nhật thời gian hoạt động
@@ -79,15 +76,16 @@ exports.protect = asyncHandler(async (req, res, next) => {
 
     next();
   } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
     const errorMessage =
       error.name === "TokenExpiredError"
         ? "Token đã hết hạn, vui lòng đăng nhập lại"
         : "Token không hợp lệ, vui lòng đăng nhập lại";
 
-    return res.status(401).json({
-      success: false,
-      message: errorMessage,
-    });
+    throw new ApiError(401, errorMessage);
   }
 });
 
@@ -96,19 +94,13 @@ exports.admin = (req, res, next) => {
   if (req.user && req.user.role === "admin") {
     return next();
   }
-  return res.status(403).json({
-    success: false,
-    message: "Bạn không có quyền admin",
-  });
+  throw new ApiError(403, "Bạn không có quyền admin");
 };
 
 // Middleware kiểm tra xác thực
 exports.isAuthenticated = (req, res, next) => {
   if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: "Bạn cần đăng nhập để thực hiện chức năng này",
-    });
+    throw new ApiError(401, "Bạn cần đăng nhập để thực hiện chức năng này");
   }
   next();
 };

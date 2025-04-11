@@ -1,14 +1,13 @@
 const { body, param } = require("express-validator");
 const mongoose = require("mongoose");
+const ApiError = require("@utils/ApiError");
 
 /**
  * Kiểm tra ID có phải là MongoDB ObjectId hợp lệ không
  */
 const isValidObjectId = (value) => {
   if (!mongoose.Types.ObjectId.isValid(value)) {
-    const error = new Error("ID không hợp lệ");
-    error.statusCode = 400; // Bad Request
-    throw error;
+    throw new ApiError(400, "ID không hợp lệ");
   }
   return true;
 };
@@ -18,15 +17,11 @@ const isValidObjectId = (value) => {
  */
 const areValidObjectIds = (value) => {
   if (!Array.isArray(value)) {
-    const error = new Error("Phải là một mảng các ID");
-    error.statusCode = 400; // Bad Request
-    throw error;
+    throw new ApiError(400, "Phải là một mảng các ID");
   }
 
   if (!value.every((id) => mongoose.Types.ObjectId.isValid(id))) {
-    const error = new Error("Có ID không hợp lệ trong danh sách");
-    error.statusCode = 400; // Bad Request
-    throw error;
+    throw new ApiError(400, "Có ID không hợp lệ trong danh sách");
   }
 
   return true;
@@ -110,9 +105,7 @@ const uploadValidator = {
   validateSingleFileExists: [
     body().custom((_, { req }) => {
       if (!req.file) {
-        const error = new Error("Không có file nào được tải lên");
-        error.statusCode = 400; // Bad Request
-        throw error;
+        throw new ApiError(400, "Không có file nào được tải lên");
       }
       return true;
     }),
@@ -124,9 +117,7 @@ const uploadValidator = {
   validateMultipleFilesExist: [
     body().custom((_, { req }) => {
       if (!req.files || req.files.length === 0) {
-        const error = new Error("Không có file nào được tải lên");
-        error.statusCode = 400; // Bad Request
-        throw error;
+        throw new ApiError(400, "Không có file nào được tải lên");
       }
       return true;
     }),
@@ -164,11 +155,10 @@ const uploadValidator = {
         (!req.body.publicIds || req.body.publicIds.length === 0) &&
         !req.body.publicId
       ) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           "Vui lòng cung cấp ít nhất một mã file cần xóa"
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
       return true;
     }),
@@ -189,11 +179,10 @@ const uploadValidator = {
         "image/svg+xml",
       ];
       if (!validMimeTypes.includes(req.file.mimetype)) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           "Chỉ chấp nhận file hình ảnh (jpeg, png, gif, webp, svg)"
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
       return true;
     }),
@@ -219,11 +208,10 @@ const uploadValidator = {
 
       if (invalidFiles.length > 0) {
         const invalidNames = invalidFiles.map((f) => f.originalname).join(", ");
-        const error = new Error(
+        throw new ApiError(
+          400,
           `Các file không hợp lệ: ${invalidNames}. Chỉ chấp nhận file hình ảnh (jpeg, png, gif, webp, svg)`
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
       return true;
     }),
@@ -238,14 +226,13 @@ const uploadValidator = {
 
       const maxSize = 5 * 1024 * 1024; // 5MB
       if (req.file.size > maxSize) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           `Kích thước file không được vượt quá 5MB. File hiện tại: ${(
             req.file.size /
             (1024 * 1024)
           ).toFixed(2)}MB`
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
       return true;
     }),
@@ -267,11 +254,10 @@ const uploadValidator = {
             (f) => `${f.originalname}: ${(f.size / (1024 * 1024)).toFixed(2)}MB`
           )
           .join(", ");
-        const error = new Error(
+        throw new ApiError(
+          400,
           `Các file vượt quá kích thước cho phép (5MB): ${oversizedDetails}`
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
       return true;
     }),
@@ -286,11 +272,10 @@ const uploadValidator = {
 
       const maxFileCount = 10; // Số file tối đa cho phép
       if (req.files.length > maxFileCount) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           `Chỉ được phép tải lên tối đa ${maxFileCount} file. Bạn đang tải lên ${req.files.length} file.`
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
       return true;
     }),
@@ -307,14 +292,13 @@ const uploadValidator = {
       const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
 
       if (totalSize > maxTotalSize) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           `Tổng kích thước các file không được vượt quá 20MB. Hiện tại: ${(
             totalSize /
             (1024 * 1024)
           ).toFixed(2)}MB`
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
       return true;
     }),
@@ -327,9 +311,7 @@ const uploadValidator = {
     // Kiểm tra tồn tại
     body().custom((_, { req }) => {
       if (!req.file) {
-        const error = new Error("Không có file nào được tải lên");
-        error.statusCode = 400; // Bad Request
-        throw error;
+        throw new ApiError(400, "Không có file nào được tải lên");
       }
       return true;
     }),
@@ -346,11 +328,10 @@ const uploadValidator = {
         "image/svg+xml",
       ];
       if (!validMimeTypes.includes(req.file.mimetype)) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           "Chỉ chấp nhận file hình ảnh (jpeg, png, gif, webp, svg)"
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
       return true;
     }),
@@ -361,14 +342,13 @@ const uploadValidator = {
 
       const maxSize = 5 * 1024 * 1024; // 5MB
       if (req.file.size > maxSize) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           `Kích thước file không được vượt quá 5MB. File hiện tại: ${(
             req.file.size /
             (1024 * 1024)
           ).toFixed(2)}MB`
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
       return true;
     }),
@@ -381,9 +361,7 @@ const uploadValidator = {
     // Kiểm tra tồn tại
     body().custom((_, { req }) => {
       if (!req.files || req.files.length === 0) {
-        const error = new Error("Không có file nào được tải lên");
-        error.statusCode = 400; // Bad Request
-        throw error;
+        throw new ApiError(400, "Không có file nào được tải lên");
       }
       return true;
     }),
@@ -394,11 +372,10 @@ const uploadValidator = {
 
       const maxFileCount = 10; // Số file tối đa cho phép
       if (req.files.length > maxFileCount) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           `Chỉ được phép tải lên tối đa ${maxFileCount} file. Bạn đang tải lên ${req.files.length} file.`
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
       return true;
     }),
@@ -420,11 +397,10 @@ const uploadValidator = {
 
       if (invalidFiles.length > 0) {
         const invalidNames = invalidFiles.map((f) => f.originalname).join(", ");
-        const error = new Error(
+        throw new ApiError(
+          400,
           `Các file không hợp lệ: ${invalidNames}. Chỉ chấp nhận file hình ảnh (jpeg, png, gif, webp, svg)`
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
       return true;
     }),
@@ -442,11 +418,10 @@ const uploadValidator = {
             (f) => `${f.originalname}: ${(f.size / (1024 * 1024)).toFixed(2)}MB`
           )
           .join(", ");
-        const error = new Error(
+        throw new ApiError(
+          400,
           `Các file vượt quá kích thước cho phép (5MB): ${oversizedDetails}`
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
       return true;
     }),
@@ -459,14 +434,34 @@ const uploadValidator = {
       const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
 
       if (totalSize > maxTotalSize) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           `Tổng kích thước các file không được vượt quá 20MB. Hiện tại: ${(
             totalSize /
             (1024 * 1024)
           ).toFixed(2)}MB`
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
+      }
+      return true;
+    }),
+  ],
+
+  /**
+   * Validator kiểm tra publicIds hoặc publicId khi xóa CloudinaryImage
+   */
+  validateDeleteCloudinaryImage: [
+    // ... existing code ...
+
+    // Custom validator: phải có ít nhất một trong số các trường (publicIds hoặc publicId)
+    body().custom((_, { req }) => {
+      if (
+        (!req.body.publicIds || req.body.publicIds.length === 0) &&
+        !req.body.publicId
+      ) {
+        throw new ApiError(
+          400,
+          "Vui lòng cung cấp ít nhất một mã file cần xóa"
+        );
       }
       return true;
     }),

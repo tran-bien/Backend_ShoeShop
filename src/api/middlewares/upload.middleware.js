@@ -1,7 +1,7 @@
 const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("@config/cloudinary");
-
+const ApiError = require("@utils/ApiError");
 // Danh sách các loại file ảnh được phép
 const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
@@ -45,7 +45,8 @@ const fileFilter = (req, file, cb) => {
     cb(null, true);
   } else {
     cb(
-      new Error(
+      new ApiError(
+        400,
         "Loại file không được hỗ trợ. Chỉ chấp nhận file JPEG, JPG, PNG, WEBP"
       ),
       false
@@ -99,6 +100,11 @@ const uploadMiddleware = {
   ),
   uploadBrandLogo: createSingleUploadMiddleware("brands", "logo"),
   uploadAvatar: createSingleUploadMiddleware("users/avatars", "avatar"),
+  uploadReviewImages: createMultiUploadMiddleware(
+    "reviews/images",
+    "images",
+    5
+  ),
 
   /**
    * Middleware xử lý lỗi upload
@@ -110,36 +116,27 @@ const uploadMiddleware = {
   handleUploadError: (err, req, res, next) => {
     if (err instanceof multer.MulterError) {
       if (err.code === "LIMIT_FILE_SIZE") {
-        return res.status(400).json({
-          success: false,
-          message: `Kích thước file không được vượt quá ${
+        throw new ApiError(
+          400,
+          `Kích thước file không được vượt quá ${
             MAX_FILE_SIZE / (1024 * 1024)
-          }MB`,
-        });
+          }MB`
+        );
       }
       if (err.code === "LIMIT_FILE_COUNT") {
-        return res.status(400).json({
-          success: false,
-          message: "Số lượng file vượt quá giới hạn cho phép",
-        });
+        throw new ApiError(400, "Số lượng file vượt quá giới hạn cho phép");
       }
       if (err.code === "LIMIT_UNEXPECTED_FILE") {
-        return res.status(400).json({
-          success: false,
-          message: "Field không hợp lệ hoặc số lượng file vượt quá giới hạn",
-        });
+        throw new ApiError(
+          400,
+          "Field không hợp lệ hoặc số lượng file vượt quá giới hạn"
+        );
       }
-      return res.status(400).json({
-        success: false,
-        message: `Lỗi upload: ${err.message}`,
-      });
+      throw new ApiError(400, `Lỗi upload: ${err.message}`);
     }
 
     if (err) {
-      return res.status(400).json({
-        success: false,
-        message: err.message,
-      });
+      throw new ApiError(400, err.message);
     }
 
     next();
@@ -186,6 +183,18 @@ const uploadMiddleware = {
    */
   handleBrandLogoUpload: (req, res, next) => {
     uploadMiddleware.uploadBrandLogo(req, res, (err) => {
+      if (err) {
+        return uploadMiddleware.handleUploadError(err, req, res, next);
+      }
+      next();
+    });
+  },
+
+  /**
+   * Middleware xử lý upload review images
+   */
+  handleReviewImagesUpload: (req, res, next) => {
+    uploadMiddleware.uploadReviewImages(req, res, (err) => {
       if (err) {
         return uploadMiddleware.handleUploadError(err, req, res, next);
       }

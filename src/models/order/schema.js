@@ -220,6 +220,37 @@ const OrderSchema = new mongoose.Schema(
       ref: "CancelRequest",
       default: null,
     },
+
+    // Trạng thái yêu cầu hủy đơn
+    cancelRequest: {
+      type: Boolean,
+      default: false,
+    },
+
+    // Lý do hủy đơn
+    cancelReason: {
+      type: String,
+      default: "",
+    },
+
+    // Thời gian hủy đơn
+    cancelledAt: {
+      type: Date,
+      default: null,
+    },
+
+    // Người hủy đơn (user hoặc admin)
+    cancelledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    // Thời gian giao hàng
+    deliveredAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

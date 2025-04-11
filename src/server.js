@@ -11,7 +11,7 @@ const socketIo = require("socket.io");
 // Sử dụng đường dẫn mới theo cấu trúc thư mục trong src
 const connectDB = require("@config/db");
 const errorHandler = require("@middlewares/error.middleware");
-const { cleanSessions } = require("@services/session.service");
+const sessionService = require("@services/session.service");
 const routes = require("@routes");
 
 // Load biến môi trường từ file .env
@@ -20,21 +20,21 @@ dotenv.config();
 // Kết nối đến CSDL
 connectDB();
 
-const cleanupSessions = async () => {
-  try {
-    await cleanSessions();
+// Dọn dẹp session định kỳ để tránh quá tải database
+const setupSessionCleanup = () => {
+  // Đầu tiên dọn dẹp ngay khi server khởi động
+  sessionService.cleanSessions().catch((error) => {
+    console.error("Không thể dọn dẹp session khi khởi động:", error);
+  });
 
-    // Thiết lập job định kỳ để dọn dẹp session
-    setInterval(async () => {
-      try {
-        await cleanSessions();
-      } catch (error) {
-        console.error("Lỗi khi dọn dẹp session:", error);
-      }
-    }, 60 * 60 * 1000); // Mỗi giờ
-  } catch (error) {
-    console.error("Lỗi khi dọn dẹp session ban đầu:", error);
-  }
+  // Sau đó thiết lập lịch trình dọn dẹp định kỳ
+  setInterval(() => {
+    sessionService.cleanSessions().catch((error) => {
+      console.error("Lỗi trong quá trình dọn dẹp session định kỳ:", error);
+    });
+  }, 60 * 60 * 1000); // Mỗi giờ
+
+  console.log("Đã thiết lập lịch trình dọn dẹp session định kỳ");
 };
 
 const app = express();
@@ -82,7 +82,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(morgan("dev"));
 
 // Sử dụng các routes từ thư mục src/api/routes
-app.use("/api/v1", routes);
+app.use("/api", routes);
 
 // Serve static assets nếu đang trong môi trường production
 if (process.env.NODE_ENV === "production") {
@@ -96,9 +96,9 @@ if (process.env.NODE_ENV === "production") {
 // Error handler middleware
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5005;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  // Dọn dẹp session hết hạn khi khởi động server
-  cleanupSessions();
+  // Thiết lập dọn dẹp session
+  setupSessionCleanup();
 });

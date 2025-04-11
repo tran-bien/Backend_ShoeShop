@@ -1,5 +1,6 @@
 const nodemailer = require("nodemailer");
 const dotenv = require("dotenv");
+const ApiError = require("@utils/ApiError");
 
 dotenv.config();
 
@@ -37,7 +38,7 @@ exports.sendVerificationEmail = async (email, name, otp) => {
     await transporter.sendMail(mailOptions);
   } catch (error) {
     console.error("Error sending verification email:", error);
-    throw new Error("Không thể gửi email xác nhận. Vui lòng thử lại!");
+    throw new ApiError(500, "Không thể gửi email xác nhận. Vui lòng thử lại!");
   }
 };
 
@@ -68,6 +69,9 @@ exports.sendResetPasswordEmail = async (email, name, resetToken) => {
     await transporter.sendMail(mailOptions);
   } catch (error) {
     console.error("Error sending reset password email:", error);
-    throw new Error("Không thể gửi email đặt lại mật khẩu. Vui lòng thử lại!");
+    throw new ApiError(
+      500,
+      "Không thể gửi email đặt lại mật khẩu. Vui lòng thử lại!"
+    );
   }
 };

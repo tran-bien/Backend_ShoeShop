@@ -1,5 +1,5 @@
 const { body, param, query } = require("express-validator");
-
+const ApiError = require("@utils/ApiError");
 const colorValidator = {
   validateColorId: [
     param("id").isMongoId().withMessage("ID màu sắc không hợp lệ"),
@@ -25,9 +25,7 @@ const colorValidator = {
     body().custom((value) => {
       // Đảm bảo rằng nếu type là 'solid' thì phải có code
       if (value.type === "solid" && !value.code) {
-        const error = new Error("Màu đơn (solid) phải có mã màu (code)");
-        error.statusCode = 400; // Bad Request
-        throw error;
+        throw new ApiError(400, "Màu đơn (solid) phải có mã màu (code)");
       }
 
       // Đảm bảo rằng nếu type là 'half' thì phải có mảng colors
@@ -35,29 +33,17 @@ const colorValidator = {
         value.type === "half" &&
         (!value.colors || !Array.isArray(value.colors))
       ) {
-        const error = new Error(
-          "Màu kết hợp (half) phải có danh sách màu (colors)"
-        );
-        error.statusCode = 400; // Bad Request
-        throw error;
+        throw new ApiError(400, "Màu kết hợp (half) phải có danh sách màu (colors)");
       }
 
       // Đảm bảo rằng nếu type là 'solid' thì KHÔNG được có mảng colors
       if (value.type === "solid" && value.colors) {
-        const error = new Error(
-          "Màu đơn (solid) không được có danh sách màu (colors)"
-        );
-        error.statusCode = 400; // Bad Request
-        throw error;
+        throw new ApiError(400, "Màu đơn (solid) không được có danh sách màu (colors)");
       }
 
       // Đảm bảo rằng nếu type là 'half' thì KHÔNG được có code
       if (value.type === "half" && value.code) {
-        const error = new Error(
-          "Màu kết hợp (half) không được có mã màu đơn (code)"
-        );
-        error.statusCode = 400; // Bad Request
-        throw error;
+        throw new ApiError(400, "Màu kết hợp (half) không được có mã màu đơn (code)");
       }
 
       return true;
@@ -71,11 +57,7 @@ const colorValidator = {
         // Kiểm tra mã hex hợp lệ (với hoặc không có # ở đầu)
         const regex = /^#?([0-9A-F]{6}|[0-9A-F]{3})$/i;
         if (value && !regex.test(value)) {
-          const error = new Error(
-            "Mã màu không hợp lệ (yêu cầu định dạng HEX)"
-          );
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "Mã màu không hợp lệ (yêu cầu định dạng HEX)");
         }
         return true;
       }),
@@ -84,19 +66,13 @@ const colorValidator = {
       // Kiểm tra nếu type = half thì phải có đúng 2 mã màu
       if (req.body.type === "half") {
         if (!Array.isArray(value) || value.length !== 2) {
-          const error = new Error("Màu kết hợp (half) phải có đúng 2 mã màu");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "Màu kết hợp (half) phải có đúng 2 mã màu");
         }
 
         // Kiểm tra mỗi mã màu trong array
         const regex = /^#?([0-9A-F]{6}|[0-9A-F]{3})$/i;
         if (!value.every((color) => regex.test(color))) {
-          const error = new Error(
-            "Mã màu không hợp lệ (yêu cầu định dạng HEX)"
-          );
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "Mã màu không hợp lệ (yêu cầu định dạng HEX)");
         }
       }
       return true;
@@ -118,38 +94,34 @@ const colorValidator = {
     body().custom((value) => {
       // Nếu thay đổi type thành solid mà không cung cấp code
       if (value.type === "solid" && !value.code && value.colors) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           "Khi chuyển sang màu đơn (solid) phải cung cấp mã màu (code) và không có colors"
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
 
       // Nếu thay đổi type thành half mà không cung cấp colors
       if (value.type === "half" && value.code && !value.colors) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           "Khi chuyển sang màu kết hợp (half) phải cung cấp danh sách màu (colors) và không có code"
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
 
       // Nếu type là solid thì không được cập nhật colors
       if (value.type === "solid" && value.colors) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           "Màu đơn (solid) không được có danh sách màu (colors)"
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
 
       // Nếu type là half thì không được cập nhật code
       if (value.type === "half" && value.code) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           "Màu kết hợp (half) không được có mã màu đơn (code)"
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
 
       return true;
@@ -168,11 +140,7 @@ const colorValidator = {
         // Kiểm tra mã hex hợp lệ
         const regex = /^#?([0-9A-F]{6}|[0-9A-F]{3})$/i;
         if (value && !regex.test(value)) {
-          const error = new Error(
-            "Mã màu không hợp lệ (yêu cầu định dạng HEX)"
-          );
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "Mã màu không hợp lệ (yêu cầu định dạng HEX)");
         }
         return true;
       }),
@@ -183,19 +151,13 @@ const colorValidator = {
         // Nếu có type và type = half, hoặc nếu không có type trong req nhưng colors có (cập nhật riêng colors)
         if (req.body.type === "half" || (!req.body.type && value)) {
           if (!Array.isArray(value) || value.length !== 2) {
-            const error = new Error("Màu kết hợp (half) phải có đúng 2 mã màu");
-            error.statusCode = 400; // Bad Request
-            throw error;
+            throw new ApiError(400, "Màu kết hợp (half) phải có đúng 2 mã màu");
           }
 
           // Kiểm tra mỗi mã màu trong array
           const regex = /^#?([0-9A-F]{6}|[0-9A-F]{3})$/i;
           if (!value.every((color) => regex.test(color))) {
-            const error = new Error(
-              "Mã màu không hợp lệ (yêu cầu định dạng HEX)"
-            );
-            error.statusCode = 400; // Bad Request
-            throw error;
+            throw new ApiError(400, "Mã màu không hợp lệ (yêu cầu định dạng HEX)");
           }
         }
         return true;

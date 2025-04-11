@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-
+const cartSchema = require("./schema");
 /**
  * Kiểm tra tồn kho của sản phẩm
  * @param {Object} cartItem - Mục giỏ hàng cần kiểm tra
@@ -82,213 +82,265 @@ const calculateDiscount = async (cart) => {
 };
 
 /**
- * Áp dụng middleware cho Cart Schema
- * @param {mongoose.Schema} schema - Schema để áp dụng middleware
+ * Tính tổng số lượng sản phẩm trong giỏ hàng
+ * @param {Array} cartItems - Danh sách sản phẩm trong giỏ hàng
+ * @returns {Number} - Tổng số lượng
  */
-const applyMiddlewares = (schema) => {
-  // Thêm thông tin sản phẩm khi thêm vào giỏ hàng
-  schema.pre("save", async function (next) {
-    try {
-      // Chỉ xử lý khi cartItems thay đổi
-      if (this.isModified("cartItems")) {
-        const Product = mongoose.model("Product");
-        const Variant = mongoose.model("Variant");
-        const Size = mongoose.model("Size");
+const calculateTotalItems = (cartItems) => {
+  return cartItems.reduce((total, item) => total + item.quantity, 0);
+};
 
-        // Cập nhật thông tin hiển thị cho từng mục giỏ hàng
+/**
+ * Tính tổng giá trị sản phẩm trong giỏ hàng
+ * @param {Array} cartItems - Danh sách sản phẩm trong giỏ hàng
+ * @returns {Number} - Tổng giá trị
+ */
+const calculateSubTotal = (cartItems) => {
+  return cartItems.reduce(
+    (total, item) => total + item.price * item.quantity,
+    0
+  );
+};
+
+/**
+ * Kiểm tra và xác thực coupon
+ * @param {Object} coupon - Thông tin coupon
+ * @param {Number} subTotal - Tổng giá trị đơn hàng
+ * @returns {Object} - Kết quả kiểm tra và giá trị giảm giá
+ */
+const validateCoupon = async (coupon, subTotal) => {
+  if (!coupon) return { isValid: false, discount: 0 };
+
+  // Kiểm tra ngày hết hạn
+  if (!coupon.isActive) {
+    return {
+      isValid: false,
+      message: "Mã giảm giá không hoạt động",
+      discount: 0,
+    };
+  }
+
+  const now = new Date();
+  if (now < coupon.startDate || now > coupon.endDate) {
+    return {
+      isValid: false,
+      message: "Mã giảm giá đã hết hạn hoặc chưa đến thời gian sử dụng",
+      discount: 0,
+    };
+  }
+
+  // Kiểm tra đơn hàng tối thiểu
+  if (coupon.minOrderValue && subTotal < coupon.minOrderValue) {
+    return {
+      isValid: false,
+      message: `Giá trị đơn hàng tối thiểu để sử dụng mã giảm giá này là ${coupon.minOrderValue.toLocaleString(
+        "vi-VN"
+      )}đ`,
+      discount: 0,
+    };
+  }
+
+  // Tính giá trị giảm giá
+  let discount = 0;
+  if (coupon.type === "percent") {
+    discount = (subTotal * coupon.value) / 100;
+    if (coupon.maxDiscount) {
+      discount = Math.min(discount, coupon.maxDiscount);
+    }
+  } else {
+    discount = Math.min(coupon.value, subTotal);
+  }
+
+  return {
+    isValid: true,
+    discount,
+  };
+};
+
+/**
+ * Cập nhật thông tin của một mục trong giỏ hàng
+ * @param {Object} cartItem - Mục cần cập nhật
+ * @returns {Object} - Dữ liệu đã cập nhật
+ */
+const updateCartItemInfo = async (cartItem) => {
+  // Lấy thông tin sản phẩm
+  const Product = mongoose.model("Product");
+  const Variant = mongoose.model("Variant");
+  const Size = mongoose.model("Size");
+
+  // Kiểm tra sản phẩm có tồn tại không
+  const product = await Product.findById(cartItem.product);
+  if (!product || !product.isActive) {
+    cartItem.isAvailable = false;
+    cartItem.unavailableReason = "Sản phẩm không tồn tại hoặc đã bị ẩn";
+    return cartItem;
+  }
+
+  // Kiểm tra biến thể có tồn tại không
+  const variant = await Variant.findById(cartItem.variant);
+  if (!variant || !variant.isActive) {
+    cartItem.isAvailable = false;
+    cartItem.unavailableReason = "Biến thể không tồn tại hoặc đã bị ẩn";
+    return cartItem;
+  }
+
+  // Kiểm tra kích cỡ có tồn tại không
+  const size = await Size.findById(cartItem.size);
+  if (!size) {
+    cartItem.isAvailable = false;
+    cartItem.unavailableReason = "Kích cỡ không tồn tại";
+    return cartItem;
+  }
+
+  // Kiểm tra trong variant có size này không
+  const sizeInVariant = variant.sizes.find(
+    (s) => s.size.toString() === cartItem.size.toString()
+  );
+
+  if (!sizeInVariant || !sizeInVariant.isSizeAvailable) {
+    cartItem.isAvailable = false;
+    cartItem.unavailableReason = "Kích cỡ này hiện không có sẵn";
+    return cartItem;
+  }
+
+  // Kiểm tra tồn kho đủ không
+  if (sizeInVariant.quantity < cartItem.quantity) {
+    cartItem.isAvailable = false;
+    cartItem.unavailableReason = `Chỉ còn ${sizeInVariant.quantity} sản phẩm trong kho`;
+    return cartItem;
+  }
+
+  // Cập nhật thông tin về sản phẩm
+  cartItem.productName = product.name;
+  cartItem.variantName = variant.name;
+  cartItem.sizeName = size.name || size.value;
+  cartItem.price = variant.priceFinal || variant.price;
+  cartItem.image = variant.images?.[0] || product.images?.[0];
+  cartItem.isAvailable = true;
+  cartItem.unavailableReason = "";
+
+  return cartItem;
+};
+
+/**
+ * Áp dụng middleware cho schema giỏ hàng
+ */
+const applyMiddlewares = () => {
+  // Trước khi lưu giỏ hàng
+  cartSchema.pre("save", async function (next) {
+    try {
+      // Nếu không có sự thay đổi trong items hoặc coupon, không cần cập nhật giá
+      if (!this.isModified("cartItems") && !this.isModified("coupon")) {
+        return next();
+      }
+
+      // Cập nhật thông tin về sản phẩm, giá, tên,...
+      if (this.cartItems.length > 0) {
         for (let i = 0; i < this.cartItems.length; i++) {
-          const item = this.cartItems[i];
-
-          // Chỉ cập nhật các mục mới hoặc đã thay đổi
-          if (!item.productName || !item.variantName || !item.sizeName) {
-            const [product, variant, size] = await Promise.all([
-              Product.findById(item.product),
-              Variant.findById(item.variant),
-              Size.findById(item.size),
-            ]);
-
-            if (product) {
-              this.cartItems[i].productName = product.name;
-            }
-
-            if (variant) {
-              this.cartItems[i].variantName = variant.name;
-              this.cartItems[i].price = variant.priceFinal || variant.price;
-
-              // Lấy ảnh chính của biến thể
-              if (variant.images && variant.images.length > 0) {
-                this.cartItems[i].image = variant.images[0];
-              } else if (
-                product &&
-                product.images &&
-                product.images.length > 0
-              ) {
-                this.cartItems[i].image = product.images[0];
-              }
-            }
-
-            if (size) {
-              this.cartItems[i].sizeName = size.name || size.value || size;
-            }
-
-            // Kiểm tra tồn kho
-            const inventoryStatus = await checkInventory(item);
-            this.cartItems[i].isAvailable = inventoryStatus.isAvailable;
-
-            // Nếu số lượng yêu cầu vượt quá tồn kho, giới hạn xuống
-            if (
-              !inventoryStatus.isAvailable &&
-              inventoryStatus.availableQuantity > 0
-            ) {
-              this.cartItems[i].quantity = Math.min(
-                this.cartItems[i].quantity,
-                inventoryStatus.availableQuantity
-              );
-            }
-          }
+          this.cartItems[i] = await updateCartItemInfo(this.cartItems[i]);
         }
-
-        // Lọc bỏ các mục có số lượng tồn kho = 0
-        this.cartItems = this.cartItems.filter((item) => item.quantity > 0);
       }
 
-      next();
-    } catch (error) {
-      next(error);
-    }
-  });
+      // Tính toán tổng số lượng và tổng giá
+      this.totalItems = calculateTotalItems(this.cartItems);
+      this.subTotal = calculateSubTotal(this.cartItems);
 
-  // Tính toán tổng giá trị giỏ hàng
-  schema.pre("save", async function (next) {
-    try {
-      if (this.cartItems && Array.isArray(this.cartItems)) {
-        // Tính subtotal
-        this.subTotal = this.cartItems.reduce((total, item) => {
-          return total + (item.price * item.quantity || 0);
-        }, 0);
+      // Xử lý coupon nếu có
+      if (this.coupon) {
+        const Coupon = mongoose.model("Coupon");
+        const coupon = await Coupon.findById(this.coupon);
 
-        // Tổng số lượng items
-        this.totalItems = this.cartItems.reduce((count, item) => {
-          return count + (item.quantity || 0);
-        }, 0);
+        const validationResult = await validateCoupon(coupon, this.subTotal);
 
-        // Tính giảm giá nếu có coupon
-        if (this.coupon) {
-          this.discount = await calculateDiscount(this);
+        if (validationResult.isValid) {
+          this.discount = validationResult.discount;
+          this.couponData = {
+            code: coupon.code,
+            type: coupon.type,
+            value: coupon.value,
+            maxDiscount: coupon.maxDiscount,
+          };
         } else {
+          // Nếu coupon không hợp lệ, xóa coupon
+          this.coupon = null;
+          this.couponData = null;
           this.discount = 0;
+          this.couponError = validationResult.message;
         }
-
-        // Tính tổng tiền sau giảm giá
-        this.totalPrice = Math.max(0, this.subTotal - this.discount);
+      } else {
+        this.discount = 0;
+        this.couponData = null;
+        this.couponError = null;
       }
-      next();
+
+      // Tính toán giá cuối cùng
+      this.totalPrice = this.subTotal - (this.discount || 0);
+
+      return next();
     } catch (error) {
-      next(error);
+      return next(error);
     }
   });
 
-  // Xử lý khi findOneAndUpdate
-  schema.pre("findOneAndUpdate", async function (next) {
+  // Hook để kiểm tra khi cart được truy vấn
+  cartSchema.post("findOne", async function (doc, next) {
+    if (!doc) return next();
+
     try {
-      const update = this.getUpdate();
-      const cartItems =
-        update.cartItems || (update.$set && update.$set.cartItems);
+      let needUpdate = false;
 
-      // Xử lý khi cập nhật cartItems
-      if (cartItems && Array.isArray(cartItems)) {
-        const Product = mongoose.model("Product");
-        const Variant = mongoose.model("Variant");
-        const Size = mongoose.model("Size");
-
-        // Cập nhật thông tin và kiểm tra tồn kho
-        for (let i = 0; i < cartItems.length; i++) {
-          const item = cartItems[i];
-
-          // Cập nhật thông tin hiển thị
-          const [product, variant, size] = await Promise.all([
-            Product.findById(item.product),
-            Variant.findById(item.variant),
-            Size.findById(item.size),
-          ]);
-
-          if (product) {
-            cartItems[i].productName = product.name;
-          }
-
-          if (variant) {
-            cartItems[i].variantName = variant.name;
-            cartItems[i].price = variant.priceFinal || variant.price;
-
-            // Lấy ảnh chính của biến thể
-            if (variant.images && variant.images.length > 0) {
-              cartItems[i].image = variant.images[0];
-            } else if (product && product.images && product.images.length > 0) {
-              cartItems[i].image = product.images[0];
-            }
-          }
-
-          if (size) {
-            cartItems[i].sizeName = size.name || size.value || size;
-          }
-
-          // Kiểm tra tồn kho
-          const inventoryStatus = await checkInventory(item);
-          cartItems[i].isAvailable = inventoryStatus.isAvailable;
-
-          // Nếu số lượng yêu cầu vượt quá tồn kho, giới hạn xuống
+      // Kiểm tra và cập nhật thông tin sản phẩm
+      if (doc.cartItems.length > 0) {
+        for (let i = 0; i < doc.cartItems.length; i++) {
+          const updatedItem = await updateCartItemInfo(doc.cartItems[i]);
+          // Kiểm tra nếu có thay đổi
           if (
-            !inventoryStatus.isAvailable &&
-            inventoryStatus.availableQuantity > 0
+            updatedItem.price !== doc.cartItems[i].price ||
+            updatedItem.isAvailable !== doc.cartItems[i].isAvailable ||
+            updatedItem.productName !== doc.cartItems[i].productName ||
+            updatedItem.variantName !== doc.cartItems[i].variantName ||
+            updatedItem.sizeName !== doc.cartItems[i].sizeName
           ) {
-            cartItems[i].quantity = Math.min(
-              cartItems[i].quantity,
-              inventoryStatus.availableQuantity
-            );
+            doc.cartItems[i] = updatedItem;
+            needUpdate = true;
           }
-        }
-
-        // Lọc bỏ các mục có số lượng tồn kho = 0
-        const filteredItems = cartItems.filter((item) => item.quantity > 0);
-
-        // Tính tổng giá trị
-        const subTotal = filteredItems.reduce((total, item) => {
-          return total + (item.price * item.quantity || 0);
-        }, 0);
-
-        const totalItems = filteredItems.reduce((count, item) => {
-          return count + (item.quantity || 0);
-        }, 0);
-
-        // Cập nhật giỏ hàng
-        if (!update.$set) update.$set = {};
-        update.$set.cartItems = filteredItems;
-        update.$set.subTotal = subTotal;
-        update.$set.totalItems = totalItems;
-
-        // Tính giảm giá nếu có coupon
-        const doc = await this.model.findOne(this.getQuery());
-        if (doc && doc.coupon) {
-          update.$set.discount = await calculateDiscount({
-            ...doc.toObject(),
-            subTotal,
-          });
-          update.$set.totalPrice = Math.max(0, subTotal - update.$set.discount);
-        } else {
-          update.$set.discount = 0;
-          update.$set.totalPrice = subTotal;
         }
       }
 
-      next();
+      // Cập nhật giỏ hàng nếu có thay đổi
+      if (needUpdate) {
+        doc.totalItems = calculateTotalItems(doc.cartItems);
+        doc.subTotal = calculateSubTotal(doc.cartItems);
+
+        // Kiểm tra lại coupon nếu có
+        if (doc.coupon) {
+          const Coupon = mongoose.model("Coupon");
+          const coupon = await Coupon.findById(doc.coupon);
+
+          const validationResult = await validateCoupon(coupon, doc.subTotal);
+
+          if (validationResult.isValid) {
+            doc.discount = validationResult.discount;
+          } else {
+            doc.coupon = null;
+            doc.couponData = null;
+            doc.discount = 0;
+            doc.couponError = validationResult.message;
+          }
+        } else {
+          doc.discount = 0;
+        }
+
+        // Cập nhật tổng giá
+        doc.totalPrice = doc.subTotal - (doc.discount || 0);
+        await doc.save();
+      }
+
+      return next();
     } catch (error) {
-      next(error);
+      return next(error);
     }
   });
 };
 
-module.exports = {
-  applyMiddlewares,
-  checkInventory,
-  calculateDiscount,
-};
+module.exports = { applyMiddlewares };

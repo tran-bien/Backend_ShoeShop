@@ -5,6 +5,7 @@ const emailUtils = require("@utils/email");
 const bcrypt = require("bcryptjs");
 const uaParser = require("ua-parser-js");
 const { limitActiveSessions } = require("./session.service");
+const ApiError = require("@utils/ApiError");
 
 const authService = {
   /**
@@ -202,9 +203,7 @@ const authService = {
         return user;
       }
       // Nếu người dùng đã xác thực, trả về lỗi
-      const error = new Error("Email đã được đăng ký");
-      error.statusCode = 409; // Conflict
-      throw error;
+      throw new ApiError(409, "Email đã được đăng ký");
     }
 
     // Nếu email chưa tồn tại, tạo mới người dùng
@@ -245,9 +244,7 @@ const authService = {
 
     // Kiểm tra email có tồn tại không
     if (!user) {
-      const error = new Error("Email không tồn tại");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Email không tồn tại");
     }
 
     // Kiểm tra tài khoản có bị khóa không
@@ -256,9 +253,7 @@ const authService = {
         ? `Lý do: ${user.blockReason}`
         : "Vui lòng liên hệ quản trị viên để được hỗ trợ";
 
-      const error = new Error(`Tài khoản đã bị vô hiệu hóa. ${blockReason}`);
-      error.statusCode = 403; // Forbidden
-      throw error;
+      throw new ApiError(403, `Tài khoản đã bị vô hiệu hóa. ${blockReason}`);
     }
 
     // Kiểm tra email có được xác thực không
@@ -286,11 +281,10 @@ const authService = {
         user.otp.code
       );
 
-      const error = new Error(
+      throw new ApiError(
+        403,
         "Email chưa được xác thực. Vui lòng kiểm tra email để xác thực"
       );
-      error.statusCode = 403; // Forbidden
-      throw error;
     }
 
     // Kiểm tra mật khẩu có đúng không
@@ -299,9 +293,7 @@ const authService = {
       user.password
     );
     if (!isPasswordMatch) {
-      const error = new Error("Mật khẩu không đúng");
-      error.statusCode = 401; // Unauthorized
-      throw error;
+      throw new ApiError(401, "Mật khẩu không đúng");
     }
 
     const { token, refreshToken } = await authService.manageUserSession(
@@ -331,18 +323,14 @@ const authService = {
     // Kiểm tra refresh token
     const session = await Session.findOne({ refreshToken, isActive: true });
     if (!session) {
-      const error = new Error("Refresh token không hợp lệ hoặc đã hết hạn");
-      error.statusCode = 401; // Unauthorized
-      throw error;
+      throw new ApiError(401, "Refresh token không hợp lệ hoặc đã hết hạn");
     }
 
     // Tìm người dùng
     const user = await User.findById(session.user);
 
     if (!user) {
-      const error = new Error("Người dùng không tồn tại");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Người dùng không tồn tại");
     }
 
     // Kiểm tra tài khoản có bị khóa không
@@ -351,9 +339,7 @@ const authService = {
       session.isActive = false;
       await session.save();
 
-      const error = new Error("Tài khoản đã bị vô hiệu hóa");
-      error.statusCode = 403; // Forbidden
-      throw error;
+      throw new ApiError(403, "Tài khoản đã bị vô hiệu hóa");
     }
 
     // Tạo token mới
@@ -377,18 +363,15 @@ const authService = {
     const user = await User.findOne({ email });
 
     if (!user) {
-      const error = new Error("Không tìm thấy tài khoản với email này");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy tài khoản với email này");
     }
 
     // Kiểm tra tài khoản có bị khóa không
     if (!user.isActive || user.blockedAt) {
-      const error = new Error(
+      throw new ApiError(
+        403,
         "Tài khoản đã bị vô hiệu hóa, không thể đặt lại mật khẩu"
       );
-      error.statusCode = 403; // Forbidden
-      throw error;
     }
 
     // Tạo reset token và thiết lập thời gian hết hạn
@@ -426,11 +409,10 @@ const authService = {
     });
 
     if (!user) {
-      const error = new Error(
+      throw new ApiError(
+        400,
         "Token đặt lại mật khẩu không hợp lệ hoặc đã hết hạn"
       );
-      error.statusCode = 400; // Bad Request
-      throw error;
     }
 
     console.log("Đã tìm thấy người dùng:", user.email);
@@ -438,11 +420,10 @@ const authService = {
     // Kiểm tra mật khẩu mới trùng với mật khẩu cũ không
     const isSamePassword = await bcrypt.compare(newPassword, user.password);
     if (isSamePassword) {
-      const error = new Error(
+      throw new ApiError(
+        400,
         "Mật khẩu mới trùng với mật khẩu cũ. Vui lòng chọn mật khẩu khác!"
       );
-      error.statusCode = 400; // Bad Request
-      throw error;
     }
 
     // Gán mật khẩu mới trực tiếp (middleware sẽ hash khi save)
@@ -478,9 +459,7 @@ const authService = {
     // Kiểm tra người dùng
     const user = await User.findById(userId);
     if (!user) {
-      const error = new Error("Không tìm thấy người dùng");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy người dùng");
     }
 
     // Kiểm tra mật khẩu hiện tại
@@ -489,11 +468,10 @@ const authService = {
       user.password
     );
     if (!isPasswordMatch) {
-      const error = new Error(
+      throw new ApiError(
+        401,
         "Mật khẩu hiện tại không đúng, không thể thay đổi mật khẩu"
       );
-      error.statusCode = 401; // Unauthorized
-      throw error;
     }
 
     // Gán mật khẩu mới (middleware sẽ hash khi save)
@@ -518,16 +496,12 @@ const authService = {
     // Kiểm tra phiên tồn tại
     const session = await Session.findById(sessionId);
     if (!session) {
-      const error = new Error("Phiên đăng nhập không tồn tại");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Phiên đăng nhập không tồn tại");
     }
 
     // Kiểm tra quyền (chỉ có thể đăng xuất khỏi phiên của chính mình)
     if (session.user.toString() !== userId.toString()) {
-      const error = new Error("Bạn không có quyền đăng xuất khỏi phiên này");
-      error.statusCode = 403; // Forbidden
-      throw error;
+      throw new ApiError(403, "Bạn không có quyền đăng xuất khỏi phiên này");
     }
 
     // Đánh dấu phiên là không còn hoạt động
@@ -573,28 +547,20 @@ const authService = {
     }
 
     if (!user) {
-      const error = new Error("Người dùng không tồn tại");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Người dùng không tồn tại");
     }
 
     // Kiểm tra tài khoản có bị khóa không
     if (!user.isActive || user.blockedAt) {
-      const error = new Error("Tài khoản đã bị vô hiệu hóa");
-      error.statusCode = 403; // Forbidden
-      throw error;
+      throw new ApiError(403, "Tài khoản đã bị vô hiệu hóa");
     }
 
     if (!user.otp || user.otp.code !== otp) {
-      const error = new Error("Mã OTP không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
+      throw new ApiError(400, "Mã OTP không hợp lệ");
     }
 
     if (new Date() > new Date(user.otp.expiredAt)) {
-      const error = new Error("Mã OTP đã hết hạn");
-      error.statusCode = 400; // Bad Request
-      throw error;
+      throw new ApiError(400, "Mã OTP đã hết hạn");
     }
 
     user.isVerified = true;
@@ -687,6 +653,4 @@ const authService = {
   },
 };
 
-module.exports = {
-  authService,
-};
+module.exports = authService;

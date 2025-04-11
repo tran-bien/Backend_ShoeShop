@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const ApiError = require("../utils/ApiError");
 
 module.exports = function softDeletePlugin(schema, options) {
   options = options || {};
@@ -122,9 +123,7 @@ module.exports = function softDeletePlugin(schema, options) {
         .ne(null);
 
       if (!doc) {
-        const error = new Error(`Không tìm thấy dữ liệu khôi phục`);
-        error.statusCode = 404; // Not Found
-        throw error;
+        throw new ApiError(404, `Không tìm thấy dữ liệu khôi phục`);
       }
 
       // Khôi phục

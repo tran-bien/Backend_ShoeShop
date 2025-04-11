@@ -6,7 +6,6 @@ const CartSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      unique: true,
     },
     cartItems: [
       {
@@ -28,30 +27,29 @@ const CartSchema = new mongoose.Schema(
         quantity: {
           type: Number,
           required: true,
-          default: 1,
           min: 1,
-          validate: {
-            validator: Number.isInteger,
-            message: "Số lượng phải là số nguyên",
-          },
+          default: 1,
         },
         price: {
           type: Number,
           required: true,
-          min: 0,
         },
-        // Lưu thông tin để hiển thị trên giỏ hàng mà không cần joins
+        // Thông tin bổ sung để hiển thị
         productName: {
           type: String,
+          required: true,
         },
         variantName: {
           type: String,
+          required: true,
         },
         sizeName: {
           type: String,
+          required: true,
         },
         image: {
           type: String,
+          default: "",
         },
         isAvailable: {
           type: Boolean,
@@ -63,34 +61,46 @@ const CartSchema = new mongoose.Schema(
         },
       },
     ],
+    // Thông tin mã giảm giá
     coupon: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Coupon",
+      default: null,
     },
+    // Thông tin mã giảm giá (lưu trữ để tránh liên kết)
     couponData: {
       code: String,
-      discountType: {
+      type: {
         type: String,
-        enum: ["fixed", "percent"],
+        enum: ["percent", "fixed"],
       },
-      discountValue: Number,
-      maxDiscountAmount: Number,
+      value: Number,
+      maxDiscount: Number,
     },
+    // Tổng số sản phẩm trong giỏ hàng
     totalItems: {
       type: Number,
       default: 0,
     },
+    // Tổng giá trị sản phẩm
     subTotal: {
       type: Number,
       default: 0,
     },
+    // Giá trị giảm giá
     discount: {
       type: Number,
       default: 0,
     },
+    // Tổng giá trị sau giảm giá
     totalPrice: {
       type: Number,
       default: 0,
+    },
+    // Thời gian cập nhật cuối cùng
+    updatedAt: {
+      type: Date,
+      default: Date.now,
     },
   },
   {

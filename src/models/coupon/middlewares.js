@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const ApiError = require("@utils/ApiError");
 
 /**
  * Áp dụng middleware cho Coupon Schema
@@ -35,20 +36,24 @@ const applyMiddlewares = (schema) => {
       this.applyFor === "products" &&
       (!this.productIds || this.productIds.length === 0)
     ) {
-      const error = new Error(
-        "Phải chỉ định ít nhất một sản phẩm khi applyFor là 'products'"
+      return next(
+        new ApiError(
+          400,
+          "Phải chỉ định ít nhất một sản phẩm khi applyFor là 'products'"
+        )
       );
-      return next(error);
     }
 
     if (
       this.applyFor === "categories" &&
       (!this.categoryIds || this.categoryIds.length === 0)
     ) {
-      const error = new Error(
-        "Phải chỉ định ít nhất một danh mục khi applyFor là 'categories'"
+      return next(
+        new ApiError(
+          400,
+          "Phải chỉ định ít nhất một danh mục khi applyFor là 'categories'"
+        )
       );
-      return next(error);
     }
 
     next();
@@ -89,10 +94,12 @@ const applyMiddlewares = (schema) => {
         await this.save();
 
         // Ngăn không cho xóa thực sự
-        const error = new Error(
-          "Không thể xóa mã giảm giá đã được sử dụng. Đã chuyển sang trạng thái 'archived'."
+        return next(
+          new ApiError(
+            409,
+            "Không thể xóa mã giảm giá đã được sử dụng. Đã chuyển sang trạng thái 'archived'."
+          )
         );
-        return next(error);
       }
 
       next();
@@ -124,10 +131,12 @@ const applyMiddlewares = (schema) => {
       await doc.updateOne({ status: "archived" });
 
       // Ngăn không cho xóa thực sự
-      const error = new Error(
-        "Không thể xóa mã giảm giá đã được sử dụng. Đã chuyển sang trạng thái 'archived'."
+      return next(
+        new ApiError(
+          409,
+          "Không thể xóa mã giảm giá đã được sử dụng. Đã chuyển sang trạng thái 'archived'."
+        )
       );
-      return next(error);
     }
 
     next();

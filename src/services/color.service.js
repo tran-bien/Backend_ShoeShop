@@ -1,7 +1,7 @@
 const { Color } = require("@models");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
-
+const ApiError = require("@utils/ApiError");
 // Hàm hỗ trợ xử lý các case sắp xếp
 const getSortOption = (sortParam) => {
   let sortOption = { createdAt: -1 };
@@ -72,9 +72,7 @@ const colorService = {
     });
 
     if (!color) {
-      const error = new Error("Không tìm thấy màu sắc");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy màu sắc");
     }
 
     return { success: true, color };
@@ -119,9 +117,7 @@ const colorService = {
     // Kiểm tra xem màu sắc có tồn tại chưa theo tên
     const existingColorName = await Color.findOne({ name: colorData.name });
     if (existingColorName) {
-      const error = new Error("Tên màu đã tồn tại");
-      error.statusCode = 409; // Conflict
-      throw error;
+      throw new ApiError(409, "Tên màu đã tồn tại");
     }
 
     // Kiểm tra trùng mã màu cho màu solid
@@ -132,15 +128,14 @@ const colorService = {
       });
 
       if (existingColorCode) {
-        const error = new Error(
+        throw new ApiError(
+          409,
           `Mã màu ${colorData.code} đã được sử dụng bởi màu "${existingColorCode.name}"`
         );
-        error.statusCode = 409; // Conflict
-        throw error;
       }
     }
 
-    // Kiểm tra trùng mã màu cho màu half
+    // Kiểm tra bộ màu trùng lặp khi thêm màu half
     if (
       colorData.type === "half" &&
       Array.isArray(colorData.colors) &&
@@ -169,7 +164,8 @@ const colorService = {
           (normalizedColors[0] === existingColors[1] &&
             normalizedColors[1] === existingColors[0])
         ) {
-          throw new Error(
+          throw new ApiError(
+            409,
             `Bộ màu này đã được sử dụng bởi màu "${halfColor.name}"`
           );
         }
@@ -196,9 +192,7 @@ const colorService = {
     const color = await Color.findById(id);
 
     if (!color) {
-      const error = new Error("Không tìm thấy màu sắc");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy màu sắc");
     }
 
     // Kiểm tra nếu đang cập nhật tên, xem tên đã tồn tại chưa
@@ -206,9 +200,7 @@ const colorService = {
       const existingColor = await Color.findOne({ name: updateData.name });
 
       if (existingColor) {
-        const error = new Error("Tên màu đã tồn tại");
-        error.statusCode = 409; // Conflict
-        throw error;
+        throw new ApiError(409, "Tên màu đã tồn tại");
       }
     }
 
@@ -221,11 +213,10 @@ const colorService = {
       });
 
       if (existingColorCode) {
-        const error = new Error(
+        throw new ApiError(
+          409,
           `Mã màu ${updateData.code} đã được sử dụng bởi màu "${existingColorCode.name}"`
         );
-        error.statusCode = 409; // Conflict
-        throw error;
       }
     }
 
@@ -262,7 +253,8 @@ const colorService = {
           (normalizedColors[0] === existingColors[1] &&
             normalizedColors[1] === existingColors[0])
         ) {
-          throw new Error(
+          throw new ApiError(
+            409,
             `Bộ màu này đã được sử dụng bởi màu "${halfColor.name}"`
           );
         }
@@ -293,9 +285,7 @@ const colorService = {
     const color = await Color.findById(id);
 
     if (!color) {
-      const error = new Error("Không tìm thấy màu sắc");
-      error.statusCode = 404;
-      throw error;
+      throw new ApiError(404, "Không tìm thấy màu sắc");
     }
 
     // Kiểm tra xem màu sắc có được sử dụng trong biến thể nào không
@@ -303,12 +293,10 @@ const colorService = {
 
     // Nếu có biến thể liên kết, thông báo lỗi và không cho xóa
     if (variantCount > 0) {
-      const error = new Error(
+      throw new ApiError(
+        409,
         `Màu sắc đang được sử dụng trong ${variantCount} biến thể sản phẩm nên không thể xóa.`
       );
-      error.statusCode = 409; // Conflict
-      error.variantCount = variantCount;
-      throw error;
     }
 
     // Nếu không có biến thể liên kết, tiến hành xóa mềm

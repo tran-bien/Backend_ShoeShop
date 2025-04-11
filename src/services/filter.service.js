@@ -1,6 +1,5 @@
 const { Product, Category, Brand, Color, Size, Variant } = require("@models");
-const mongoose = require("mongoose");
-
+const ApiError = require("@utils/ApiError");
 const filterService = {
   /**
    * Lấy tất cả thuộc tính dùng cho bộ lọc
@@ -85,9 +84,7 @@ const filterService = {
       });
 
     if (!product) {
-      const error = new Error("Không tìm thấy sản phẩm");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy sản phẩm");
     }
 
     // Trích xuất các màu sắc có sẵn cho sản phẩm

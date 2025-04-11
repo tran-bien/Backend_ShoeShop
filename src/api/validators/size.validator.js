@@ -1,4 +1,5 @@
 const { body, param, query } = require("express-validator");
+const ApiError = require("@utils/ApiError");
 
 const sizeValidator = {
   validateSizeId: [
@@ -12,11 +13,8 @@ const sizeValidator = {
       .isNumeric()
       .withMessage("Giá trị kích thước phải là số")
       .custom((value) => {
-        // Đảm bảo giá trị là số dương
-        if (Number(value) <= 0) {
-          const error = new Error("Giá trị kích thước phải lớn hơn 0");
-          error.statusCode = 400; // Bad Request
-          throw error;
+        if (parseFloat(value) <= 0) {
+          throw new ApiError(400, "Giá trị kích thước phải lớn hơn 0");
         }
         return true;
       }),
@@ -39,11 +37,8 @@ const sizeValidator = {
       .isNumeric()
       .withMessage("Giá trị kích thước phải là số")
       .custom((value) => {
-        // Đảm bảo giá trị là số dương
-        if (Number(value) <= 0) {
-          const error = new Error("Giá trị kích thước phải lớn hơn 0");
-          error.statusCode = 400; // Bad Request
-          throw error;
+        if (parseFloat(value) <= 0) {
+          throw new ApiError(400, "Giá trị kích thước phải lớn hơn 0");
         }
         return true;
       }),

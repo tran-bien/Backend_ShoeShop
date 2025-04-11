@@ -1,6 +1,7 @@
 const { body, param } = require("express-validator");
 const mongoose = require("mongoose");
 const User = require("@models/user");
+const ApiError = require("@utils/ApiError");
 
 // Validator cho đăng ký user
 const validateRegisterInput = [
@@ -54,9 +55,7 @@ const validateResetPassword = [
     .withMessage("Mật khẩu phải có ít nhất 1 ký tự đặc biệt"),
   body("confirmPassword").custom((value, { req }) => {
     if (value !== req.body.password) {
-      const error = new Error("Mật khẩu mới và xác nhận mật khẩu không khớp");
-      error.statusCode = 400; // Bad Request
-      throw error;
+      throw new ApiError(400, "Mật khẩu mới và xác nhận mật khẩu không khớp");
     }
     return true;
   }),
@@ -80,9 +79,7 @@ const validateChangePassword = [
     .withMessage("Mật khẩu mới phải có ít nhất 1 ký tự đặc biệt")
     .custom((value, { req }) => {
       if (value === req.body.currentPassword) {
-        const error = new Error("Mật khẩu mới phải khác mật khẩu hiện tại");
-        error.statusCode = 400; // Bad Request
-        throw error;
+        throw new ApiError(400, "Mật khẩu mới phải khác mật khẩu hiện tại");
       }
       return true;
     }),
@@ -91,9 +88,7 @@ const validateChangePassword = [
     .withMessage("Vui lòng xác nhận mật khẩu")
     .custom((value, { req }) => {
       if (value !== req.body.newPassword) {
-        const error = new Error("Mật khẩu mới và xác nhận mật khẩu không khớp");
-        error.statusCode = 400; // Bad Request
-        throw error;
+        throw new ApiError(400, "Mật khẩu mới và xác nhận mật khẩu không khớp");
       }
       return true;
     }),
@@ -116,15 +111,11 @@ const validateAdminLogoutUser = [
     .withMessage("Vui lòng cung cấp userId")
     .custom(async (value) => {
       if (!mongoose.Types.ObjectId.isValid(value)) {
-        const error = new Error("User ID không hợp lệ");
-        error.statusCode = 400; // Bad Request
-        throw error;
+        throw new ApiError(400, "User ID không hợp lệ");
       }
       const user = await User.findById(value);
       if (!user) {
-        const error = new Error("User không tồn tại");
-        error.statusCode = 404; // Not Found
-        throw error;
+        throw new ApiError(404, "User không tồn tại");
       }
       return true;
     }),
@@ -141,19 +132,13 @@ const validateVerifyOTP = [
     .withMessage("Mã OTP phải là số"),
   body().custom((_, { req }) => {
     if (!req.body.userId && !req.body.email) {
-      const error = new Error("Vui lòng cung cấp userId hoặc email");
-      error.statusCode = 400; // Bad Request
-      throw error;
+      throw new ApiError(400, "Vui lòng cung cấp userId hoặc email");
     }
     if (req.body.email && !req.body.email.match(/^\S+@\S+\.\S+$/)) {
-      const error = new Error("Email không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
+      throw new ApiError(400, "Email không hợp lệ");
     }
     if (req.body.userId && !mongoose.Types.ObjectId.isValid(req.body.userId)) {
-      const error = new Error("User ID không hợp lệ");
-      error.statusCode = 400; // Bad Request
-      throw error;
+      throw new ApiError(400, "User ID không hợp lệ");
     }
     return true;
   }),
@@ -173,9 +158,7 @@ const validateLogoutSession = [
     .withMessage("Vui lòng cung cấp sessionId")
     .custom((value) => {
       if (!mongoose.Types.ObjectId.isValid(value)) {
-        const error = new Error("Session ID không hợp lệ");
-        error.statusCode = 400; // Bad Request
-        throw error;
+        throw new ApiError(400, "Session ID không hợp lệ");
       }
       return true;
     }),

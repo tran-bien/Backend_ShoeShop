@@ -1,16 +1,17 @@
 const mongoose = require("mongoose");
+const cloudinary = require("cloudinary").v2;
 
 /**
- * Cập nhật rating trung bình của sản phẩm
- * @param {string} productId - ID của sản phẩm
+ * Áp dụng middleware cho Review Schema
+ * @param {mongoose.Schema} schema - Schema để áp dụng middleware
  */
-async function updateProductRating(productId) {
-  try {
-    const Review = mongoose.model("Review");
+const applyMiddlewares = (schema) => {
+  // Sau khi tạo hoặc cập nhật đánh giá, cập nhật rating trung bình cho sản phẩm
+  const updateProductRating = async function (productId) {
     const Product = mongoose.model("Product");
-    const Variant = mongoose.model("Variant");
+    const Review = mongoose.model("Review");
 
-    // Lấy thống kê đánh giá cho sản phẩm
+    // Tính trung bình đánh giá
     const stats = await Review.aggregate([
       {
         $match: {
@@ -22,156 +23,96 @@ async function updateProductRating(productId) {
       {
         $group: {
           _id: null,
-          averageRating: { $avg: "$rating" },
+          avgRating: { $avg: "$rating" },
           numReviews: { $sum: 1 },
-          ratingCounts: {
-            $push: "$rating",
-          },
         },
       },
     ]);
 
-    // Mặc định nếu không có đánh giá
-    let avgRating = 0;
-    let numReviews = 0;
-    let ratingDistribution = {
-      1: 0,
-      2: 0,
-      3: 0,
-      4: 0,
-      5: 0,
-    };
-
+    // Cập nhật sản phẩm
     if (stats.length > 0) {
-      // Làm tròn đến 1 chữ số thập phân
-      avgRating = Math.round(stats[0].averageRating * 10) / 10;
-      numReviews = stats[0].numReviews;
-
-      // Tính phân bố rating
-      if (stats[0].ratingCounts) {
-        stats[0].ratingCounts.forEach((rating) => {
-          ratingDistribution[rating] = (ratingDistribution[rating] || 0) + 1;
-        });
-      }
+      await Product.findByIdAndUpdate(productId, {
+        rating: Math.round(stats[0].avgRating * 10) / 10,
+        numReviews: stats[0].numReviews,
+      });
+    } else {
+      await Product.findByIdAndUpdate(productId, {
+        rating: 0,
+        numReviews: 0,
+      });
     }
+  };
 
-    // Cập nhật thông tin rating cho sản phẩm
-    await Product.findByIdAndUpdate(productId, {
-      rating: avgRating,
-      numReviews: numReviews,
-      ratingDistribution: ratingDistribution,
-    });
+  // Xóa tất cả ảnh của review từ Cloudinary
+  const deleteReviewImages = async function (review) {
+    if (!review.images || review.images.length === 0) return;
 
-    // Cập nhật rating cho các biến thể của sản phẩm
-    await Variant.updateMany(
-      { product: new mongoose.Types.ObjectId(productId) },
-      { rating: avgRating }
-    );
-
-    console.log(
-      `[review/middleware] Đã cập nhật rating cho sản phẩm ${productId}: ${avgRating} (${numReviews} đánh giá)`
-    );
-  } catch (error) {
-    console.error(`[review/middleware] Lỗi cập nhật rating: ${error.message}`);
-  }
-}
-
-/**
- * Áp dụng middleware cho Review Schema
- * @param {mongoose.Schema} schema - Schema để áp dụng middleware
- */
-const applyMiddlewares = (schema) => {
-  // Kiểm tra xác thực mua hàng trước khi tạo đánh giá
-  schema.pre("save", async function (next) {
     try {
-      if (this.isNew) {
-        // Kiểm tra xem người dùng đã mua sản phẩm này chưa
-        if (this.order && this.user && this.variant) {
-          const Order = mongoose.model("Order");
-          const order = await Order.findOne({
-            _id: this.order,
-            user: this.user,
-            "orderItems.variant": this.variant,
-            status: "delivered",
-          });
+      // Lấy tất cả public_id của ảnh
+      const publicIds = review.images
+        .filter((img) => img.public_id)
+        .map((img) => img.public_id);
 
-          this.isVerifiedPurchase = Boolean(order);
-
-          // Kiểm tra nếu đã có đánh giá cho sản phẩm này từ người dùng
-          if (order) {
-            const existingReview = await mongoose.model("Review").findOne({
-              user: this.user,
-              product: this.product,
-              variant: this.variant,
-              deletedAt: null,
-            });
-
-            if (existingReview) {
-              return next(new Error("Bạn đã đánh giá sản phẩm này rồi"));
-            }
-          }
-        }
-
-        // Nếu không xác thực được đơn hàng, kiểm tra quyền admin
-        if (!this.isVerifiedPurchase) {
-          const User = mongoose.model("User");
-          const user = await User.findById(this.user);
-
-          // Nếu không phải admin và không xác thực được thì từ chối
-          if (user && user.role !== "admin") {
-            return next(new Error("Chỉ có thể đánh giá sản phẩm đã mua"));
-          }
-        }
+      if (publicIds.length > 0) {
+        // Xóa ảnh từ Cloudinary
+        const deletePromises = publicIds.map((publicId) =>
+          cloudinary.uploader.destroy(publicId)
+        );
+        await Promise.all(deletePromises);
+        console.log(`Đã xóa ${publicIds.length} ảnh của review ${review._id}`);
       }
-      next();
     } catch (error) {
-      next(error);
+      console.error(`Lỗi khi xóa ảnh review: ${error.message}`);
+      // Không throw lỗi - vẫn tiếp tục xóa review
     }
-  });
+  };
 
-  // Sau khi tạo/cập nhật đánh giá, cập nhật thông tin đánh giá của sản phẩm
+  // Sau khi lưu đánh giá
   schema.post("save", async function () {
-    if (this.product) {
-      await updateProductRating(this.product);
+    await updateProductRating(this.product);
+  });
+
+  // Sau khi cập nhật đánh giá
+  schema.post("findOneAndUpdate", async function (doc) {
+    if (doc) {
+      await updateProductRating(doc.product);
     }
   });
 
-  // Trước khi xóa đánh giá, lưu ID sản phẩm
-  schema.pre("remove", async function (next) {
-    if (this.product) {
+  // Trước khi xóa đánh giá
+  schema.pre(
+    "deleteOne",
+    { document: true, query: false },
+    async function (next) {
+      // Lưu id sản phẩm để cập nhật sau khi xóa
       this._productId = this.product;
-    }
-    next();
-  });
 
-  // Sau khi xóa đánh giá, cập nhật thông tin đánh giá sản phẩm
-  schema.post("remove", async function () {
+      // Xóa ảnh từ Cloudinary nếu có
+      await deleteReviewImages(this);
+      next();
+    }
+  );
+
+  // Sau khi xóa đánh giá
+  schema.post("deleteOne", { document: true, query: false }, async function () {
     if (this._productId) {
       await updateProductRating(this._productId);
     }
   });
 
-  // Xử lý xóa mềm và khôi phục
-  schema.pre("findOneAndUpdate", async function (next) {
+  // Xử lý cho deleteMany
+  schema.pre("deleteMany", async function (next) {
     try {
-      const update = this.getUpdate();
+      // Lấy danh sách review bị ảnh hưởng để xóa ảnh và cập nhật rating
+      const reviews = await this.model.find(this.getFilter());
 
-      // Xử lý xóa mềm - theo dõi productId để cập nhật rating
-      if (update.$set && update.$set.deletedAt !== undefined) {
-        const doc = await this.model.findOne(this.getFilter());
-        if (doc && doc.product) {
-          this._productIdToUpdate = doc.product;
-        }
-      }
+      // Lưu thông tin để xử lý sau khi xóa
+      this._reviews = reviews;
+      this._productIds = reviews.map((review) => review.product.toString());
 
-      // Xử lý khôi phục - theo dõi productId để cập nhật rating
-      if (update.$set && update.$set.deletedAt === null) {
-        const doc = await this.model.findOne(this.getFilter(), {
-          includeDeleted: true,
-        });
-        if (doc && doc.product) {
-          this._productIdToUpdate = doc.product;
-        }
+      // Xóa ảnh của tất cả review bị ảnh hưởng
+      for (const review of reviews) {
+        await deleteReviewImages(review);
       }
 
       next();
@@ -180,18 +121,14 @@ const applyMiddlewares = (schema) => {
     }
   });
 
-  // Cập nhật rating sau khi cập nhật đánh giá
-  schema.post("findOneAndUpdate", async function (doc) {
-    // Cập nhật rating nếu đánh giá đã thay đổi
-    if (doc && doc.product) {
-      await updateProductRating(doc.product);
-    }
-
-    // Xóa biến tạm để tránh rò rỉ bộ nhớ
-    if (this._productIdToUpdate) {
-      delete this._productIdToUpdate;
+  schema.post("deleteMany", async function () {
+    // Cập nhật tất cả sản phẩm bị ảnh hưởng
+    if (this._productIds && this._productIds.length > 0) {
+      for (const productId of this._productIds) {
+        await updateProductRating(productId);
+      }
     }
   });
 };
 
-module.exports = { applyMiddlewares, updateProductRating };
+module.exports = { applyMiddlewares };

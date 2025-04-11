@@ -30,18 +30,19 @@ const ReviewSchema = new mongoose.Schema(
     },
     content: {
       type: String,
+      trim: true,
       maxlength: 1500,
     },
     images: [
       {
-        url: String,
-        public_id: String,
+        url: {
+          type: String,
+        },
+        public_id: {
+          type: String,
+        },
       },
     ],
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
     likes: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -51,6 +52,10 @@ const ReviewSchema = new mongoose.Schema(
     isVerifiedPurchase: {
       type: Boolean,
       default: false,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
     deletedAt: {
       type: Date,

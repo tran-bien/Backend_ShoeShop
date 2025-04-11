@@ -1,4 +1,6 @@
 const mongoose = require("mongoose");
+const { createNotification } = require("@services/notification.service");
+const ApiError = require("@utils/ApiError");
 
 /**
  * Áp dụng middleware cho CancelRequest Schema
@@ -14,17 +16,18 @@ const applyMiddlewares = (schema) => {
 
         // Kiểm tra đơn có tồn tại không
         if (!order) {
-          throw new Error("Không tìm thấy đơn hàng");
+          throw new ApiError(404, "Không tìm thấy đơn hàng");
         }
 
         // Kiểm tra đơn có thuộc về người dùng không
         if (order.user.toString() !== this.user.toString()) {
-          throw new Error("Đơn hàng không thuộc về bạn");
+          throw new ApiError(403, "Đơn hàng không thuộc về bạn");
         }
 
         // Kiểm tra trạng thái đơn hàng có cho phép hủy không
         if (!["pending", "confirmed"].includes(order.status)) {
-          throw new Error(
+          throw new ApiError(
+            400,
             "Chỉ có thể hủy đơn hàng ở trạng thái chờ xác nhận hoặc đã xác nhận"
           );
         }
@@ -37,7 +40,10 @@ const applyMiddlewares = (schema) => {
         });
 
         if (existingRequest) {
-          throw new Error("Đã có yêu cầu hủy cho đơn hàng này đang chờ xử lý");
+          throw new ApiError(
+            400,
+            "Đã có yêu cầu hủy cho đơn hàng này đang chờ xử lý"
+          );
         }
       }
       next();
@@ -88,32 +94,28 @@ const applyMiddlewares = (schema) => {
             },
           });
 
-          // Tạo thông báo cho người dùng - hiện tại comment lại
-          /*
-          const createNotification = require("../services/notification.service").createNotification;
+          // Tạo thông báo cho người dùng
           await createNotification(this.user, {
-            type: "cancel_request",
+            type: "cancelRequest",
             title: "Yêu cầu hủy đơn được chấp nhận",
-            content: `Yêu cầu hủy đơn hàng của bạn đã được chấp nhận.`,
-            refId: this.order,
-            refModel: "Order"
+            message: `Yêu cầu hủy đơn hàng của bạn đã được chấp nhận.`,
+            relatedId: this.order,
+            onModel: "Order",
           });
-          */
         }
 
         // Nếu yêu cầu hủy bị từ chối, tạo thông báo
         if (currentStatus === "rejected") {
-          // Tạo thông báo cho người dùng - hiện tại comment lại
-          /*
-          const createNotification = require("../services/notification.service").createNotification;
+          // Tạo thông báo cho người dùng
           await createNotification(this.user, {
-            type: "cancel_request",
+            type: "cancelRequest",
             title: "Yêu cầu hủy đơn bị từ chối",
-            content: `Yêu cầu hủy đơn hàng của bạn đã bị từ chối. ${this.adminResponse || ''}`,
-            refId: this.order,
-            refModel: "Order"
+            message: `Yêu cầu hủy đơn hàng của bạn đã bị từ chối. ${
+              this.adminResponse || ""
+            }`,
+            relatedId: this.order,
+            onModel: "Order",
           });
-          */
         }
 
         // Nếu trạng thái là "approved" hoặc "rejected", cập nhật thời gian xử lý
@@ -180,36 +182,32 @@ const applyMiddlewares = (schema) => {
             },
           });
 
-          // Tạo thông báo - hiện tại comment lại
-          /*
-          const createNotification = require("../services/notification.service").createNotification;
+          // Tạo thông báo
           await createNotification(doc.user, {
-            type: "cancel_request",
+            type: "cancelRequest",
             title: "Yêu cầu hủy đơn được chấp nhận",
-            content: `Yêu cầu hủy đơn hàng của bạn đã được chấp nhận.`,
-            refId: doc.order,
-            refModel: "Order"
+            message: `Yêu cầu hủy đơn hàng của bạn đã được chấp nhận.`,
+            relatedId: doc.order,
+            onModel: "Order",
           });
-          */
         }
 
         // Nếu yêu cầu bị từ chối
         if (doc.status === "rejected" && this._oldStatus !== "rejected") {
-          // Tạo thông báo - hiện tại comment lại
-          /*
-          const createNotification = require("../services/notification.service").createNotification;
+          // Tạo thông báo
           await createNotification(doc.user, {
-            type: "cancel_request",
+            type: "cancelRequest",
             title: "Yêu cầu hủy đơn bị từ chối",
-            content: `Yêu cầu hủy đơn hàng của bạn đã bị từ chối. ${doc.adminResponse || ''}`,
-            refId: doc.order,
-            refModel: "Order"
+            message: `Yêu cầu hủy đơn hàng của bạn đã bị từ chối. ${
+              doc.adminResponse || ""
+            }`,
+            relatedId: doc.order,
+            onModel: "Order",
           });
-          */
         }
       }
     } catch (error) {
-      console.error("Lỗi xử lý sau khi cập nhật yêu cầu hủy:", error);
+      console.error("Lỗi khi xử lý sau cập nhật yêu cầu hủy đơn:", error);
     }
   });
 };

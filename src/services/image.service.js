@@ -1,5 +1,6 @@
 const cloudinary = require("cloudinary").v2;
-const { Product, Variant, Brand, User } = require("@models");
+const { Product, Variant, Brand, User, Review } = require("@models");
+const ApiError = require("@utils/ApiError");
 
 const imageService = {
   /**
@@ -29,9 +30,7 @@ const imageService = {
     // Tìm user
     const user = await User.findById(userId);
     if (!user) {
-      const error = new Error("Không tìm thấy người dùng");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy người dùng");
     }
 
     // Nếu người dùng đã có ảnh đại diện, xóa ảnh cũ
@@ -68,9 +67,7 @@ const imageService = {
     // Tìm user
     const user = await User.findById(userId);
     if (!user) {
-      const error = new Error("Không tìm thấy người dùng");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy người dùng");
     }
 
     // Nếu người dùng có ảnh đại diện, xóa nó
@@ -107,9 +104,7 @@ const imageService = {
     // Tìm brand
     const brand = await Brand.findById(brandId);
     if (!brand) {
-      const error = new Error("Không tìm thấy thương hiệu");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy thương hiệu");
     }
 
     // Nếu brand đã có logo, xóa logo cũ
@@ -143,9 +138,7 @@ const imageService = {
     // Tìm brand
     const brand = await Brand.findById(brandId);
     if (!brand) {
-      const error = new Error("Không tìm thấy thương hiệu");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy thương hiệu");
     }
 
     // Nếu brand có logo, xóa nó
@@ -181,9 +174,7 @@ const imageService = {
   addProductImages: async (productId, images) => {
     const product = await Product.findById(productId);
     if (!product) {
-      const error = new Error("Không tìm thấy sản phẩm");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy sản phẩm");
     }
 
     // Tìm giá trị displayOrder lớn nhất trong mảng hiện tại
@@ -231,9 +222,7 @@ const imageService = {
   removeProductImages: async (productId, imageIds) => {
     const product = await Product.findById(productId);
     if (!product) {
-      const error = new Error("Không tìm thấy sản phẩm");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy sản phẩm");
     }
 
     // Lọc ra những ảnh cần xóa
@@ -242,9 +231,7 @@ const imageService = {
     );
 
     if (imagesToDelete.length === 0) {
-      const error = new Error("Không tìm thấy ảnh cần xóa");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy ảnh cần xóa");
     }
 
     // Lấy public_id để xóa trên Cloudinary
@@ -290,9 +277,7 @@ const imageService = {
   addVariantImages: async (variantId, images) => {
     const variant = await Variant.findById(variantId);
     if (!variant) {
-      const error = new Error("Không tìm thấy biến thể");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy biến thể");
     }
 
     // Tìm giá trị displayOrder lớn nhất trong mảng hiện tại
@@ -340,9 +325,7 @@ const imageService = {
   removeVariantImages: async (variantId, imageIds) => {
     const variant = await Variant.findById(variantId);
     if (!variant) {
-      const error = new Error("Không tìm thấy biến thể");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy biến thể");
     }
 
     // Lọc ra những ảnh cần xóa
@@ -351,9 +334,7 @@ const imageService = {
     );
 
     if (imagesToDelete.length === 0) {
-      const error = new Error("Không tìm thấy ảnh cần xóa");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy ảnh cần xóa");
     }
 
     // Lấy public_id để xóa trên Cloudinary
@@ -399,9 +380,7 @@ const imageService = {
   reorderProductImages: async (productId, imageOrders) => {
     const product = await Product.findById(productId);
     if (!product) {
-      const error = new Error("Không tìm thấy sản phẩm");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy sản phẩm");
     }
 
     // Cập nhật thứ tự
@@ -433,9 +412,7 @@ const imageService = {
   reorderVariantImages: async (variantId, imageOrders) => {
     const variant = await Variant.findById(variantId);
     if (!variant) {
-      const error = new Error("Không tìm thấy biến thể");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy biến thể");
     }
 
     // Cập nhật thứ tự
@@ -467,9 +444,7 @@ const imageService = {
   setProductMainImage: async (productId, imageId) => {
     const product = await Product.findById(productId);
     if (!product) {
-      const error = new Error("Không tìm thấy sản phẩm");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy sản phẩm");
     }
 
     // Bỏ đánh dấu ảnh chính cũ
@@ -480,9 +455,7 @@ const imageService = {
     // Đánh dấu ảnh mới làm ảnh chính
     const mainImage = product.images.id(imageId);
     if (!mainImage) {
-      const error = new Error("Không tìm thấy ảnh cần đặt làm ảnh chính");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy ảnh cần đặt làm ảnh chính");
     }
 
     mainImage.isMain = true;
@@ -505,9 +478,7 @@ const imageService = {
   setVariantMainImage: async (variantId, imageId) => {
     const variant = await Variant.findById(variantId);
     if (!variant) {
-      const error = new Error("Không tìm thấy biến thể");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy biến thể");
     }
 
     // Bỏ đánh dấu ảnh chính cũ
@@ -518,9 +489,7 @@ const imageService = {
     // Đánh dấu ảnh mới làm ảnh chính
     const mainImage = variant.imagesvariant.id(imageId);
     if (!mainImage) {
-      const error = new Error("Không tìm thấy ảnh cần đặt làm ảnh chính");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy ảnh cần đặt làm ảnh chính");
     }
 
     mainImage.isMain = true;
@@ -531,6 +500,109 @@ const imageService = {
       success: true,
       message: "Đã cập nhật ảnh chính biến thể",
       images: variant.imagesvariant,
+    };
+  },
+
+  /**
+   * Thêm ảnh cho review
+   * @param {String} reviewId - ID đánh giá
+   * @param {Array} images - Mảng các đối tượng ảnh
+   * @returns {Promise<Object>} - Kết quả cập nhật
+   */
+  addReviewImages: async (reviewId, images) => {
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      throw new ApiError(404, "Không tìm thấy đánh giá");
+    }
+
+    // Kiểm tra giới hạn số lượng ảnh (tối đa 5 ảnh)
+    if (review.images.length + images.length > 5) {
+      throw new ApiError(400, "Mỗi đánh giá chỉ được phép có tối đa 5 ảnh");
+    }
+
+    // Thêm ảnh mới vào mảng ảnh hiện có
+    review.images.push(...images);
+    await review.save();
+
+    return {
+      success: true,
+      message: "Thêm ảnh đánh giá thành công",
+      images: review.images,
+    };
+  },
+
+  /**
+   * Xóa ảnh của review
+   * @param {String} reviewId - ID đánh giá
+   * @param {Array} imageIds - Mảng ID ảnh cần xóa
+   * @returns {Promise<Object>} - Kết quả xóa
+   */
+  removeReviewImages: async (reviewId, imageIds) => {
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      throw new ApiError(404, "Không tìm thấy đánh giá");
+    }
+
+    // Lọc ra những ảnh cần xóa
+    const imagesToDelete = review.images.filter((img) =>
+      imageIds.includes(img._id.toString())
+    );
+
+    if (imagesToDelete.length === 0) {
+      throw new ApiError(404, "Không tìm thấy ảnh cần xóa");
+    }
+
+    // Lấy public_id để xóa trên Cloudinary
+    const publicIds = imagesToDelete.map((img) => img.public_id);
+
+    // Xóa ảnh trên Cloudinary
+    await imageService.deleteImages(publicIds);
+
+    // Xóa ảnh khỏi model
+    review.images = review.images.filter(
+      (img) => !imageIds.includes(img._id.toString())
+    );
+
+    await review.save();
+
+    return {
+      success: true,
+      message: "Xóa ảnh đánh giá thành công",
+      images: review.images,
+    };
+  },
+
+  /**
+   * Xóa tất cả ảnh của review
+   * @param {String} reviewId - ID đánh giá
+   * @returns {Promise<Object>} - Kết quả xóa
+   */
+  removeAllReviewImages: async (reviewId) => {
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      throw new ApiError(404, "Không tìm thấy đánh giá");
+    }
+
+    if (!review.images || review.images.length === 0) {
+      return {
+        success: true,
+        message: "Đánh giá không có ảnh nào",
+      };
+    }
+
+    // Lấy public_id để xóa trên Cloudinary
+    const publicIds = review.images.map((img) => img.public_id);
+
+    // Xóa ảnh trên Cloudinary
+    await imageService.deleteImages(publicIds);
+
+    // Xóa tất cả ảnh khỏi model
+    review.images = [];
+    await review.save();
+
+    return {
+      success: true,
+      message: "Xóa tất cả ảnh đánh giá thành công",
     };
   },
 };

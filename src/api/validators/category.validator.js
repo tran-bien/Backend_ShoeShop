@@ -1,14 +1,13 @@
 const { body, param, query } = require("express-validator");
 const mongoose = require("mongoose");
+const ApiError = require("@utils/ApiError");
 
 /**
  * Kiểm tra ID có phải là MongoDB ObjectId hợp lệ không
  */
 const isValidObjectId = (value) => {
   if (!mongoose.Types.ObjectId.isValid(value)) {
-    const error = new Error("ID không hợp lệ");
-    error.statusCode = 400; // Bad Request
-    throw error;
+    throw new ApiError(400, "ID không hợp lệ");
   }
   return true;
 };
@@ -18,11 +17,10 @@ const isValidObjectId = (value) => {
  */
 const isValidSlug = (value) => {
   if (value && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) {
-    const error = new Error(
+    throw new ApiError(
+      400,
       "Slug phải chỉ chứa chữ thường, số và dấu gạch ngang"
     );
-    error.statusCode = 400; // Bad Request
-    throw error;
   }
   return true;
 };

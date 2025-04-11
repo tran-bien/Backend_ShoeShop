@@ -1,4 +1,4 @@
-const { validateRequest } = require("@middlewares/validateRequest");
+const validateRequest = require("@middlewares/validateRequest");
 
 /**
  * Gom nhóm validators + validateRequest để code ngắn gọn

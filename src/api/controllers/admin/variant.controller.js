@@ -55,27 +55,20 @@ const variantController = {
   }),
 
   /**
-   * @route PUT /api/admin/variants/:id/restore
-   * @desc Khôi phục biến thể đã xóa nếu không có biến thể cùng màu
+   * @desc    Khôi phục biến thể đã xóa
+   * @route   POST /api/admin/variants/:id/restore
+   * @access  Admin
    */
   restoreVariant: asyncHandler(async (req, res) => {
     try {
       const result = await variantService.restoreVariant(req.params.id);
       return res.json(result);
     } catch (error) {
-      // Xử lý trường hợp đặc biệt khi không thể khôi phục do trùng màu
-      if (error.existingVariant) {
-        return res.status(409).json({
-          success: false,
-          message: error.message,
-          existingVariant: error.existingVariant,
-        });
-      }
-
       // Đối với các lỗi khác, middleware xử lý lỗi sẽ tiếp quản
       throw error;
     }
   }),
+
   /**
    * @desc    Cập nhật số lượng tồn kho của biến thể
    * @route   PATCH /api/admin/variants/:id/inventory

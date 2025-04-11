@@ -1,6 +1,7 @@
 const { Category, Product, Variant } = require("@models");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
+const ApiError = require("@utils/ApiError");
 
 // Hàm hỗ trợ xử lý các case sắp xếp
 const getSortOption = (sortParam) => {
@@ -71,9 +72,7 @@ const categoryService = {
     });
 
     if (!category) {
-      const error = new Error("Không tìm thấy danh mục");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy danh mục");
     }
 
     return category;
@@ -124,9 +123,7 @@ const categoryService = {
     });
 
     if (!category) {
-      const error = new Error("Không tìm thấy danh mục");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy danh mục");
     }
 
     return category;
@@ -143,9 +140,7 @@ const categoryService = {
     });
 
     if (!category) {
-      const error = new Error("Không tìm thấy danh mục");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy danh mục");
     }
 
     return category;
@@ -168,9 +163,7 @@ const categoryService = {
     });
 
     if (existingCategory) {
-      const error = new Error("Tên danh mục đã tồn tại");
-      error.statusCode = 409; // Conflict
-      throw error;
+      throw new ApiError(409, "Tên danh mục đã tồn tại");
     }
 
     const category = new Category(categoryData);
@@ -191,9 +184,7 @@ const categoryService = {
     const category = await Category.findById(categoryId);
 
     if (!category) {
-      const error = new Error("Không tìm thấy danh mục");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy danh mục");
     }
 
     // Kiểm tra xem có cập nhật tên không và tên mới có trùng không
@@ -203,9 +194,7 @@ const categoryService = {
         _id: { $ne: categoryId },
       });
       if (existingCategory) {
-        const error = new Error("Tên danh mục đã tồn tại");
-        error.statusCode = 409; // Conflict
-        throw error;
+        throw new ApiError(409, "Tên danh mục đã tồn tại");
       }
     }
 
@@ -231,9 +220,7 @@ const categoryService = {
     const category = await Category.findById(categoryId);
 
     if (!category) {
-      const error = new Error("Không tìm thấy danh mục");
-      error.statusCode = 404;
-      throw error;
+      throw new ApiError(404, "Không tìm thấy danh mục");
     }
 
     // Kiểm tra xem category có được sử dụng trong sản phẩm nào không
@@ -270,11 +257,10 @@ const categoryService = {
     const category = await Category.restoreById(categoryId);
 
     if (!category) {
-      const error = new Error(
+      throw new ApiError(
+        404,
         "Không tìm thấy danh mục hoặc danh mục không bị xóa"
       );
-      error.statusCode = 404;
-      throw error;
     }
 
     // Kích hoạt trạng thái category (vì restore chỉ xóa deletedAt mà không đổi isActive)
@@ -328,9 +314,7 @@ const categoryService = {
     const category = await Category.findById(categoryId);
 
     if (!category) {
-      const error = new Error("Không tìm thấy danh mục");
-      error.statusCode = 404; // Not Found
-      throw error;
+      throw new ApiError(404, "Không tìm thấy danh mục");
     }
 
     // Cập nhật trạng thái category

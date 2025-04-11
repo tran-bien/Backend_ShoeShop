@@ -1,5 +1,6 @@
 const { body, param, query } = require("express-validator");
 const mongoose = require("mongoose");
+const ApiError = require("@utils/ApiError");
 
 const checkDuplicateSizes = (sizes) => {
   if (!sizes || !Array.isArray(sizes)) return true;
@@ -13,11 +14,10 @@ const checkDuplicateSizes = (sizes) => {
 
   const uniqueIds = new Set(sizeIds);
   if (uniqueIds.size !== sizeIds.length) {
-    const error = new Error(
+    throw new ApiError(
+      400,
       "Mỗi kích thước chỉ được xuất hiện một lần trong biến thể"
     );
-    error.statusCode = 400; // Bad Request
-    throw error;
   }
 
   return true;
@@ -31,9 +31,7 @@ const variantValidator = {
       .withMessage("ID biến thể không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          const error = new Error("ID biến thể không hợp lệ");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "ID biến thể không hợp lệ");
         }
         return true;
       }),
@@ -46,9 +44,7 @@ const variantValidator = {
       .withMessage("ID sản phẩm không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          const error = new Error("ID sản phẩm không hợp lệ");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "ID sản phẩm không hợp lệ");
         }
         return true;
       }),
@@ -58,9 +54,7 @@ const variantValidator = {
       .withMessage("ID màu sắc không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          const error = new Error("ID màu sắc không hợp lệ");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "ID màu sắc không hợp lệ");
         }
         return true;
       }),
@@ -78,9 +72,7 @@ const variantValidator = {
       .withMessage("Giá gốc phải là số dương")
       .custom((value, { req }) => {
         if (parseFloat(value) > parseFloat(req.body.price)) {
-          const error = new Error("Giá gốc không được lớn hơn giá bán");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "Giá gốc không được lớn hơn giá bán");
         }
         return true;
       }),
@@ -109,9 +101,7 @@ const variantValidator = {
       .withMessage("ID kích thước không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          const error = new Error("ID kích thước không hợp lệ");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "ID kích thước không hợp lệ");
         }
         return true;
       }),
@@ -131,9 +121,7 @@ const variantValidator = {
       .withMessage("ID biến thể không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          const error = new Error("ID biến thể không hợp lệ");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "ID biến thể không hợp lệ");
         }
         return true;
       }),
@@ -142,9 +130,7 @@ const variantValidator = {
       .optional()
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          const error = new Error("ID màu sắc không hợp lệ");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "ID màu sắc không hợp lệ");
         }
         return true;
       }),
@@ -163,9 +149,7 @@ const variantValidator = {
           req.body.price !== undefined &&
           parseFloat(value) > parseFloat(req.body.price)
         ) {
-          const error = new Error("Giá gốc không được lớn hơn giá bán");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "Giá gốc không được lớn hơn giá bán");
         }
         return true;
       }),
@@ -196,9 +180,7 @@ const variantValidator = {
       .withMessage("ID kích thước không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          const error = new Error("ID kích thước không hợp lệ");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "ID kích thước không hợp lệ");
         }
         return true;
       }),
@@ -228,9 +210,7 @@ const variantValidator = {
       .optional()
       .custom((value) => {
         if (value && !mongoose.Types.ObjectId.isValid(value)) {
-          const error = new Error("ID sản phẩm không hợp lệ");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "ID sản phẩm không hợp lệ");
         }
         return true;
       }),
@@ -239,9 +219,7 @@ const variantValidator = {
       .optional()
       .custom((value) => {
         if (value && !mongoose.Types.ObjectId.isValid(value)) {
-          const error = new Error("ID màu sắc không hợp lệ");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "ID màu sắc không hợp lệ");
         }
         return true;
       }),
@@ -266,11 +244,10 @@ const variantValidator = {
           req.query.costPriceMin &&
           Number(value) < Number(req.query.costPriceMin)
         ) {
-          const error = new Error(
+          throw new ApiError(
+            400,
             "Giá nhập tối đa phải lớn hơn hoặc bằng giá nhập tối thiểu"
           );
-          error.statusCode = 400; // Bad Request
-          throw error;
         }
         return true;
       }),
@@ -287,11 +264,10 @@ const variantValidator = {
       .withMessage("Giá bán gốc tối đa phải là số nguyên không âm")
       .custom((value, { req }) => {
         if (req.query.priceMin && Number(value) < Number(req.query.priceMin)) {
-          const error = new Error(
+          throw new ApiError(
+            400,
             "Giá bán gốc tối đa phải lớn hơn hoặc bằng giá bán gốc tối thiểu"
           );
-          error.statusCode = 400; // Bad Request
-          throw error;
         }
         return true;
       }),
@@ -311,11 +287,10 @@ const variantValidator = {
           req.query.finalPriceMin &&
           Number(value) < Number(req.query.finalPriceMin)
         ) {
-          const error = new Error(
+          throw new ApiError(
+            400,
             "Giá cuối tối đa phải lớn hơn hoặc bằng giá cuối tối thiểu"
           );
-          error.statusCode = 400; // Bad Request
-          throw error;
         }
         return true;
       }),
@@ -334,9 +309,7 @@ const variantValidator = {
           JSON.parse(value);
           return true;
         } catch (error) {
-          const customError = new Error("Chuỗi sắp xếp không hợp lệ");
-          customError.statusCode = 400; // Bad Request
-          throw customError;
+          throw new ApiError(400, "Chuỗi sắp xếp không hợp lệ");
         }
       }),
   ],
@@ -348,9 +321,7 @@ const variantValidator = {
       .withMessage("ID biến thể không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          const error = new Error("ID biến thể không hợp lệ");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "ID biến thể không hợp lệ");
         }
         return true;
       }),
@@ -364,9 +335,7 @@ const variantValidator = {
       .withMessage("ID kích thước không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          const error = new Error("ID kích thước không hợp lệ");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "ID kích thước không hợp lệ");
         }
         return true;
       }),
@@ -388,11 +357,10 @@ const variantValidator = {
 
       const uniqueIds = new Set(sizeIds);
       if (uniqueIds.size !== sizeIds.length) {
-        const error = new Error(
+        throw new ApiError(
+          400,
           "Mỗi kích thước chỉ được xuất hiện một lần trong cập nhật tồn kho"
         );
-        error.statusCode = 400; // Bad Request
-        throw error;
       }
 
       return true;
@@ -406,9 +374,7 @@ const variantValidator = {
       .withMessage("ID biến thể không được để trống")
       .custom((value) => {
         if (!mongoose.Types.ObjectId.isValid(value)) {
-          const error = new Error("ID biến thể không hợp lệ");
-          error.statusCode = 400; // Bad Request
-          throw error;
+          throw new ApiError(400, "ID biến thể không hợp lệ");
         }
         return true;
       }),

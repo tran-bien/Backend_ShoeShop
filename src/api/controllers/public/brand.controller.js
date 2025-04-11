@@ -8,7 +8,10 @@ const brandController = {
    */
   getPublicAllBrands: asyncHandler(async (req, res) => {
     const result = await brandService.getPublicAllBrands();
-    return res.json(result);
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
   }),
 
   /**
@@ -17,7 +20,7 @@ const brandController = {
    */
   getPublicBrandById: asyncHandler(async (req, res) => {
     const brand = await brandService.getPublicBrandById(req.params.id);
-    return res.json({
+    return res.status(200).json({
       success: true,
       brand,
     });
@@ -29,7 +32,7 @@ const brandController = {
    */
   getBrandBySlug: asyncHandler(async (req, res) => {
     const brand = await brandService.getBrandBySlug(req.params.slug);
-    return res.json({
+    return res.status(200).json({
       success: true,
       brand,
     });
