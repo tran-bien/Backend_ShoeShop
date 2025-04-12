@@ -15,6 +15,7 @@ const adminSizeRoutes = require("@routes/admin/size.routes");
 const adminProductRoutes = require("@routes/admin/product.routes");
 const userProductRoutes = require("@routes/public/product.routes");
 const adminVariantRoutes = require("@routes/admin/variant.routes");
+const userVariantRoutes = require("@routes/public/variant.routes");
 const filterRoutes = require("@routes/public/filter.routes");
 
 // Routes người dùng
@@ -72,5 +73,8 @@ router.use("/admin/reports", adminReportRoutes);
 router.use("/admin/users", adminUserRoutes);
 router.use("/admin/coupons", adminCouponRoutes);
 router.use("/admin/reviews", adminReviewRoutes);
+
+// Routes công khai
+router.use("/variants", userVariantRoutes);
 
 module.exports = router;

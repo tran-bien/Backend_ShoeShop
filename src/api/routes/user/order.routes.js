@@ -55,6 +55,12 @@ router
   );
 
 /**
+ * @description Lấy thống kê đơn hàng theo trạng thái
+ * @access      Người dùng đã đăng nhập
+ */
+router.get("/stats", orderController.getUserOrderStats);
+
+/**
  * @description Thanh toán lại đơn hàng
  * @access      Người dùng đã đăng nhập
  */

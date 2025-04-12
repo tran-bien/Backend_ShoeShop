@@ -186,6 +186,21 @@ const repayOrder = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Lấy thống kê đơn hàng theo trạng thái
+ * @route   GET /api/orders/stats
+ * @access  Người dùng đã đăng nhập
+ */
+const getUserOrderStats = asyncHandler(async (req, res) => {
+  const stats = await orderService.getUserOrderStats(req.user.id);
+
+  res.status(HTTP_STATUS.OK).json({
+    success: true,
+    message: "Lấy thống kê đơn hàng thành công",
+    data: stats,
+  });
+});
+
 module.exports = {
   getOrders,
   getOrderById,
@@ -195,4 +210,5 @@ module.exports = {
   vnpayCallback,
   vnpayIpn,
   repayOrder,
+  getUserOrderStats,
 };

@@ -554,7 +554,7 @@ const adminReviewService = {
       throw new ApiError(404, "Không tìm thấy sản phẩm");
     }
 
-    // Tính thống kê đánh giá
+    // Tính thống kê đánh giá - chỉ từ đánh giá active và không bị xóa mềm
     const stats = await Review.aggregate([
       {
         $match: {
@@ -615,6 +615,29 @@ const adminReviewService = {
         ratingDistribution,
       };
     }
+
+    // Thêm thống kê về tổng số đánh giá (bao gồm cả đã ẩn và đã xóa)
+    const allReviewsCount = await Review.countDocuments({
+      product: productId,
+    });
+
+    const hiddenReviewsCount = await Review.countDocuments({
+      product: productId,
+      isActive: false,
+      deletedAt: null,
+    });
+
+    const deletedReviewsCount = await Review.countDocuments({
+      product: productId,
+      deletedAt: { $ne: null },
+    });
+
+    result.allReviewsStats = {
+      total: allReviewsCount,
+      active: result.totalReviews,
+      hidden: hiddenReviewsCount,
+      deleted: deletedReviewsCount,
+    };
 
     return {
       success: true,

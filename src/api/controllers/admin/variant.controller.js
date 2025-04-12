@@ -104,6 +104,18 @@ const variantController = {
     const result = await variantService.getAdminDeletedVariants(req.query);
     res.json(result);
   }),
+
+  /**
+   * @desc    Xem tổng quan tồn kho của biến thể
+   * @route   GET /api/admin/variants/:id/inventory
+   * @access  Admin
+   */
+  getVariantInventory: asyncHandler(async (req, res) => {
+    const result = await variantService.getVariantInventorySummary(
+      req.params.id
+    );
+    res.json(result);
+  }),
 };
 
 module.exports = variantController;

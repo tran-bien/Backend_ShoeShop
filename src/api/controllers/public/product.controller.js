@@ -38,7 +38,7 @@ const productController = {
    * @access  Public
    */
   getFeaturedProducts: asyncHandler(async (req, res) => {
-    const limit = req.query.limit || 8;
+    const limit = req.query.limit || 20;
     const result = await productService.getFeaturedProducts(limit);
     res.json(result);
   }),
@@ -49,7 +49,7 @@ const productController = {
    * @access  Public
    */
   getNewArrivals: asyncHandler(async (req, res) => {
-    const limit = req.query.limit || 8;
+    const limit = req.query.limit || 20;
     const result = await productService.getNewArrivals(limit);
     res.json(result);
   }),
@@ -60,10 +60,22 @@ const productController = {
    * @access  Public
    */
   getRelatedProducts: asyncHandler(async (req, res) => {
-    const limit = req.query.limit || 8;
+    const limit = req.query.limit || 20;
     const result = await productService.getRelatedProducts(
       req.params.id,
       limit
+    );
+    res.json(result);
+  }),
+
+  /**
+   * @desc    Lấy thông tin tồn kho theo size cho sản phẩm
+   * @route   GET /api/products/:id/inventory
+   * @access  Public
+   */
+  getProductInventoryBySize: asyncHandler(async (req, res) => {
+    const result = await productService.getProductInventoryBySize(
+      req.params.id
     );
     res.json(result);
   }),

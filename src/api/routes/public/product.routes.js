@@ -23,6 +23,17 @@ router.get(
 router.get("/featured", productController.getFeaturedProducts);
 
 /**
+ * @route   GET /api/products/slug/:slug
+ * @desc    Lấy chi tiết sản phẩm theo slug
+ * @access  Public
+ */
+router.get(
+  "/slug/:slug",
+  validate(productValidator.validateProductSlug),
+  productController.getProductBySlug
+);
+
+/**
  * @route   GET /api/products/new-arrivals
  * @desc    Lấy danh sách sản phẩm mới nhất
  * @access  Public
@@ -41,6 +52,17 @@ router.get(
 );
 
 /**
+ * @route   GET /api/products/:id/inventory
+ * @desc    Lấy thông tin tồn kho theo size cho sản phẩm
+ * @access  Public
+ */
+router.get(
+  "/:id/inventory",
+  validate(productValidator.validateProductId),
+  productController.getProductInventoryBySize
+);
+
+/**
  * @route   GET /api/products/:id
  * @desc    Lấy chi tiết sản phẩm theo ID
  * @access  Public
@@ -49,17 +71,6 @@ router.get(
   "/:id",
   validate(productValidator.validateProductId),
   productController.getProductById
-);
-
-/**
- * @route   GET /api/products/slug/:slug
- * @desc    Lấy chi tiết sản phẩm theo slug
- * @access  Public
- */
-router.get(
-  "/slug/:slug",
-  validate(productValidator.validateProductSlug),
-  productController.getProductBySlug
 );
 
 module.exports = router;

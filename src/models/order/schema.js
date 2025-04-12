@@ -1,5 +1,18 @@
 const mongoose = require("mongoose");
 
+/**
+ * Schema cho đơn hàng
+ *
+ * Về cơ chế hủy đơn: Hệ thống hỗ trợ hai cách hủy đơn hàng:
+ * 1. Hủy qua yêu cầu: Người dùng tạo yêu cầu hủy đơn, cần admin phê duyệt
+ *    - Sử dụng model CancelRequest và tham chiếu qua cancelRequestId
+ *    - Đánh dấu hasCancelRequest = true
+ * 2. Hủy trực tiếp: Admin hủy đơn trực tiếp không qua quy trình yêu cầu
+ *    - Không có cancelRequestId
+ *    - Đánh dấu hasCancelRequest = false
+ *
+ * Cả hai cách đều cập nhật cancelReason, cancelledAt, cancelledBy
+ */
 const OrderSchema = new mongoose.Schema(
   {
     // Mã đơn hàng tự động sinh
@@ -222,24 +235,28 @@ const OrderSchema = new mongoose.Schema(
     },
 
     // Trạng thái yêu cầu hủy đơn
-    cancelRequest: {
+    //     "Đánh dấu đơn hàng có yêu cầu hủy hay không, dùng để lọc nhanh mà không cần join bảng",
+    hasCancelRequest: {
       type: Boolean,
       default: false,
     },
 
     // Lý do hủy đơn
+    //     "Lý do hủy đơn hàng - có thể từ yêu cầu hủy được duyệt hoặc từ admin hủy trực tiếp",
     cancelReason: {
       type: String,
       default: "",
     },
 
     // Thời gian hủy đơn
+    //     "Thời điểm đơn hàng bị hủy - có thể từ yêu cầu hủy được duyệt hoặc từ admin hủy trực tiếp",
     cancelledAt: {
       type: Date,
       default: null,
     },
 
     // Người hủy đơn (user hoặc admin)
+    //     "ID của người dùng hoặc admin thực hiện việc hủy đơn hàng",
     cancelledBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

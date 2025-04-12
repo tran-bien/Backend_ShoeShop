@@ -13,7 +13,8 @@ const filterController = {
   }),
 
   /**
-   * @desc    Lấy thuộc tính của sản phẩm
+   * @desc    Lấy thuộc tính của sản phẩm (giữ API để tương thích ngược)
+   * @note    Khuyến nghị sử dụng /api/products/:id thay thế vì đã tích hợp đầy đủ thuộc tính
    * @route   GET /api/filters/products/:id/attributes
    * @access  Public
    */

@@ -84,6 +84,10 @@ const applyMiddlewares = (schema) => {
           await Order.findByIdAndUpdate(this.order, {
             status: "cancelled",
             cancelRequestId: this._id,
+            hasCancelRequest: true,
+            cancelReason: this.reason,
+            cancelledAt: new Date(),
+            cancelledBy: this.processedBy,
             $push: {
               statusHistory: {
                 status: "cancelled",
@@ -172,6 +176,10 @@ const applyMiddlewares = (schema) => {
           await Order.findByIdAndUpdate(doc.order, {
             status: "cancelled",
             cancelRequestId: doc._id,
+            hasCancelRequest: true,
+            cancelReason: doc.reason,
+            cancelledAt: new Date(),
+            cancelledBy: doc.processedBy || null,
             $push: {
               statusHistory: {
                 status: "cancelled",

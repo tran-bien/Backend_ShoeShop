@@ -281,10 +281,14 @@ const orderService = {
       // Cập nhật đơn hàng
       order.status = "cancelled";
       order.cancelledAt = new Date();
+      order.cancelledBy = userId;
+      order.cancelReason = reason;
       order.cancelRequestId = cancelRequest._id;
+      order.hasCancelRequest = true;
     } else {
       // Nếu đơn hàng đã xác nhận, cần chờ admin phê duyệt
       order.cancelRequestId = cancelRequest._id;
+      order.hasCancelRequest = true;
     }
 
     // Lưu thay đổi
@@ -532,13 +536,25 @@ const orderService = {
 
       order.status = "cancelled";
       order.cancelledAt = new Date();
+      order.hasCancelRequest = true;
+      order.cancelReason = cancelRequest.reason;
+      order.cancelledBy = cancelRequest.processedBy || null;
       order.statusHistory.push({
         status: "cancelled",
         note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${cancelRequest.reason}`,
         updatedAt: new Date(),
+        updatedBy: cancelRequest.processedBy || null,
       });
 
       await order.save();
+    } else if (status === "rejected") {
+      // Nếu từ chối, cập nhật trạng thái yêu cầu hủy
+      const order = await Order.findById(cancelRequest.order);
+      if (order) {
+        order.hasCancelRequest = false;
+        order.cancelRequestId = null;
+        await order.save();
+      }
     }
 
     // Lưu yêu cầu hủy
@@ -695,6 +711,128 @@ const orderService = {
     await newOrder.save();
 
     return newOrder;
+  },
+
+  /**
+   * Admin hủy đơn hàng trực tiếp
+   * @param {String} orderId - ID của đơn hàng
+   * @param {String} adminId - ID của admin
+   * @param {Object} cancelData - Dữ liệu hủy đơn
+   * @returns {Object} - Đơn hàng đã hủy
+   */
+  adminCancelOrder: async (orderId, adminId, cancelData) => {
+    // Kiểm tra đơn hàng
+    const order = await Order.findById(orderId);
+    if (!order) {
+      throw new ApiError(404, "Không tìm thấy đơn hàng");
+    }
+
+    // Kiểm tra trạng thái đơn hàng
+    if (["delivered", "cancelled"].includes(order.status)) {
+      throw new ApiError(400, "Không thể hủy đơn hàng đã giao hoặc đã hủy");
+    }
+
+    // Cập nhật trạng thái đơn hàng
+    order.status = "cancelled";
+    order.cancelledAt = new Date();
+    order.cancelledBy = adminId;
+    order.cancelReason = cancelData.reason || "Hủy bởi admin";
+    order.hasCancelRequest = false; // Đánh dấu là hủy trực tiếp, không qua quy trình yêu cầu
+
+    // Lưu lịch sử trạng thái
+    order.statusHistory.push({
+      status: "cancelled",
+      updatedAt: new Date(),
+      updatedBy: adminId,
+      note: `Đơn hàng bị hủy bởi admin. Lý do: ${order.cancelReason}`,
+    });
+
+    // Lưu đơn hàng
+    await order.save();
+
+    return order;
+  },
+
+  /**
+   * Lấy thông tin theo dõi đơn hàng
+   * @param {String} orderId - ID của đơn hàng
+   * @param {String} userId - ID của người dùng
+   * @returns {Object} - Lịch sử trạng thái và thông tin đơn hàng
+   */
+  getOrderTracking: async (orderId, userId) => {
+    // Kiểm tra đơn hàng có tồn tại không
+    const order = await Order.findById(orderId)
+      .populate({
+        path: "statusHistory.updatedBy",
+        select: "name role",
+      })
+      .lean();
+
+    if (!order) {
+      throw new ApiError(404, "Không tìm thấy đơn hàng");
+    }
+
+    // Kiểm tra người dùng có quyền xem đơn hàng này không
+    if (order.user.toString() !== userId) {
+      throw new ApiError(403, "Bạn không có quyền xem đơn hàng này");
+    }
+
+    // Lấy thông tin chi tiết cần thiết cho việc theo dõi
+    return {
+      orderCode: order.code,
+      orderStatus: order.status,
+      orderDate: order.createdAt,
+      statusHistory: order.statusHistory.map((status) => ({
+        status: status.status,
+        updatedAt: status.updatedAt,
+        updatedBy: status.updatedBy ? status.updatedBy.name : "Hệ thống",
+        note: status.note,
+      })),
+      paymentStatus: order.payment.paymentStatus,
+      paymentMethod: order.payment.method,
+      shippingAddress: order.shippingAddress,
+      deliveredAt: order.deliveredAt,
+      cancelledAt: order.cancelledAt,
+      hasCancelRequest: order.hasCancelRequest,
+    };
+  },
+
+  /**
+   * Lấy thống kê đơn hàng của người dùng theo trạng thái
+   * @param {String} userId - ID của người dùng
+   * @returns {Object} - Thống kê số lượng đơn hàng theo trạng thái
+   */
+  getUserOrderStats: async (userId) => {
+    // Lấy tổng số đơn hàng theo từng trạng thái
+    const orderStats = await Order.aggregate([
+      {
+        $match: { user: mongoose.Types.ObjectId(userId) },
+      },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Chuyển đổi kết quả thành đối tượng dễ sử dụng
+    const stats = {
+      pending: 0,
+      confirmed: 0,
+      shipping: 0,
+      delivered: 0,
+      cancelled: 0,
+      total: 0,
+    };
+
+    // Cập nhật số lượng cho từng trạng thái
+    orderStats.forEach((stat) => {
+      stats[stat._id] = stat.count;
+      stats.total += stat.count;
+    });
+
+    return stats;
   },
 };
 

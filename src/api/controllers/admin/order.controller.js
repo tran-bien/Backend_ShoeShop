@@ -60,9 +60,11 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Xử lý hủy đơn hàng
+ * @desc    Xử lý hủy đơn hàng (Admin hủy trực tiếp)
  * @route   PATCH /api/admin/orders/:id/cancel
  * @access  Admin
+ * @note    Admin có thể hủy đơn trực tiếp mà không cần qua quy trình yêu cầu hủy đơn
+ *          Khác với việc phê duyệt yêu cầu hủy đơn từ người dùng
  */
 const cancelOrder = asyncHandler(async (req, res) => {
   const { reason } = req.body;

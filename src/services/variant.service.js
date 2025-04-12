@@ -138,7 +138,23 @@ const variantService = {
       ],
     };
 
-    return await paginate(Variant, filter, options);
+    const results = await paginate(Variant, filter, options);
+
+    // Bổ sung thông tin tổng hợp tồn kho cho mỗi biến thể
+    results.data = results.data.map((variant) => {
+      const variantObj = variant.toObject ? variant.toObject() : { ...variant };
+
+      // Tính tổng hợp tồn kho
+      const inventorySummary =
+        variantService.calculateInventorySummary(variant);
+
+      return {
+        ...variantObj,
+        inventorySummary,
+      };
+    });
+
+    return results;
   },
 
   /**
@@ -475,28 +491,28 @@ const variantService = {
   },
 
   /**
-   * Xóa mềm biến thể - với kiểm tra ràng buộc đơn hàng
+   * Vô hiệu hóa biến thể thay vì xóa mềm khi liên quan đến đơn hàng
    * @param {String} id ID biến thể
-   * @param {String} userId ID người xóa
+   * @param {String} userId ID người thực hiện
    */
   deleteVariant: async (id, userId) => {
+    // Tìm biến thể
     const variant = await Variant.findById(id);
     if (!variant) {
       throw new ApiError(404, "Không tìm thấy biến thể");
     }
 
-    // Lưu lại ID sản phẩm để cập nhật tồn kho sau khi xóa
+    // Lưu lại thông tin productId để cập nhật sau
     const productId = variant.product;
 
-    // Kiểm tra xem biến thể có đang được sử dụng trong bất kỳ đơn hàng nào
+    // Kiểm tra xem biến thể có được sử dụng trong đơn hàng không
     const hasOrderItems = await Order.exists({
       "orderItems.variant": id,
-      // Không lọc theo trạng thái đơn hàng - tính hết với mọi đơn
     });
 
-    // Nếu có đơn hàng liên quan, chỉ vô hiệu hóa thay vì xóa
+    // Vô hiệu hóa nếu liên quan đến đơn hàng
     if (hasOrderItems) {
-      // Vô hiệu hóa biến thể
+      // Vô hiệu hóa thay vì xóa mềm
       variant.isActive = false;
       await variant.save();
 
@@ -511,26 +527,56 @@ const variantService = {
       return {
         success: true,
         message:
-          "Biến thể đang được sử dụng trong đơn hàng nên đã được vô hiệu hóa thay vì xóa.",
-        isDeactivatedInstead: true,
+          "Biến thể đang được sử dụng trong đơn hàng nên đã được vô hiệu hóa",
+        variant: {
+          _id: variant._id,
+          name: variant.name,
+          isDeactivated: true,
+        },
       };
     }
 
-    // Soft delete biến thể
+    // Xóa mềm nếu không liên quan đến đơn hàng
     await variant.softDelete(userId);
 
-    // Cập nhật thông tin tồn kho của sản phẩm sau khi xóa biến thể
-    if (productId) {
-      const product = await Product.findById(productId);
-      if (product) {
-        await updateProductStockInfo(product);
-      }
+    // Cập nhật trạng thái sản phẩm liên quan
+    const product = await Product.findById(productId);
+    if (product) {
+      // Kiểm tra nếu tất cả biến thể của sản phẩm đều đã bị xóa mềm
+      const remainingVariants = await Variant.countDocuments({
+        product: productId,
+        isDeleted: false,
+      });
+
+      // Thông báo cho client
+      return {
+        success: true,
+        message: "Xóa biến thể thành công",
+        variant: {
+          _id: variant._id,
+          name: variant.name,
+          isDeleted: true,
+        },
+        affectedProduct:
+          remainingVariants === 0
+            ? {
+                _id: product._id,
+                name: product.name,
+                warning:
+                  "Tất cả biến thể của sản phẩm đã bị xóa. Sản phẩm sẽ không hiển thị cho người dùng.",
+              }
+            : null,
+      };
     }
 
     return {
       success: true,
       message: "Xóa biến thể thành công",
-      isDeleted: true,
+      variant: {
+        _id: variant._id,
+        name: variant.name,
+        isDeleted: true,
+      },
     };
   },
 
@@ -682,6 +728,223 @@ const variantService = {
       success: true,
       message: `Biến thể đã được ${statusMsg} thành công`,
       variant: updatedVariant,
+    };
+  },
+
+  /**
+   * Tính tổng số lượng tồn kho của biến thể
+   * @param {Object} variant Biến thể cần tính tổng số lượng
+   * @returns {Object} Thông tin tồn kho tổng hợp
+   */
+  calculateInventorySummary: (variant) => {
+    // Tổng số lượng có sẵn
+    const totalQuantity = variant.sizes.reduce(
+      (sum, size) => sum + (size.quantity || 0),
+      0
+    );
+
+    // Số lượng kích thước có sẵn
+    const availableSizes = variant.sizes.filter(
+      (size) => size.quantity > 0 && size.isSizeAvailable
+    ).length;
+
+    // Số lượng tồn kho theo kích thước
+    const sizeInventory = variant.sizes.map((size) => {
+      return {
+        sizeId: size.size._id || size.size,
+        sizeValue: size.size.value || "",
+        sizeDescription: size.size.description || "",
+        quantity: size.quantity || 0,
+        isAvailable: size.isSizeAvailable,
+        sku: size.sku || "",
+      };
+    });
+
+    // Xác định trạng thái tồn kho
+    let stockStatus = "out_of_stock";
+    if (totalQuantity > 0) {
+      stockStatus = totalQuantity > 10 ? "in_stock" : "low_stock";
+    }
+
+    return {
+      totalQuantity,
+      availableSizes,
+      totalSizes: variant.sizes.length,
+      stockStatus,
+      sizeInventory,
+    };
+  },
+
+  /**
+   * [PUBLIC] Lấy tổng quan tồn kho cho biến thể
+   * @param {String} id ID biến thể
+   * @returns {Promise<Object>} Thông tin tồn kho
+   */
+  getVariantInventorySummary: async (id) => {
+    const variant = await Variant.findOne({
+      _id: id,
+      isActive: true,
+      deletedAt: null,
+    })
+      .populate("color", "name code type colors")
+      .populate("sizes.size", "value description")
+      .populate({
+        path: "product",
+        select: "name category brand slug",
+        populate: [
+          { path: "category", select: "name" },
+          { path: "brand", select: "name" },
+        ],
+      });
+
+    if (!variant) {
+      throw new ApiError(404, "Không tìm thấy biến thể");
+    }
+
+    // Tính số lượng tồn kho
+    const inventorySummary = variantService.calculateInventorySummary(variant);
+
+    return {
+      success: true,
+      inventory: {
+        variantId: variant._id,
+        productId: variant.product._id,
+        productName: variant.product.name,
+        productSlug: variant.product.slug,
+        colorId: variant.color._id,
+        colorName: variant.color.name,
+        colorCode: variant.color.code,
+        colorType: variant.color.type,
+        gender: variant.gender,
+        price: variant.price,
+        priceFinal: variant.priceFinal,
+        percentDiscount: variant.percentDiscount,
+        ...inventorySummary,
+      },
+    };
+  },
+
+  /**
+   * [PUBLIC] Lấy biến thể theo sản phẩm, màu và kích thước
+   * @param {Object} options Tùy chọn tìm kiếm (productId, colorId, sizeId)
+   * @returns {Promise<Object>} Biến thể tương ứng hoặc null nếu không tìm thấy
+   */
+  getVariantByCriteria: async (options) => {
+    const { productId, colorId, sizeId } = options;
+
+    if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+      throw new ApiError(400, "ID sản phẩm không hợp lệ");
+    }
+
+    // Tạo điều kiện tìm kiếm cơ bản
+    const query = {
+      product: productId,
+      isActive: true,
+      deletedAt: null,
+    };
+
+    // Thêm điều kiện tìm kiếm theo màu sắc
+    if (colorId && mongoose.Types.ObjectId.isValid(colorId)) {
+      query.color = colorId;
+    }
+
+    // Lấy các biến thể phù hợp
+    const variants = await Variant.find(query)
+      .populate("color", "name code type colors")
+      .populate("sizes.size", "value description")
+      .populate({
+        path: "product",
+        select: "name slug",
+      });
+
+    if (!variants || variants.length === 0) {
+      return {
+        success: false,
+        message: "Không tìm thấy biến thể phù hợp",
+        inventory: null,
+      };
+    }
+
+    // Nếu có sizeId, tiếp tục lọc theo kích thước
+    if (sizeId && mongoose.Types.ObjectId.isValid(sizeId)) {
+      // Lọc các biến thể có kích thước này và số lượng > 0
+      const filteredVariants = variants.filter((variant) => {
+        return variant.sizes.some(
+          (size) =>
+            size.size._id.toString() === sizeId &&
+            size.quantity > 0 &&
+            size.isSizeAvailable
+        );
+      });
+
+      if (filteredVariants.length === 0) {
+        return {
+          success: false,
+          message:
+            "Không có biến thể phù hợp với kích thước này hoặc đã hết hàng",
+          inventory: null,
+        };
+      }
+
+      // Lấy biến thể đầu tiên có kích thước phù hợp
+      const variant = filteredVariants[0];
+      const inventorySummary =
+        variantService.calculateInventorySummary(variant);
+
+      // Lọc ra chỉ size được chọn
+      const selectedSize = variant.sizes.find(
+        (size) => size.size._id.toString() === sizeId
+      );
+
+      return {
+        success: true,
+        variant: {
+          id: variant._id,
+          productId: variant.product._id,
+          productName: variant.product.name,
+          productSlug: variant.product.slug,
+          colorId: variant.color._id,
+          colorName: variant.color.name,
+          colorCode: variant.color.code,
+          gender: variant.gender,
+          price: variant.price,
+          priceFinal: variant.priceFinal,
+          percentDiscount: variant.percentDiscount,
+          images: variant.imagesvariant,
+          size: {
+            id: selectedSize.size._id,
+            value: selectedSize.size.value,
+            description: selectedSize.size.description,
+            quantity: selectedSize.quantity,
+            isAvailable: selectedSize.isSizeAvailable,
+          },
+          totalQuantity: inventorySummary.totalQuantity,
+        },
+      };
+    }
+
+    // Nếu không có sizeId, trả về tổng quan các biến thể
+    const result = variants.map((variant) => {
+      const inventorySummary =
+        variantService.calculateInventorySummary(variant);
+      return {
+        id: variant._id,
+        colorId: variant.color._id,
+        colorName: variant.color.name,
+        colorCode: variant.color.code,
+        gender: variant.gender,
+        price: variant.price,
+        priceFinal: variant.priceFinal,
+        percentDiscount: variant.percentDiscount,
+        totalQuantity: inventorySummary.totalQuantity,
+        availableSizes: inventorySummary.availableSizes,
+        sizeInventory: inventorySummary.sizeInventory,
+      };
+    });
+
+    return {
+      success: true,
+      variants: result,
     };
   },
 };
