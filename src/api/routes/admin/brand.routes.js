@@ -5,6 +5,10 @@ const brandValidator = require("@validators/brand.validator");
 const validate = require("@utils/validatehelper");
 const router = express.Router();
 
+// Áp dụng middleware xác thực cho tất cả các routes
+router.use(protect);
+router.use(admin);
+
 /**
  * @route   GET /api/admin/brands
  * @desc    Lấy tất cả thương hiệu (có phân trang, filter)
@@ -12,8 +16,6 @@ const router = express.Router();
  */
 router.get(
   "/",
-  protect,
-  admin,
   validate(brandValidator.validateBrandQuery),
   brandController.getAllBrands
 );
@@ -25,8 +27,6 @@ router.get(
  */
 router.get(
   "/deleted",
-  protect,
-  admin,
   validate(brandValidator.validateBrandQuery),
   brandController.getDeletedBrands
 );
@@ -38,8 +38,6 @@ router.get(
  */
 router.get(
   "/:id",
-  protect,
-  admin,
   validate(brandValidator.validateBrandId),
   brandController.getBrandById
 );
@@ -51,8 +49,6 @@ router.get(
  */
 router.post(
   "/",
-  protect,
-  admin,
   validate(brandValidator.validateBrandData),
   brandController.createBrand
 );
@@ -64,8 +60,6 @@ router.post(
  */
 router.put(
   "/:id",
-  protect,
-  admin,
   validate([
     ...brandValidator.validateBrandId,
     ...brandValidator.validateBrandData,
@@ -80,8 +74,6 @@ router.put(
  */
 router.delete(
   "/:id",
-  protect,
-  admin,
   validate(brandValidator.validateBrandId),
   brandController.deleteBrand
 );
@@ -93,8 +85,6 @@ router.delete(
  */
 router.put(
   "/:id/restore",
-  protect,
-  admin,
   validate(brandValidator.validateBrandId),
   brandController.restoreBrand
 );
@@ -106,8 +96,6 @@ router.put(
  */
 router.patch(
   "/:id/status",
-  protect,
-  admin,
   validate(brandValidator.validateStatusUpdate),
   brandController.updateBrandStatus
 );

@@ -8,7 +8,10 @@ const categoryController = {
    */
   getPublicAllCategories: asyncHandler(async (req, res) => {
     const result = await categoryService.getPublicAllCategories();
-    return res.json(result);
+    return res.json({
+      success: true,
+      categories: result,
+    });
   }),
 
   /**

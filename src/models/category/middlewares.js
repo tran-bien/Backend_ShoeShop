@@ -6,9 +6,10 @@ const { createSlug } = require("@utils/slugify");
  * @param {mongoose.Schema} schema - Schema để áp dụng middleware
  */
 const applyMiddlewares = (schema) => {
-  // Tạo slug trước khi lưu
+  // Tạo slug trước khi lưu - đồng bộ với logic trong service
   schema.pre("save", function (next) {
-    if (this.isModified("name")) {
+    // Kiểm tra xem có cập nhật tên không và tên mới có trùng không
+    if (this.isModified("name") && !this.isModified("slug")) {
       this.slug = createSlug(this.name);
     }
     next();

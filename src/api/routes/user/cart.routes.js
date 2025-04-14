@@ -6,12 +6,15 @@ const validate = require("@utils/validatehelper");
 
 const router = express.Router();
 
+// Áp dụng middleware xác thực cho tất cả các routes
+router.use(protect);
+
 /**
  * @route   GET /api/users/cart
  * @desc    Lấy giỏ hàng hiện tại
  * @access  Private
  */
-router.get("/", protect, cartController.getCart);
+router.get("/", cartController.getCart);
 
 /**
  * @route   POST /api/users/cart/items
@@ -20,7 +23,6 @@ router.get("/", protect, cartController.getCart);
  */
 router.post(
   "/items",
-  protect,
   validate(cartValidator.validateAddToCart),
   cartController.addToCart
 );
@@ -32,7 +34,6 @@ router.post(
  */
 router.put(
   "/items/:itemId",
-  protect,
   validate(cartValidator.validateUpdateCartItem),
   cartController.updateCartItem
 );
@@ -44,7 +45,6 @@ router.put(
  */
 router.delete(
   "/items/:itemId",
-  protect,
   validate(cartValidator.validateRemoveFromCart),
   cartController.removeCartItem
 );
@@ -54,7 +54,7 @@ router.delete(
  * @desc    Xóa toàn bộ giỏ hàng
  * @access  Private
  */
-router.delete("/", protect, cartController.clearCart);
+router.delete("/", cartController.clearCart);
 
 /**
  * @route   POST /api/users/cart/apply-coupon
@@ -63,7 +63,6 @@ router.delete("/", protect, cartController.clearCart);
  */
 router.post(
   "/apply-coupon",
-  protect,
   validate(cartValidator.validateApplyCoupon),
   cartController.applyCoupon
 );
@@ -73,13 +72,13 @@ router.post(
  * @desc    Hủy mã giảm giá
  * @access  Private
  */
-router.delete("/remove-coupon", protect, cartController.removeCoupon);
+router.delete("/remove-coupon", cartController.removeCoupon);
 
 /**
  * @route   POST /api/users/cart/checkout
  * @desc    Chuẩn bị thanh toán
  * @access  Private
  */
-router.post("/checkout", protect, cartController.checkout);
+router.post("/checkout", cartController.checkout);
 
 module.exports = router;

@@ -6,12 +6,15 @@ const validate = require("@utils/validatehelper");
 
 const router = express.Router();
 
+// Áp dụng middleware xác thực cho tất cả các routes
+router.use(protect);
+
 /**
  * @route   GET /api/users/wishlist
  * @desc    Lấy danh sách yêu thích
  * @access  Private
  */
-router.get("/wishlist", protect, wishlistController.getUserWishlist);
+router.get("/wishlist", wishlistController.getUserWishlist);
 
 /**
  * @route   POST /api/users/wishlist
@@ -20,7 +23,6 @@ router.get("/wishlist", protect, wishlistController.getUserWishlist);
  */
 router.post(
   "/wishlist",
-  protect,
   validate(userValidator.validateAddToWishlist),
   wishlistController.addToWishlist
 );
@@ -30,6 +32,6 @@ router.post(
  * @desc    Xóa sản phẩm khỏi danh sách yêu thích
  * @access  Private
  */
-router.delete("/wishlist/:id", protect, wishlistController.removeFromWishlist);
+router.delete("/wishlist/:id", wishlistController.removeFromWishlist);
 
 module.exports = router;

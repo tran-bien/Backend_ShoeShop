@@ -5,20 +5,21 @@ const validate = require("@utils/validatehelper");
 const { validateCollectCoupon } = require("@validators/coupon.validator");
 
 const router = express.Router();
-
+// Middleware kiểm tra xác thực
+router.use(isAuthenticated);
 /**
  * @route   GET /api/coupons
  * @desc    Lấy danh sách mã giảm giá công khai
  * @access  Private - User
  */
-router.get("/", isAuthenticated, couponController.getPublicCoupons);
+router.get("/", couponController.getPublicCoupons);
 
 /**
  * @route   GET /api/coupons/collected
  * @desc    Lấy danh sách mã giảm giá đã thu thập của người dùng
  * @access  Private - User
  */
-router.get("/collected", isAuthenticated, couponController.getUserCoupons);
+router.get("/collected", couponController.getUserCoupons);
 
 /**
  * @route   POST /api/coupons/:id/collect
@@ -27,7 +28,6 @@ router.get("/collected", isAuthenticated, couponController.getUserCoupons);
  */
 router.post(
   "/:id/collect",
-  isAuthenticated,
   validate(validateCollectCoupon),
   couponController.collectCoupon
 );

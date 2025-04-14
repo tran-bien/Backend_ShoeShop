@@ -6,6 +6,10 @@ const validate = require("@utils/validatehelper");
 
 const router = express.Router();
 
+// Áp dụng middleware xác thực cho tất cả các routes
+router.use(protect);
+router.use(admin);
+
 /**
  * @route   GET /api/admin/coupons
  * @desc    Lấy danh sách mã giảm giá
@@ -13,8 +17,6 @@ const router = express.Router();
  */
 router.get(
   "/",
-  protect,
-  admin,
   validate(couponValidator.validateGetCoupons),
   couponController.getAllCoupons
 );
@@ -33,8 +35,6 @@ router.get("/:id", protect, admin, couponController.getCouponById);
  */
 router.post(
   "/",
-  protect,
-  admin,
   validate(couponValidator.validateCreateCoupon),
   couponController.createCoupon
 );
@@ -46,8 +46,6 @@ router.post(
  */
 router.put(
   "/:id",
-  protect,
-  admin,
   validate(couponValidator.validateUpdateCoupon),
   couponController.updateCoupon
 );
@@ -57,7 +55,7 @@ router.put(
  * @desc    Xóa mã giảm giá
  * @access  Admin
  */
-router.delete("/:id", protect, admin, couponController.deleteCoupon);
+router.delete("/:id", couponController.deleteCoupon);
 
 /**
  * @route   PATCH /api/admin/coupons/:id/status
@@ -66,8 +64,6 @@ router.delete("/:id", protect, admin, couponController.deleteCoupon);
  */
 router.patch(
   "/:id/status",
-  protect,
-  admin,
   validate(couponValidator.validateUpdateCouponStatus),
   couponController.updateCouponStatus
 );

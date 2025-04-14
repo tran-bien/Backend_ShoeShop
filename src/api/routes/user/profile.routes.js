@@ -6,12 +6,15 @@ const validate = require("@utils/validatehelper");
 
 const router = express.Router();
 
+// Áp dụng middleware xác thực cho tất cả các routes
+router.use(protect);
+
 /**
  * @route   GET /api/users/profile
  * @desc    Lấy thông tin cá nhân
  * @access  Private
  */
-router.get("/profile", protect, profileController.getUserProfile);
+router.get("/profile", profileController.getUserProfile);
 
 /**
  * @route   PUT /api/users/profile
@@ -20,7 +23,6 @@ router.get("/profile", protect, profileController.getUserProfile);
  */
 router.put(
   "/profile",
-  protect,
   validate(userValidator.validateUpdateProfile),
   profileController.updateUserProfile
 );
@@ -30,7 +32,7 @@ router.put(
  * @desc    Lấy danh sách địa chỉ
  * @access  Private
  */
-router.get("/addresses", protect, profileController.getUserAddresses);
+router.get("/addresses", profileController.getUserAddresses);
 
 /**
  * @route   POST /api/users/addresses
@@ -39,7 +41,6 @@ router.get("/addresses", protect, profileController.getUserAddresses);
  */
 router.post(
   "/addresses",
-  protect,
   validate(userValidator.validateAddAddress),
   profileController.addUserAddress
 );
@@ -51,7 +52,6 @@ router.post(
  */
 router.put(
   "/addresses/:id",
-  protect,
   validate(userValidator.validateUpdateAddress),
   profileController.updateUserAddress
 );
@@ -61,17 +61,13 @@ router.put(
  * @desc    Xóa địa chỉ
  * @access  Private
  */
-router.delete("/addresses/:id", protect, profileController.deleteUserAddress);
+router.delete("/addresses/:id", profileController.deleteUserAddress);
 
 /**
  * @route   PUT /api/users/addresses/:id/default
  * @desc    Đặt địa chỉ mặc định
  * @access  Private
  */
-router.put(
-  "/addresses/:id/default",
-  protect,
-  profileController.setDefaultAddress
-);
+router.put("/addresses/:id/default", profileController.setDefaultAddress);
 
 module.exports = router;

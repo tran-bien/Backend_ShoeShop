@@ -7,6 +7,9 @@ const validate = require("@utils/validatehelper");
 
 const router = express.Router();
 
+// Áp dụng middleware xác thực cho tất cả các routes
+router.use(protect);
+
 /**
  * @route   POST /api/images/avatar
  * @desc    Upload ảnh đại diện cho chính mình
@@ -14,7 +17,6 @@ const router = express.Router();
  */
 router.post(
   "/avatar",
-  protect,
   uploadMiddleware.handleAvatarUpload,
   validate([
     uploadValidator.validateSingleFileExists,
@@ -29,6 +31,6 @@ router.post(
  * @desc    Xóa ảnh đại diện của chính mình
  * @access  Private
  */
-router.delete("/avatar", protect, imageController.removeAvatar);
+router.delete("/avatar", imageController.removeAvatar);
 
 module.exports = router;

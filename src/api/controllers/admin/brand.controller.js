@@ -16,11 +16,8 @@ const brandController = {
    * @desc Lấy chi tiết thương hiệu theo ID
    */
   getBrandById: asyncHandler(async (req, res) => {
-    const brand = await brandService.getAdminBrandById(req.params.id);
-    return res.json({
-      success: true,
-      brand,
-    });
+    const result = await brandService.getAdminBrandById(req.params.id);
+    return res.json(result);
   }),
 
   /**
@@ -89,11 +86,7 @@ const brandController = {
       cascade
     );
 
-    return res.json({
-      success: true,
-      message: result.message,
-      brand: result.brand,
-    });
+    return res.json(result);
   }),
 };
 

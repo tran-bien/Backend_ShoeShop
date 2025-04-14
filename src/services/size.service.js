@@ -40,7 +40,7 @@ const sizeService = {
    * @param {Object} query - Các tham số truy vấn
    */
   getAdminSizes: async (query) => {
-    const { page = 1, limit = 10, value, description, sort } = query;
+    const { page = 1, limit = 15, value, description, sort } = query;
     const filter = { deletedAt: null }; // Mặc định chỉ lấy các kích thước chưa xóa
 
     // Tìm theo giá trị
@@ -68,12 +68,14 @@ const sizeService = {
    */
   getAdminSizeById: async (id) => {
     // Sử dụng setOptions để bao gồm cả kích thước đã xóa
-    const size = await Size.findById(id).setOptions({
-      includeDeleted: true,
-    });
+    const size = await Size.findById(id)
+      .setOptions({
+        includeDeleted: true,
+      })
+      .populate("deletedBy", "name email");
 
     if (!size) {
-      throw new ApiError(404, "Không tìm thấy kích thước");
+      throw new ApiError(404, `Không tìm thấy kích thước value: ${id}`);
     }
 
     return { success: true, size };
@@ -84,8 +86,8 @@ const sizeService = {
    * @param {Object} query - Các tham số truy vấn
    */
   getDeletedSizes: async (query) => {
-    const { page = 1, limit = 10, value, description, sort } = query;
-    const filter = {};
+    const { page = 1, limit = 15, value, description, sort } = query;
+    const filter = { deletedAt: { $ne: null } };
 
     if (value !== undefined) {
       filter.value = Number(value);
@@ -99,6 +101,7 @@ const sizeService = {
       page,
       limit,
       sort: sort ? getSortOption(sort) : { deletedAt: -1 },
+      populate: [{ path: "deletedBy", select: "name email" }],
     };
 
     return await paginateDeleted(Size, filter, options);
@@ -118,7 +121,10 @@ const sizeService = {
     });
 
     if (existingSize) {
-      throw new ApiError(409, "Kích thước này đã tồn tại");
+      throw new ApiError(
+        409,
+        `Kích thước value: ${sizeData.value} và description: ${sizeData.description} đã tồn tại`
+      );
     }
 
     // Tạo kích thước mới
@@ -126,7 +132,7 @@ const sizeService = {
 
     return {
       success: true,
-      message: "Tạo kích thước thành công",
+      message: `Tạo kích thước value: ${size.value} thành công`,
       size,
     };
   },
@@ -163,7 +169,10 @@ const sizeService = {
       });
 
       if (existingSize) {
-        throw new ApiError(409, "Kích thước này đã tồn tại");
+        throw new ApiError(
+          409,
+          `Kích thước value: ${valueToCheck} và description: ${descriptionToCheck} đã tồn tại`
+        );
       }
     }
 
@@ -176,7 +185,7 @@ const sizeService = {
 
     return {
       success: true,
-      message: "Cập nhật kích thước thành công",
+      message: `Cập nhật kích thước value: ${updatedSize.value} thành công`,
       size: updatedSize,
     };
   },
@@ -210,7 +219,7 @@ const sizeService = {
 
     return {
       success: true,
-      message: "Xóa kích thước thành công",
+      message: `Xóa kích thước value: ${size.value} thành công`,
       isDeleted: true,
     };
   },
@@ -225,7 +234,7 @@ const sizeService = {
 
     return {
       success: true,
-      message: "Khôi phục kích thước thành công",
+      message: `Khôi phục kích thước value: ${size.value} thành công`,
       size,
     };
   },

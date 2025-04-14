@@ -6,12 +6,16 @@ const validate = require("@utils/validatehelper");
 
 const router = express.Router();
 
+// Áp dụng middleware xác thực cho tất cả các routes
+router.use(protect);
+router.use(admin);
+
 /**
  * @route   GET /api/admin/sessions
  * @desc    Lấy toàn bộ session
  * @access  Admin
  */
-router.get("/sessions", protect, admin, authController.getAllSessions);
+router.get("/sessions", authController.getAllSessions);
 
 /**
  * @route   DELETE /api/admin/logout/:userId
@@ -20,8 +24,6 @@ router.get("/sessions", protect, admin, authController.getAllSessions);
  */
 router.delete(
   "/logout/:userId",
-  protect,
-  admin,
   validate(authValidator.validateAdminLogoutUser),
   authController.adminLogoutUser
 );

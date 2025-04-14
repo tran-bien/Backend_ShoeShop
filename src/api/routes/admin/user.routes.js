@@ -6,19 +6,23 @@ const validate = require("@utils/validatehelper");
 
 const router = express.Router();
 
+// Áp dụng middleware xác thực cho tất cả các routes
+router.use(protect);
+router.use(admin);
+
 /**
  * @route   GET /api/admin/users
  * @desc    Lấy danh sách người dùng (phân trang)
  * @access  Admin
  */
-router.get("/", protect, admin, userController.getAllUsers);
+router.get("/", userController.getAllUsers);
 
 /**
  * @route   GET /api/admin/users/:id
  * @desc    Lấy chi tiết người dùng
  * @access  Admin
  */
-router.get("/:id", protect, admin, userController.getUserDetails);
+router.get("/:id", userController.getUserDetails);
 
 /**
  * @route   PUT /api/admin/users/:id/block
@@ -27,8 +31,6 @@ router.get("/:id", protect, admin, userController.getUserDetails);
  */
 router.put(
   "/:id/block",
-  protect,
-  admin,
   validate(userValidator.validateToggleUserBlock),
   userController.toggleUserBlock
 );

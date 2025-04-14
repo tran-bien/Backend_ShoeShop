@@ -16,11 +16,8 @@ const categoryController = {
    * @desc Lấy chi tiết danh mục theo ID
    */
   getCategoryById: asyncHandler(async (req, res) => {
-    const category = await categoryService.getAdminCategoryById(req.params.id);
-    return res.json({
-      success: true,
-      category,
-    });
+    const result = await categoryService.getAdminCategoryById(req.params.id);
+    return res.json(result);
   }),
 
   /**
@@ -28,12 +25,8 @@ const categoryController = {
    * @desc Tạo mới danh mục
    */
   createCategory: asyncHandler(async (req, res) => {
-    const category = await categoryService.createCategory(req.body);
-    return res.status(201).json({
-      success: true,
-      message: "Tạo danh mục thành công",
-      category,
-    });
+    const result = await categoryService.createCategory(req.body);
+    return res.status(201).json(result);
   }),
 
   /**
@@ -41,20 +34,16 @@ const categoryController = {
    * @desc Cập nhật danh mục
    */
   updateCategory: asyncHandler(async (req, res) => {
-    const category = await categoryService.updateCategory(
+    const result = await categoryService.updateCategory(
       req.params.id,
       req.body
     );
-    return res.json({
-      success: true,
-      message: "Cập nhật danh mục thành công",
-      category,
-    });
+    return res.json(result);
   }),
 
   /**
    * @route DELETE /api/admin/categories/:id
-   * @desc Xóa mềm danh mục
+   * @desc Xóa mềm danh mục hoặc vô hiệu hóa nếu có sản phẩm liên quan
    */
   deleteCategory: asyncHandler(async (req, res) => {
     const result = await categoryService.deleteCategory(
@@ -78,7 +67,11 @@ const categoryController = {
    * @desc Khôi phục danh mục đã xóa kèm sản phẩm liên quan
    */
   restoreCategory: asyncHandler(async (req, res) => {
-    const result = await categoryService.restoreCategory(req.params.id, true);
+    const { cascade = true } = req.body;
+    const result = await categoryService.restoreCategory(
+      req.params.id,
+      cascade
+    );
     return res.json(result);
   }),
 
@@ -88,18 +81,12 @@ const categoryController = {
    */
   updateCategoryStatus: asyncHandler(async (req, res) => {
     const { isActive, cascade = true } = req.body;
-
     const result = await categoryService.updateCategoryStatus(
       req.params.id,
       isActive,
       cascade
     );
-
-    return res.json({
-      success: true,
-      message: result.message,
-      category: result.category,
-    });
+    return res.json(result);
   }),
 };
 

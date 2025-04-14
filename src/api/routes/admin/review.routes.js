@@ -6,6 +6,10 @@ const validate = require("@utils/validatehelper");
 
 const router = express.Router();
 
+// Áp dụng middleware xác thực cho tất cả các routes
+router.use(protect);
+router.use(admin);
+
 /**
  * @route   GET /api/admin/reviews
  * @desc    Lấy danh sách tất cả đánh giá
@@ -13,8 +17,6 @@ const router = express.Router();
  */
 router.get(
   "/",
-  protect,
-  admin,
   validate(reviewValidator.validateGetAllReviews),
   reviewController.getAllReviews
 );
@@ -26,8 +28,6 @@ router.get(
  */
 router.get(
   "/:id",
-  protect,
-  admin,
   validate(reviewValidator.validateGetReviewDetail),
   reviewController.getReviewById
 );
@@ -39,8 +39,6 @@ router.get(
  */
 router.patch(
   "/:id/visibility",
-  protect,
-  admin,
   validate(reviewValidator.validateToggleReviewVisibility),
   reviewController.toggleReviewVisibility
 );
@@ -52,8 +50,6 @@ router.patch(
  */
 router.patch(
   "/:id/restore",
-  protect,
-  admin,
   validate(reviewValidator.validateRestoreReview),
   reviewController.restoreReview
 );
@@ -65,8 +61,6 @@ router.patch(
  */
 router.get(
   "/:productId/stats",
-  protect,
-  admin,
   validate(reviewValidator.validateGetProductReviews),
   reviewController.getProductReviewStats
 );

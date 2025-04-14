@@ -6,6 +6,10 @@ const validate = require("@utils/validatehelper");
 
 const router = express.Router();
 
+// Áp dụng middleware xác thực cho tất cả các routes
+router.use(protect);
+router.use(admin);
+
 /**
  * @route   GET /api/admin/categories
  * @desc    Lấy tất cả danh mục (có phân trang, filter)
@@ -13,8 +17,6 @@ const router = express.Router();
  */
 router.get(
   "/",
-  protect,
-  admin,
   validate(categoryValidator.validateCategoryQuery),
   categoryController.getAllCategories
 );
@@ -26,8 +28,6 @@ router.get(
  */
 router.get(
   "/deleted",
-  protect,
-  admin,
   validate(categoryValidator.validateCategoryQuery),
   categoryController.getDeletedCategories
 );
@@ -39,8 +39,6 @@ router.get(
  */
 router.get(
   "/:id",
-  protect,
-  admin,
   validate(categoryValidator.validateCategoryId),
   categoryController.getCategoryById
 );
@@ -52,8 +50,6 @@ router.get(
  */
 router.post(
   "/",
-  protect,
-  admin,
   validate(categoryValidator.validateCategoryData),
   categoryController.createCategory
 );
@@ -65,8 +61,6 @@ router.post(
  */
 router.put(
   "/:id",
-  protect,
-  admin,
   validate([
     ...categoryValidator.validateCategoryId,
     ...categoryValidator.validateCategoryData,
@@ -81,8 +75,6 @@ router.put(
  */
 router.delete(
   "/:id",
-  protect,
-  admin,
   validate(categoryValidator.validateCategoryId),
   categoryController.deleteCategory
 );
@@ -94,8 +86,6 @@ router.delete(
  */
 router.put(
   "/:id/restore",
-  protect,
-  admin,
   validate(categoryValidator.validateCategoryId),
   categoryController.restoreCategory
 );
@@ -107,8 +97,6 @@ router.put(
  */
 router.patch(
   "/:id/status",
-  protect,
-  admin,
   validate(categoryValidator.validateStatusUpdate),
   categoryController.updateCategoryStatus
 );

@@ -109,9 +109,13 @@ const adminValidators = {
 
     query("isActive")
       .optional()
+      .customSanitizer((value) => {
+        if (value === "true") return true;
+        if (value === "false") return false;
+        return value;
+      })
       .isBoolean()
-      .withMessage("Trạng thái phải là true hoặc false")
-      .toBoolean(),
+      .withMessage("Trạng thái phải là true hoặc false"),
   ],
 
   /**
@@ -127,6 +131,21 @@ const adminValidators = {
       .withMessage("Thiếu thông tin trạng thái")
       .isBoolean()
       .withMessage("Trạng thái phải là true hoặc false"),
+
+    body("cascade")
+      .optional()
+      .isBoolean()
+      .withMessage("Cascade phải là true hoặc false")
+      .toBoolean(),
+  ],
+
+  /**
+   * Validator cho restore brand
+   */
+  validateBrandRestore: [
+    param("id")
+      .custom(isValidObjectId)
+      .withMessage("ID thương hiệu không hợp lệ"),
 
     body("cascade")
       .optional()

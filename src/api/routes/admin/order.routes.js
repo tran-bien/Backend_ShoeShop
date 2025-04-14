@@ -6,19 +6,23 @@ const orderValidator = require("@validators/order.validator");
 const validate = require("@utils/validatehelper");
 const { protect, admin } = require("@middlewares/auth.middleware");
 
+// Áp dụng middleware xác thực cho tất cả các routes
+router.use(protect);
+router.use(admin);
+
 /**
  * @route   GET /api/admin/orders
  * @desc    Lấy danh sách tất cả đơn hàng
  * @access  Admin
  */
-router.get("/", protect, admin, orderController.getOrders);
+router.get("/", orderController.getOrders);
 
 /**
  * @route   GET /api/admin/orders/:id
  * @desc    Lấy chi tiết đơn hàng
  * @access  Admin
  */
-router.get("/:id", protect, admin, orderController.getOrderById);
+router.get("/:id", orderController.getOrderById);
 
 /**
  * @route   PATCH /api/admin/orders/:id/status
@@ -27,8 +31,6 @@ router.get("/:id", protect, admin, orderController.getOrderById);
  */
 router.patch(
   "/:id/status",
-  protect,
-  admin,
   validate(orderValidator.validateUpdateOrderStatus),
   orderController.updateOrderStatus
 );
@@ -38,6 +40,6 @@ router.patch(
  * @desc    Hủy đơn hàng (bởi Admin)
  * @access  Admin
  */
-router.patch("/:id/cancel", protect, admin, orderController.cancelOrder);
+router.patch("/:id/cancel", orderController.cancelOrder);
 
 module.exports = router;

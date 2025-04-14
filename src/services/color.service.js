@@ -39,7 +39,7 @@ const colorService = {
    * @param {Object} query - Các tham số truy vấn
    */
   getAdminColors: async (query) => {
-    const { page = 1, limit = 10, name, type, sort } = query;
+    const { page = 1, limit = 15, name, type, sort } = query;
     const filter = { deletedAt: null }; // Mặc định chỉ lấy các màu chưa xóa
 
     // Tìm theo tên
@@ -67,12 +67,14 @@ const colorService = {
    */
   getAdminColorById: async (id) => {
     // Sử dụng setOptions để bao gồm cả màu đã xóa
-    const color = await Color.findById(id).setOptions({
-      includeDeleted: true,
-    });
+    const color = await Color.findById(id)
+      .setOptions({
+        includeDeleted: true,
+      })
+      .populate("deletedBy", "name email");
 
     if (!color) {
-      throw new ApiError(404, "Không tìm thấy màu sắc");
+      throw new ApiError(404, `Không tìm thấy màu sắc id: ${id}`);
     }
 
     return { success: true, color };
@@ -83,10 +85,10 @@ const colorService = {
    * @param {Object} query - Các tham số truy vấn
    */
   getDeletedColors: async (query) => {
-    const { page = 1, limit = 10, name, type, sort } = query;
+    const { page = 1, limit = 15, name, type, sort } = query;
 
     // Xây dựng query
-    const filter = {};
+    const filter = { deletedAt: { $ne: null } };
 
     // Tìm theo tên
     if (name) {
@@ -102,6 +104,7 @@ const colorService = {
       page,
       limit,
       sort: sort ? getSortOption(sort) : { deletedAt: -1 },
+      populate: [{ path: "deletedBy", select: "name email" }],
     };
 
     return await paginateDeleted(Color, filter, options);
@@ -117,7 +120,7 @@ const colorService = {
     // Kiểm tra xem màu sắc có tồn tại chưa theo tên
     const existingColorName = await Color.findOne({ name: colorData.name });
     if (existingColorName) {
-      throw new ApiError(409, "Tên màu đã tồn tại");
+      throw new ApiError(409, `Tên màu ${colorData.name} đã tồn tại`);
     }
 
     // Kiểm tra trùng mã màu cho màu solid
@@ -177,7 +180,7 @@ const colorService = {
 
     return {
       success: true,
-      message: "Tạo màu sắc thành công",
+      message: `Tạo màu sắc id: ${color.id} thành công`,
       color,
     };
   },
@@ -192,7 +195,7 @@ const colorService = {
     const color = await Color.findById(id);
 
     if (!color) {
-      throw new ApiError(404, "Không tìm thấy màu sắc");
+      throw new ApiError(404, `Không tìm thấy màu sắc id: ${id}`);
     }
 
     // Kiểm tra nếu đang cập nhật tên, xem tên đã tồn tại chưa
@@ -200,7 +203,7 @@ const colorService = {
       const existingColor = await Color.findOne({ name: updateData.name });
 
       if (existingColor) {
-        throw new ApiError(409, "Tên màu đã tồn tại");
+        throw new ApiError(409, `Tên màu ${updateData.name} đã tồn tại`);
       }
     }
 
@@ -270,7 +273,7 @@ const colorService = {
 
     return {
       success: true,
-      message: "Cập nhật màu sắc thành công",
+      message: `Cập nhật màu sắc id: ${updatedColor.id} thành công`,
       color: updatedColor,
     };
   },
@@ -285,7 +288,7 @@ const colorService = {
     const color = await Color.findById(id);
 
     if (!color) {
-      throw new ApiError(404, "Không tìm thấy màu sắc");
+      throw new ApiError(404, `Không tìm thấy màu sắc id: ${id}`);
     }
 
     // Kiểm tra xem màu sắc có được sử dụng trong biến thể nào không
@@ -304,7 +307,7 @@ const colorService = {
 
     return {
       success: true,
-      message: "Xóa màu sắc thành công",
+      message: `Xóa màu sắc id: ${color.id} thành công`,
       isDeleted: true,
     };
   },
@@ -319,7 +322,7 @@ const colorService = {
 
     return {
       success: true,
-      message: "Khôi phục màu sắc thành công",
+      message: `Khôi phục màu sắc id: ${color.id} thành công`,
       color,
     };
   },

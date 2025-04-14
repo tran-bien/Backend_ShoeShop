@@ -7,9 +7,9 @@
  */
 const paginateDeleted = async (model, query, options = {}) => {
   // Trang hiện tại (mặc định là 1 nếu không cung cấp)
-  const page = parseInt(options.page, 10) || 1;
-  // Số bản ghi mỗi trang (mặc định là 10 nếu không cung cấp)
-  const limit = parseInt(options.limit, 10) || 10;
+  const page = parseInt(options.page, 1) || 1;
+  // Số bản ghi mỗi trang (mặc định là 15 nếu không cung cấp)
+  const limit = parseInt(options.limit, 15) || 15;
 
   // Xử lý select để chỉ lấy các trường cần thiết
   const selectOption = options.select || "";

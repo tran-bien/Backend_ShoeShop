@@ -2,6 +2,7 @@ const { Category, Product, Variant } = require("@models");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
 const ApiError = require("@utils/ApiError");
+const { createSlug } = require("@utils/slugify");
 
 // Hàm hỗ trợ xử lý các case sắp xếp
 const getSortOption = (sortParam) => {
@@ -39,7 +40,7 @@ const categoryService = {
    * [ADMIN] Lấy tất cả category (bao gồm cả inactive)
    */
   getAdminAllCategories: async (query) => {
-    const { page = 1, limit = 10, name, sort, isActive } = query;
+    const { page = 1, limit = 15, name, sort, isActive } = query;
     const filter = { deletedAt: null }; // Mặc định chỉ lấy các category chưa xóa
 
     if (name) {
@@ -67,22 +68,27 @@ const categoryService = {
    */
   getAdminCategoryById: async (categoryId) => {
     // Sử dụng setOptions để bao gồm cả category đã xóa
-    const category = await Category.findById(categoryId).setOptions({
-      includeDeleted: true,
-    });
+    const category = await Category.findById(categoryId)
+      .setOptions({
+        includeDeleted: true,
+      })
+      .populate("deletedBy", "name email");
 
     if (!category) {
-      throw new ApiError(404, "Không tìm thấy danh mục");
+      throw new ApiError(404, `Không tìm thấy danh mục id: ${categoryId}`);
     }
 
-    return category;
+    return {
+      success: true,
+      category,
+    };
   },
 
   /**
    * [ADMIN] Lấy danh sách category đã xóa mềm
    */
   getDeletedCategories: async (query) => {
-    const { page = 1, limit = 10, name, sort } = query;
+    const { page = 1, limit = 15, name, sort } = query;
 
     // Chuẩn bị filter
     const filter = {};
@@ -95,6 +101,7 @@ const categoryService = {
       page,
       limit,
       sort: sort ? getSortOption(sort) : { deletedAt: -1 },
+      populate: [{ path: "deletedBy", select: "name email" }],
     };
 
     return await paginateDeleted(Category, filter, options);
@@ -106,10 +113,7 @@ const categoryService = {
    * [PUBLIC] Lấy tất cả category (chỉ active và chưa xóa)
    */
   getPublicAllCategories: async () => {
-    return await Category.find({
-      isActive: true,
-      deletedAt: null, // Đảm bảo chỉ lấy category chưa xóa
-    });
+    return await Category.find({ isActive: true, deletedAt: null });
   },
 
   /**
@@ -123,10 +127,13 @@ const categoryService = {
     });
 
     if (!category) {
-      throw new ApiError(404, "Không tìm thấy danh mục");
+      throw new ApiError(404, `Không tìm thấy danh mục id: ${categoryId}`);
     }
 
-    return category;
+    return {
+      success: true,
+      category,
+    };
   },
 
   /**
@@ -140,10 +147,13 @@ const categoryService = {
     });
 
     if (!category) {
-      throw new ApiError(404, "Không tìm thấy danh mục");
+      throw new ApiError(404, `Không tìm thấy danh mục slug: ${slug}`);
     }
 
-    return category;
+    return {
+      success: true,
+      category,
+    };
   },
 
   // === COMMON OPERATIONS ===
@@ -163,7 +173,7 @@ const categoryService = {
     });
 
     if (existingCategory) {
-      throw new ApiError(409, "Tên danh mục đã tồn tại");
+      throw new ApiError(409, `Tên danh mục ${categoryData.name} đã tồn tại`);
     }
 
     const category = new Category(categoryData);
@@ -184,7 +194,7 @@ const categoryService = {
     const category = await Category.findById(categoryId);
 
     if (!category) {
-      throw new ApiError(404, "Không tìm thấy danh mục");
+      throw new ApiError(404, `Không tìm thấy danh mục id: ${categoryId}`);
     }
 
     // Kiểm tra xem có cập nhật tên không và tên mới có trùng không
@@ -194,7 +204,25 @@ const categoryService = {
         _id: { $ne: categoryId },
       });
       if (existingCategory) {
-        throw new ApiError(409, "Tên danh mục đã tồn tại");
+        throw new ApiError(409, `Tên danh mục ${categoryData.name} đã tồn tại`);
+      }
+
+      // Tự động tạo slug mới từ tên mới
+      const newSlug = createSlug(categoryData.name);
+
+      // Kiểm tra xem slug mới có bị trùng không
+      const existingSlug = await Category.findOne({
+        slug: newSlug,
+        _id: { $ne: categoryId },
+        deletedAt: null,
+      });
+
+      if (existingSlug) {
+        // Nếu trùng, tạo slug với timestamp để đảm bảo duy nhất
+        category.slug = `${newSlug}-${Date.now()}`;
+      } else {
+        // Nếu không trùng, sử dụng slug mới
+        category.slug = newSlug;
       }
     }
 
@@ -205,10 +233,11 @@ const categoryService = {
     if (categoryData.isActive !== undefined)
       category.isActive = categoryData.isActive;
 
+    // Lưu danh mục (middleware pre-save sẽ không tạo slug mới nếu đã đặt nó)
     await category.save();
     return {
       success: true,
-      message: "Cập nhật danh mục thành công",
+      message: `Cập nhật danh mục ${category.name} thành công`,
       category,
     };
   },
@@ -220,7 +249,7 @@ const categoryService = {
     const category = await Category.findById(categoryId);
 
     if (!category) {
-      throw new ApiError(404, "Không tìm thấy danh mục");
+      throw new ApiError(404, `Không tìm thấy danh mục id: ${categoryId}`);
     }
 
     // Kiểm tra xem category có được sử dụng trong sản phẩm nào không
@@ -244,7 +273,7 @@ const categoryService = {
 
     return {
       success: true,
-      message: "Xóa danh mục thành công",
+      message: `Xóa danh mục id: ${category.id} thành công`,
       isDeleted: true,
     };
   },
@@ -259,7 +288,7 @@ const categoryService = {
     if (!category) {
       throw new ApiError(
         404,
-        "Không tìm thấy danh mục hoặc danh mục không bị xóa"
+        `Không tìm thấy danh mục id: ${categoryId} hoặc danh mục không bị xóa`
       );
     }
 
@@ -314,7 +343,7 @@ const categoryService = {
     const category = await Category.findById(categoryId);
 
     if (!category) {
-      throw new ApiError(404, "Không tìm thấy danh mục");
+      throw new ApiError(404, `Không tìm thấy danh mục id: ${categoryId}`);
     }
 
     // Cập nhật trạng thái category
@@ -322,6 +351,7 @@ const categoryService = {
     await category.save();
 
     let affectedProducts = 0;
+    let affectedVariants = 0;
 
     // CASCADE: Chỉ cập nhật sản phẩm và biến thể khi cascade = true
     if (cascade) {
@@ -333,22 +363,30 @@ const categoryService = {
       affectedProducts = updateProductResult.modifiedCount;
 
       // CASCADE: Cập nhật trạng thái tất cả biến thể của các sản phẩm thuộc category này
-      const products = await Product.find({ category: categoryId });
+      const products = await Product.find({ category: categoryId }, { _id: 1 });
       const productIds = products.map((product) => product._id);
 
-      await Variant.updateMany(
-        { product: { $in: productIds } },
-        { isActive: isActive }
-      );
+      if (productIds.length > 0) {
+        const variantResult = await Variant.updateMany(
+          { product: { $in: productIds } },
+          { isActive: isActive }
+        );
+        affectedVariants = variantResult.modifiedCount;
+      }
     }
 
     const statusMsg = isActive ? "kích hoạt" : "vô hiệu hóa";
     return {
       success: true,
       message: cascade
-        ? `Danh mục đã được ${statusMsg}. Đã ${statusMsg} ${affectedProducts} sản phẩm liên quan.`
+        ? `Danh mục đã được ${statusMsg}. Đã ${statusMsg} ${affectedProducts} sản phẩm và ${affectedVariants} biến thể liên quan.`
         : `Danh mục đã được ${statusMsg} mà không ảnh hưởng đến sản phẩm.`,
       category,
+      cascade: {
+        applied: cascade,
+        productsAffected: affectedProducts,
+        variantsAffected: affectedVariants,
+      },
     };
   },
 };

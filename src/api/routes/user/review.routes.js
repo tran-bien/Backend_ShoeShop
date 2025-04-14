@@ -7,12 +7,15 @@ const uploadMiddleware = require("@middlewares/upload.middleware");
 
 const router = express.Router();
 
+// Áp dụng middleware xác thực cho tất cả các routes
+router.use(protect);
+
 /**
  * @route   GET /api/users/reviews/my-reviews
  * @desc    Lấy danh sách đánh giá của người dùng hiện tại
  * @access  Private
  */
-router.get("/my-reviews", protect, reviewController.getUserReviews);
+router.get("/my-reviews", reviewController.getUserReviews);
 
 /**
  * @route   POST /api/users/reviews
@@ -21,7 +24,6 @@ router.get("/my-reviews", protect, reviewController.getUserReviews);
  */
 router.post(
   "/",
-  protect,
   uploadMiddleware.handleReviewImagesUpload,
   validate(reviewValidator.validateCreateReview),
   reviewController.createReview
@@ -34,7 +36,6 @@ router.post(
  */
 router.put(
   "/:reviewId",
-  protect,
   uploadMiddleware.handleReviewImagesUpload,
   reviewValidator.validateReviewId,
   reviewValidator.validateReviewOwnership,
@@ -49,7 +50,6 @@ router.put(
  */
 router.delete(
   "/:reviewId",
-  protect,
   reviewValidator.validateReviewId,
   reviewValidator.validateReviewOwnership,
   reviewController.deleteReview
@@ -62,7 +62,6 @@ router.delete(
  */
 router.post(
   "/:reviewId/like",
-  protect,
   validate(reviewValidator.validateToggleLikeReview),
   reviewController.toggleLikeReview
 );
@@ -74,7 +73,6 @@ router.post(
  */
 router.post(
   "/:reviewId/images",
-  protect,
   uploadMiddleware.handleReviewImagesUpload,
   reviewValidator.validateReviewId,
   reviewValidator.validateReviewOwnership,
@@ -89,7 +87,6 @@ router.post(
  */
 router.delete(
   "/:reviewId/images",
-  protect,
   reviewValidator.validateReviewId,
   reviewValidator.validateReviewOwnership,
   validate(reviewValidator.validateImageIds),
