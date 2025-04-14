@@ -74,7 +74,7 @@ const authController = {
    */
   resetPassword: asyncHandler(async (req, res) => {
     const result = await authService.resetPassword(
-      req.body.token,
+      req.body.resetToken,
       req.body.password
     );
     res.json(result);

@@ -390,10 +390,9 @@ const authService = {
    * Đặt lại mật khẩu
    * @param {String} resetToken - Token đặt lại mật khẩu
    * @param {String} newPassword - Mật khẩu mới
-   * @param {String} confirmPassword - Xác nhận mật khẩu
    * @returns {Object} - Kết quả đặt lại mật khẩu
    */
-  resetPassword: async (resetToken, newPassword, confirmPassword) => {
+  resetPassword: async (resetToken, newPassword) => {
     console.log("Bắt đầu quá trình đặt lại mật khẩu với token:", resetToken);
 
     // Hash token để khớp với cách nó được lưu trong database
