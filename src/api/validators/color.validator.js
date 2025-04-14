@@ -33,17 +33,26 @@ const colorValidator = {
         value.type === "half" &&
         (!value.colors || !Array.isArray(value.colors))
       ) {
-        throw new ApiError(400, "Màu kết hợp (half) phải có danh sách màu (colors)");
+        throw new ApiError(
+          400,
+          "Màu kết hợp (half) phải có danh sách màu (colors)"
+        );
       }
 
       // Đảm bảo rằng nếu type là 'solid' thì KHÔNG được có mảng colors
       if (value.type === "solid" && value.colors) {
-        throw new ApiError(400, "Màu đơn (solid) không được có danh sách màu (colors)");
+        throw new ApiError(
+          400,
+          "Màu đơn (solid) không được có danh sách màu (colors)"
+        );
       }
 
       // Đảm bảo rằng nếu type là 'half' thì KHÔNG được có code
       if (value.type === "half" && value.code) {
-        throw new ApiError(400, "Màu kết hợp (half) không được có mã màu đơn (code)");
+        throw new ApiError(
+          400,
+          "Màu kết hợp (half) không được có mã màu đơn (code)"
+        );
       }
 
       return true;
@@ -57,7 +66,10 @@ const colorValidator = {
         // Kiểm tra mã hex hợp lệ (với hoặc không có # ở đầu)
         const regex = /^#?([0-9A-F]{6}|[0-9A-F]{3})$/i;
         if (value && !regex.test(value)) {
-          throw new ApiError(400, "Mã màu không hợp lệ (yêu cầu định dạng HEX)");
+          throw new ApiError(
+            400,
+            "Mã màu không hợp lệ (yêu cầu định dạng HEX)"
+          );
         }
         return true;
       }),
@@ -72,7 +84,10 @@ const colorValidator = {
         // Kiểm tra mỗi mã màu trong array
         const regex = /^#?([0-9A-F]{6}|[0-9A-F]{3})$/i;
         if (!value.every((color) => regex.test(color))) {
-          throw new ApiError(400, "Mã màu không hợp lệ (yêu cầu định dạng HEX)");
+          throw new ApiError(
+            400,
+            "Mã màu không hợp lệ (yêu cầu định dạng HEX)"
+          );
         }
       }
       return true;
@@ -140,7 +155,10 @@ const colorValidator = {
         // Kiểm tra mã hex hợp lệ
         const regex = /^#?([0-9A-F]{6}|[0-9A-F]{3})$/i;
         if (value && !regex.test(value)) {
-          throw new ApiError(400, "Mã màu không hợp lệ (yêu cầu định dạng HEX)");
+          throw new ApiError(
+            400,
+            "Mã màu không hợp lệ (yêu cầu định dạng HEX)"
+          );
         }
         return true;
       }),
@@ -157,7 +175,10 @@ const colorValidator = {
           // Kiểm tra mỗi mã màu trong array
           const regex = /^#?([0-9A-F]{6}|[0-9A-F]{3})$/i;
           if (!value.every((color) => regex.test(color))) {
-            throw new ApiError(400, "Mã màu không hợp lệ (yêu cầu định dạng HEX)");
+            throw new ApiError(
+              400,
+              "Mã màu không hợp lệ (yêu cầu định dạng HEX)"
+            );
           }
         }
         return true;
@@ -186,6 +207,11 @@ const colorValidator = {
       .optional()
       .isIn(["solid", "half"])
       .withMessage("Loại màu phải là 'solid' hoặc 'half'"),
+
+    query("sort")
+      .optional()
+      .isIn(["created_at_asc", "created_at_desc", "name_asc", "name_desc"])
+      .withMessage("Tham số sắp xếp không hợp lệ"),
   ],
 };
 

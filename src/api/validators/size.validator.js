@@ -72,7 +72,7 @@ const sizeValidator = {
 
     query("sort")
       .optional()
-      .isString()
+      .isIn(["created_at_asc", "created_at_desc", "value_asc", "value_desc"])
       .withMessage("Tham số sắp xếp không hợp lệ"),
   ],
 };

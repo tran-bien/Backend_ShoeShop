@@ -1,4 +1,4 @@
-const { Color } = require("@models");
+const { Color, Variant } = require("@models");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
 const ApiError = require("@utils/ApiError");

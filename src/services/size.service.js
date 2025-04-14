@@ -1,4 +1,4 @@
-const { Size } = require("@models");
+const { Size, Variant } = require("@models");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
 const ApiError = require("@utils/ApiError");
