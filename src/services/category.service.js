@@ -113,7 +113,9 @@ const categoryService = {
    * [PUBLIC] Lấy tất cả category (chỉ active và chưa xóa)
    */
   getPublicAllCategories: async () => {
-    return await Category.find({ isActive: true, deletedAt: null });
+    return await Category.find({ isActive: true, deletedAt: null }).select(
+      "-deletedBy -deletedAt"
+    );
   },
 
   /**
@@ -124,7 +126,7 @@ const categoryService = {
       _id: categoryId,
       isActive: true,
       deletedAt: null, // Đảm bảo chỉ lấy category chưa xóa
-    });
+    }).select("-deletedBy -deletedAt");
 
     if (!category) {
       throw new ApiError(404, `Không tìm thấy danh mục id: ${categoryId}`);
@@ -144,7 +146,7 @@ const categoryService = {
       slug,
       isActive: true,
       deletedAt: null, // Đảm bảo chỉ lấy category chưa xóa
-    });
+    }).select("-deletedBy -deletedAt");
 
     if (!category) {
       throw new ApiError(404, `Không tìm thấy danh mục slug: ${slug}`);
@@ -156,7 +158,7 @@ const categoryService = {
     };
   },
 
-  // === COMMON OPERATIONS ===
+  // === ADMIN OPERATIONS ===
 
   /**
    * Tạo category mới

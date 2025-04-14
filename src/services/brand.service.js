@@ -109,7 +109,9 @@ const brandService = {
    * [PUBLIC] Lấy tất cả brand (chỉ active và chưa xóa)
    */
   getPublicAllBrands: async () => {
-    return await Brand.find({ isActive: true, deletedAt: null });
+    return await Brand.find({ isActive: true, deletedAt: null }).select(
+      "-deletedBy -deletedAt"
+    );
   },
 
   /**
@@ -120,7 +122,7 @@ const brandService = {
       _id: brandId,
       isActive: true,
       deletedAt: null, // Đảm bảo chỉ lấy brand chưa xóa
-    });
+    }).select("-deletedBy -deletedAt");
 
     if (!brand) {
       throw new ApiError(404, `Không tìm thấy thương hiệu id: ${brandId}`);
@@ -137,7 +139,7 @@ const brandService = {
       slug,
       isActive: true,
       deletedAt: null, // Đảm bảo chỉ lấy brand chưa xóa
-    });
+    }).select("-deletedBy -deletedAt");
 
     if (!brand) {
       throw new ApiError(404, `Không tìm thấy thương hiệu slug: ${slug}`);
@@ -146,7 +148,7 @@ const brandService = {
     return { success: true, brand };
   },
 
-  // === COMMON OPERATIONS ===
+  // === ADMIN OPERATIONS ===
 
   /**
    * Tạo brand mới
