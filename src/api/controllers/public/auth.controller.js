@@ -8,8 +8,22 @@ const authController = {
    * @access  Public
    */
   register: asyncHandler(async (req, res) => {
-    const result = await authService.register(req.body);
+    const result = await authService.registerUser(req.body);
     res.status(201).json(result);
+  }),
+
+  /**
+   * @desc    Xác thực OTP
+   * @route   POST /api/auth/verify-otp
+   * @access  Public
+   */
+  verifyOTP: asyncHandler(async (req, res) => {
+    const result = await authService.verifyOTP({
+      email: req.body.email,
+      otp: req.body.otp,
+      req,
+    });
+    res.json(result);
   }),
 
   /**
@@ -18,7 +32,8 @@ const authController = {
    * @access  Public
    */
   login: asyncHandler(async (req, res) => {
-    const result = await authService.login(req.body);
+    const { email, password } = req.body;
+    const result = await authService.loginUser(email, password, req);
     res.json(result);
   }),
 
@@ -73,6 +88,81 @@ const authController = {
   verifyEmail: asyncHandler(async (req, res) => {
     const result = await authService.verifyEmail(req.query.token);
     res.json(result);
+  }),
+
+  /**
+   * @desc    Thay đổi mật khẩu
+   * @route   POST /api/auth/change-password
+   * @access  Private
+   */
+  changePassword: asyncHandler(async (req, res) => {
+    const result = await authService.changePassword(
+      req.user.id,
+      req.body.currentPassword,
+      req.body.newPassword
+    );
+    res.json(result);
+  }),
+
+  /**
+   * @desc    Lấy danh sách phiên đăng nhập
+   * @route   GET /api/auth/sessions
+   * @access  Private
+   */
+  getCurrentSessions: asyncHandler(async (req, res) => {
+    const result = await authService.getCurrentSessions(req.user.id, req.token);
+    res.json({
+      success: true,
+      message: "Lấy danh sách phiên đăng nhập thành công",
+      data: result,
+    });
+  }),
+
+  /**
+   * @desc    Đăng xuất khỏi một phiên
+   * @route   DELETE /api/auth/sessions/:sessionId
+   * @access  Private
+   */
+  logoutSession: asyncHandler(async (req, res) => {
+    const result = await authService.logoutSession(
+      req.params.sessionId,
+      req.user.id,
+      req.token
+    );
+    res.json({
+      success: true,
+      message: "Đăng xuất khỏi phiên thành công",
+      data: result,
+    });
+  }),
+
+  /**
+   * @desc    Đăng xuất khỏi tất cả phiên trừ phiên hiện tại
+   * @route   DELETE /api/auth/sessions
+   * @access  Private
+   */
+  logoutAllOtherSessions: asyncHandler(async (req, res) => {
+    const count = await authService.logoutAllOtherSessions(
+      req.user.id,
+      req.token
+    );
+    res.json({
+      success: true,
+      message: `Đã đăng xuất khỏi ${count} phiên khác`,
+    });
+  }),
+
+  /**
+   * @desc    Đăng xuất khỏi tất cả phiên
+   * @route   DELETE /api/auth/logout-all
+   * @access  Private
+   */
+  logoutAll: asyncHandler(async (req, res) => {
+    const count = await authService.logoutAll(req.user.id);
+    res.json({
+      success: true,
+      message: `Đã đăng xuất khỏi tất cả ${count} phiên`,
+    });
   }),
 };
 

@@ -82,7 +82,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(morgan("dev"));
 
 // Sử dụng các routes từ thư mục src/api/routes
-app.use("/api", routes);
+app.use("/api/v1", routes);
 
 // Serve static assets nếu đang trong môi trường production
 if (process.env.NODE_ENV === "production") {
