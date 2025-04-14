@@ -178,6 +178,19 @@ const categoryService = {
       throw new ApiError(409, `Tên danh mục ${categoryData.name} đã tồn tại`);
     }
 
+    // Kiểm tra tên danh mục trùng với danh mục đã xóa
+    const deletedCategory = await Category.findOne({
+      name: categoryData.name,
+      deletedAt: { $ne: null },
+    });
+
+    if (deletedCategory) {
+      throw new ApiError(
+        409,
+        `Tên danh mục ${categoryData.name} đã tồn tại trong một danh mục đã xóa. Vui lòng khôi phục hoặc chọn tên khác.`
+      );
+    }
+
     const category = new Category(categoryData);
 
     // Lỗi unique key sẽ được xử lý bởi error handler
@@ -201,18 +214,33 @@ const categoryService = {
 
     // Kiểm tra xem có cập nhật tên không và tên mới có trùng không
     if (categoryData.name && categoryData.name !== category.name) {
+      // Kiểm tra cả bản ghi đã xóa mềm, sử dụng setOptions
       const existingCategory = await Category.findOne({
         name: categoryData.name,
         _id: { $ne: categoryId },
-      });
+      }).setOptions({ includeDeleted: true });
+
       if (existingCategory) {
-        throw new ApiError(409, `Tên danh mục ${categoryData.name} đã tồn tại`);
+        // Xác định xem bản ghi trùng tên đã bị xóa mềm hay không
+        if (existingCategory.deletedAt === null) {
+          // Bản ghi chưa bị xóa - không cho phép đặt tên trùng
+          throw new ApiError(
+            409,
+            `Tên danh mục ${categoryData.name} đã tồn tại`
+          );
+        } else {
+          // Bản ghi đã bị xóa mềm - thông báo rõ hơn
+          throw new ApiError(
+            409,
+            `Tên danh mục ${categoryData.name} đã tồn tại trong một danh mục đã xóa. Vui lòng khôi phục hoặc chọn tên khác.`
+          );
+        }
       }
 
       // Tự động tạo slug mới từ tên mới
       const newSlug = createSlug(categoryData.name);
 
-      // Kiểm tra xem slug mới có bị trùng không
+      // Kiểm tra xem slug mới có bị trùng không (cả bản ghi chưa xóa mềm)
       const existingSlug = await Category.findOne({
         slug: newSlug,
         _id: { $ne: categoryId },
@@ -228,14 +256,14 @@ const categoryService = {
       }
     }
 
-    // Cập nhật từng trường thay vì Object.assign để xử lý thêm logic nếu cần
+    // Cập nhật từng trường
     if (categoryData.name !== undefined) category.name = categoryData.name;
     if (categoryData.description !== undefined)
       category.description = categoryData.description;
     if (categoryData.isActive !== undefined)
       category.isActive = categoryData.isActive;
 
-    // Lưu danh mục (middleware pre-save sẽ không tạo slug mới nếu đã đặt nó)
+    // Lưu danh mục
     await category.save();
     return {
       success: true,
@@ -243,7 +271,6 @@ const categoryService = {
       category,
     };
   },
-
   /**
    * Xóa mềm category - với kiểm tra và tự động vô hiệu hóa
    */

@@ -2,6 +2,7 @@ const { Color, Variant } = require("@models");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
 const ApiError = require("@utils/ApiError");
+
 // Hàm hỗ trợ xử lý các case sắp xếp
 const getSortOption = (sortParam) => {
   let sortOption = { createdAt: -1 };
@@ -88,7 +89,7 @@ const colorService = {
     const { page = 1, limit = 15, name, type, sort } = query;
 
     // Xây dựng query
-    const filter = { deletedAt: { $ne: null } };
+    const filter = {};
 
     // Tìm theo tên
     if (name) {
@@ -110,17 +111,27 @@ const colorService = {
     return await paginateDeleted(Color, filter, options);
   },
 
-  // === COMMON OPERATIONS ===
+  // === ADMIN OPERATIONS ===
 
   /**
    * Tạo màu sắc mới
    * @param {Object} colorData - Dữ liệu màu sắc
    */
   createColor: async (colorData) => {
-    // Kiểm tra xem màu sắc có tồn tại chưa theo tên
-    const existingColorName = await Color.findOne({ name: colorData.name });
+    // Kiểm tra xem màu sắc có tồn tại chưa theo tên kể cả đã xóa
+    const existingColorName = await Color.findOne({
+      name: colorData.name,
+    }).setOptions({ includeDeleted: true });
+
     if (existingColorName) {
-      throw new ApiError(409, `Tên màu ${colorData.name} đã tồn tại`);
+      if (existingColorName.deletedAt) {
+        throw new ApiError(
+          409,
+          `Tên màu ${colorData.name} đã tồn tại trong một màu đã xóa. Vui lòng khôi phục hoặc chọn tên khác.`
+        );
+      } else {
+        throw new ApiError(409, `Tên màu ${colorData.name} đã tồn tại`);
+      }
     }
 
     // Kiểm tra trùng mã màu cho màu solid
@@ -128,13 +139,20 @@ const colorService = {
       const existingColorCode = await Color.findOne({
         code: colorData.code.toUpperCase(),
         type: "solid",
-      });
+      }).setOptions({ includeDeleted: true });
 
       if (existingColorCode) {
-        throw new ApiError(
-          409,
-          `Mã màu ${colorData.code} đã được sử dụng bởi màu "${existingColorCode.name}"`
-        );
+        if (existingColorCode.deletedAt) {
+          throw new ApiError(
+            409,
+            `Mã màu ${colorData.code} đã được sử dụng bởi màu "${existingColorCode.name}" đã xóa. Vui lòng khôi phục hoặc chọn mã khác.`
+          );
+        } else {
+          throw new ApiError(
+            409,
+            `Mã màu ${colorData.code} đã được sử dụng bởi màu "${existingColorCode.name}"`
+          );
+        }
       }
     }
 
@@ -149,8 +167,10 @@ const colorService = {
         color.toUpperCase()
       );
 
-      // Tìm tất cả màu half
-      const halfColors = await Color.find({ type: "half" });
+      // Tìm tất cả màu half (bao gồm cả đã xóa)
+      const halfColors = await Color.find({
+        type: "half",
+      }).setOptions({ includeDeleted: true });
 
       // Kiểm tra từng màu half xem có bộ màu giống nhau không
       for (const halfColor of halfColors) {
@@ -167,10 +187,17 @@ const colorService = {
           (normalizedColors[0] === existingColors[1] &&
             normalizedColors[1] === existingColors[0])
         ) {
-          throw new ApiError(
-            409,
-            `Bộ màu này đã được sử dụng bởi màu "${halfColor.name}"`
-          );
+          if (halfColor.deletedAt) {
+            throw new ApiError(
+              409,
+              `Bộ màu này đã được sử dụng bởi màu "${halfColor.name}" đã xóa. Vui lòng khôi phục hoặc chọn bộ màu khác.`
+            );
+          } else {
+            throw new ApiError(
+              409,
+              `Bộ màu này đã được sử dụng bởi màu "${halfColor.name}"`
+            );
+          }
         }
       }
     }
@@ -200,10 +227,20 @@ const colorService = {
 
     // Kiểm tra nếu đang cập nhật tên, xem tên đã tồn tại chưa
     if (updateData.name && updateData.name !== color.name) {
-      const existingColor = await Color.findOne({ name: updateData.name });
+      const existingColor = await Color.findOne({
+        name: updateData.name,
+        _id: { $ne: id },
+      }).setOptions({ includeDeleted: true });
 
       if (existingColor) {
-        throw new ApiError(409, `Tên màu ${updateData.name} đã tồn tại`);
+        if (existingColor.deletedAt) {
+          throw new ApiError(
+            409,
+            `Tên màu ${updateData.name} đã tồn tại trong một màu đã xóa. Vui lòng khôi phục hoặc chọn tên khác.`
+          );
+        } else {
+          throw new ApiError(409, `Tên màu ${updateData.name} đã tồn tại`);
+        }
       }
     }
 
@@ -213,13 +250,20 @@ const colorService = {
         code: updateData.code.toUpperCase(),
         type: "solid",
         _id: { $ne: id },
-      });
+      }).setOptions({ includeDeleted: true });
 
       if (existingColorCode) {
-        throw new ApiError(
-          409,
-          `Mã màu ${updateData.code} đã được sử dụng bởi màu "${existingColorCode.name}"`
-        );
+        if (existingColorCode.deletedAt) {
+          throw new ApiError(
+            409,
+            `Mã màu ${updateData.code} đã được sử dụng bởi màu "${existingColorCode.name}" đã xóa. Vui lòng khôi phục hoặc chọn mã khác.`
+          );
+        } else {
+          throw new ApiError(
+            409,
+            `Mã màu ${updateData.code} đã được sử dụng bởi màu "${existingColorCode.name}"`
+          );
+        }
       }
     }
 
@@ -239,7 +283,7 @@ const colorService = {
       const halfColors = await Color.find({
         type: "half",
         _id: { $ne: id },
-      });
+      }).setOptions({ includeDeleted: true });
 
       // Kiểm tra từng màu half xem có bộ màu giống nhau không
       for (const halfColor of halfColors) {
@@ -256,10 +300,17 @@ const colorService = {
           (normalizedColors[0] === existingColors[1] &&
             normalizedColors[1] === existingColors[0])
         ) {
-          throw new ApiError(
-            409,
-            `Bộ màu này đã được sử dụng bởi màu "${halfColor.name}"`
-          );
+          if (halfColor.deletedAt) {
+            throw new ApiError(
+              409,
+              `Bộ màu này đã được sử dụng bởi màu "${halfColor.name}" đã xóa. Vui lòng khôi phục hoặc chọn bộ màu khác.`
+            );
+          } else {
+            throw new ApiError(
+              409,
+              `Bộ màu này đã được sử dụng bởi màu "${halfColor.name}"`
+            );
+          }
         }
       }
     }

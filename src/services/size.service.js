@@ -75,7 +75,7 @@ const sizeService = {
       .populate("deletedBy", "name email");
 
     if (!size) {
-      throw new ApiError(404, `Không tìm thấy kích thước value: ${id}`);
+      throw new ApiError(404, `Không tìm thấy kích thước id: ${id}`);
     }
 
     return { success: true, size };
@@ -87,7 +87,7 @@ const sizeService = {
    */
   getDeletedSizes: async (query) => {
     const { page = 1, limit = 15, value, description, sort } = query;
-    const filter = { deletedAt: { $ne: null } };
+    const filter = {};
 
     if (value !== undefined) {
       filter.value = Number(value);
@@ -107,24 +107,32 @@ const sizeService = {
     return await paginateDeleted(Size, filter, options);
   },
 
-  // === COMMON OPERATIONS ===
+  // === ADMIN OPERATIONS ===
 
   /**
    * Tạo kích thước mới
    * @param {Object} sizeData - Dữ liệu kích thước
    */
   createSize: async (sizeData) => {
-    // Kiểm tra xem kích thước có tồn tại chưa (same value and description)
+    // Kiểm tra xem kích thước có tồn tại chưa (bao gồm cả đã xóa mềm)
     const existingSize = await Size.findOne({
       value: sizeData.value,
       description: sizeData.description,
-    });
+    }).setOptions({ includeDeleted: true });
 
     if (existingSize) {
-      throw new ApiError(
-        409,
-        `Kích thước value: ${sizeData.value} và description: ${sizeData.description} đã tồn tại`
-      );
+      // Phân biệt thông báo dựa trên trạng thái xóa
+      if (existingSize.deletedAt) {
+        throw new ApiError(
+          409,
+          `Kích thước value: ${sizeData.value} và description: ${sizeData.description} đã tồn tại trong một kích thước đã xóa. Vui lòng khôi phục hoặc chọn giá trị khác.`
+        );
+      } else {
+        throw new ApiError(
+          409,
+          `Kích thước value: ${sizeData.value} và description: ${sizeData.description} đã tồn tại`
+        );
+      }
     }
 
     // Tạo kích thước mới
@@ -162,17 +170,26 @@ const sizeService = {
           ? updateData.description
           : size.description;
 
+      // Kiểm tra bao gồm cả các kích thước đã xóa mềm
       const existingSize = await Size.findOne({
         value: valueToCheck,
         description: descriptionToCheck,
         _id: { $ne: id },
-      });
+      }).setOptions({ includeDeleted: true });
 
       if (existingSize) {
-        throw new ApiError(
-          409,
-          `Kích thước value: ${valueToCheck} và description: ${descriptionToCheck} đã tồn tại`
-        );
+        // Phân biệt thông báo dựa trên trạng thái xóa
+        if (existingSize.deletedAt) {
+          throw new ApiError(
+            409,
+            `Kích thước value: ${valueToCheck} và description: ${descriptionToCheck} đã tồn tại trong một kích thước đã xóa. Vui lòng khôi phục hoặc chọn giá trị khác.`
+          );
+        } else {
+          throw new ApiError(
+            409,
+            `Kích thước value: ${valueToCheck} và description: ${descriptionToCheck} đã tồn tại`
+          );
+        }
       }
     }
 

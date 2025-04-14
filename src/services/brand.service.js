@@ -166,6 +166,19 @@ const brandService = {
       throw new ApiError(409, `Tên thương hiệu ${brandData.name} đã tồn tại`);
     }
 
+    // Kiểm tra tên thương hiệu trùng với thương hiệu đã xóa
+    const deletedBrand = await Brand.findOne({
+      name: brandData.name,
+      deletedAt: { $ne: null },
+    });
+
+    if (deletedBrand) {
+      throw new ApiError(
+        409,
+        `Tên thương hiệu ${brandData.name} đã tồn tại trong một thương hiệu đã xóa. Vui lòng khôi phục hoặc chọn tên khác.`
+      );
+    }
+
     const brand = new Brand(brandData);
     await brand.save();
 
@@ -188,19 +201,31 @@ const brandService = {
 
     // Kiểm tra xem có cập nhật tên không và tên mới có trùng không
     if (brandData.name && brandData.name !== brand.name) {
+      // Kiểm tra cả bản ghi đã xóa mềm, sử dụng setOptions
       const existingBrand = await Brand.findOne({
         name: brandData.name,
         _id: { $ne: brandId },
-      });
+      }).setOptions({ includeDeleted: true });
 
       if (existingBrand) {
-        throw new ApiError(409, `Tên thương hiệu ${brandData.name} đã tồn tại`);
+        // Xác định xem bản ghi trùng tên đã bị xóa mềm hay không
+        if (existingBrand.deletedAt === null) {
+          throw new ApiError(
+            409,
+            `Tên thương hiệu ${brandData.name} đã tồn tại`
+          );
+        } else {
+          // Bản ghi đã bị xóa mềm - thông báo rõ hơn
+          throw new ApiError(
+            409,
+            `Tên thương hiệu ${brandData.name} đã tồn tại trong một thương hiệu đã xóa. Vui lòng khôi phục hoặc chọn tên khác.`
+          );
+        }
       }
-
       // Tự động tạo slug mới từ tên mới
       const newSlug = createSlug(brandData.name);
 
-      // Kiểm tra xem slug mới có bị trùng không
+      // Kiểm tra xem slug mới có bị trùng không (cả bản ghi chưa xóa mềm)
       const existingSlug = await Brand.findOne({
         slug: newSlug,
         _id: { $ne: brandId },
@@ -223,8 +248,7 @@ const brandService = {
     if (brandData.isActive !== undefined) brand.isActive = brandData.isActive;
     if (brandData.logo !== undefined) brand.logo = brandData.logo;
 
-    // Slug luôn được tạo tự động từ tên
-    // Lưu thương hiệu (middleware pre-save sẽ không tạo slug mới nếu đã đặt nó)
+    //Lưu brand
     await brand.save();
 
     return {
