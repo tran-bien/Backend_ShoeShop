@@ -125,7 +125,7 @@ const brandService = {
     }).select("-deletedBy -deletedAt");
 
     if (!brand) {
-      throw new ApiError(404, `Không tìm thấy thương hiệu id: ${brandId}`);
+      throw new ApiError(404, `Không tìm thấy thương hiệu`);
     }
 
     return { success: true, brand };
@@ -142,7 +142,7 @@ const brandService = {
     }).select("-deletedBy -deletedAt");
 
     if (!brand) {
-      throw new ApiError(404, `Không tìm thấy thương hiệu slug: ${slug}`);
+      throw new ApiError(404, `Không tìm thấy thương hiệu`);
     }
 
     return { success: true, brand };

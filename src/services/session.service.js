@@ -96,7 +96,7 @@ async function limitActiveSessions(userId, maxSessions = 5) {
 const sessionService = {
   cleanSessions,
   limitActiveSessions,
-  cleanExpiredSessions: cleanSessions, // Giữ tương thích với code cũ
+  cleanExpiredSessions: cleanSessions,
 };
 
 module.exports = sessionService;

@@ -674,12 +674,12 @@ const productService = {
     // Kiểm tra category và brand tồn tại
     const categoryExists = await Category.findById(productData.category);
     if (!categoryExists) {
-      throw new ApiError(404, "Danh mục không tồn tại");
+      throw new ApiError(404, `Danh mục ${productData.category} không tồn tại`);
     }
 
     const brandExists = await Brand.findById(productData.brand);
     if (!brandExists) {
-      throw new ApiError(404, "Thương hiệu không tồn tại");
+      throw new ApiError(404, `Thương hiệu ${productData.brand} không tồn tại`);
     }
 
     // Kiểm tra sản phẩm đã tồn tại (trùng hết tất cả các thông tin)
@@ -690,7 +690,10 @@ const productService = {
       brand: productData.brand,
     });
     if (duplicate) {
-      throw new ApiError(409, "Sản phẩm đã tồn tại với thông tin này");
+      throw new ApiError(
+        409,
+        `Đã tồn tại sản phẩm với thông tin này trong dữ liệu`
+      );
     }
 
     // Tạo sản phẩm mới
@@ -722,14 +725,17 @@ const productService = {
   updateProduct: async (id, updateData) => {
     const product = await Product.findById(id);
     if (!product) {
-      throw new ApiError(404, "Không tìm thấy sản phẩm");
+      throw new ApiError(404, `Không tìm thấy sản phẩm với ID: ${id}`);
     }
 
     // Kiểm tra nếu cập nhật category
     if (updateData.category) {
       const categoryExists = await Category.findById(updateData.category);
       if (!categoryExists) {
-        throw new ApiError(404, "Danh mục không tồn tại");
+        throw new ApiError(
+          404,
+          `Danh mục ${updateData.category} không tồn tại`
+        );
       }
     }
 
@@ -737,7 +743,10 @@ const productService = {
     if (updateData.brand) {
       const brandExists = await Brand.findById(updateData.brand);
       if (!brandExists) {
-        throw new ApiError(404, "Thương hiệu không tồn tại");
+        throw new ApiError(
+          404,
+          `Thương hiệu ${updateData.brand} không tồn tại`
+        );
       }
     }
 
@@ -761,7 +770,7 @@ const productService = {
 
     return {
       success: true,
-      message: "Cập nhật sản phẩm thành công",
+      message: `Cập nhật sản phẩm với ID: ${product._id} thành công`,
       product: transformProductForAdmin(product),
     };
   },
@@ -774,7 +783,7 @@ const productService = {
   deleteProduct: async (id, userId) => {
     const product = await Product.findById(id);
     if (!product) {
-      throw new ApiError(404, "Không tìm thấy sản phẩm");
+      throw new ApiError(404, `Không tìm thấy sản phẩm với ID: ${id}`);
     }
 
     // Kiểm tra xem sản phẩm có đang được sử dụng trong bất kỳ đơn hàng nào
@@ -793,8 +802,7 @@ const productService = {
 
       return {
         success: true,
-        message:
-          "Sản phẩm đang được sử dụng trong đơn hàng nên đã được vô hiệu hóa",
+        message: `Sản phẩm với ID: ${product._id} đang được sử dụng trong ${hasOrderItems.length} đơn hàng nên đã được vô hiệu hóa`,
         isDeactivated: true,
       };
     }
@@ -807,7 +815,7 @@ const productService = {
 
     return {
       success: true,
-      message: "Xóa sản phẩm thành công",
+      message: `Xóa sản phẩm ID: ${product._id} thành công`,
       isDeleted: true,
     };
   },
@@ -821,7 +829,10 @@ const productService = {
     // Khôi phục sản phẩm - middleware sẽ kiểm tra slug trùng lặp và tạo slug mới nếu cần
     const product = await Product.restoreById(id);
     if (!product) {
-      throw new ApiError(404, "Không tìm thấy sản phẩm để khôi phục");
+      throw new ApiError(
+        404,
+        `Không tìm thấy sản phẩm với ID: ${id} để khôi phục`
+      );
     }
 
     // Kích hoạt trạng thái sản phẩm
@@ -889,7 +900,7 @@ const productService = {
   updateProductStatus: async (id, isActive, cascade = true) => {
     const product = await Product.findById(id);
     if (!product) {
-      throw new ApiError(404, "Không tìm thấy sản phẩm");
+      throw new ApiError(404, `Không tìm thấy sản phẩm với ID: ${id}`);
     }
 
     // Cập nhật trạng thái product
@@ -931,7 +942,7 @@ const productService = {
     });
 
     if (!product) {
-      throw new ApiError(404, "Không tìm thấy sản phẩm");
+      throw new ApiError(404, `Không tìm thấy sản phẩm với ID: ${id}`);
     }
 
     // Cập nhật thông tin tồn kho sử dụng hàm từ middleware
@@ -941,7 +952,7 @@ const productService = {
     const updatedProduct = await Product.findById(id);
     return {
       success: true,
-      message: "Cập nhật trạng thái tồn kho thành công",
+      message: `Cập nhật trạng thái tồn kho sản phẩm với ID: ${updatedProduct._id} thành công`,
       product: transformProductForAdmin(updatedProduct),
     };
   },
@@ -1151,7 +1162,7 @@ const productService = {
     ]);
 
     if (!product) {
-      throw new ApiError(404, "Không tìm thấy sản phẩm");
+      throw new ApiError(404, `Không tìm thấy sản phẩm`);
     }
 
     // Tích hợp thông tin attributes
@@ -1189,7 +1200,7 @@ const productService = {
       });
 
     if (!product) {
-      throw new ApiError(404, "Không tìm thấy sản phẩm");
+      throw new ApiError(404, `Không tìm thấy sản phẩm`);
     }
 
     // Tích hợp thông tin attributes
@@ -1387,7 +1398,7 @@ const productService = {
   getRelatedProducts: async (id, limit = 20) => {
     const product = await Product.findById(id);
     if (!product) {
-      throw new ApiError(404, "Không tìm thấy sản phẩm");
+      throw new ApiError(404, `Không tìm thấy sản phẩm`);
     }
 
     const relatedProducts = await Product.find({
@@ -1440,7 +1451,7 @@ const productService = {
     });
 
     if (!product) {
-      throw new ApiError(404, "Không tìm thấy sản phẩm");
+      throw new ApiError(404, `Không tìm thấy sản phẩm`);
     }
 
     // Tổng hợp dữ liệu tồn kho

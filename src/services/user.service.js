@@ -351,7 +351,7 @@ const userService = {
     if (existingIndex !== -1) {
       return {
         success: true,
-        message: "Sản phẩm đã có trong danh sách yêu thích",
+        message: `Sản phẩm đã có trong danh sách yêu thích`,
         isExisting: true,
       };
     }
@@ -371,7 +371,7 @@ const userService = {
 
     return {
       success: true,
-      message: "Đã thêm vào danh sách yêu thích",
+      message: `Đã thêm sản phẩm vào danh sách yêu thích`,
     };
   },
 
@@ -396,7 +396,7 @@ const userService = {
     if (itemIndex === -1) {
       throw new ApiError(
         404,
-        "Không tìm thấy sản phẩm trong danh sách yêu thích"
+        `Không tìm thấy sản phẩm trong danh sách yêu thích`
       );
     }
 
@@ -406,7 +406,7 @@ const userService = {
 
     return {
       success: true,
-      message: "Đã xóa khỏi danh sách yêu thích",
+      message: `Đã xóa sản phẩm khỏi danh sách yêu thích`,
     };
   },
 
@@ -541,7 +541,7 @@ const adminUserService = {
     const user = await User.findById(userId);
 
     if (!user) {
-      throw new ApiError(404, "Không tìm thấy người dùng");
+      throw new ApiError(404, `Không tìm thấy người dùng với ID: ${userId}`);
     }
 
     // Không được phép khóa tài khoản admin

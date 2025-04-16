@@ -129,7 +129,7 @@ const categoryService = {
     }).select("-deletedBy -deletedAt");
 
     if (!category) {
-      throw new ApiError(404, `Không tìm thấy danh mục id: ${categoryId}`);
+      throw new ApiError(404, `Không tìm thấy danh mục`);
     }
 
     return {
@@ -149,7 +149,7 @@ const categoryService = {
     }).select("-deletedBy -deletedAt");
 
     if (!category) {
-      throw new ApiError(404, `Không tìm thấy danh mục slug: ${slug}`);
+      throw new ApiError(404, `Không tìm thấy danh mục`);
     }
 
     return {
