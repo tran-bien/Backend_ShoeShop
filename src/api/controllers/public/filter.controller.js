@@ -13,17 +13,6 @@ const filterController = {
   }),
 
   /**
-   * @desc    Lấy thuộc tính của sản phẩm (giữ API để tương thích ngược)
-   * @note    Khuyến nghị sử dụng /api/products/:id thay thế vì đã tích hợp đầy đủ thuộc tính
-   * @route   GET /api/filters/products/:id/attributes
-   * @access  Public
-   */
-  getProductAttributes: asyncHandler(async (req, res) => {
-    const result = await filterService.getProductAttributes(req.params.id);
-    res.json(result);
-  }),
-
-  /**
    * @desc    Lấy gợi ý tìm kiếm
    * @route   GET /api/filters/suggestions
    * @access  Public

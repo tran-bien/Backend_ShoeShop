@@ -167,7 +167,10 @@ const productValidator = {
       .withMessage("Giá tối đa phải là số nguyên không âm")
       .custom((value, { req }) => {
         if (req.query.minPrice && Number(value) < Number(req.query.minPrice)) {
-          throw new ApiError(400, "Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu");
+          throw new ApiError(
+            400,
+            "Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu"
+          );
         }
         return true;
       }),
@@ -184,16 +187,8 @@ const productValidator = {
 
     query("sort")
       .optional()
-      .isString()
-      .withMessage("Chuỗi sắp xếp phải là chuỗi")
-      .custom((value) => {
-        try {
-          JSON.parse(value);
-          return true;
-        } catch (error) {
-          throw new ApiError(400, "Chuỗi sắp xếp không hợp lệ");
-        }
-      }),
+      .isIn(["created_at_asc", "created_at_desc", "name_asc", "name_desc"])
+      .withMessage("Kiểu sắp xếp không hợp lệ"),
   ],
 
   // Kiểm tra query public products
@@ -242,7 +237,10 @@ const productValidator = {
       .withMessage("Giá tối đa phải là số nguyên không âm")
       .custom((value, { req }) => {
         if (req.query.minPrice && Number(value) < Number(req.query.minPrice)) {
-          throw new ApiError(400, "Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu");
+          throw new ApiError(
+            400,
+            "Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu"
+          );
         }
         return true;
       }),

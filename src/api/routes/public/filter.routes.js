@@ -12,17 +12,6 @@ const validate = require("@utils/validatehelper");
 router.get("/attributes", filterController.getFilterAttributes);
 
 /**
- * @route   GET /api/filters/products/:id/attributes
- * @desc    Lấy thuộc tính của sản phẩm
- * @access  Public
- */
-router.get(
-  "/products/:id/attributes",
-  validate(filterValidator.validateProductId),
-  filterController.getProductAttributes
-);
-
-/**
  * @route   GET /api/filters/suggestions
  * @desc    Lấy gợi ý tìm kiếm
  * @access  Public
