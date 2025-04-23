@@ -540,7 +540,7 @@ const productService = {
     const product = await Product.findById(id)
       .populate("category", "name")
       .populate("brand", "name logo")
-      .populate("deletedBy", "firstName lastName email")
+      .populate("deletedBy", "name email")
       .setOptions({ includeDeleted: true });
 
     if (!product) {
@@ -570,12 +570,10 @@ const productService = {
       if (variant.deletedAt) {
         variantStats.deleted++;
 
-        // Thêm thông tin người xóa hiển thị dễ đọc
+        // Thêm thông tin người xóa c
         if (variant.deletedBy) {
           variant._doc.deletedByInfo = {
-            name: `${variant.deletedBy.firstName || ""} ${
-              variant.deletedBy.lastName || ""
-            }`.trim(),
+            name: variant.deletedBy.name,
             email: variant.deletedBy.email,
           };
         }
@@ -585,17 +583,6 @@ const productService = {
         variantStats.inactive++;
       }
     });
-
-    // Thêm thông tin người xóa sản phẩm (nếu sản phẩm đã bị xóa)
-    if (product.deletedAt && product.deletedBy) {
-      product._doc.deletedByInfo = {
-        name: `${product.deletedBy.firstName || ""} ${
-          product.deletedBy.lastName || ""
-        }`.trim(),
-        email: product.deletedBy.email,
-        deletedAt: product.deletedAt,
-      };
-    }
 
     // Chuyển đổi product và thêm thống kê
     const productData = transformProductForAdmin(product);
@@ -642,7 +629,7 @@ const productService = {
       populate: [
         { path: "category", select: "name" },
         { path: "brand", select: "name" },
-        { path: "deletedBy", select: "firstName lastName email" },
+        { path: "deletedBy", select: "name email" },
       ],
     };
 
@@ -1140,7 +1127,7 @@ const productService = {
       deletedAt: null,
     }).populate([
       {
-        path: "categories",
+        path: "category",
         select: "name slug",
         match: { isActive: true, deletedAt: null },
       },
