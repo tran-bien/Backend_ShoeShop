@@ -15,7 +15,7 @@ const reviewService = {
 
     // Xây dựng điều kiện lọc
     const filter = {
-      product: productId,
+      "productSnapshot.productId": productId,
       isActive: true,
       deletedAt: null,
     };
@@ -37,14 +37,7 @@ const reviewService = {
       page: parseInt(page, 10),
       limit: parseInt(limit, 10),
       sort: sortOptions,
-      populate: [
-        { path: "user", select: "name avatar" },
-        {
-          path: "variant",
-          select: "color",
-          populate: { path: "color", select: "name code type colors" },
-        },
-      ],
+      populate: [{ path: "user", select: "name" }],
     };
 
     const result = await paginate(Review, filter, options);
@@ -65,15 +58,7 @@ const reviewService = {
       _id: reviewId,
       isActive: true,
       deletedAt: null,
-    }).populate([
-      { path: "user", select: "name avatar" },
-      { path: "product", select: "name slug images" },
-      {
-        path: "variant",
-        select: "color",
-        populate: { path: "color", select: "name code type colors" },
-      },
-    ]);
+    }).populate([{ path: "user", select: "name avatar" }]);
 
     if (!review) {
       throw new ApiError(404, "Không tìm thấy đánh giá");
@@ -92,37 +77,51 @@ const reviewService = {
    * @returns {Object} - Đánh giá đã tạo
    */
   createReview: async (userId, reviewData) => {
-    // Kiểm tra đơn hàng và xác thực mua hàng
+    // Kiểm tra đơn hàng và orderItem
     const order = await Order.findOne({
       _id: reviewData.orderId,
       user: userId,
-      "orderItems.variant": reviewData.variantId,
       status: "delivered",
     });
 
     if (!order) {
-      throw new ApiError(400, "Bạn chỉ có thể đánh giá sản phẩm đã mua");
+      throw new ApiError(
+        400,
+        "Không tìm thấy đơn hàng hoặc đơn hàng chưa được giao"
+      );
     }
 
-    // Kiểm tra người dùng đã đánh giá sản phẩm này chưa
+    // Tìm orderItem trong đơn hàng
+    const orderItem = order.orderItems.id(reviewData.orderItemId);
+    if (!orderItem) {
+      throw new ApiError(400, "Không tìm thấy sản phẩm trong đơn hàng");
+    }
+
+    // Lấy thông tin sản phẩm và variant từ orderItem
+    const productId = orderItem.product;
+    const variantId = orderItem.variant;
+
+    // Kiểm tra người dùng đã đánh giá orderItem này chưa
     const existingReview = await Review.findOne({
       user: userId,
-      product: reviewData.productId,
-      variant: reviewData.variantId,
+      orderItem: reviewData.orderItemId,
       deletedAt: null,
     });
 
     if (existingReview) {
-      throw new ApiError(400, "Bạn đã đánh giá sản phẩm này rồi");
+      throw new ApiError(
+        400,
+        "Bạn đã đánh giá sản phẩm này trong đơn hàng rồi"
+      );
     }
 
     // Kiểm tra sản phẩm và biến thể tồn tại
-    const product = await Product.findById(reviewData.productId);
+    const product = await Product.findById(productId);
     if (!product) {
       throw new ApiError(404, "Không tìm thấy sản phẩm");
     }
 
-    const variant = await Variant.findById(reviewData.variantId);
+    const variant = await Variant.findById(variantId);
     if (!variant) {
       throw new ApiError(404, "Không tìm thấy biến thể sản phẩm");
     }
@@ -132,16 +131,31 @@ const reviewService = {
       throw new ApiError(400, "Mỗi đánh giá chỉ được phép có tối đa 5 ảnh");
     }
 
+    // Lưu thông tin snapshot từ orderItem
+    const productSnapshot = {
+      productId: productId,
+      variantId: variantId,
+      orderId: reviewData.orderId,
+      name: orderItem.productName || product.name,
+      variantName: orderItem.variantName || variant.name,
+      sizeName: orderItem.sizeName,
+      image:
+        orderItem.image ||
+        (variant.images && variant.images[0]) ||
+        (product.images && product.images[0]) ||
+        "",
+    };
+
     // Tạo đánh giá mới
     const newReview = new Review({
       user: userId,
-      product: reviewData.productId,
-      variant: reviewData.variantId,
-      order: reviewData.orderId,
+      orderItem: reviewData.orderItemId,
+      productSnapshot: productSnapshot,
       rating: reviewData.rating,
+      title: reviewData.title,
       content: reviewData.content,
       images: reviewData.images || [],
-      isVerifiedPurchase: true,
+      isVerified: true,
     });
 
     await newReview.save();
@@ -151,11 +165,6 @@ const reviewService = {
       message: "Đánh giá sản phẩm thành công",
       review: await Review.findById(newReview._id).populate([
         { path: "user", select: "name avatar" },
-        {
-          path: "variant",
-          select: "color",
-          populate: { path: "color", select: "name code type colors" },
-        },
       ]),
     };
   },
@@ -234,14 +243,7 @@ const reviewService = {
       reviewId,
       { $set: updateFields },
       { new: true, runValidators: true }
-    ).populate([
-      { path: "user", select: "name avatar" },
-      {
-        path: "variant",
-        select: "color",
-        populate: { path: "color", select: "name code type colors" },
-      },
-    ]);
+    ).populate([{ path: "user", select: "name avatar" }]);
 
     return {
       success: true,
@@ -356,14 +358,7 @@ const reviewService = {
       page: parseInt(page, 10),
       limit: parseInt(limit, 10),
       sort: sortOptions,
-      populate: [
-        { path: "product", select: "name slug images" },
-        {
-          path: "variant",
-          select: "color",
-          populate: { path: "color", select: "name code type colors" },
-        },
-      ],
+      populate: [{ path: "user", select: "name avatar" }],
     };
 
     const result = await paginate(Review, filter, options);
@@ -391,7 +386,7 @@ const adminReviewService = {
       productId,
       userId,
       rating,
-      isVerifiedPurchase,
+      isVerified,
       isActive,
       showDeleted,
       sort = "createdAt_desc",
@@ -401,7 +396,7 @@ const adminReviewService = {
     const filter = {};
 
     if (productId) {
-      filter.product = productId;
+      filter["productSnapshot.productId"] = productId;
     }
 
     if (userId) {
@@ -412,9 +407,8 @@ const adminReviewService = {
       filter.rating = parseInt(rating);
     }
 
-    if (isVerifiedPurchase !== undefined) {
-      filter.isVerifiedPurchase =
-        isVerifiedPurchase === "true" || isVerifiedPurchase === true;
+    if (isVerified !== undefined) {
+      filter.isVerified = isVerified === "true" || isVerified === true;
     }
 
     if (isActive !== undefined) {
@@ -440,12 +434,6 @@ const adminReviewService = {
       sort: sortOptions,
       populate: [
         { path: "user", select: "name email avatar" },
-        { path: "product", select: "name slug images" },
-        {
-          path: "variant",
-          select: "color",
-          populate: { path: "color", select: "name code type colors" },
-        },
         { path: "deletedBy", select: "name email" },
       ],
     };
@@ -466,13 +454,6 @@ const adminReviewService = {
   getReviewById: async (reviewId) => {
     const review = await Review.findById(reviewId).populate([
       { path: "user", select: "name email avatar" },
-      { path: "product", select: "name slug images" },
-      {
-        path: "variant",
-        select: "color",
-        populate: { path: "color", select: "name code type colors" },
-      },
-      { path: "order", select: "orderNumber totalAmount status" },
       { path: "deletedBy", select: "name email" },
     ]);
 
@@ -558,7 +539,7 @@ const adminReviewService = {
     const stats = await Review.aggregate([
       {
         $match: {
-          product: new mongoose.Types.ObjectId(productId),
+          "productSnapshot.productId": productId,
           isActive: true,
           deletedAt: null,
         },
@@ -568,8 +549,8 @@ const adminReviewService = {
           _id: null,
           totalReviews: { $sum: 1 },
           avgRating: { $avg: "$rating" },
-          verifiedPurchases: {
-            $sum: { $cond: [{ $eq: ["$isVerifiedPurchase", true] }, 1, 0] },
+          verifiedReviews: {
+            $sum: { $cond: [{ $eq: ["$isVerified", true] }, 1, 0] },
           },
           ratingCounts: {
             $push: "$rating",
@@ -582,7 +563,7 @@ const adminReviewService = {
     let result = {
       totalReviews: 0,
       avgRating: 0,
-      verifiedPurchases: 0,
+      verifiedReviews: 0,
       ratingDistribution: {
         1: 0,
         2: 0,
@@ -611,24 +592,24 @@ const adminReviewService = {
       result = {
         totalReviews: stats[0].totalReviews,
         avgRating: Math.round(stats[0].avgRating * 10) / 10,
-        verifiedPurchases: stats[0].verifiedPurchases,
+        verifiedReviews: stats[0].verifiedReviews,
         ratingDistribution,
       };
     }
 
     // Thêm thống kê về tổng số đánh giá (bao gồm cả đã ẩn và đã xóa)
     const allReviewsCount = await Review.countDocuments({
-      product: productId,
+      "productSnapshot.productId": productId,
     });
 
     const hiddenReviewsCount = await Review.countDocuments({
-      product: productId,
+      "productSnapshot.productId": productId,
       isActive: false,
       deletedAt: null,
     });
 
     const deletedReviewsCount = await Review.countDocuments({
-      product: productId,
+      "productSnapshot.productId": productId,
       deletedAt: { $ne: null },
     });
 

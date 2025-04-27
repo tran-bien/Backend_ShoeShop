@@ -15,7 +15,7 @@ const applyMiddlewares = (schema) => {
     const stats = await Review.aggregate([
       {
         $match: {
-          product: new mongoose.Types.ObjectId(productId),
+          "productSnapshot.productId": productId,
           isActive: true,
           deletedAt: null,
         },
@@ -69,13 +69,13 @@ const applyMiddlewares = (schema) => {
 
   // Sau khi lưu đánh giá
   schema.post("save", async function () {
-    await updateProductRating(this.product);
+    await updateProductRating(this.productSnapshot.productId);
   });
 
   // Sau khi cập nhật đánh giá
   schema.post("findOneAndUpdate", async function (doc) {
-    if (doc) {
-      await updateProductRating(doc.product);
+    if (doc && doc.productSnapshot && doc.productSnapshot.productId) {
+      await updateProductRating(doc.productSnapshot.productId);
     }
   });
 
@@ -85,7 +85,7 @@ const applyMiddlewares = (schema) => {
     { document: true, query: false },
     async function (next) {
       // Lưu id sản phẩm để cập nhật sau khi xóa
-      this._productId = this.product;
+      this._productId = this.productSnapshot.productId;
 
       // Xóa ảnh từ Cloudinary nếu có
       await deleteReviewImages(this);
@@ -108,7 +108,13 @@ const applyMiddlewares = (schema) => {
 
       // Lưu thông tin để xử lý sau khi xóa
       this._reviews = reviews;
-      this._productIds = reviews.map((review) => review.product.toString());
+      this._productIds = reviews
+        .map((review) =>
+          review.productSnapshot && review.productSnapshot.productId
+            ? review.productSnapshot.productId.toString()
+            : null
+        )
+        .filter((id) => id !== null);
 
       // Xóa ảnh của tất cả review bị ảnh hưởng
       for (const review of reviews) {

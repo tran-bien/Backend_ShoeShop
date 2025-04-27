@@ -26,20 +26,19 @@ const ReviewSchema = new Schema(
       ref: "User",
       required: true,
     },
-    product: {
+    orderItem: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Product",
       required: true,
     },
-    variant: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Variant",
-      required: true,
-    },
-    order: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Order",
-      required: true,
+    // Lưu thông tin sản phẩm tại thời điểm đánh giá (phòng trường hợp sản phẩm thay đổi)
+    productSnapshot: {
+      productId: mongoose.Schema.Types.ObjectId, // ID sản phẩm để tham chiếu nếu cần
+      variantId: mongoose.Schema.Types.ObjectId, // ID biến thể để tham chiếu nếu cần
+      orderId: mongoose.Schema.Types.ObjectId, // ID đơn hàng để tham chiếu nếu cần
+      name: String,
+      variantName: String,
+      sizeName: String,
+      image: String,
     },
     rating: {
       type: Number,
@@ -77,7 +76,29 @@ const ReviewSchema = new Schema(
   }
 );
 
-// Đảm bảo mỗi người dùng chỉ có thể đánh giá một sản phẩm một lần
-ReviewSchema.index({ user: 1, product: 1 }, { unique: true });
+// Đảm bảo mỗi sản phẩm trong đơn hàng chỉ được đánh giá một lần
+ReviewSchema.index({ user: 1, orderItem: 1 }, { unique: true });
+
+// Thêm các virtual fields để dễ dàng tham chiếu khi cần
+ReviewSchema.virtual("product", {
+  ref: "Product",
+  localField: "productSnapshot.productId",
+  foreignField: "_id",
+  justOne: true,
+});
+
+ReviewSchema.virtual("variant", {
+  ref: "Variant",
+  localField: "productSnapshot.variantId",
+  foreignField: "_id",
+  justOne: true,
+});
+
+ReviewSchema.virtual("order", {
+  ref: "Order",
+  localField: "productSnapshot.orderId",
+  foreignField: "_id",
+  justOne: true,
+});
 
 module.exports = ReviewSchema;

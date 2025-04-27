@@ -48,13 +48,11 @@ const createVariantSummary = (variants) => {
     sizeCount: 0,
     priceRange: { min: null, max: null, isSinglePrice: true },
     discount: { hasDiscount: false, maxPercent: 0 },
-    sizeInventory: {}, // Thêm thông tin tồn kho theo size
   };
 
   // Tập hợp để lưu trữ các ID duy nhất
   const colorSet = new Set();
   const sizeSet = new Set();
-  const sizeInventoryMap = {}; // Map để tính tổng số lượng theo size
 
   // Xử lý thông tin từ variants nếu có
   if (variants && variants.length > 0) {
@@ -85,31 +83,12 @@ const createVariantSummary = (variants) => {
         }
       }
 
-      // Thu thập thông tin kích thước và số lượng
+      // Thu thập thông tin kích thước
       if (variant.sizes && Array.isArray(variant.sizes)) {
         variant.sizes.forEach((sizeObj) => {
           if (sizeObj.size && sizeObj.size._id) {
             const sizeId = sizeObj.size._id.toString();
             sizeSet.add(sizeId);
-
-            // Tính tổng số lượng theo size
-            if (!sizeInventoryMap[sizeId]) {
-              sizeInventoryMap[sizeId] = {
-                sizeId: sizeId,
-                sizeValue: sizeObj.size.value,
-                sizeDescription: sizeObj.size.description || "",
-                totalQuantity: 0,
-                isAvailable: false,
-              };
-            }
-
-            // Cộng dồn số lượng và cập nhật trạng thái
-            const quantity = sizeObj.quantity || 0;
-            sizeInventoryMap[sizeId].totalQuantity += quantity;
-
-            if (quantity > 0 && sizeObj.isSizeAvailable) {
-              sizeInventoryMap[sizeId].isAvailable = true;
-            }
           }
         });
       }
@@ -145,9 +124,6 @@ const createVariantSummary = (variants) => {
     // Cập nhật số lượng màu và kích thước
     variantSummary.colorCount = colorSet.size;
     variantSummary.sizeCount = sizeSet.size;
-
-    // Chuyển map thành mảng cho dễ sử dụng
-    variantSummary.sizeInventory = Object.values(sizeInventoryMap);
 
     // Kiểm tra xem tất cả các biến thể có cùng mức giá hay không
     variantSummary.priceRange.isSinglePrice =
@@ -464,7 +440,6 @@ const productService = {
     } = query;
 
     const filter = { deletedAt: null }; // Mặc định chỉ lấy chưa xóa
-
     // Lọc theo tên
     if (name) {
       filter.name = { $regex: name, $options: "i" };

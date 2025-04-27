@@ -66,16 +66,11 @@ const areValidObjectIds = (value) => {
  * Validator cho API tạo đánh giá
  */
 const validateCreateReview = [
-  body("productId")
+  body("orderItemId")
     .notEmpty()
-    .withMessage("ID sản phẩm không được để trống")
+    .withMessage("ID sản phẩm trong đơn hàng không được để trống")
     .custom(isValidObjectId)
-    .withMessage("ID sản phẩm không hợp lệ"),
-  body("variantId")
-    .notEmpty()
-    .withMessage("ID biến thể không được để trống")
-    .custom(isValidObjectId)
-    .withMessage("ID biến thể không hợp lệ"),
+    .withMessage("ID sản phẩm trong đơn hàng không hợp lệ"),
   body("orderId")
     .notEmpty()
     .withMessage("ID đơn hàng không được để trống")
@@ -86,6 +81,11 @@ const validateCreateReview = [
     .withMessage("Đánh giá sao không được để trống")
     .isInt({ min: 1, max: 5 })
     .withMessage("Đánh giá phải từ 1-5 sao"),
+  body("title")
+    .notEmpty()
+    .withMessage("Tiêu đề đánh giá không được để trống")
+    .isLength({ min: 3, max: 100 })
+    .withMessage("Tiêu đề đánh giá phải từ 3-100 ký tự"),
   body("content")
     .notEmpty()
     .withMessage("Nội dung đánh giá không được để trống")
@@ -156,10 +156,10 @@ const validateGetAllReviews = [
     .optional()
     .isInt({ min: 1, max: 5 })
     .withMessage("Đánh giá phải là số nguyên từ 1-5"),
-  query("isVerifiedPurchase")
+  query("isVerified")
     .optional()
     .isBoolean()
-    .withMessage("isVerifiedPurchase phải là boolean"),
+    .withMessage("isVerified phải là boolean"),
   query("isActive")
     .optional()
     .isBoolean()
@@ -213,7 +213,10 @@ const validateUploadReviewImages = [
   // Kiểm tra số lượng ảnh tối đa
   (req, res, next) => {
     if (req.files.length > 5) {
-      throw new ApiError(400, "Chỉ được phép tải lên tối đa 5 ảnh cho mỗi đánh giá");
+      throw new ApiError(
+        400,
+        "Chỉ được phép tải lên tối đa 5 ảnh cho mỗi đánh giá"
+      );
     }
     next();
   },
