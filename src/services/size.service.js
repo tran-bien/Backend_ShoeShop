@@ -1,6 +1,4 @@
 const { Size, Variant } = require("@models");
-const paginate = require("@utils/pagination");
-const paginateDeleted = require("@utils/paginationDeleted");
 const ApiError = require("@utils/ApiError");
 
 // Hàm hỗ trợ xử lý các case sắp xếp
@@ -41,6 +39,11 @@ const sizeService = {
    */
   getAdminSizes: async (query) => {
     const { page = 1, limit = 15, value, description, sort } = query;
+    
+    // Chuyển đổi page và limit sang number
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 15;
+    
     const filter = { deletedAt: null }; // Mặc định chỉ lấy các kích thước chưa xóa
 
     // Tìm theo giá trị
@@ -53,13 +56,33 @@ const sizeService = {
       filter.description = { $regex: description, $options: "i" };
     }
 
-    const options = {
-      page,
-      limit,
-      sort: sort ? getSortOption(sort) : { createdAt: -1 },
-    };
+    // Đếm tổng số kích thước thỏa mãn điều kiện
+    const total = await Size.countDocuments(filter);
+    const totalPages = Math.ceil(total / limitNum);
 
-    return await paginate(Size, filter, options);
+    // Tính toán skip để phân trang
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Sắp xếp
+    const sortOption = sort ? getSortOption(sort) : { createdAt: -1 };
+
+    // Lấy dữ liệu với phân trang
+    const sizes = await Size.find(filter)
+      .sort(sortOption)
+      .skip(skip)
+      .limit(limitNum);
+
+    // Trả về kết quả với thông tin phân trang chính xác
+    return {
+      success: true,
+      count: sizes.length,
+      total,
+      totalPages,
+      currentPage: pageNum,
+      hasNextPage: pageNum < totalPages,
+      hasPrevPage: pageNum > 1,
+      data: sizes,
+    };
   },
 
   /**
@@ -87,7 +110,13 @@ const sizeService = {
    */
   getDeletedSizes: async (query) => {
     const { page = 1, limit = 15, value, description, sort } = query;
-    const filter = {};
+    
+    // Chuyển đổi page và limit sang number
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 15;
+    
+    // Xây dựng query cho các kích thước đã xóa
+    const filter = { deletedAt: { $ne: null } };
 
     if (value !== undefined) {
       filter.value = Number(value);
@@ -97,14 +126,35 @@ const sizeService = {
       filter.description = { $regex: description, $options: "i" };
     }
 
-    const options = {
-      page,
-      limit,
-      sort: sort ? getSortOption(sort) : { deletedAt: -1 },
-      populate: [{ path: "deletedBy", select: "name email" }],
-    };
+    // Đếm tổng số kích thước đã xóa thỏa mãn điều kiện
+    const total = await Size.countDocuments(filter).setOptions({ includeDeleted: true });
+    const totalPages = Math.ceil(total / limitNum);
 
-    return await paginateDeleted(Size, filter, options);
+    // Tính toán skip để phân trang
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Sắp xếp
+    const sortOption = sort ? getSortOption(sort) : { deletedAt: -1 };
+
+    // Lấy dữ liệu với phân trang
+    const sizes = await Size.find(filter)
+      .sort(sortOption)
+      .skip(skip)
+      .limit(limitNum)
+      .populate("deletedBy", "name email")
+      .setOptions({ includeDeleted: true });
+
+    // Trả về kết quả với thông tin phân trang chính xác
+    return {
+      success: true,
+      count: sizes.length,
+      total,
+      totalPages,
+      currentPage: pageNum,
+      hasNextPage: pageNum < totalPages,
+      hasPrevPage: pageNum > 1,
+      data: sizes,
+    };
   },
 
   // === ADMIN OPERATIONS ===
@@ -221,7 +271,9 @@ const sizeService = {
     }
 
     // Kiểm tra xem kích thước có được sử dụng trong biến thể nào không
-    const variantCount = await Variant.countDocuments({ size: id });
+    const variantCount = await Variant.countDocuments({
+      "sizes.size": id
+    });
 
     // Nếu có biến thể liên kết, thông báo lỗi và không cho xóa
     if (variantCount > 0) {

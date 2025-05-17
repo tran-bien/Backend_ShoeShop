@@ -1,5 +1,6 @@
 const { Product, Category, Brand, Color, Size, Variant } = require("@models");
 const ApiError = require("@utils/ApiError");
+
 const filterService = {
   /**
    * Lấy tất cả thuộc tính dùng cho bộ lọc
@@ -7,22 +8,24 @@ const filterService = {
    */
   getFilterAttributes: async () => {
     // Lấy các danh mục đang active
-    const categories = await Category.find({ isActive: true }).select(
-      "name _id"
-    );
+    const categories = await Category.find({ isActive: true, deletedAt: null }).select(
+      "name _id slug"
+    ).sort({ name: 1 });
 
     // Lấy các thương hiệu đang active
-    const brands = await Brand.find({ isActive: true }).select("name logo _id");
+    const brands = await Brand.find({ isActive: true, deletedAt: null }).select(
+      "name logo _id slug"
+    ).sort({ name: 1 });
 
-    // Lấy các màu sắc đang active
-    const colors = await Color.find({ isActive: true }).select(
+    // Lấy các màu sắc (chưa bị xóa mềm)
+    const colors = await Color.find({ deletedAt: null }).select(
       "name code type colors _id"
-    );
+    ).sort({ name: 1 });
 
-    // Lấy các kích thước đang active
-    const sizes = await Size.find({ isActive: true }).select(
+    // Lấy các kích thước (chưa bị xóa mềm)
+    const sizes = await Size.find({ deletedAt: null }).select(
       "value description _id"
-    );
+    ).sort({ value: 1 });
 
     // Tính khoảng giá từ variants có sẵn (chỉ lấy các variant đang active)
     const priceRange = await Variant.aggregate([
@@ -48,13 +51,39 @@ const filterService = {
       { id: "female", name: "Nữ" },
     ];
 
+    // Chuyển đổi màu sắc để dễ sử dụng cho frontend
+    const formattedColors = colors.map(color => {
+      const formattedColor = {
+        _id: color._id,
+        id: color._id,
+        name: color.name,
+        type: color.type
+      };
+      
+      if (color.type === "solid") {
+        formattedColor.code = color.code;
+      } else if (color.type === "half" && Array.isArray(color.colors) && color.colors.length === 2) {
+        formattedColor.colors = color.colors;
+      }
+      
+      return formattedColor;
+    });
+
+    // Định dạng lại sizes để dễ sử dụng
+    const formattedSizes = sizes.map(size => ({
+      _id: size._id,
+      id: size._id,
+      value: size.value,
+      description: size.description
+    }));
+
     return {
       success: true,
       filters: {
         categories,
         brands,
-        colors,
-        sizes,
+        colors: formattedColors,
+        sizes: formattedSizes,
         priceRange: { min: minPrice, max: maxPrice },
         genders,
       },
@@ -75,6 +104,7 @@ const filterService = {
     }
 
     const sanitizedKeyword = keyword.trim();
+    const limitNum = Number(limit) || 5;
 
     // Tìm kiếm sản phẩm theo tên
     const productSuggestions = await Product.find({
@@ -82,7 +112,7 @@ const filterService = {
       isActive: true,
       deletedAt: null,
     })
-      .limit(Number(limit))
+      .limit(limitNum)
       .select("name slug images")
       .lean();
 
@@ -90,6 +120,7 @@ const filterService = {
     const categorySuggestions = await Category.find({
       name: { $regex: sanitizedKeyword, $options: "i" },
       isActive: true,
+      deletedAt: null
     })
       .limit(3)
       .select("name slug")
@@ -99,9 +130,10 @@ const filterService = {
     const brandSuggestions = await Brand.find({
       name: { $regex: sanitizedKeyword, $options: "i" },
       isActive: true,
+      deletedAt: null
     })
       .limit(3)
-      .select("name logo")
+      .select("name logo slug")
       .lean();
 
     // Định dạng kết quả gợi ý
@@ -128,6 +160,7 @@ const filterService = {
       type: "brand",
       id: brand._id,
       name: brand.name,
+      slug: brand.slug,
       logo: brand.logo,
     }));
 
@@ -136,7 +169,7 @@ const filterService = {
       ...formatProducts,
       ...formatCategories,
       ...formatBrands,
-    ].slice(0, Number(limit));
+    ].slice(0, limitNum);
 
     return {
       success: true,

@@ -1,6 +1,4 @@
 const { Color, Variant } = require("@models");
-const paginate = require("@utils/pagination");
-const paginateDeleted = require("@utils/paginationDeleted");
 const ApiError = require("@utils/ApiError");
 
 // Hàm hỗ trợ xử lý các case sắp xếp
@@ -39,28 +37,53 @@ const colorService = {
    * [ADMIN] Lấy tất cả màu sắc (bao gồm cả đã xóa)
    * @param {Object} query - Các tham số truy vấn
    */
-  getAdminColors: async (query) => {
-    const { page = 1, limit = 15, name, type, sort } = query;
-    const filter = { deletedAt: null }; // Mặc định chỉ lấy các màu chưa xóa
+getAdminColors: async (query) => {
+  const { page = 1, limit = 15, name, type, sort } = query;
+  
+  // Chuyển đổi page và limit sang number
+  const pageNum = Number(page) || 1;
+  const limitNum = Number(limit) || 15;
+  
+  const filter = { deletedAt: null }; // Mặc định chỉ lấy các màu chưa xóa
 
-    // Tìm theo tên
-    if (name) {
-      filter.name = { $regex: name, $options: "i" };
-    }
+  // Tìm theo tên
+  if (name) {
+    filter.name = { $regex: name, $options: "i" };
+  }
 
-    // Tìm theo loại
-    if (type) {
-      filter.type = type;
-    }
+  // Tìm theo loại
+  if (type) {
+    filter.type = type;
+  }
 
-    const options = {
-      page,
-      limit,
-      sort: sort ? getSortOption(sort) : { createdAt: -1 },
-    };
+  // Đếm tổng số màu thỏa mãn điều kiện
+  const total = await Color.countDocuments(filter);
+  const totalPages = Math.ceil(total / limitNum);
 
-    return await paginate(Color, filter, options);
-  },
+  // Tính toán skip để phân trang
+  const skip = (pageNum - 1) * limitNum;
+  
+  // Sắp xếp
+  const sortOption = sort ? getSortOption(sort) : { createdAt: -1 };
+
+  // Lấy dữ liệu với phân trang
+  const colors = await Color.find(filter)
+    .sort(sortOption)
+    .skip(skip)
+    .limit(limitNum);
+
+  // Trả về kết quả với thông tin phân trang chính xác
+  return {
+    success: true,
+    count: colors.length,
+    total,
+    totalPages,
+    currentPage: pageNum,
+    hasNextPage: pageNum < totalPages,
+    hasPrevPage: pageNum > 1,
+    data: colors,
+  };
+},
 
   /**
    * [ADMIN] Lấy màu sắc theo ID (bao gồm cả đã xóa mềm)
@@ -82,34 +105,59 @@ const colorService = {
   },
 
   /**
-   * [ADMIN] Lấy danh sách màu sắc đã xóa
-   * @param {Object} query - Các tham số truy vấn
-   */
-  getDeletedColors: async (query) => {
-    const { page = 1, limit = 15, name, type, sort } = query;
+ * [ADMIN] Lấy danh sách màu sắc đã xóa
+ * @param {Object} query - Các tham số truy vấn
+ */
+getDeletedColors: async (query) => {
+  const { page = 1, limit = 15, name, type, sort } = query;
+  
+  // Chuyển đổi page và limit sang number
+  const pageNum = Number(page) || 1;
+  const limitNum = Number(limit) || 15;
+  
+  // Xây dựng query cho các màu đã xóa
+  const filter = { deletedAt: { $ne: null } };
 
-    // Xây dựng query
-    const filter = {};
+  // Tìm theo tên
+  if (name) {
+    filter.name = { $regex: name, $options: "i" };
+  }
 
-    // Tìm theo tên
-    if (name) {
-      filter.name = { $regex: name, $options: "i" };
-    }
+  // Tìm theo loại
+  if (type) {
+    filter.type = type;
+  }
 
-    // Tìm theo loại
-    if (type) {
-      filter.type = type;
-    }
+  // Đếm tổng số màu đã xóa thỏa mãn điều kiện
+  const total = await Color.countDocuments(filter).setOptions({ includeDeleted: true });
+  const totalPages = Math.ceil(total / limitNum);
 
-    const options = {
-      page,
-      limit,
-      sort: sort ? getSortOption(sort) : { deletedAt: -1 },
-      populate: [{ path: "deletedBy", select: "name email" }],
-    };
+  // Tính toán skip để phân trang
+  const skip = (pageNum - 1) * limitNum;
+  
+  // Sắp xếp
+  const sortOption = sort ? getSortOption(sort) : { deletedAt: -1 };
 
-    return await paginateDeleted(Color, filter, options);
-  },
+  // Lấy dữ liệu với phân trang
+  const colors = await Color.find(filter)
+    .sort(sortOption)
+    .skip(skip)
+    .limit(limitNum)
+    .populate("deletedBy", "name email")
+    .setOptions({ includeDeleted: true });
+
+  // Trả về kết quả với thông tin phân trang chính xác
+  return {
+    success: true,
+    count: colors.length,
+    total,
+    totalPages,
+    currentPage: pageNum,
+    hasNextPage: pageNum < totalPages,
+    hasPrevPage: pageNum > 1,
+    data: colors,
+  };
+},
 
   // === ADMIN OPERATIONS ===
 
