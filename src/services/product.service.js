@@ -1,5 +1,6 @@
 const { Product, Variant, Category, Brand, Order } = require("@models");
 const mongoose = require("mongoose");
+const { createSlug } = require("@utils/slugify");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
 const { updateProductStockInfo } = require("@models/product/middlewares");
@@ -644,17 +645,34 @@ const productService = {
       throw new ApiError(404, `Thương hiệu ${productData.brand} không tồn tại`);
     }
 
-    // Kiểm tra sản phẩm đã tồn tại (trùng hết tất cả các thông tin)
-    const duplicate = await Product.findOne({
+    // Tạo slug từ tên sản phẩm (để kiểm tra trùng lặp)
+    const potentialSlug = createSlug(productData.name);
+
+    // Kiểm tra sản phẩm trùng lặp (bao gồm cả sản phẩm đã bị xóa mềm)
+    const duplicateActiveProduct = await Product.findOne({
       name: productData.name,
-      description: productData.description,
       category: productData.category,
       brand: productData.brand,
+      deletedAt: null,
     });
-    if (duplicate) {
+
+    if (duplicateActiveProduct) {
       throw new ApiError(
         409,
-        `Đã tồn tại sản phẩm với thông tin này trong dữ liệu`
+        `Đã tồn tại sản phẩm "${productData.name}" với thông tin này trong dữ liệu`
+      );
+    }
+
+    // Kiểm tra slug bị trùng với sản phẩm đã bị xóa mềm
+    const slugExists = await Product.findOne({
+      slug: potentialSlug,
+      deletedAt: { $ne: null },
+    }).setOptions({ includeDeleted: true });
+
+    if (slugExists) {
+      throw new ApiError(
+        409,
+        `Không thể tạo sản phẩm với tên này vì trùng với sản phẩm đã xóa mềm "${slugExists.name}". Vui lòng sử dụng tên khác hoặc khôi phục sản phẩm đã xóa.`
       );
     }
 
@@ -666,7 +684,6 @@ const productService = {
       brand: productData.brand,
       isActive:
         productData.isActive !== undefined ? productData.isActive : true,
-      // Không khởi tạo images ở đây vì sẽ được xử lý qua imageService
     });
 
     // Lưu sản phẩm - các middleware sẽ tự động tạo slug
@@ -712,6 +729,24 @@ const productService = {
       }
     }
 
+    // Nếu đang cập nhật tên (sẽ ảnh hưởng đến slug)
+    if (updateData.name && updateData.name !== product.name) {
+      const potentialSlug = createSlug(updateData.name);
+
+      // Kiểm tra slug bị trùng với bất kỳ sản phẩm nào (kể cả đã xóa mềm)
+      const slugExists = await Product.findOne({
+        slug: potentialSlug,
+        _id: { $ne: id },
+      }).setOptions({ includeDeleted: true });
+
+      if (slugExists) {
+        throw new ApiError(
+          409,
+          `Không thể đổi tên sản phẩm thành "${updateData.name}" vì sẽ tạo ra slug trùng với sản phẩm "${slugExists._id}"`
+        );
+      }
+    }
+
     // Cập nhật các trường
     const allowedFields = [
       "name",
@@ -753,13 +788,11 @@ const productService = {
       "orderItems.product": id,
     });
 
-    // Nếu có đơn hàng liên quan, chỉ vô hiệu hóa thay vì xóa
+    // Nếu có đơn hàng liên quan, chỉ vô hiệu hóa sản phẩm và các biến thể thay vì xóa
     if (hasOrderItems) {
-      // Vô hiệu hóa sản phẩm
+      // Vô hiệu hóa sản phẩm và các biến thể
       product.isActive = false;
       await product.save();
-
-      // Vô hiệu hóa các biến thể
       await Variant.updateMany({ product: id }, { $set: { isActive: false } });
 
       return {

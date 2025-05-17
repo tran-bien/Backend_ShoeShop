@@ -108,17 +108,19 @@ const applyMiddlewares = (schema) => {
       if (this.isModified("name") || !this.slug) {
         this.slug = createSlug(this.name);
 
-        // Đảm bảo slug là duy nhất
+        // Đảm bảo slug là duy nhất (kiểm tra cả sản phẩm đã xóa mềm)
         const Product = mongoose.model("Product");
         const slugRegEx = new RegExp(`^${this.slug}(-\\d+)?$`, "i");
+
+        // Tìm tất cả các sản phẩm có slug tương tự (kể cả đã xóa mềm)
         const productsWithSlug = await Product.find({
           slug: slugRegEx,
           _id: { $ne: this._id },
-          deletedAt: null,
-        });
+        }).setOptions({ includeDeleted: true });
 
         if (productsWithSlug.length > 0) {
-          this.slug = `${this.slug}-${productsWithSlug.length + 1}`;
+          // Thêm timestamp để đảm bảo duy nhất
+          this.slug = `${this.slug}-${Date.now()}`;
         }
       }
       next();

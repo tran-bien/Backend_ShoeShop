@@ -60,7 +60,7 @@ const authService = {
       existingSession.refreshToken = refreshToken;
       existingSession.lastActive = new Date();
       existingSession.expiresAt = new Date(
-        Date.now() + 30 * 24 * 60 * 60 * 1000
+        Date.now() + 10 * 24 * 60 * 60 * 1000
       );
       await existingSession.save();
 
@@ -81,7 +81,7 @@ const authService = {
       userAgent,
       ip,
       device: parsedDevice,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
       isActive: true,
       lastActive: new Date(),
     });
@@ -135,7 +135,7 @@ const authService = {
       },
     };
 
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
     return await Session.create({
       user: userId,
       token,
