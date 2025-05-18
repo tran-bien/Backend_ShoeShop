@@ -331,10 +331,11 @@ createVariant: async (variantData) => {
     throw new ApiError(404, `Không tìm thấy kích thước: ${missingSizeIds.join(', ')}`);
   }
 
-  // Tìm biến thể hiện có với cùng sản phẩm và màu sắc
+  // Tìm biến thể hiện có với cùng sản phẩm và màu sắc và giới tính và 
   let existingVariant = await Variant.findOne({
     product: productId,
     color: colorId,
+    gender: variantData.gender,
     deletedAt: null
   }).populate('sizes.size');
 
@@ -344,7 +345,7 @@ createVariant: async (variantData) => {
   let newSizes = [];
   let message = '';
   
-  // TH1: Biến thể với màu này đã tồn tại
+  // TH1: Biến thể với màu và giới tính này đã tồn tại
   if (existingVariant) {
     // Tạo Map để dễ dàng tìm kiếm size đã tồn tại
     const existingSizeMap = new Map(
@@ -397,7 +398,7 @@ createVariant: async (variantData) => {
       ? `Đã ${updates.join(' và ')} cho biến thể màu ${color.name}`
       : `Không có thay đổi nào cho biến thể màu ${color.name}`;
   }
-  // TH2: Chưa có biến thể với màu này, tạo mới hoàn toàn
+  // TH2: Chưa có biến thể với màu và giới tính này, tạo mới hoàn toàn
   else {
     // Chuẩn bị dữ liệu size
     const sizesData = variantData.sizes.map(sizeData => ({
@@ -427,7 +428,7 @@ createVariant: async (variantData) => {
       { $addToSet: { variants: newVariant._id } }
     );
     
-    message = `Đã tạo biến thể màu ${color.name} mới với ${sizesData.length} kích thước`;
+    message = `Đã tạo biến thể màu ${color.name} và giới tính ${variantData.gender} mới với ${sizesData.length} kích thước`;
     existingVariant = newVariant;
   }
   

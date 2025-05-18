@@ -43,17 +43,6 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/variants/:id/inventory
- * @desc    Xem tổng quan tồn kho của biến thể
- * @access  Admin
- */
-router.get(
-  "/:id/inventory",
-  validate(variantValidator.validateVariantId),
-  variantController.getVariantInventory
-);
-
-/**
  * @route   POST /api/admin/variants
  * @desc    Tạo biến thể mới
  * @access  Admin

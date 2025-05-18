@@ -1357,6 +1357,56 @@ getPublicProductById: async (id) => {
   
   // Xử lý thông tin sản phẩm
   const publicProduct = transformProductForPublic(product);
+  
+  // Tạo collection ảnh từ tất cả các biến thể
+  const variantImages = {};
+  
+  // Nhóm ảnh theo màu sắc và giới tính
+  if (product.variants && product.variants.length > 0) {
+    product.variants.forEach(variant => {
+      const colorId = variant.color?._id?.toString();
+      const gender = variant.gender;
+      
+      if (!colorId) return;
+      
+      // Tạo khóa cho màu và giới tính
+      const key = `${gender}-${colorId}`;
+      
+      if (!variantImages[key]) {
+        variantImages[key] = [];
+      }
+      
+      // Thêm ảnh của biến thể vào collection
+      if (variant.imagesvariant && variant.imagesvariant.length > 0) {
+        // Sắp xếp ảnh với ảnh chính đầu tiên, sau đó theo displayOrder
+        const sortedImages = [...variant.imagesvariant].sort((a, b) => {
+          if (a.isMain && !b.isMain) return -1;
+          if (!a.isMain && b.isMain) return 1;
+          return a.displayOrder - b.displayOrder;
+        });
+        
+        variantImages[key] = sortedImages.map(img => ({
+          url: img.url,
+          public_id: img.public_id,
+          isMain: img.isMain,
+          gender: variant.gender,
+          colorId: colorId,
+          colorName: variant.color?.name || '',
+          variantId: variant._id.toString()
+        }));
+      }
+    });
+  }
+  
+  // Nếu không có ảnh biến thể nào, thêm ảnh sản phẩm vào một key mặc định
+  if (Object.keys(variantImages).length === 0 && publicProduct.images && publicProduct.images.length > 0) {
+    variantImages['default'] = publicProduct.images.map(img => ({
+      url: img.url,
+      public_id: img.public_id,
+      isMain: img.isMain,
+      isProductImage: true
+    }));
+  }
 
   // Tối ưu dữ liệu trả về - chỉ giữ lại cấu trúc cần thiết
   const optimizedAttributes = {
@@ -1381,7 +1431,8 @@ getPublicProductById: async (id) => {
     success: true,
     product: publicProduct,
     attributes: optimizedAttributes,
-    summary: summary
+    summary: summary,
+    images: variantImages // Chỉ trả về variantImages thay vì cấu trúc phức tạp hơn
   };
 },
 
@@ -1426,6 +1477,56 @@ getPublicProductBySlug: async (slug) => {
   
   // Xử lý thông tin sản phẩm
   const publicProduct = transformProductForPublic(product);
+  
+  // Tạo collection ảnh từ tất cả các biến thể
+  const variantImages = {};
+  
+  // Nhóm ảnh theo màu sắc và giới tính
+  if (product.variants && product.variants.length > 0) {
+    product.variants.forEach(variant => {
+      const colorId = variant.color?._id?.toString();
+      const gender = variant.gender;
+      
+      if (!colorId) return;
+      
+      // Tạo khóa cho màu và giới tính
+      const key = `${gender}-${colorId}`;
+      
+      if (!variantImages[key]) {
+        variantImages[key] = [];
+      }
+      
+      // Thêm ảnh của biến thể vào collection
+      if (variant.imagesvariant && variant.imagesvariant.length > 0) {
+        // Sắp xếp ảnh với ảnh chính đầu tiên, sau đó theo displayOrder
+        const sortedImages = [...variant.imagesvariant].sort((a, b) => {
+          if (a.isMain && !b.isMain) return -1;
+          if (!a.isMain && b.isMain) return 1;
+          return a.displayOrder - b.displayOrder;
+        });
+        
+        variantImages[key] = sortedImages.map(img => ({
+          url: img.url,
+          public_id: img.public_id,
+          isMain: img.isMain,
+          gender: variant.gender,
+          colorId: colorId,
+          colorName: variant.color?.name || '',
+          variantId: variant._id.toString()
+        }));
+      }
+    });
+  }
+  
+  // Nếu không có ảnh biến thể nào, thêm ảnh sản phẩm vào một key mặc định
+  if (Object.keys(variantImages).length === 0 && publicProduct.images && publicProduct.images.length > 0) {
+    variantImages['default'] = publicProduct.images.map(img => ({
+      url: img.url,
+      public_id: img.public_id,
+      isMain: img.isMain,
+      isProductImage: true
+    }));
+  }
 
   // Tối ưu dữ liệu trả về - chỉ giữ lại cấu trúc cần thiết
   const optimizedAttributes = {
@@ -1450,7 +1551,8 @@ getPublicProductBySlug: async (slug) => {
     success: true,
     product: publicProduct,
     attributes: optimizedAttributes,
-    summary: summary
+    summary: summary,
+    images: variantImages // Chỉ trả về variantImages thay vì cấu trúc phức tạp hơn
   };
 },
 
