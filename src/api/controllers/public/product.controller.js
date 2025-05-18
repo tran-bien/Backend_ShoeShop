@@ -67,18 +67,6 @@ const productController = {
     );
     res.json(result);
   }),
-
-  /**
-   * @desc    Lấy thông tin tồn kho theo size cho sản phẩm
-   * @route   GET /api/products/:id/inventory
-   * @access  Public
-   */
-  getProductInventoryBySize: asyncHandler(async (req, res) => {
-    const result = await productService.getProductInventoryBySize(
-      req.params.id
-    );
-    res.json(result);
-  }),
 };
 
 module.exports = productController;

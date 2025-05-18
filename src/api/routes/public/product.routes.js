@@ -52,17 +52,6 @@ router.get(
 );
 
 /**
- * @route   GET /api/products/:id/inventory
- * @desc    Lấy thông tin tồn kho theo size cho sản phẩm
- * @access  Public
- */
-router.get(
-  "/:id/inventory",
-  validate(productValidator.validateProductId),
-  productController.getProductInventoryBySize
-);
-
-/**
  * @route   GET /api/products/:id
  * @desc    Lấy chi tiết sản phẩm theo ID
  * @access  Public

@@ -306,6 +306,7 @@ const transformProductForPublicList = (product) => {
 
 /**
  * Helper tổng hợp thuộc tính sản phẩm
+ * @param {Object} product - Sản phẩm đã được populate các thông tin liên quan
  */
 const getProductAttributesHelper = async (product) => {
   // Kiểm tra nếu sản phẩm không có variants
@@ -317,15 +318,25 @@ const getProductAttributesHelper = async (product) => {
       genders: [],
       sizesCountByColor: {},
       sizeInventoryByColor: {},
+      variantsByColor: {},
+      inventoryMatrix: {
+        colors: [],
+        sizes: [],
+        genders: [],
+        stock: {}
+      }
     };
   }
 
   // Trích xuất các màu sắc có sẵn cho sản phẩm
   const availableColors = {};
   const availableSizes = {};
+  const availableGenders = new Set();
   const sizesCountByColor = {};
   const sizeInventoryByColor = {};
   const variantsByColor = {};
+  const variantsByGender = {};
+  const variantsByColorAndGender = {};
 
   // Phân loại variants theo màu sắc và kích thước
   product.variants.forEach((variant) => {
@@ -333,17 +344,34 @@ const getProductAttributesHelper = async (product) => {
     if (!variant.color) return;
 
     const colorId = variant.color._id.toString();
+    const gender = variant.gender || 'unisex';
+    
+    // Thêm gender vào danh sách
+    availableGenders.add(gender);
 
     // Lưu thông tin màu
     if (!availableColors[colorId]) {
       availableColors[colorId] = variant.color;
     }
 
-    // Lưu variant theo màu
+    // Phân loại variants theo giới tính
+    if (!variantsByGender[gender]) {
+      variantsByGender[gender] = [];
+    }
+    variantsByGender[gender].push(variant);
+
+    // Phân loại variants theo màu
     if (!variantsByColor[colorId]) {
       variantsByColor[colorId] = [];
     }
     variantsByColor[colorId].push(variant);
+
+    // Phân loại variants theo màu và giới tính
+    const colorGenderKey = `${colorId}-${gender}`;
+    if (!variantsByColorAndGender[colorGenderKey]) {
+      variantsByColorAndGender[colorGenderKey] = [];
+    }
+    variantsByColorAndGender[colorGenderKey].push(variant);
 
     // Đếm số lượng sizes theo màu
     if (!sizesCountByColor[colorId]) {
@@ -372,6 +400,8 @@ const getProductAttributesHelper = async (product) => {
             sizeDescription: sizeItem.size.description || "",
             quantity: 0,
             isAvailable: false,
+            variantId: variant._id.toString(),
+            gender: gender
           };
         }
 
@@ -388,6 +418,7 @@ const getProductAttributesHelper = async (product) => {
   // Chuyển đổi dữ liệu sang mảng để trả về
   const colors = Object.values(availableColors);
   const sizes = Object.values(availableSizes);
+  const genders = Array.from(availableGenders);
 
   // Lấy khoảng giá của sản phẩm hiện tại
   const prices = product.variants.map((variant) => variant.priceFinal);
@@ -396,16 +427,121 @@ const getProductAttributesHelper = async (product) => {
     max: prices.length > 0 ? Math.max(...prices) : 0,
   };
 
-  // Lấy các giới tính có sẵn
-  const genders = [
-    ...new Set(product.variants.map((variant) => variant.gender)),
-  ];
-
   // Chuyển đổi sizeInventoryByColor từ object sang array
   const formattedSizeInventory = {};
   for (const [colorId, sizeMap] of Object.entries(sizeInventoryByColor)) {
     formattedSizeInventory[colorId] = Object.values(sizeMap);
   }
+
+  // Tạo ma trận tồn kho theo màu, kích thước và giới tính
+  const inventoryMatrix = {
+    colors: colors.map(color => ({
+      id: color._id.toString(),
+      name: color.name,
+      code: color.code,
+      type: color.type,
+      colors: color.colors || [],
+    })),
+    sizes: sizes.map(size => ({
+      id: size._id.toString(),
+      value: size.value,
+      description: size.description || "",
+    })),
+    genders: genders.map(gender => ({
+      id: gender,
+      name: gender === "male" ? "Nam" : (gender === "female" ? "Nữ" : "Unisex")
+    })),
+    // Ma trận tồn kho: {gender: {colorId: {sizeId: {quantity, isAvailable, variantId, sku}}}}
+    stock: {}
+  };
+
+  // Khởi tạo ma trận tồn kho
+  genders.forEach(gender => {
+    inventoryMatrix.stock[gender] = {};
+    
+    colors.forEach(color => {
+      const colorId = color._id.toString();
+      inventoryMatrix.stock[gender][colorId] = {};
+      
+      sizes.forEach(size => {
+        const sizeId = size._id.toString();
+        // Mặc định số lượng là 0
+        inventoryMatrix.stock[gender][colorId][sizeId] = {
+          quantity: 0,
+          isAvailable: false,
+          variantId: null,
+          sku: null
+        };
+      });
+    });
+  });
+
+  // Điền thông tin vào ma trận tồn kho
+  product.variants.forEach(variant => {
+    if (!variant.color) return;
+    
+    const colorId = variant.color._id.toString();
+    const gender = variant.gender || 'unisex';
+    const variantId = variant._id.toString();
+    
+    variant.sizes.forEach(sizeItem => {
+      if (!sizeItem.size) return;
+      
+      const sizeId = sizeItem.size._id.toString();
+      const quantity = sizeItem.quantity || 0;
+      const isAvailable = quantity > 0 && sizeItem.isSizeAvailable;
+      
+      if (inventoryMatrix.stock[gender] && 
+          inventoryMatrix.stock[gender][colorId] && 
+          inventoryMatrix.stock[gender][colorId][sizeId]) {
+        
+        inventoryMatrix.stock[gender][colorId][sizeId] = {
+          quantity: quantity,
+          isAvailable: isAvailable,
+          variantId: variantId,
+          sku: sizeItem.sku || null
+        };
+      }
+    });
+  });
+
+  // Thêm thông tin tổng hợp tồn kho
+  inventoryMatrix.summary = {
+    byGender: {},
+    byColor: {},
+    bySize: {},
+    total: 0
+  };
+
+  // Tính tổng số lượng tồn kho theo giới tính
+  genders.forEach(gender => {
+    inventoryMatrix.summary.byGender[gender] = 0;
+    
+    colors.forEach(color => {
+      const colorId = color._id.toString();
+      
+      sizes.forEach(size => {
+        const sizeId = size._id.toString();
+        const quantity = inventoryMatrix.stock[gender][colorId][sizeId].quantity;
+        
+        // Cộng dồn tổng số lượng
+        inventoryMatrix.summary.byGender[gender] += quantity;
+        inventoryMatrix.summary.total += quantity;
+        
+        // Tính tổng số lượng theo màu
+        if (!inventoryMatrix.summary.byColor[colorId]) {
+          inventoryMatrix.summary.byColor[colorId] = 0;
+        }
+        inventoryMatrix.summary.byColor[colorId] += quantity;
+        
+        // Tính tổng số lượng theo kích thước
+        if (!inventoryMatrix.summary.bySize[sizeId]) {
+          inventoryMatrix.summary.bySize[sizeId] = 0;
+        }
+        inventoryMatrix.summary.bySize[sizeId] += quantity;
+      });
+    });
+  });
 
   return {
     colors,
@@ -413,11 +549,13 @@ const getProductAttributesHelper = async (product) => {
     priceRange,
     genders: genders.map((gender) => ({
       id: gender,
-      name: gender === "male" ? "Nam" : "Nữ",
+      name: gender === "male" ? "Nam" : (gender === "female" ? "Nữ" : "Unisex"),
     })),
     sizesCountByColor,
     sizeInventoryByColor: formattedSizeInventory,
     variantsByColor,
+    variantsByGender,
+    inventoryMatrix    // Ma trận tồn kho mới
   };
 };
 
@@ -1178,92 +1316,143 @@ getPublicProducts: async (query) => {
   };
 },
 
-  /**
-   * [PUBLIC] Lấy chi tiết sản phẩm theo ID
-   * @param {String} id ID của sản phẩm
-   */
-  getPublicProductById: async (id) => {
-    const product = await Product.findOne({
-      _id: id,
-      isActive: true,
-      deletedAt: null,
-    }).populate([
-      {
-        path: "category",
-        select: "name slug",
-        match: { isActive: true, deletedAt: null },
-      },
-      {
-        path: "brand",
-        select: "name logo slug",
-        match: { isActive: true, deletedAt: null },
-      },
-      {
-        path: "variants",
-        match: { isActive: true, deletedAt: null },
-        select:
-          "color price priceFinal percentDiscount gender imagesvariant sizes",
-        populate: [
-          { path: "color", select: "name code type colors" },
-          { path: "sizes.size", select: "value description" },
-        ],
-      },
-    ]);
+/**
+ * [PUBLIC] Lấy chi tiết sản phẩm theo ID
+ * @param {String} id ID của sản phẩm
+ */
+getPublicProductById: async (id) => {
+  const product = await Product.findOne({
+    _id: id,
+    isActive: true,
+    deletedAt: null,
+  }).populate([
+    {
+      path: "category",
+      select: "name slug",
+      match: { isActive: true, deletedAt: null },
+    },
+    {
+      path: "brand",
+      select: "name logo slug",
+      match: { isActive: true, deletedAt: null },
+    },
+    {
+      path: "variants",
+      match: { isActive: true, deletedAt: null },
+      select:
+        "color price priceFinal percentDiscount gender imagesvariant sizes",
+      populate: [
+        { path: "color", select: "name code type colors" },
+        { path: "sizes.size", select: "value description" },
+      ],
+    },
+  ]);
 
-    if (!product) {
-      throw new ApiError(404, `Không tìm thấy sản phẩm`);
-    }
+  if (!product) {
+    throw new ApiError(404, `Không tìm thấy sản phẩm`);
+  }
 
-    // Tích hợp thông tin attributes
-    const attributes = await getProductAttributesHelper(product);
+  // Tính toán ma trận tồn kho và thông tin cơ bản
+  const productAttributes = await getProductAttributesHelper(product);
+  
+  // Xử lý thông tin sản phẩm
+  const publicProduct = transformProductForPublic(product);
 
-    // Xử lý thông tin sản phẩm
-    const publicProduct = transformProductForPublic(product);
+  // Tối ưu dữ liệu trả về - chỉ giữ lại cấu trúc cần thiết
+  const optimizedAttributes = {
+    // Danh sách tham khảo đơn giản
+    colors: productAttributes.colors,
+    sizes: productAttributes.sizes,
+    genders: productAttributes.genders,
+    priceRange: productAttributes.priceRange,
+    
+    // Ma trận tồn kho (chứa tất cả thông tin cần thiết)
+    inventoryMatrix: productAttributes.inventoryMatrix
+  };
 
-    return {
-      success: true,
-      product: publicProduct,
-      attributes: attributes,
-    };
-  },
+  // Thêm thông tin tổng hợp quan trọng, bỏ các giá trị dễ tính từ client
+  const summary = {
+    totalInventory: productAttributes.inventoryMatrix.summary.total,
+    priceRange: productAttributes.priceRange,
+    stockStatus: publicProduct.stockStatus
+  };
 
-  /**
-   * [PUBLIC] Lấy chi tiết sản phẩm theo slug
-   * @param {String} slug Slug của sản phẩm
-   */
-  getPublicProductBySlug: async (slug) => {
-    const product = await Product.findOne({
-      slug,
-      isActive: true,
-      deletedAt: null,
-    })
-      .populate("category", "name")
-      .populate("brand", "name logo")
-      .populate({
-        path: "variants",
-        match: { isActive: true, deletedAt: null },
-        populate: [
-          { path: "color", select: "name type code colors" },
-          { path: "sizes.size", select: "value description" },
-        ],
-      });
+  return {
+    success: true,
+    product: publicProduct,
+    attributes: optimizedAttributes,
+    summary: summary
+  };
+},
 
-    if (!product) {
-      throw new ApiError(404, `Không tìm thấy sản phẩm`);
-    }
+/**
+ * [PUBLIC] Lấy chi tiết sản phẩm theo slug
+ * @param {String} slug Slug của sản phẩm
+ */
+getPublicProductBySlug: async (slug) => {
+  const product = await Product.findOne({
+    slug,
+    isActive: true,
+    deletedAt: null,
+  }).populate([
+    {
+      path: "category",
+      select: "name slug",
+      match: { isActive: true, deletedAt: null },
+    },
+    {
+      path: "brand",
+      select: "name logo slug",
+      match: { isActive: true, deletedAt: null },
+    },
+    {
+      path: "variants",
+      match: { isActive: true, deletedAt: null },
+      select:
+        "color price priceFinal percentDiscount gender imagesvariant sizes",
+      populate: [
+        { path: "color", select: "name code type colors" },
+        { path: "sizes.size", select: "value description" },
+      ],
+    },
+  ]);
 
-    // Tích hợp thông tin attributes
-    const attributes = await getProductAttributesHelper(product);
+  if (!product) {
+    throw new ApiError(404, `Không tìm thấy sản phẩm`);
+  }
 
-    // Xử lý thông tin sản phẩm
-    const publicProduct = transformProductForPublic(product);
+  // Tính toán ma trận tồn kho và thông tin cơ bản
+  const productAttributes = await getProductAttributesHelper(product);
+  
+  // Xử lý thông tin sản phẩm
+  const publicProduct = transformProductForPublic(product);
 
-    return {
-      success: true,
-      product: publicProduct,
-      attributes: attributes,
-    };
-  },
+  // Tối ưu dữ liệu trả về - chỉ giữ lại cấu trúc cần thiết
+  const optimizedAttributes = {
+    // Danh sách tham khảo đơn giản
+    colors: productAttributes.colors,
+    sizes: productAttributes.sizes,
+    genders: productAttributes.genders,
+    priceRange: productAttributes.priceRange,
+    
+    // Ma trận tồn kho (chứa tất cả thông tin cần thiết)
+    inventoryMatrix: productAttributes.inventoryMatrix
+  };
+
+  // Thêm thông tin tổng hợp quan trọng, bỏ các giá trị dễ tính từ client
+  const summary = {
+    totalInventory: productAttributes.inventoryMatrix.summary.total,
+    priceRange: productAttributes.priceRange,
+    stockStatus: publicProduct.stockStatus
+  };
+
+  return {
+    success: true,
+    product: publicProduct,
+    attributes: optimizedAttributes,
+    summary: summary
+  };
+},
 
   /**
    * [PUBLIC] Lấy sản phẩm nổi bật (theo rating cao)
@@ -1477,131 +1666,6 @@ getPublicProducts: async (query) => {
     };
 
     return result;
-  },
-
-  /**
-   * [PUBLIC] Lấy số lượng tồn kho theo size cho sản phẩm
-   * @param {String} productId - ID sản phẩm
-   * @returns {Promise<Object>} - Thông tin tồn kho theo size
-   */
-  getProductInventoryBySize: async (productId) => {
-    const product = await Product.findOne({
-      _id: productId,
-      isActive: true,
-      deletedAt: null,
-    }).populate({
-      path: "variants",
-      match: { isActive: true, deletedAt: null },
-      select: "color sizes",
-      populate: [
-        { path: "color", select: "name code type colors" },
-        { path: "sizes.size", select: "value description" },
-      ],
-    });
-
-    if (!product) {
-      throw new ApiError(404, `Không tìm thấy sản phẩm`);
-    }
-
-    // Tổng hợp dữ liệu tồn kho
-    const inventory = {
-      totalInventory: 0,
-      bySizeId: {},
-      byColorId: {},
-      byColorAndSize: {},
-    };
-
-    // Nếu không có variants, trả về dữ liệu trống
-    if (!product.variants || product.variants.length === 0) {
-      return {
-        success: true,
-        inventory,
-      };
-    }
-
-    // Xử lý từng variant
-    product.variants.forEach((variant) => {
-      const colorId = variant.color?._id?.toString();
-      if (!colorId) return;
-
-      // Khởi tạo thông tin màu nếu chưa có
-      if (!inventory.byColorId[colorId]) {
-        inventory.byColorId[colorId] = {
-          colorId,
-          colorName: variant.color.name,
-          colorCode: variant.color.code,
-          colorType: variant.color.type,
-          totalQuantity: 0,
-          sizeCount: 0,
-        };
-      }
-
-      // Khởi tạo map cho màu-kích thước
-      if (!inventory.byColorAndSize[colorId]) {
-        inventory.byColorAndSize[colorId] = {};
-      }
-
-      // Xử lý từng size trong variant
-      variant.sizes.forEach((sizeItem) => {
-        if (!sizeItem.size || !sizeItem.isSizeAvailable) return;
-
-        const sizeId = sizeItem.size._id.toString();
-        const quantity = sizeItem.quantity || 0;
-
-        // Cộng dồn số lượng tổng
-        inventory.totalInventory += quantity;
-        inventory.byColorId[colorId].totalQuantity += quantity;
-
-        // Khởi tạo thông tin kích thước nếu chưa có
-        if (!inventory.bySizeId[sizeId]) {
-          inventory.bySizeId[sizeId] = {
-            sizeId,
-            sizeValue: sizeItem.size.value,
-            sizeDescription: sizeItem.size.description || "",
-            totalQuantity: 0,
-            colorCount: 0,
-          };
-        }
-
-        // Cập nhật số lượng theo kích thước
-        inventory.bySizeId[sizeId].totalQuantity += quantity;
-
-        // Khởi tạo thông tin size-color
-        if (!inventory.byColorAndSize[colorId][sizeId]) {
-          inventory.byColorAndSize[colorId][sizeId] = {
-            colorId,
-            sizeId,
-            sizeValue: sizeItem.size.value,
-            quantity: 0,
-            isAvailable: false,
-          };
-
-          // Tăng số lượng size/color dùng để đếm
-          inventory.byColorId[colorId].sizeCount++;
-          inventory.bySizeId[sizeId].colorCount++;
-        }
-
-        // Cập nhật số lượng theo màu-kích thước
-        inventory.byColorAndSize[colorId][sizeId].quantity += quantity;
-        inventory.byColorAndSize[colorId][sizeId].isAvailable = quantity > 0;
-      });
-    });
-
-    // Chuyển map byColorAndSize thành mảng
-    const formattedColorSizeInventory = {};
-    for (const [colorId, sizeMap] of Object.entries(inventory.byColorAndSize)) {
-      formattedColorSizeInventory[colorId] = Object.values(sizeMap);
-    }
-    inventory.byColorAndSize = formattedColorSizeInventory;
-
-    // Chuyển các Map sang mảng cho dễ sử dụng
-    inventory.bySizeId = Object.values(inventory.bySizeId);
-    inventory.byColorId = Object.values(inventory.byColorId);
-
-    return {
-      success: true,
-      inventory,
-    };
   },
 };
 
