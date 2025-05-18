@@ -1,5 +1,6 @@
-const { Variant, Product, Color, Size } = require("@models");
+const { Variant, Product, Color, Size, Order } = require("@models");
 const mongoose = require("mongoose");
+const { updateProductStockInfo } = require("@models/product/middlewares");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
 const ApiError = require("@utils/ApiError");
@@ -179,9 +180,16 @@ const variantService = {
       throw new ApiError(404, `Không tìm thấy biến thể với ID: ${id}`);
     }
 
+    // Bổ sung thông tin tổng hợp tồn kho
+    const variantObj = variant.toObject ? variant.toObject() : { ...variant };
+    const inventorySummary = variantService.calculateInventorySummary(variant);
+
     return {
       success: true,
-      variant,
+      variant: {
+        ...variantObj,
+        inventorySummary,
+      },
     };
   },
 
@@ -282,50 +290,204 @@ const variantService = {
     return await paginateDeleted(Variant, filter, options);
   },
 
-  /**
-   * Tạo biến thể mới
-   * @param {Object} variantData Thông tin biến thể
-   */
-  createVariant: async (variantData) => {
-    // Kiểm tra sản phẩm tồn tại
-    const productId = variantData.product;
-    const colorId = variantData.color;
+ /**
+ * Tạo biến thể mới hoặc cập nhật biến thể hiện có nếu đã tồn tại
+ * @param {Object} variantData Thông tin biến thể
+ */
+createVariant: async (variantData) => {
+  // Kiểm tra dữ liệu đầu vào
+  const productId = variantData.product;
+  const colorId = variantData.color;
 
-    const product = await Product.findById(productId);
-    if (!product) {
-      throw new ApiError(404, `Không tìm thấy sản phẩm với ID: ${productId}`);
+  // Kiểm tra xem sản phẩm, màu sắc và sizes có hợp lệ hay không
+  if (!mongoose.Types.ObjectId.isValid(productId) || 
+      !mongoose.Types.ObjectId.isValid(colorId) ||
+      !Array.isArray(variantData.sizes) || 
+      variantData.sizes.length === 0) {
+    throw new ApiError(400, "Dữ liệu không hợp lệ");
+  }
+
+  // Lấy dữ liệu sản phẩm và màu sắc song song
+  const [product, color] = await Promise.all([
+    Product.findById(productId),
+    Color.findById(colorId)
+  ]);
+
+  if (!product) {
+    throw new ApiError(404, `Không tìm thấy sản phẩm với ID: ${productId}`);
+  }
+
+  if (!color) {
+    throw new ApiError(404, `Không tìm thấy màu sắc với ID: ${colorId}`);
+  }
+
+  // Kiểm tra size hợp lệ
+  const sizeIds = variantData.sizes.map(s => s.size.toString());
+  const sizes = await Size.find({ _id: { $in: sizeIds } });
+  
+  if (sizes.length !== sizeIds.length) {
+    const foundSizeIds = sizes.map(s => s._id.toString());
+    const missingSizeIds = sizeIds.filter(id => !foundSizeIds.includes(id));
+    throw new ApiError(404, `Không tìm thấy kích thước: ${missingSizeIds.join(', ')}`);
+  }
+
+  // Tìm biến thể hiện có với cùng sản phẩm và màu sắc
+  let existingVariant = await Variant.findOne({
+    product: productId,
+    color: colorId,
+    deletedAt: null
+  }).populate('sizes.size');
+
+  // Biến để theo dõi các thay đổi
+  let newVariant = null;
+  let updatedSizes = [];
+  let newSizes = [];
+  let message = '';
+  
+  // TH1: Biến thể với màu này đã tồn tại
+  if (existingVariant) {
+    // Tạo Map để dễ dàng tìm kiếm size đã tồn tại
+    const existingSizeMap = new Map(
+      existingVariant.sizes.map(s => [s.size._id.toString(), s])
+    );
+    
+    // Xử lý từng size trong dữ liệu mới
+    for (const sizeData of variantData.sizes) {
+      const sizeId = sizeData.size.toString();
+      const existingSize = existingSizeMap.get(sizeId);
+      
+      if (existingSize) {
+        // Size đã tồn tại, cập nhật số lượng
+        if (existingSize.quantity !== sizeData.quantity) {
+          existingSize.quantity = sizeData.quantity;
+          existingSize.isSizeAvailable = sizeData.quantity > 0;
+          updatedSizes.push(sizeId);
+        }
+      } else {
+        // Size chưa tồn tại, thêm mới vào biến thể
+        existingVariant.sizes.push({
+          size: sizeId,
+          quantity: sizeData.quantity || 0,
+          isSizeAvailable: (sizeData.quantity || 0) > 0
+        });
+        newSizes.push(sizeId);
+      }
     }
-
-    const color = await Color.findById(colorId);
-    if (!color) {
-      throw new ApiError(404, `Không tìm thấy màu sắc với ID: ${colorId}`);
+    
+    // Cập nhật các thông tin khác nếu cần
+    ['price', 'costPrice', 'percentDiscount', 'gender'].forEach(field => {
+      if (variantData[field] !== undefined) {
+        existingVariant[field] = variantData[field];
+      }
+    });
+    
+    // Lưu thay đổi
+    await existingVariant.save();
+    
+    // Tạo thông báo phù hợp
+    const updates = [];
+    if (newSizes.length > 0) {
+      updates.push(`thêm ${newSizes.length} kích thước mới`);
     }
-
-    // Kiểm tra kích thước tồn tại và tạo mảng sizes hợp lệ
-    if (
-      !variantData.sizes ||
-      !Array.isArray(variantData.sizes) ||
-      variantData.sizes.length === 0
-    ) {
-      throw new ApiError(400, "Phải có ít nhất một kích thước");
+    if (updatedSizes.length > 0) {
+      updates.push(`cập nhật ${updatedSizes.length} kích thước đã tồn tại`);
     }
-
-    // Kiểm tra xem sản phẩm đã có biến thể với màu này chưa
-    const existingVariantWithColor = await Variant.findOne({
+    
+    message = updates.length > 0 
+      ? `Đã ${updates.join(' và ')} cho biến thể màu ${color.name}`
+      : `Không có thay đổi nào cho biến thể màu ${color.name}`;
+  }
+  // TH2: Chưa có biến thể với màu này, tạo mới hoàn toàn
+  else {
+    // Chuẩn bị dữ liệu size
+    const sizesData = variantData.sizes.map(sizeData => ({
+      size: sizeData.size,
+      quantity: sizeData.quantity || 0,
+      isSizeAvailable: (sizeData.quantity || 0) > 0
+    }));
+    
+    // Tạo biến thể mới
+    newVariant = new Variant({
       product: productId,
       color: colorId,
-      deletedAt: null,
+      price: variantData.price,
+      costPrice: variantData.costPrice || variantData.price,
+      gender: variantData.gender || "male",
+      percentDiscount: variantData.percentDiscount || 0,
+      isActive: variantData.isActive !== undefined ? variantData.isActive : true,
+      sizes: sizesData
     });
+    
+    // Lưu biến thể mới
+    await newVariant.save();
+    
+    // Cập nhật sản phẩm
+    await Product.findByIdAndUpdate(
+      productId,
+      { $addToSet: { variants: newVariant._id } }
+    );
+    
+    message = `Đã tạo biến thể màu ${color.name} mới với ${sizesData.length} kích thước`;
+    existingVariant = newVariant;
+  }
+  
+  // Lấy biến thể đã populated đầy đủ để trả về
+  const populatedVariant = await Variant.findById(existingVariant._id)
+    .populate('color', 'name code type colors')
+    .populate('sizes.size', 'value description')
+    .populate({
+      path: 'product',
+      select: 'name category brand',
+      populate: [
+        { path: 'category', select: 'name' },
+        { path: 'brand', select: 'name' }
+      ]
+    });
+  
+  // Tính toán thông tin tồn kho
+  const inventorySummary = variantService.calculateInventorySummary(populatedVariant);
+  
+  return {
+    success: true,
+    message,
+    isNewVariant: newVariant !== null,
+    updatedSizes: updatedSizes.length,
+    newSizes: newSizes.length,
+    variant: populatedVariant,
+    inventory: inventorySummary
+  };
+},
 
-    if (existingVariantWithColor) {
+  /**
+ * Cập nhật thông tin biến thể
+ * @param {String} id ID biến thể
+ * @param {Object} updateData Dữ liệu cập nhật
+ */
+updateVariant: async (id, updateData) => {
+  const variant = await Variant.findById(id);
+  if (!variant) {
+    throw new ApiError(404, `Không tìm thấy biến thể với ID: ${id}`);
+  }
+
+  // Kiểm tra màu sắc tồn tại nếu có cập nhật
+  if (updateData.color) {
+    const colorExists = await Color.findById(updateData.color);
+    if (!colorExists) {
       throw new ApiError(
-        409,
-        `Sản phẩm ${product.name} đã có biến thể với màu sắc ${color.name}`
+        404,
+        `Không tìm thấy màu sắc với ID: ${updateData.color}`
       );
     }
+  }
 
+  // Kiểm tra kích thước tồn tại nếu có cập nhật sizes
+  if (updateData.sizes && Array.isArray(updateData.sizes)) {
     const sizesData = [];
-    for (const sizeData of variantData.sizes) {
+    for (const sizeData of updateData.sizes) {
+      if (!mongoose.Types.ObjectId.isValid(sizeData.size)) {
+        throw new ApiError(400, "ID kích thước không hợp lệ");
+      }
+
       const sizeExists = await Size.findById(sizeData.size);
       if (!sizeExists) {
         throw new ApiError(
@@ -334,162 +496,62 @@ const variantService = {
         );
       }
 
-      // Thêm size vào mảng
+      // Kiểm tra xem size này đã tồn tại trong variant chưa để giữ lại SKU
+      const existingSize = variant.sizes.find(
+        (s) => s.size.toString() === sizeData.size.toString()
+      );
+
       sizesData.push({
         size: sizeData.size,
         quantity: sizeData.quantity || 0,
-        // Không cần gán SKU và isSizeAvailable, middleware sẽ xử lý
+        sku: existingSize ? existingSize.sku : undefined,
+        // isSizeAvailable sẽ được tính lại bởi middleware
       });
     }
+    updateData.sizes = sizesData;
+  }
 
-    // Tạo biến thể mới với dữ liệu đã validate
-    const variant = new Variant({
-      product: productId,
-      color: colorId,
-      price: variantData.price,
-      costPrice: variantData.costPrice,
-      gender: variantData.gender || "male",
-      percentDiscount: variantData.percentDiscount || 0,
-      isActive:
-        variantData.isActive !== undefined ? variantData.isActive : true,
-      sizes: sizesData,
-      // Các trường khác như profit, profitPercentage, priceFinal sẽ được tính tự động bởi middleware
+  // Cập nhật các trường
+  const allowedFields = [
+    "color",
+    "price",
+    "costPrice",
+    "percentDiscount",
+    "gender",
+    "sizes",
+    "isActive",
+  ];
+
+  const updateFields = {};
+  for (const [key, value] of Object.entries(updateData)) {
+    if (allowedFields.includes(key)) {
+      updateFields[key] = value;
+    }
+  }
+
+  // Cập nhật biến thể - middleware sẽ tự động tính lại các trường phụ thuộc
+  const updatedVariant = await Variant.findByIdAndUpdate(
+    id,
+    { $set: updateFields },
+    { new: true, runValidators: true }
+  )
+    .populate("color", "name code type colors")
+    .populate("sizes.size", "value description")
+    .populate({
+      path: "product",
+      select: "name category brand",
+      populate: [
+        { path: "category", select: "name" },
+        { path: "brand", select: "name" },
+      ],
     });
 
-    // Lưu biến thể
-    await variant.save();
-
-    // Cập nhật sản phẩm liên quan
-    await Product.findByIdAndUpdate(
-      productId,
-      { $addToSet: { variants: variant._id } },
-      { new: true }
-    );
-
-    // Thêm populate cho các trường liên quan trước khi trả về
-    const populatedVariant = await Variant.findById(variant._id)
-      .populate({ path: "color", select: "name code type colors" })
-      .populate({ path: "sizes.size", select: "value description" })
-      .populate({ path: "product", select: "name category brand" });
-
-    return {
-      success: true,
-      message: "Tạo biến thể thành công",
-      variant: populatedVariant,
-    };
-  },
-
-  /**
-   * Cập nhật thông tin biến thể
-   * @param {String} id ID biến thể
-   * @param {Object} updateData Dữ liệu cập nhật
-   */
-  updateVariant: async (id, updateData) => {
-    const variant = await Variant.findById(id);
-    if (!variant) {
-      throw new ApiError(404, `Không tìm thấy biến thể với ID: ${id}`);
-    }
-
-    // Kiểm tra màu sắc tồn tại nếu có cập nhật
-    if (updateData.color) {
-      const colorExists = await Color.findById(updateData.color);
-      if (!colorExists) {
-        throw new ApiError(
-          404,
-          `Không tìm thấy màu sắc với ID: ${updateData.color}`
-        );
-      }
-
-      // Kiểm tra xem sản phẩm đã có biến thể với màu này chưa (nếu đang thay đổi màu)
-      if (updateData.color.toString() !== variant.color.toString()) {
-        const existingVariantWithColor = await Variant.findOne({
-          product: variant.product,
-          color: updateData.color,
-          _id: { $ne: id },
-          deletedAt: null,
-        });
-
-        if (existingVariantWithColor) {
-          throw new ApiError(
-            409,
-            `Sản phẩm ${variant.product.name} đã có biến thể với màu sắc ${colorExists.name}`
-          );
-        }
-      }
-    }
-
-    // Kiểm tra kích thước tồn tại nếu có cập nhật sizes
-    if (updateData.sizes && Array.isArray(updateData.sizes)) {
-      const sizesData = [];
-      for (const sizeData of updateData.sizes) {
-        if (!mongoose.Types.ObjectId.isValid(sizeData.size)) {
-          throw new ApiError(400, "ID kích thước không hợp lệ");
-        }
-
-        const sizeExists = await Size.findById(sizeData.size);
-        if (!sizeExists) {
-          throw new ApiError(
-            404,
-            `Không tìm thấy kích thước với ID: ${sizeData.size}`
-          );
-        }
-
-        // Kiểm tra xem size này đã tồn tại trong variant chưa để giữ lại SKU
-        const existingSize = variant.sizes.find(
-          (s) => s.size.toString() === sizeData.size.toString()
-        );
-
-        sizesData.push({
-          size: sizeData.size,
-          quantity: sizeData.quantity || 0,
-          sku: existingSize ? existingSize.sku : undefined,
-          // isSizeAvailable sẽ được tính lại bởi middleware
-        });
-      }
-      updateData.sizes = sizesData;
-    }
-
-    // Cập nhật các trường
-    const allowedFields = [
-      "color",
-      "price",
-      "costPrice",
-      "percentDiscount",
-      "gender",
-      "sizes",
-      "isActive",
-    ];
-
-    const updateFields = {};
-    for (const [key, value] of Object.entries(updateData)) {
-      if (allowedFields.includes(key)) {
-        updateFields[key] = value;
-      }
-    }
-
-    // Cập nhật biến thể - middleware sẽ tự động tính lại các trường phụ thuộc
-    const updatedVariant = await Variant.findByIdAndUpdate(
-      id,
-      { $set: updateFields },
-      { new: true, runValidators: true }
-    )
-      .populate("color", "name code type colors")
-      .populate("sizes.size", "value description")
-      .populate({
-        path: "product",
-        select: "name category brand",
-        populate: [
-          { path: "category", select: "name" },
-          { path: "brand", select: "name" },
-        ],
-      });
-
-    return {
-      success: true,
-      message: `Cập nhật biến thể ${updatedVariant.name} thành công`,
-      variant: updatedVariant,
-    };
-  },
+  return {
+    success: true,
+    message: `Cập nhật biến thể thành công`,
+    variant: updatedVariant,
+  };
+},
 
   /**
    * Vô hiệu hóa biến thể thay vì xóa mềm khi liên quan đến đơn hàng
@@ -527,10 +589,9 @@ const variantService = {
 
       return {
         success: true,
-        message: `Biến thể ${variant.name} đang được sử dụng trong ${hasOrderItems.length} đơn hàng nên đã được vô hiệu hóa`,
+        message: `Biến thể ${variant._id} đang được sử dụng trong ${hasOrderItems.length} đơn hàng nên đã được vô hiệu hóa`,
         variant: {
-          _id: variant._id,
-          name: variant.name,
+          variant: variant,
           isDeactivated: true,
         },
       };
@@ -542,40 +603,22 @@ const variantService = {
     // Cập nhật trạng thái sản phẩm liên quan
     const product = await Product.findById(productId);
     if (product) {
-      // Kiểm tra nếu tất cả biến thể của sản phẩm đều đã bị xóa mềm
+      // Kiểm tra nếu tất cả biến thể của sản phẩm đều đã bị xóa mềm và không còn sản phẩm nào khác ẩn sản phẩm
       const remainingVariants = await Variant.countDocuments({
         product: productId,
-        isDeleted: false,
+        deletedAt: null,
       });
-
-      // Thông báo cho client
-      return {
-        success: true,
-        message: `Xóa biến thể ${variant.name} thành công`,
-        variant: {
-          _id: variant._id,
-          name: variant.name,
-          isDeleted: true,
-        },
-        affectedProduct:
-          remainingVariants === 0
-            ? {
-                _id: product._id,
-                name: product.name,
-                warning: `Tất cả biến thể của sản phẩm ${product.name} đã bị xóa. Sản phẩm sẽ không hiển thị cho người dùng.`,
-              }
-            : null,
-      };
+      if (remainingVariants === 0) {
+        product.isActive = false;
+        await product.save();
+      }
     }
 
     return {
       success: true,
-      message: `Xóa biến thể ${variant.name} thành công`,
-      variant: {
-        _id: variant._id,
-        name: variant.name,
-        isDeleted: true,
-      },
+      message: `Xóa biến thể ${variant._id} thành công`,
+      variant: variant,
+
     };
   },
 
@@ -606,7 +649,7 @@ const variantService = {
     if (existingVariantWithColor) {
       throw new ApiError(
         409,
-        `Sản phẩm ${variant.product.name} đã có biến thể với màu sắc ${variant.color.name} nên không thể khôi phục biến thể đã xóa.`
+        `Sản phẩm ${variant.product._id} đã có biến thể với màu sắc ${variant.color._id} nên không thể khôi phục biến thể đã xóa.`
       );
     }
 
@@ -625,13 +668,13 @@ const variantService = {
 
     return {
       success: true,
-      message: `Khôi phục biến thể ${variant.name} thành công`,
+      message: `Khôi phục biến thể ${variant._id} thành công`,
       variant,
     };
   },
 
   /**
-   * Cập nhật số lượng tồn kho của biến thể
+   * Cập nhật số lượng tồn kho của biến thể theo size
    * @param {String} id ID biến thể
    * @param {Array} sizesData Dữ liệu cập nhật số lượng theo kích thước
    */
@@ -643,6 +686,18 @@ const variantService = {
 
     if (!Array.isArray(sizesData) || sizesData.length === 0) {
       throw new ApiError(400, "Dữ liệu cập nhật tồn kho không hợp lệ");
+    }
+
+    // Kiểm tra xem size có tồn tại không
+    const sizeIds = sizesData.map((item) => item.sizeId);
+    const sizes = await Size.find({ _id: { $in: sizeIds } });
+    if (sizes.length !== sizeIds.length) {
+      const foundSizeIds = sizes.map((s) => s._id.toString());
+      const missingSizeIds = sizeIds.filter((id) => !foundSizeIds.includes(id));
+      throw new ApiError(
+        404,
+        `Không tìm thấy kích thước: ${missingSizeIds.join(", ")}`
+      );
     }
 
     // Cập nhật số lượng cho từng size
@@ -724,7 +779,7 @@ const variantService = {
     const statusMsg = isActive ? "kích hoạt" : "vô hiệu hóa";
     return {
       success: true,
-      message: `Biến thể ${updatedVariant.name} đã được ${statusMsg} thành công`,
+      message: `Biến thể ${updatedVariant._id} đã được ${statusMsg} thành công`,
       variant: updatedVariant,
     };
   },
@@ -770,174 +825,6 @@ const variantService = {
       totalSizes: variant.sizes.length,
       stockStatus,
       sizeInventory,
-    };
-  },
-
-  /**
-   * [PUBLIC] Lấy tổng quan tồn kho cho biến thể
-   * @param {String} id ID biến thể
-   * @returns {Promise<Object>} Thông tin tồn kho
-   */
-  getVariantInventorySummary: async (id) => {
-    const variant = await Variant.findOne({
-      _id: id,
-      isActive: true,
-      deletedAt: null,
-    })
-      .populate("color", "name code type colors")
-      .populate("sizes.size", "value description")
-      .populate({
-        path: "product",
-        select: "name category brand slug",
-        populate: [
-          { path: "category", select: "name" },
-          { path: "brand", select: "name" },
-        ],
-      });
-
-    if (!variant) {
-      throw new ApiError(404, `Không tìm thấy biến thể với ID: ${id}`);
-    }
-
-    // Tính số lượng tồn kho
-    const inventorySummary = variantService.calculateInventorySummary(variant);
-
-    return {
-      success: true,
-      inventory: {
-        variantId: variant._id,
-        productId: variant.product._id,
-        productName: variant.product.name,
-        productSlug: variant.product.slug,
-        colorId: variant.color._id,
-        colorName: variant.color.name,
-        colorCode: variant.color.code,
-        colorType: variant.color.type,
-        gender: variant.gender,
-        price: variant.price,
-        priceFinal: variant.priceFinal,
-        percentDiscount: variant.percentDiscount,
-        ...inventorySummary,
-      },
-    };
-  },
-
-  /**
-   * [PUBLIC] Lấy biến thể theo sản phẩm, màu và kích thước
-   * @param {Object} options Tùy chọn tìm kiếm (productId, colorId, sizeId)
-   * @returns {Promise<Object>} Biến thể tương ứng hoặc null nếu không tìm thấy
-   */
-  getVariantByCriteria: async (options) => {
-    const { productId, colorId, sizeId } = options;
-    // Tạo điều kiện tìm kiếm cơ bản
-    const query = {
-      product: productId,
-      isActive: true,
-      deletedAt: null,
-    };
-
-    // Thêm điều kiện tìm kiếm theo màu sắc
-    if (colorId && mongoose.Types.ObjectId.isValid(colorId)) {
-      query.color = colorId;
-    }
-
-    // Lấy các biến thể phù hợp
-    const variants = await Variant.find(query)
-      .populate("color", "name code type colors")
-      .populate("sizes.size", "value description")
-      .populate({
-        path: "product",
-        select: "name slug",
-      });
-
-    if (!variants || variants.length === 0) {
-      return {
-        success: false,
-        message: "Không tìm thấy biến thể phù hợp",
-        inventory: null,
-      };
-    }
-
-    // Nếu có sizeId, tiếp tục lọc theo kích thước
-    if (sizeId && mongoose.Types.ObjectId.isValid(sizeId)) {
-      // Lọc các biến thể có kích thước này và số lượng > 0
-      const filteredVariants = variants.filter((variant) => {
-        return variant.sizes.some(
-          (size) =>
-            size.size._id.toString() === sizeId &&
-            size.quantity > 0 &&
-            size.isSizeAvailable
-        );
-      });
-
-      if (filteredVariants.length === 0) {
-        return {
-          success: false,
-          message:
-            "Không có biến thể phù hợp với kích thước này hoặc đã hết hàng",
-          inventory: null,
-        };
-      }
-
-      // Lấy biến thể đầu tiên có kích thước phù hợp
-      const variant = filteredVariants[0];
-      const inventorySummary =
-        variantService.calculateInventorySummary(variant);
-
-      // Lọc ra chỉ size được chọn
-      const selectedSize = variant.sizes.find(
-        (size) => size.size._id.toString() === sizeId
-      );
-
-      return {
-        success: true,
-        variant: {
-          id: variant._id,
-          productId: variant.product._id,
-          productName: variant.product.name,
-          productSlug: variant.product.slug,
-          colorId: variant.color._id,
-          colorName: variant.color.name,
-          colorCode: variant.color.code,
-          gender: variant.gender,
-          price: variant.price,
-          priceFinal: variant.priceFinal,
-          percentDiscount: variant.percentDiscount,
-          images: variant.imagesvariant,
-          size: {
-            id: selectedSize.size._id,
-            value: selectedSize.size.value,
-            description: selectedSize.size.description,
-            quantity: selectedSize.quantity,
-            isAvailable: selectedSize.isSizeAvailable,
-          },
-          totalQuantity: inventorySummary.totalQuantity,
-        },
-      };
-    }
-
-    // Nếu không có sizeId, trả về tổng quan các biến thể
-    const result = variants.map((variant) => {
-      const inventorySummary =
-        variantService.calculateInventorySummary(variant);
-      return {
-        id: variant._id,
-        colorId: variant.color._id,
-        colorName: variant.color.name,
-        colorCode: variant.color.code,
-        gender: variant.gender,
-        price: variant.price,
-        priceFinal: variant.priceFinal,
-        percentDiscount: variant.percentDiscount,
-        totalQuantity: inventorySummary.totalQuantity,
-        availableSizes: inventorySummary.availableSizes,
-        sizeInventory: inventorySummary.sizeInventory,
-      };
-    });
-
-    return {
-      success: true,
-      variants: result,
     };
   },
 };
