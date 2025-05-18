@@ -1629,7 +1629,7 @@ getPublicProductBySlug: async (slug) => {
   },
 
   /**
-   * [PUBLIC] Lấy sản phẩm liên quan (cùng danh mục)
+   * [PUBLIC] Lấy sản phẩm liên quan (cùng danh mục) chỉ lấy các sản phẩm có biến thể hoạt động
    * @param {String} id ID sản phẩm
    * @param {Number} limit Số lượng sản phẩm trả về
    */
@@ -1639,6 +1639,7 @@ getPublicProductBySlug: async (slug) => {
       throw new ApiError(404, `Không tìm thấy sản phẩm`);
     }
 
+    // 1. Lấy các sản phẩm cùng danh mục, sắp xếp theo rating
     const relatedProducts = await Product.find({
       category: product.category,
       _id: { $ne: id },
@@ -1646,7 +1647,6 @@ getPublicProductBySlug: async (slug) => {
       deletedAt: null,
     })
       .sort({ rating: -1 })
-      .limit(Number(limit))
       .populate("category", "name")
       .populate("brand", "name logo")
       .populate({
@@ -1660,9 +1660,18 @@ getPublicProductBySlug: async (slug) => {
         ],
       });
 
+    // 2. Chỉ giữ các sản phẩm có ít nhất một biến thể hoạt động
+    const filteredProducts = relatedProducts.filter(
+      (p) => Array.isArray(p.variants) && p.variants.length > 0
+    );
+
+    // 3. Giới hạn số lượng sản phẩm trả về
+    const limitedProducts = filteredProducts.slice(0, Number(limit));
+
+    // 4. Chuyển đổi và trả về kết quả
     const result = {
       success: true,
-      products: relatedProducts.map(transformProductForPublicList),
+      products: limitedProducts.map(transformProductForPublicList),
     };
 
     return result;
