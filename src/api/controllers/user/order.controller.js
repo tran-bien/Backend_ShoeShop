@@ -1,105 +1,147 @@
 const asyncHandler = require("express-async-handler");
 const orderService = require("@services/order.service");
-const cartService = require("@services/cart.service");
 const paymentService = require("@services/payment.service");
-const { Order } = require("@models");
-
-// Các mã HTTP Status
-const HTTP_STATUS = {
-  OK: 200,
-  CREATED: 201,
-  BAD_REQUEST: 400,
-};
 
 /**
- * @desc    Get orders
+ * @desc    Lấy danh sách đơn hàng của người dùng
  * @route   GET /api/orders
  * @access  Private
  */
 const getOrders = asyncHandler(async (req, res) => {
   const userId = req.user.id;
-
   const result = await orderService.getUserOrders(userId, req.query);
-
-  res.status(HTTP_STATUS.OK).json({
+  
+  res.status(200).json({
     success: true,
-    ...result,
+    message: "Lấy danh sách đơn hàng thành công",
+    ...result
   });
 });
 
 /**
  * @desc    Lấy chi tiết đơn hàng
  * @route   GET /api/orders/:id
- * @access  Người dùng đã đăng nhập
+ * @access  Private
  */
 const getOrderById = asyncHandler(async (req, res) => {
   const order = await orderService.getOrderById(req.params.id, req.user.id);
-
-  res.status(HTTP_STATUS.OK).json({
+  
+  res.status(200).json({
     success: true,
     message: "Lấy chi tiết đơn hàng thành công",
-    data: order,
+    data: order
   });
 });
 
 /**
  * @desc    Tạo đơn hàng mới
  * @route   POST /api/orders
- * @access  Người dùng đã đăng nhập
+ * @access  Private
  */
 const createOrder = asyncHandler(async (req, res) => {
-  const { addressId, paymentMethod, shippingMethod, note } = req.body;
+  const { addressId, paymentMethod, note } = req.body;
 
-  const result = await orderService.createOrder({
+  const order = await orderService.createOrder({
     userId: req.user.id,
     addressId,
     paymentMethod,
-    shippingMethod,
-    note,
+    note
   });
 
   // Nếu thanh toán qua VNPAY, tạo URL thanh toán
   if (paymentMethod === "VNPAY") {
     const paymentUrl = await paymentService.createVnpayPaymentUrl({
-      orderId: result.order._id,
-      amount: result.order.totalAfterDiscountAndShipping,
-      orderInfo: `Thanh toán đơn hàng #${result.order._id}`,
+      orderId: order._id,
+      amount: order.totalAfterDiscountAndShipping,
+      orderInfo: `Thanh toán đơn hàng #${order.code || order._id}`,
       ipAddr: req.ip,
-      returnUrl: process.env.VNPAY_RETURN_URL,
+      returnUrl: process.env.VNPAY_RETURN_URL
     });
 
-    return res.status(HTTP_STATUS.OK).json({
+    return res.status(200).json({
       success: true,
       message: "Đơn hàng đã được tạo, vui lòng thanh toán",
-      data: { order: result.order, paymentUrl },
+      data: { order, paymentUrl }
     });
   }
 
-  res.status(HTTP_STATUS.CREATED).json({
+  res.status(201).json({
     success: true,
     message: "Đơn hàng đã được tạo thành công",
-    data: result.order,
+    data: order
   });
 });
 
 /**
- * @desc    Hủy đơn hàng
+ * @desc    Gửi yêu cầu hủy đơn hàng
  * @route   POST /api/orders/:id/cancel
- * @access  Người dùng đã đăng nhập
+ * @access  Private
  */
 const cancelOrder = asyncHandler(async (req, res) => {
   const { reason } = req.body;
-
-  const canceledOrder = await orderService.cancelOrder(
+  
+  const result = await orderService.cancelOrder(
     req.params.id,
     req.user.id,
     { reason }
   );
-
-  res.status(HTTP_STATUS.OK).json({
+  
+  res.status(200).json({
     success: true,
-    message: "Đơn hàng đã được hủy thành công",
-    data: canceledOrder,
+    message: result.message,
+    data: result.cancelRequest
+  });
+});
+
+/**
+ * @desc    Lấy thông tin theo dõi đơn hàng
+ * @route   GET /api/orders/:id/tracking
+ * @access  Private
+ */
+const getOrderTracking = asyncHandler(async (req, res) => {
+  const tracking = await orderService.getOrderTracking(
+    req.params.id,
+    req.user.id
+  );
+  
+  res.status(200).json({
+    success: true,
+    message: "Lấy thông tin theo dõi đơn hàng thành công",
+    data: tracking
+  });
+});
+
+/**
+ * @desc    Lấy thống kê đơn hàng theo trạng thái
+ * @route   GET /api/orders/stats
+ * @access  Private
+ */
+const getUserOrderStats = asyncHandler(async (req, res) => {
+  const stats = await orderService.getUserOrderStats(req.user.id);
+  
+  res.status(200).json({
+    success: true,
+    message: "Lấy thống kê đơn hàng thành công",
+    data: stats
+  });
+});
+
+/**
+ * @desc    Thanh toán lại đơn hàng
+ * @route   POST /api/orders/:id/repay
+ * @access  Private
+ */
+const repayOrder = asyncHandler(async (req, res) => {
+  const result = await paymentService.createRepaymentUrl(
+    req.params.id,
+    req.ip,
+    process.env.VNPAY_RETURN_URL
+  );
+  
+  res.status(200).json({
+    success: true,
+    message: "Đã tạo URL thanh toán lại cho đơn hàng",
+    data: result.data
   });
 });
 
@@ -110,16 +152,16 @@ const cancelOrder = asyncHandler(async (req, res) => {
  */
 const vnpayCallback = asyncHandler(async (req, res) => {
   const vnpParams = req.query;
-
+  
   // Xử lý kết quả thanh toán
   const paymentResult = await paymentService.processVnpayReturn(vnpParams);
-
+  
   // Chuyển hướng tới trang kết quả ở frontend
   res.redirect(
     `${process.env.FRONTEND_URL}/payment/result?${new URLSearchParams({
       orderId: paymentResult.orderId,
       status: paymentResult.success ? "success" : "failed",
-      message: paymentResult.message,
+      message: paymentResult.message
     }).toString()}`
   );
 });
@@ -131,74 +173,15 @@ const vnpayCallback = asyncHandler(async (req, res) => {
  */
 const vnpayIpn = asyncHandler(async (req, res) => {
   const vnpParams = req.query;
-
+  
   // Xử lý thông báo thanh toán
   const result = await paymentService.processVnpayIpn(vnpParams);
-
+  
   if (result.success) {
-    return res
-      .status(HTTP_STATUS.OK)
-      .json({ RspCode: "00", Message: "Confirmed" });
+    return res.status(200).json({ RspCode: "00", Message: "Confirmed" });
   }
-
-  return res
-    .status(HTTP_STATUS.BAD_REQUEST)
-    .json({ RspCode: "99", Message: "Invalid Params" });
-});
-
-/**
- * @desc    Lấy thông tin theo dõi đơn hàng
- * @route   GET /api/orders/:id/tracking
- * @access  Người dùng đã đăng nhập
- */
-const getOrderTracking = asyncHandler(async (req, res) => {
-  const tracking = await orderService.getOrderTracking(
-    req.params.id,
-    req.user.id
-  );
-
-  res.status(HTTP_STATUS.OK).json({
-    success: true,
-    message: "Lấy thông tin theo dõi đơn hàng thành công",
-    data: tracking,
-  });
-});
-
-/**
- * @desc    Thanh toán lại đơn hàng
- * @route   POST /api/orders/:id/repay
- * @access  Người dùng đã đăng nhập
- */
-const repayOrder = asyncHandler(async (req, res) => {
-  const orderId = req.params.id;
-
-  // Tạo URL thanh toán lại
-  const result = await paymentService.createRepaymentUrl(
-    orderId,
-    req.ip,
-    process.env.VNP_RETURN_URL
-  );
-
-  res.status(HTTP_STATUS.OK).json({
-    success: true,
-    message: "Đã tạo URL thanh toán lại cho đơn hàng",
-    data: result.data,
-  });
-});
-
-/**
- * @desc    Lấy thống kê đơn hàng theo trạng thái
- * @route   GET /api/orders/stats
- * @access  Người dùng đã đăng nhập
- */
-const getUserOrderStats = asyncHandler(async (req, res) => {
-  const stats = await orderService.getUserOrderStats(req.user.id);
-
-  res.status(HTTP_STATUS.OK).json({
-    success: true,
-    message: "Lấy thống kê đơn hàng thành công",
-    data: stats,
-  });
+  
+  return res.status(400).json({ RspCode: "99", Message: "Invalid Params" });
 });
 
 module.exports = {
@@ -207,8 +190,8 @@ module.exports = {
   createOrder,
   cancelOrder,
   getOrderTracking,
-  vnpayCallback,
-  vnpayIpn,
-  repayOrder,
   getUserOrderStats,
+  repayOrder,
+  vnpayCallback,
+  vnpayIpn
 };

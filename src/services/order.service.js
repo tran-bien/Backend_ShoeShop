@@ -11,37 +11,29 @@ const orderService = {
    * @returns {Object} - Danh sách đơn hàng
    */
   getUserOrders: async (userId, query = {}) => {
-    const { page = 1, limit = 10, status, sort = "createdAt" } = query;
+    const { page = 1, limit = 10, status} = query;
 
     // Xây dựng điều kiện lọc
     const filter = { user: userId };
     if (status) filter.status = status;
 
-    // Xây dựng thông tin sắp xếp
-    let sortOptions = {};
-    if (sort) {
-      const [field, order] = sort.split("_");
-      sortOptions[field] = order === "desc" ? -1 : 1;
-    } else {
-      sortOptions = { createdAt: -1 };
-    }
-
     // Sử dụng hàm phân trang
     const populate = [
       { path: "user", select: "name email" },
-      { path: "orderItems.product", select: "name images price slug" },
       {
         path: "orderItems.variant",
-        select: "name color",
-        populate: { path: "color", select: "name code" },
+        select: "color product",
+        populate: [
+          { path: "color", select: "name code" },
+          { path: "product", select: "name slug images price" }
+        ]
       },
-      { path: "orderItems.size", select: "name value" },
+      { path: "orderItems.size", select: "value description" },
     ];
 
     const result = await paginate(Order, filter, {
       page,
       limit,
-      sort: sortOptions,
       populate,
     });
 
@@ -69,17 +61,16 @@ const orderService = {
     const order = await Order.findById(orderId)
       .populate("user", "name email avatar")
       .populate({
-        path: "orderItems.product",
-        select: "name slug images price description",
-      })
-      .populate({
         path: "orderItems.variant",
-        select: "name color price",
-        populate: { path: "color", select: "name code" },
+        select: "color price",
+        populate: [
+          { path: "color", select: "name code" },
+          { path: "product", select: "name slug images price description" }
+        ]
       })
       .populate({
         path: "orderItems.size",
-        select: "name value",
+        select: "value description",
       })
       .populate("coupon", "code type value maxDiscount")
       .populate("cancelRequestId")
@@ -138,8 +129,10 @@ const orderService = {
 
     // Lấy giỏ hàng hiện tại
     const cart = await Cart.findOne({ user: userId })
-      .populate("cartItems.product")
-      .populate("cartItems.variant")
+      .populate({
+        path: "cartItems.variant",
+        populate: { path: "product" }
+      })
       .populate("cartItems.size")
       .populate("coupon");
 
@@ -153,8 +146,6 @@ const orderService = {
       if (!item.isAvailable) {
         unavailableItems.push({
           productName: item.productName,
-          variantName: item.variantName,
-          sizeName: item.sizeName,
         });
       }
     }
@@ -180,12 +171,9 @@ const orderService = {
     const newOrder = new Order({
       user: userId,
       orderItems: cart.cartItems.map((item) => ({
-        product: item.product._id,
         variant: item.variant._id,
         size: item.size._id,
         productName: item.productName,
-        variantName: item.variantName,
-        sizeName: item.sizeName,
         quantity: item.quantity,
         price: item.price,
         image: item.image,
@@ -232,11 +220,11 @@ const orderService = {
   },
 
   /**
-   * Hủy đơn hàng
+   * Gửi yêu cầu hủy đơn hàng
    * @param {String} orderId - ID của đơn hàng
    * @param {String} userId - ID của người dùng
    * @param {Object} cancelData - Dữ liệu hủy đơn hàng
-   * @returns {Object} - Kết quả hủy đơn hàng
+   * @returns {Object} - Kết quả yêu cầu hủy đơn hàng
    */
   cancelOrder: async (orderId, userId, cancelData) => {
     // Kiểm tra đơn hàng
@@ -275,16 +263,22 @@ const orderService = {
     // Nếu đơn hàng đang ở trạng thái pending, cho phép hủy ngay
     if (order.status === "pending") {
       cancelRequest.status = "approved";
-      cancelRequest.approvedAt = new Date();
-      cancelRequest.note = "Hủy tự động khi đơn hàng chưa được xác nhận";
+      cancelRequest.resolvedAt = new Date();
+      cancelRequest.adminResponse = "Hủy tự động khi đơn hàng chưa được xác nhận";
 
       // Cập nhật đơn hàng
       order.status = "cancelled";
       order.cancelledAt = new Date();
-      order.cancelledBy = userId;
       order.cancelReason = reason;
       order.cancelRequestId = cancelRequest._id;
-      order.hasCancelRequest = true;
+      order.hasCancelRequest = false; // Không còn yêu cầu hủy đang chờ xử lý
+      
+      // Thêm vào lịch sử
+      order.statusHistory.push({
+        status: "cancelled",
+        updatedAt: new Date(),
+        note: `Đơn hàng bị hủy tự động. Lý do: ${reason}`,
+      });
     } else {
       // Nếu đơn hàng đã xác nhận, cần chờ admin phê duyệt
       order.cancelRequestId = cancelRequest._id;
@@ -304,23 +298,6 @@ const orderService = {
   },
 
   /**
-   * Kiểm tra xem người dùng có thể đánh giá sản phẩm không
-   * @param {String} userId - ID của người dùng
-   * @param {String} productId - ID của sản phẩm
-   * @returns {Boolean} - Kết quả kiểm tra
-   */
-  canReviewProduct: async (userId, productId) => {
-    // Tìm đơn hàng đã giao thành công, có chứa sản phẩm này
-    const orders = await Order.find({
-      user: userId,
-      status: "delivered",
-      "orderItems.product": productId,
-    });
-
-    return orders.length > 0;
-  },
-
-  /**
    * Lấy danh sách tất cả đơn hàng (cho admin)
    * @param {Object} query - Các tham số truy vấn
    * @returns {Object} - Danh sách đơn hàng
@@ -331,7 +308,6 @@ const orderService = {
       limit = 10,
       status,
       search,
-      sort = "createdAt_desc",
     } = query;
 
     // Xây dựng điều kiện lọc
@@ -353,21 +329,11 @@ const orderService = {
       }).distinct("_id");
 
       filter.$or = [
-        { orderCode: { $regex: search, $options: "i" } },
+        { code: { $regex: search, $options: "i" } },
         { user: { $in: userIds } },
-        { "shippingAddress.fullName": { $regex: search, $options: "i" } },
+        { "shippingAddress.name": { $regex: search, $options: "i" } },
         { "shippingAddress.phone": { $regex: search, $options: "i" } },
       ];
-    }
-
-    // Xây dựng thông tin sắp xếp
-    let sortOptions = {};
-    if (sort) {
-      const [field, order] = sort.split("_");
-      sortOptions[field] = order === "desc" ? -1 : 1;
-    } else {
-      // Mặc định sắp xếp theo thời gian tạo giảm dần
-      sortOptions = { createdAt: -1 };
     }
 
     // Sử dụng hàm phân trang
@@ -375,14 +341,13 @@ const orderService = {
       { path: "user", select: "name email phone" },
       {
         path: "cancelRequestId",
-        select: "reason status createdAt approvedAt note",
+        select: "reason status createdAt resolvedAt adminResponse",
       },
     ];
 
     const result = await paginate(Order, filter, {
       page,
       limit,
-      sort: sortOptions,
       populate,
     });
 
@@ -407,17 +372,16 @@ const orderService = {
     const order = await Order.findById(orderId)
       .populate("user", "name email phone avatar")
       .populate({
-        path: "orderItems.product",
-        select: "name slug images price",
-      })
-      .populate({
         path: "orderItems.variant",
-        select: "name color price",
-        populate: { path: "color", select: "name code" },
+        select: "color price",
+        populate: [
+          { path: "color", select: "name code" },
+          { path: "product", select: "name slug images price" }
+        ]
       })
       .populate({
         path: "orderItems.size",
-        select: "name value",
+        select: "value description",
       })
       .populate("coupon", "code type value maxDiscount")
       .populate("cancelRequestId")
@@ -461,6 +425,14 @@ const orderService = {
       );
     }
 
+    // Kiểm tra nếu đơn hàng có yêu cầu hủy đang chờ xử lý
+    if (order.hasCancelRequest && status !== "cancelled") {
+      throw new ApiError(
+        400,
+        "Đơn hàng có yêu cầu hủy đang chờ xử lý, không thể chuyển sang trạng thái khác"
+      );
+    }
+
     // Cập nhật trạng thái
     const previousStatus = order.status;
     order.status = status;
@@ -480,11 +452,23 @@ const orderService = {
 
       // Cập nhật trạng thái thanh toán nếu là COD
       if (order.payment.method === "COD") {
-        order.payment.paymentStatus = "completed";
+        order.payment.paymentStatus = "paid";
         order.payment.paidAt = new Date();
       }
     } else if (status === "cancelled") {
       order.cancelledAt = new Date();
+      
+      // Nếu đơn hàng có yêu cầu hủy, đánh dấu đã xử lý
+      if (order.hasCancelRequest && order.cancelRequestId) {
+        // Cập nhật cancel request nếu có
+        await CancelRequest.findByIdAndUpdate(order.cancelRequestId, {
+          status: "approved",
+          resolvedAt: new Date(),
+          adminResponse: note || "Yêu cầu hủy đơn hàng được chấp nhận"
+        });
+        
+        order.hasCancelRequest = false;
+      }
     }
 
     // Lưu đơn hàng
@@ -504,7 +488,7 @@ const orderService = {
    * @returns {Object} - Kết quả xử lý
    */
   processCancelRequest: async (requestId, updateData) => {
-    const { status, note } = updateData;
+    const { status, adminResponse } = updateData;
 
     // Kiểm tra yêu cầu hủy có tồn tại không
     const cancelRequest = await CancelRequest.findById(requestId);
@@ -524,8 +508,8 @@ const orderService = {
 
     // Cập nhật yêu cầu hủy
     cancelRequest.status = status;
-    cancelRequest.note = note || "";
-    cancelRequest.processedAt = new Date();
+    cancelRequest.adminResponse = adminResponse || "";
+    cancelRequest.resolvedAt = new Date();
 
     // Nếu được chấp nhận, cập nhật đơn hàng
     if (status === "approved") {
@@ -536,23 +520,20 @@ const orderService = {
 
       order.status = "cancelled";
       order.cancelledAt = new Date();
-      order.hasCancelRequest = true;
+      order.hasCancelRequest = false;
       order.cancelReason = cancelRequest.reason;
-      order.cancelledBy = cancelRequest.processedBy || null;
       order.statusHistory.push({
         status: "cancelled",
         note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${cancelRequest.reason}`,
         updatedAt: new Date(),
-        updatedBy: cancelRequest.processedBy || null,
       });
 
       await order.save();
     } else if (status === "rejected") {
-      // Nếu từ chối, cập nhật trạng thái yêu cầu hủy
+      // Nếu từ chối, cập nhật đơn hàng để loại bỏ trạng thái yêu cầu hủy
       const order = await Order.findById(cancelRequest.order);
       if (order) {
         order.hasCancelRequest = false;
-        order.cancelRequestId = null;
         await order.save();
       }
     }
@@ -567,190 +548,6 @@ const orderService = {
           : "Đã từ chối yêu cầu hủy đơn hàng",
       cancelRequest,
     };
-  },
-
-  /**
-   * Tạo đơn hàng mới không qua giỏ hàng (cho admin)
-   * @param {Object} orderData - Dữ liệu đơn hàng
-   * @returns {Object} - Đơn hàng đã tạo
-   */
-  createOrderByAdmin: async (orderData) => {
-    const {
-      userId,
-      orderItems,
-      shippingAddress,
-      note,
-      shippingFee = 30000,
-      paymentMethod = "COD",
-      couponId,
-    } = orderData;
-
-    // Kiểm tra dữ liệu đầu vào
-    if (!userId || !orderItems || orderItems.length === 0 || !shippingAddress) {
-      throw new ApiError(400, "Dữ liệu đơn hàng không đầy đủ");
-    }
-
-    // Kiểm tra người dùng
-    const user = await User.findById(userId);
-    if (!user) {
-      throw new ApiError(404, "Không tìm thấy người dùng");
-    }
-
-    // Xử lý các mục đơn hàng
-    const processedItems = [];
-    let subTotal = 0;
-
-    for (const item of orderItems) {
-      const { productId, variantId, sizeId, quantity } = item;
-
-      // Kiểm tra dữ liệu sản phẩm, biến thể, kích cỡ thực tế
-      const Product = mongoose.model("Product");
-      const Variant = mongoose.model("Variant");
-      const Size = mongoose.model("Size");
-
-      const [product, variant, size] = await Promise.all([
-        Product.findById(productId),
-        Variant.findById(variantId),
-        Size.findById(sizeId),
-      ]);
-
-      if (!product || !variant || !size) {
-        throw new ApiError(
-          404,
-          "Sản phẩm, biến thể hoặc kích cỡ không tồn tại"
-        );
-      }
-
-      // Kiểm tra tồn kho
-      const sizeObj = variant.sizes.find(
-        (s) => s.size.toString() === sizeId.toString()
-      );
-
-      if (!sizeObj || !sizeObj.isSizeAvailable || sizeObj.quantity < quantity) {
-        throw new ApiError(
-          400,
-          `Sản phẩm ${product.name} - ${variant.name} - ${size.name} không đủ số lượng`
-        );
-      }
-
-      // Thêm vào danh sách
-      const price = variant.priceFinal || variant.price;
-      processedItems.push({
-        product: productId,
-        variant: variantId,
-        size: sizeId,
-        productName: product.name,
-        variantName: variant.name,
-        sizeName: size.name || size.value,
-        quantity,
-        price,
-        image: variant.images?.[0] || product.images?.[0],
-      });
-
-      subTotal += price * quantity;
-    }
-
-    // Xử lý coupon nếu có
-    let discount = 0;
-    let couponDetail = null;
-
-    if (couponId) {
-      const Coupon = mongoose.model("Coupon");
-      const coupon = await Coupon.findById(couponId);
-
-      if (
-        coupon &&
-        coupon.isActive &&
-        new Date() >= coupon.startDate &&
-        new Date() <= coupon.endDate
-      ) {
-        couponDetail = {
-          code: coupon.code,
-          type: coupon.type,
-          value: coupon.value,
-          maxDiscount: coupon.maxDiscount,
-        };
-
-        if (coupon.type === "percent") {
-          discount = (subTotal * coupon.value) / 100;
-          if (coupon.maxDiscount) {
-            discount = Math.min(discount, coupon.maxDiscount);
-          }
-        } else {
-          discount = Math.min(coupon.value, subTotal);
-        }
-      }
-    }
-
-    // Tạo đơn hàng mới
-    const orderCode = await generateOrderCode();
-    const newOrder = new Order({
-      user: userId,
-      orderCode,
-      orderItems: processedItems,
-      shippingAddress,
-      note: note || "",
-      subTotal,
-      discount,
-      shippingFee,
-      totalAfterDiscountAndShipping: subTotal - discount + shippingFee,
-      status: "pending",
-      payment: {
-        method: paymentMethod,
-        paymentStatus: "pending",
-      },
-      createdBy: "admin",
-    });
-
-    if (couponId && couponDetail) {
-      newOrder.coupon = couponId;
-      newOrder.couponDetail = couponDetail;
-    }
-
-    // Lưu đơn hàng
-    await newOrder.save();
-
-    return newOrder;
-  },
-
-  /**
-   * Admin hủy đơn hàng trực tiếp
-   * @param {String} orderId - ID của đơn hàng
-   * @param {String} adminId - ID của admin
-   * @param {Object} cancelData - Dữ liệu hủy đơn
-   * @returns {Object} - Đơn hàng đã hủy
-   */
-  adminCancelOrder: async (orderId, adminId, cancelData) => {
-    // Kiểm tra đơn hàng
-    const order = await Order.findById(orderId);
-    if (!order) {
-      throw new ApiError(404, "Không tìm thấy đơn hàng");
-    }
-
-    // Kiểm tra trạng thái đơn hàng
-    if (["delivered", "cancelled"].includes(order.status)) {
-      throw new ApiError(400, "Không thể hủy đơn hàng đã giao hoặc đã hủy");
-    }
-
-    // Cập nhật trạng thái đơn hàng
-    order.status = "cancelled";
-    order.cancelledAt = new Date();
-    order.cancelledBy = adminId;
-    order.cancelReason = cancelData.reason || "Hủy bởi admin";
-    order.hasCancelRequest = false; // Đánh dấu là hủy trực tiếp, không qua quy trình yêu cầu
-
-    // Lưu lịch sử trạng thái
-    order.statusHistory.push({
-      status: "cancelled",
-      updatedAt: new Date(),
-      updatedBy: adminId,
-      note: `Đơn hàng bị hủy bởi admin. Lý do: ${order.cancelReason}`,
-    });
-
-    // Lưu đơn hàng
-    await order.save();
-
-    return order;
   },
 
   /**
@@ -834,17 +631,6 @@ const orderService = {
 
     return stats;
   },
-};
-
-/**
- * Tạo mã đơn hàng mới
- * @returns {String} - Mã đơn hàng
- */
-const generateOrderCode = async () => {
-  // Đếm số lượng đơn hàng hiện có và tạo mã mới
-  const count = await Order.countDocuments();
-  const orderCode = `DH${String(count + 1).padStart(6, "0")}`;
-  return orderCode;
 };
 
 module.exports = orderService;

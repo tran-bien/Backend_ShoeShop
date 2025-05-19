@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const cartSchema = require("./schema");
+
 /**
  * Kiểm tra tồn kho của sản phẩm
  * @param {Object} cartItem - Mục giỏ hàng cần kiểm tra
@@ -30,54 +31,6 @@ const checkInventory = async (cartItem) => {
   } catch (error) {
     console.error(`[cart/middleware] Lỗi kiểm tra tồn kho: ${error.message}`);
     return { isAvailable: false, availableQuantity: 0 };
-  }
-};
-
-/**
- * Tính toán giá trị giảm giá từ coupon
- * @param {Object} cart - Giỏ hàng
- * @returns {Promise<number>} - Giá trị giảm giá
- */
-const calculateDiscount = async (cart) => {
-  if (!cart.coupon) return 0;
-
-  try {
-    const Coupon = mongoose.model("Coupon");
-    const coupon = await Coupon.findById(cart.coupon);
-
-    if (!coupon || !coupon.isActive) return 0;
-
-    // Kiểm tra thời hạn coupon
-    const now = new Date();
-    if (now < coupon.startDate || now > coupon.endDate) return 0;
-
-    // Kiểm tra giá trị đơn hàng tối thiểu
-    if (cart.subTotal < coupon.minOrderAmount) return 0;
-
-    // Tính giảm giá
-    let discountAmount = 0;
-    if (coupon.discountType === "percent") {
-      discountAmount = (cart.subTotal * coupon.discountValue) / 100;
-      // Áp dụng giới hạn giảm giá nếu có
-      if (coupon.maxDiscountAmount) {
-        discountAmount = Math.min(discountAmount, coupon.maxDiscountAmount);
-      }
-    } else {
-      discountAmount = coupon.discountValue;
-    }
-
-    // Cập nhật thông tin coupon lưu trong cart
-    cart.couponData = {
-      code: coupon.code,
-      discountType: coupon.discountType,
-      discountValue: coupon.discountValue,
-      maxDiscountAmount: coupon.maxDiscountAmount,
-    };
-
-    return Math.min(discountAmount, cart.subTotal);
-  } catch (error) {
-    console.error(`[cart/middleware] Lỗi tính giảm giá: ${error.message}`);
-    return 0;
   }
 };
 
@@ -163,24 +116,22 @@ const validateCoupon = async (coupon, subTotal) => {
  * @returns {Object} - Dữ liệu đã cập nhật
  */
 const updateCartItemInfo = async (cartItem) => {
-  // Lấy thông tin sản phẩm
-  const Product = mongoose.model("Product");
+  // Lấy thông tin biến thể và kích thước
   const Variant = mongoose.model("Variant");
   const Size = mongoose.model("Size");
 
-  // Kiểm tra sản phẩm có tồn tại không
-  const product = await Product.findById(cartItem.product);
-  if (!product || !product.isActive) {
-    cartItem.isAvailable = false;
-    cartItem.unavailableReason = "Sản phẩm không tồn tại hoặc đã bị ẩn";
-    return cartItem;
-  }
-
   // Kiểm tra biến thể có tồn tại không
-  const variant = await Variant.findById(cartItem.variant);
+  const variant = await Variant.findById(cartItem.variant).populate("product", "name images");
   if (!variant || !variant.isActive) {
     cartItem.isAvailable = false;
     cartItem.unavailableReason = "Biến thể không tồn tại hoặc đã bị ẩn";
+    return cartItem;
+  }
+
+  // Kiểm tra sản phẩm có tồn tại không
+  if (!variant.product || !variant.product.isActive) {
+    cartItem.isAvailable = false;
+    cartItem.unavailableReason = "Sản phẩm không tồn tại hoặc đã bị ẩn";
     return cartItem;
   }
 
@@ -210,12 +161,11 @@ const updateCartItemInfo = async (cartItem) => {
     return cartItem;
   }
 
-  // Cập nhật thông tin về sản phẩm
-  cartItem.productName = product.name;
-  cartItem.variantName = variant.name;
-  cartItem.sizeName = size.name || size.value;
+  // Cập nhật thông tin về sản phẩm - đơn giản hóa
+  cartItem.productName = variant.product.name;
   cartItem.price = variant.priceFinal || variant.price;
-  cartItem.image = variant.images?.[0] || product.images?.[0];
+  cartItem.image = variant.imagesvariant?.find(img => img.isMain)?.url || 
+                 variant.product.images?.find(img => img.isMain)?.url || "";
   cartItem.isAvailable = true;
   cartItem.unavailableReason = "";
 
@@ -297,9 +247,7 @@ const applyMiddlewares = () => {
           if (
             updatedItem.price !== doc.cartItems[i].price ||
             updatedItem.isAvailable !== doc.cartItems[i].isAvailable ||
-            updatedItem.productName !== doc.cartItems[i].productName ||
-            updatedItem.variantName !== doc.cartItems[i].variantName ||
-            updatedItem.sizeName !== doc.cartItems[i].sizeName
+            updatedItem.productName !== doc.cartItems[i].productName
           ) {
             doc.cartItems[i] = updatedItem;
             needUpdate = true;

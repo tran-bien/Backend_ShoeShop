@@ -1,23 +1,22 @@
 const express = require("express");
-const { protect } = require("@middlewares/auth.middleware");
+const router = express.Router();
 const cartController = require("@controllers/user/cart.controller");
 const cartValidator = require("@validators/cart.validator");
 const validate = require("@utils/validatehelper");
-
-const router = express.Router();
+const { protect } = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
 router.use(protect);
 
 /**
- * @route   GET /api/users/cart
+ * @route   GET /api/cart
  * @desc    Lấy giỏ hàng hiện tại
  * @access  Private
  */
 router.get("/", cartController.getCart);
 
 /**
- * @route   POST /api/users/cart/items
+ * @route   POST /api/cart/items
  * @desc    Thêm sản phẩm vào giỏ hàng
  * @access  Private
  */
@@ -28,7 +27,7 @@ router.post(
 );
 
 /**
- * @route   PUT /api/users/cart/items/:itemId
+ * @route   PUT /api/cart/items/:itemId
  * @desc    Cập nhật số lượng sản phẩm
  * @access  Private
  */
@@ -39,7 +38,7 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/users/cart/items/:itemId
+ * @route   DELETE /api/cart/items/:itemId
  * @desc    Xóa sản phẩm khỏi giỏ hàng
  * @access  Private
  */
@@ -50,14 +49,14 @@ router.delete(
 );
 
 /**
- * @route   DELETE /api/users/cart
+ * @route   DELETE /api/cart
  * @desc    Xóa toàn bộ giỏ hàng
  * @access  Private
  */
 router.delete("/", cartController.clearCart);
 
 /**
- * @route   POST /api/users/cart/apply-coupon
+ * @route   POST /api/cart/apply-coupon
  * @desc    Áp dụng mã giảm giá
  * @access  Private
  */
@@ -68,14 +67,14 @@ router.post(
 );
 
 /**
- * @route   DELETE /api/users/cart/remove-coupon
+ * @route   DELETE /api/cart/remove-coupon
  * @desc    Hủy mã giảm giá
  * @access  Private
  */
 router.delete("/remove-coupon", cartController.removeCoupon);
 
 /**
- * @route   POST /api/users/cart/checkout
+ * @route   POST /api/cart/checkout
  * @desc    Chuẩn bị thanh toán
  * @access  Private
  */

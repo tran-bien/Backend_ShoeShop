@@ -87,14 +87,14 @@ const reviewService = {
     if (!order) {
       throw new ApiError(
         400,
-        "Không tìm thấy đơn hàng hoặc đơn hàng chưa được giao"
+        "Không tìm thấy đơn hàng hoặc đơn hàng chưa được giao. Người dùng không thể đánh giá"
       );
     }
 
     // Tìm orderItem trong đơn hàng
     const orderItem = order.orderItems.id(reviewData.orderItemId);
     if (!orderItem) {
-      throw new ApiError(400, "Không tìm thấy sản phẩm trong đơn hàng");
+      throw new ApiError(400, "Không tìm thấy sản phẩm trong đơn hàng. Người dùng không thể đánh giá");
     }
 
     // Lấy thông tin sản phẩm và variant từ orderItem

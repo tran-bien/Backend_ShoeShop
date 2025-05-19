@@ -1,25 +1,18 @@
 const asyncHandler = require("express-async-handler");
 const orderService = require("@services/order.service");
 
-// Các mã HTTP Status
-const HTTP_STATUS = {
-  OK: 200,
-  CREATED: 201,
-  BAD_REQUEST: 400,
-  NOT_FOUND: 404,
-};
-
 /**
  * @desc    Lấy danh sách đơn hàng (admin)
  * @route   GET /api/admin/orders
  * @access  Admin
  */
 const getOrders = asyncHandler(async (req, res) => {
-  const result = await orderService.getOrders(req.query);
-  res.status(HTTP_STATUS.OK).json({
+  const result = await orderService.getAllOrders(req.query);
+  
+  res.status(200).json({
     success: true,
     message: "Lấy danh sách đơn hàng thành công",
-    data: result,
+    ...result
   });
 });
 
@@ -29,11 +22,12 @@ const getOrders = asyncHandler(async (req, res) => {
  * @access  Admin
  */
 const getOrderById = asyncHandler(async (req, res) => {
-  const order = await orderService.getOrderById(req.params.id);
-  res.status(HTTP_STATUS.OK).json({
+  const order = await orderService.getOrderDetail(req.params.id);
+  
+  res.status(200).json({
     success: true,
     message: "Lấy chi tiết đơn hàng thành công",
-    data: order,
+    data: order
   });
 });
 
@@ -44,41 +38,53 @@ const getOrderById = asyncHandler(async (req, res) => {
  */
 const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status, note } = req.body;
-  const updatedOrder = await orderService.updateOrderStatus(
-    req.params.id,
+  
+  const result = await orderService.updateOrderStatus(req.params.id, {
     status,
-    {
-      note,
-      updatedBy: req.user.id,
-    }
-  );
-  res.status(HTTP_STATUS.OK).json({
+    note,
+    updatedBy: req.user.id
+  });
+  
+  res.status(200).json({
     success: true,
     message: "Cập nhật trạng thái đơn hàng thành công",
-    data: updatedOrder,
+    data: result.order
   });
 });
 
 /**
- * @desc    Xử lý hủy đơn hàng (Admin hủy trực tiếp)
- * @route   PATCH /api/admin/orders/:id/cancel
+ * @desc    Lấy danh sách yêu cầu hủy đơn hàng
+ * @route   GET /api/admin/cancel-requests
  * @access  Admin
- * @note    Admin có thể hủy đơn trực tiếp mà không cần qua quy trình yêu cầu hủy đơn
- *          Khác với việc phê duyệt yêu cầu hủy đơn từ người dùng
  */
-const cancelOrder = asyncHandler(async (req, res) => {
-  const { reason } = req.body;
-  const canceledOrder = await orderService.adminCancelOrder(
-    req.params.id,
-    req.user.id,
-    {
-      reason,
-    }
-  );
-  res.status(HTTP_STATUS.OK).json({
+const getCancelRequests = asyncHandler(async (req, res) => {
+  const result = await orderService.getCancelRequests(req.query);
+  
+  res.status(200).json({
     success: true,
-    message: "Hủy đơn hàng thành công",
-    data: canceledOrder,
+    message: "Lấy danh sách yêu cầu hủy đơn hàng thành công",
+    ...result
+  });
+});
+
+/**
+ * @desc    Xử lý yêu cầu hủy đơn hàng
+ * @route   PATCH /api/admin/cancel-requests/:id
+ * @access  Admin
+ */
+const processCancelRequest = asyncHandler(async (req, res) => {
+  const { status, adminResponse } = req.body;
+  
+  const result = await orderService.processCancelRequest(req.params.id, {
+    status,
+    adminResponse,
+    processedBy: req.user.id
+  });
+  
+  res.status(200).json({
+    success: true,
+    message: result.message,
+    data: result.cancelRequest
   });
 });
 
@@ -86,5 +92,6 @@ module.exports = {
   getOrders,
   getOrderById,
   updateOrderStatus,
-  cancelOrder,
+  getCancelRequests,
+  processCancelRequest
 };

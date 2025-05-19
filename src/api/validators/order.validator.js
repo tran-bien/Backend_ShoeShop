@@ -1,6 +1,7 @@
 const { body, param, query } = require("express-validator");
 const mongoose = require("mongoose");
 const ApiError = require("@utils/ApiError");
+
 /**
  * Kiểm tra ID có phải là MongoDB ObjectID hợp lệ
  */
@@ -59,7 +60,7 @@ const validateGetOrder = [
 ];
 
 /**
- * Validate dữ liệu khi hủy đơn hàng
+ * Validate dữ liệu khi yêu cầu hủy đơn hàng
  */
 const validateCancelOrder = [
   param("id")
@@ -107,6 +108,28 @@ const validateUpdateOrderStatus = [
     .withMessage("Ghi chú không được vượt quá 500 ký tự"),
 ];
 
+/**
+ * Validate dữ liệu khi xử lý yêu cầu hủy đơn hàng
+ */
+const validateProcessCancelRequest = [
+  param("id")
+    .notEmpty()
+    .withMessage("ID yêu cầu hủy không được để trống")
+    .custom(isValidObjectId)
+    .withMessage("ID yêu cầu hủy không hợp lệ"),
+  body("status")
+    .notEmpty()
+    .withMessage("Trạng thái không được để trống")
+    .isIn(["approved", "rejected"])
+    .withMessage("Trạng thái không hợp lệ"),
+  body("adminResponse")
+    .optional()
+    .isString()
+    .withMessage("Phản hồi phải là chuỗi")
+    .isLength({ max: 500 })
+    .withMessage("Phản hồi không được vượt quá 500 ký tự"),
+];
+
 module.exports = {
   validateCreateOrder,
   validateGetOrders,
@@ -114,4 +137,5 @@ module.exports = {
   validateCancelOrder,
   validateOrderTracking,
   validateUpdateOrderStatus,
+  validateProcessCancelRequest
 };

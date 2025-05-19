@@ -1,18 +1,5 @@
 const mongoose = require("mongoose");
 
-/**
- * Schema cho đơn hàng
- *
- * Về cơ chế hủy đơn: Hệ thống hỗ trợ hai cách hủy đơn hàng:
- * 1. Hủy qua yêu cầu: Người dùng tạo yêu cầu hủy đơn, cần admin phê duyệt
- *    - Sử dụng model CancelRequest và tham chiếu qua cancelRequestId
- *    - Đánh dấu hasCancelRequest = true
- * 2. Hủy trực tiếp: Admin hủy đơn trực tiếp không qua quy trình yêu cầu
- *    - Không có cancelRequestId
- *    - Đánh dấu hasCancelRequest = false
- *
- * Cả hai cách đều cập nhật cancelReason, cancelledAt, cancelledBy
- */
 const OrderSchema = new mongoose.Schema(
   {
     // Mã đơn hàng tự động sinh
@@ -31,11 +18,6 @@ const OrderSchema = new mongoose.Schema(
     // Chi tiết các sản phẩm trong đơn hàng
     orderItems: [
       {
-        product: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
-          required: true,
-        },
         variant: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Variant",
@@ -48,16 +30,6 @@ const OrderSchema = new mongoose.Schema(
         },
         // Lưu tên sản phẩm để tránh reference khi sản phẩm thay đổi
         productName: {
-          type: String,
-          required: true,
-        },
-        // Lưu thông tin variant
-        variantName: {
-          type: String,
-          required: true,
-        },
-        // Lưu thông tin size
-        sizeName: {
           type: String,
           required: true,
         },
@@ -227,44 +199,43 @@ const OrderSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Tham chiếu đến yêu cầu hủy đơn (nếu có)
+    // Tham chiếu đến yêu cầu hủy đơn
     cancelRequestId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "CancelRequest",
       default: null,
     },
 
-    // Trạng thái yêu cầu hủy đơn
-    //     "Đánh dấu đơn hàng có yêu cầu hủy hay không, dùng để lọc nhanh mà không cần join bảng",
+    // Đánh dấu đơn hàng có yêu cầu hủy đang chờ xử lý
     hasCancelRequest: {
       type: Boolean,
       default: false,
     },
 
-    // Lý do hủy đơn
-    //     "Lý do hủy đơn hàng - có thể từ yêu cầu hủy được duyệt hoặc từ admin hủy trực tiếp",
+    // Lý do hủy đơn (từ yêu cầu hủy được duyệt)
     cancelReason: {
       type: String,
       default: "",
     },
 
-    // Thời gian hủy đơn
-    //     "Thời điểm đơn hàng bị hủy - có thể từ yêu cầu hủy được duyệt hoặc từ admin hủy trực tiếp",
+    // Thời điểm đơn hàng bị hủy
     cancelledAt: {
       type: Date,
       default: null,
     },
 
-    // Người hủy đơn (user hoặc admin)
-    //     "ID của người dùng hoặc admin thực hiện việc hủy đơn hàng",
-    cancelledBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-
     // Thời gian giao hàng
     deliveredAt: {
+      type: Date,
+      default: null,
+    },
+    
+    // Các mốc thời gian sự kiện
+    confirmedAt: {
+      type: Date,
+      default: null,
+    },
+    shippingAt: {
       type: Date,
       default: null,
     },

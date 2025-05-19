@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const querystring = require("querystring");
 const { Order } = require("@models");
 const ApiError = require("@utils/ApiError");
+
 /**
  * Format ngày theo định dạng yyyyMMddHHmmss
  * @param {Date} date - Đối tượng ngày cần định dạng
@@ -202,6 +203,10 @@ const paymentService = {
       // Cập nhật thông tin thanh toán
       order.payment.transactionId = transactionId;
       order.payment.paymentStatus = responseCode === "00" ? "paid" : "failed";
+      
+      if (responseCode === "00") {
+        order.payment.paidAt = new Date();
+      }
 
       // Thêm vào lịch sử thanh toán
       order.paymentHistory.push({
@@ -216,6 +221,7 @@ const paymentService = {
       // Nếu thanh toán thành công và đơn hàng đang ở trạng thái pending
       if (responseCode === "00" && order.status === "pending") {
         order.status = "confirmed";
+        order.confirmedAt = new Date();
 
         // Thêm vào lịch sử trạng thái
         order.statusHistory.push({
@@ -353,6 +359,14 @@ const paymentService = {
           "Không thể thanh toán lại đơn hàng ở trạng thái này"
         );
       }
+      
+      // Kiểm tra nếu đơn hàng có yêu cầu hủy đang chờ xử lý
+      if (order.hasCancelRequest) {
+        throw new ApiError(
+          400,
+          "Đơn hàng có yêu cầu hủy đang chờ xử lý, không thể thanh toán lại"
+        );
+      }
 
       // Kiểm tra trạng thái thanh toán
       if (order.payment.paymentStatus === "paid") {
@@ -363,7 +377,7 @@ const paymentService = {
       const paymentUrl = await paymentService.createVnpayPaymentUrl({
         orderId: order._id,
         amount: order.totalAfterDiscountAndShipping,
-        orderInfo: `Thanh toán lại đơn hàng #${order._id}`,
+        orderInfo: `Thanh toán lại đơn hàng #${order.code || order._id}`,
         ipAddr: ipAddr || "127.0.0.1",
         returnUrl: returnUrl,
       });

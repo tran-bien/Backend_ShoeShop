@@ -16,12 +16,6 @@ const isValidObjectId = (value) => {
  * Validator cho thêm sản phẩm vào giỏ hàng
  */
 const validateAddToCart = [
-  body("productId")
-    .notEmpty()
-    .withMessage("Vui lòng cung cấp ID sản phẩm")
-    .custom(isValidObjectId)
-    .withMessage("ID sản phẩm không hợp lệ"),
-
   body("variantId")
     .notEmpty()
     .withMessage("Vui lòng cung cấp ID biến thể")
@@ -36,8 +30,8 @@ const validateAddToCart = [
 
   body("quantity")
     .optional()
-    .isInt({ min: 1, max: 10 })
-    .withMessage("Số lượng phải là số nguyên từ 1-10"),
+    .isInt({ min: 1, max: 100 })
+    .withMessage("Số lượng phải là số nguyên từ 1-100"),
 ];
 
 /**
@@ -53,8 +47,8 @@ const validateUpdateCartItem = [
   body("quantity")
     .notEmpty()
     .withMessage("Vui lòng cung cấp số lượng")
-    .isInt({ min: 1, max: 10 })
-    .withMessage("Số lượng phải là số nguyên từ 1-10"),
+    .isInt({ min: 1, max: 100 })
+    .withMessage("Số lượng phải là số nguyên từ 1-100"),
 ];
 
 /**
@@ -88,7 +82,7 @@ const validateCheckout = [
   body("shippingAddress")
     .optional()
     .isObject()
-    .withMessage("Địa chỉ giao hàng phải là đối tượng"),
+    .withMessage("Thông tin địa chỉ giao hàng không hợp lệ. Vui lòng nhập đúng định dạng"),
 
   body("shippingAddress.name")
     .optional()

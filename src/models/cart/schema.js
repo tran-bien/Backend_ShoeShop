@@ -9,11 +9,6 @@ const CartSchema = new mongoose.Schema(
     },
     cartItems: [
       {
-        product: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
-          required: true,
-        },
         variant: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Variant",
@@ -34,16 +29,8 @@ const CartSchema = new mongoose.Schema(
           type: Number,
           required: true,
         },
-        // Thông tin bổ sung để hiển thị
+        // Thông tin bổ sung để hiển thị - chỉ cache name và image
         productName: {
-          type: String,
-          required: true,
-        },
-        variantName: {
-          type: String,
-          required: true,
-        },
-        sizeName: {
           type: String,
           required: true,
         },

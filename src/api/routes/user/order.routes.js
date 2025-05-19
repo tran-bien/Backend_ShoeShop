@@ -1,81 +1,72 @@
 const express = require("express");
 const router = express.Router();
 const orderController = require("@controllers/user/order.controller");
-const { protect } = require("@middlewares/auth.middleware");
 const validate = require("@utils/validatehelper");
 const orderValidator = require("@validators/order.validator");
-const auth = require("@middlewares/auth.middleware");
+const { protect } = require("@middlewares/auth.middleware");
 
-/**
- * @description Áp dụng middleware xác thực cho tất cả các routes
- * @access      Người dùng đã đăng nhập
- */
+// Routes không cần xác thực
+router.get("/vnpay/callback", orderController.vnpayCallback);
+router.post("/vnpay/ipn", orderController.vnpayIpn);
+
+// Áp dụng middleware xác thực cho các routes còn lại
 router.use(protect);
 
 /**
- * @description Routes cho đơn hàng
- * @access      Người dùng đã đăng nhập
+ * @route   GET /api/orders
+ * @desc    Lấy danh sách đơn hàng của người dùng
+ * @access  Private
  */
-router
-  .route("/")
-  .get(validate(orderValidator.validateGetOrders), orderController.getOrders)
-  .post(
-    validate(orderValidator.validateCreateOrder),
-    orderController.createOrder
-  );
+router.get("/", validate(orderValidator.validateGetOrders), orderController.getOrders);
 
 /**
- * @description Lấy chi tiết đơn hàng
- * @access      Người dùng đã đăng nhập
- */
-router
-  .route("/:id")
-  .get(validate(orderValidator.validateGetOrder), orderController.getOrderById);
-
-/**
- * @description Hủy đơn hàng
- * @access      Người dùng đã đăng nhập
- */
-router
-  .route("/:id/cancel")
-  .patch(
-    validate(orderValidator.validateCancelOrder),
-    orderController.cancelOrder
-  );
-
-/**
- * @description Lấy thông tin vận chuyển của đơn hàng
- * @access      Người dùng đã đăng nhập
- */
-router
-  .route("/:id/tracking")
-  .get(
-    validate(orderValidator.validateOrderTracking),
-    orderController.getOrderTracking
-  );
-
-/**
- * @description Lấy thống kê đơn hàng theo trạng thái
- * @access      Người dùng đã đăng nhập
+ * @route   GET /api/orders/stats
+ * @desc    Lấy thống kê đơn hàng theo trạng thái
+ * @access  Private
  */
 router.get("/stats", orderController.getUserOrderStats);
 
 /**
- * @description Thanh toán lại đơn hàng
- * @access      Người dùng đã đăng nhập
+ * @route   POST /api/orders
+ * @desc    Tạo đơn hàng mới
+ * @access  Private
  */
-router.post("/:id/repay", auth.protect, orderController.repayOrder);
+router.post("/", validate(orderValidator.validateCreateOrder), orderController.createOrder);
 
 /**
- * @description Xử lý callback từ VNPAY
- * @access      Public
+ * @route   GET /api/orders/:id
+ * @desc    Lấy chi tiết đơn hàng
+ * @access  Private
  */
-router.get("/vnpay/callback", orderController.vnpayCallback);
+router.get("/:id", validate(orderValidator.validateGetOrder), orderController.getOrderById);
 
 /**
- * @description Xử lý IPN từ VNPAY
- * @access      Public
+ * @route   POST /api/orders/:id/cancel
+ * @desc    Gửi yêu cầu hủy đơn hàng
+ * @access  Private
  */
-router.post("/vnpay/ipn", orderController.vnpayIpn);
+router.post(
+  "/:id/cancel",
+  validate(orderValidator.validateCancelOrder),
+  orderController.cancelOrder
+);
+
+/**
+ * @route   GET /api/orders/:id/tracking
+ * @desc    Lấy thông tin theo dõi đơn hàng
+ * @access  Private
+ */
+router.get(
+  "/:id/tracking",
+  validate(orderValidator.validateOrderTracking),
+  orderController.getOrderTracking
+);
+
+/**
+ * @route   POST /api/orders/:id/repay
+ * @desc    Thanh toán lại đơn hàng
+ * @access  Private
+ */
+router.post("/:id/repay", orderController.repayOrder);
 
 module.exports = router;

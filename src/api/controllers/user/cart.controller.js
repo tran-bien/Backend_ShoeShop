@@ -7,9 +7,10 @@ const cartService = require("@services/cart.service");
  * @access  Private
  */
 const getCart = asyncHandler(async (req, res) => {
-  const userId = req.user._id;
+  const userId = req.user.id;
   const result = await cartService.getCartByUser(userId);
-  res.json(result);
+  
+  res.status(200).json(result);
 });
 
 /**
@@ -18,9 +19,10 @@ const getCart = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const addToCart = asyncHandler(async (req, res) => {
-  const userId = req.user._id;
+  const userId = req.user.id;
   const itemData = req.body;
   const result = await cartService.addToCart(userId, itemData);
+  
   res.status(201).json(result);
 });
 
@@ -30,11 +32,12 @@ const addToCart = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const updateCartItem = asyncHandler(async (req, res) => {
-  const userId = req.user._id;
+  const userId = req.user.id;
   const { itemId } = req.params;
   const { quantity } = req.body;
   const result = await cartService.updateCartItem(userId, itemId, quantity);
-  res.json(result);
+  
+  res.status(200).json(result);
 });
 
 /**
@@ -43,10 +46,11 @@ const updateCartItem = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const removeCartItem = asyncHandler(async (req, res) => {
-  const userId = req.user._id;
+  const userId = req.user.id;
   const { itemId } = req.params;
   const result = await cartService.removeCartItem(userId, itemId);
-  res.json(result);
+  
+  res.status(200).json(result);
 });
 
 /**
@@ -55,9 +59,10 @@ const removeCartItem = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const clearCart = asyncHandler(async (req, res) => {
-  const userId = req.user._id;
+  const userId = req.user.id;
   const result = await cartService.clearCart(userId);
-  res.json(result);
+  
+  res.status(200).json(result);
 });
 
 /**
@@ -66,10 +71,11 @@ const clearCart = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const applyCoupon = asyncHandler(async (req, res) => {
-  const userId = req.user._id;
+  const userId = req.user.id;
   const { couponCode } = req.body;
   const result = await cartService.applyCoupon(userId, couponCode);
-  res.json(result);
+  
+  res.status(200).json(result);
 });
 
 /**
@@ -78,9 +84,10 @@ const applyCoupon = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const removeCoupon = asyncHandler(async (req, res) => {
-  const userId = req.user._id;
+  const userId = req.user.id;
   const result = await cartService.removeCoupon(userId);
-  res.json(result);
+  
+  res.status(200).json(result);
 });
 
 /**
@@ -89,9 +96,10 @@ const removeCoupon = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const checkout = asyncHandler(async (req, res) => {
-  const userId = req.user._id;
+  const userId = req.user.id;
   const result = await cartService.prepareCheckout(userId);
-  res.json(result);
+  
+  res.status(200).json(result);
 });
 
 module.exports = {
@@ -102,5 +110,5 @@ module.exports = {
   clearCart,
   applyCoupon,
   removeCoupon,
-  checkout,
+  checkout
 };

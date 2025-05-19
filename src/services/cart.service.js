@@ -36,35 +36,27 @@ const cartService = {
    * @returns {Object} - Giỏ hàng đã cập nhật
    */
   addToCart: async (userId, itemData) => {
-    const { productId, variantId, sizeId, quantity = 1 } = itemData;
+    const { variantId, sizeId, quantity = 1 } = itemData;
 
     // Kiểm tra dữ liệu đầu vào
-    if (!productId || !variantId || !sizeId) {
+    if (!variantId || !sizeId) {
       throw new ApiError(400, "Thông tin sản phẩm không đủ");
     }
 
-    // Kiểm tra sản phẩm, biến thể và kích thước có tồn tại không
-    const [product, variant, size] = await Promise.all([
-      Product.findById(productId),
-      Variant.findById(variantId),
-      Size.findById(sizeId),
-    ]);
-
-    if (!product) {
-      throw new ApiError(404, "Không tìm thấy sản phẩm");
-    }
+    // Kiểm tra biến thể và kích thước có tồn tại không
+    const variant = await Variant.findById(variantId).populate("product");
+    const size = await Size.findById(sizeId);
 
     if (!variant) {
       throw new ApiError(404, "Không tìm thấy biến thể sản phẩm");
     }
 
-    if (!size) {
-      throw new ApiError(404, "Không tìm thấy kích thước sản phẩm");
+    if (!variant.product) {
+      throw new ApiError(404, "Không tìm thấy sản phẩm");
     }
 
-    // Kiểm tra variantId có thuộc về productId không
-    if (variant.product.toString() !== productId) {
-      throw new ApiError(400, "Biến thể không thuộc về sản phẩm này");
+    if (!size) {
+      throw new ApiError(404, "Không tìm thấy kích thước sản phẩm");
     }
 
     // Kiểm tra tồn kho
@@ -91,7 +83,6 @@ const cartService = {
     // Kiểm tra sản phẩm đã có trong giỏ hàng chưa
     const existingItemIndex = cart.cartItems.findIndex(
       (item) =>
-        item.product.toString() === productId &&
         item.variant.toString() === variantId &&
         item.size.toString() === sizeId
     );
@@ -107,18 +98,13 @@ const cartService = {
     } else {
       // Nếu sản phẩm chưa có trong giỏ hàng, thêm mới
       cart.cartItems.push({
-        product: productId,
         variant: variantId,
         size: sizeId,
         quantity: Math.min(quantity, sizeInfo.quantity),
         price: variant.priceFinal || variant.price,
-        productName: product.name,
-        variantName: variant.name,
-        sizeName: size.name || size.value,
-        image:
-          variant.imagesvariant.find((img) => img.isMain)?.url ||
-          product.images.find((img) => img.isMain)?.url ||
-          "",
+        productName: variant.product.name,
+        image: variant.imagesvariant?.find(img => img.isMain)?.url || 
+               variant.product.images?.find(img => img.isMain)?.url || "",
         isAvailable: true,
         addedAt: new Date(),
       });
@@ -198,11 +184,90 @@ const cartService = {
   },
 
   /**
-   * Xóa sản phẩm khỏi giỏ hàng
+   * Chuẩn bị thông tin checkout từ giỏ hàng
    * @param {String} userId - ID của người dùng
-   * @param {String} itemId - ID của mặt hàng
-   * @returns {Object} - Giỏ hàng đã cập nhật
+   * @returns {Object} - Thông tin cần thiết cho checkout
    */
+  prepareCheckout: async (userId) => {
+    // Lấy giỏ hàng của người dùng
+    const cart = await Cart.findOne({ user: userId })
+      .populate({
+        path: "cartItems.variant",
+        select: "price priceFinal product",
+        populate: {
+          path: "product",
+          select: "name slug"
+        }
+      })
+      .populate("cartItems.size", "value description");
+
+    if (!cart) {
+      throw new ApiError(404, "Không tìm thấy giỏ hàng");
+    }
+
+    // Kiểm tra giỏ hàng có sản phẩm không
+    if (cart.cartItems.length === 0) {
+      throw new ApiError(400, "Giỏ hàng trống, không thể checkout");
+    }
+
+    // Kiểm tra tồn kho của từng sản phẩm
+    for (const item of cart.cartItems) {
+      const variant = await Variant.findById(item.variant);
+      if (!variant) {
+        throw new ApiError(404, `Không tìm thấy biến thể sản phẩm`);
+      }
+
+      const sizeInfo = variant.sizes.find(
+        (s) => s.size.toString() === item.size.toString()
+      );
+
+      if (
+        !sizeInfo ||
+        !sizeInfo.isSizeAvailable ||
+        sizeInfo.quantity < item.quantity
+      ) {
+        throw new ApiError(
+          400,
+          `Sản phẩm "${item.productName} (kích thước: ${item.size.value})" đã hết hàng hoặc không đủ số lượng`
+        );
+      }
+    }
+
+    // Thêm phí vận chuyển mặc định
+    let shippingFee = 30000; // 30,000 VND
+
+    // Miễn phí vận chuyển nếu có > 2 sản phẩm và subtotal >= 1,000,000
+    let totalItems = cart.cartItems.reduce(
+      (total, item) => total + item.quantity,
+      0
+    );
+    if (totalItems > 2 && cart.subTotal >= 1000000) {
+      shippingFee = 0;
+    }
+
+    // Tính tổng tiền cuối cùng
+    const totalAmount = cart.subTotal - (cart.discount || 0) + shippingFee;
+
+    return {
+      success: true,
+      checkoutInfo: {
+        cartId: cart._id,
+        cartItems: cart.cartItems,
+        subTotal: cart.subTotal,
+        discount: cart.discount || 0,
+        coupon: cart.couponData || null,
+        shippingFee,
+        totalAmount,
+        // Thông tin thanh toán
+        paymentMethods: [
+          { id: "COD", name: "Thanh toán khi nhận hàng" },
+          { id: "VNPAY", name: "Thanh toán qua VNPAY" },
+        ],
+      },
+    };
+  },
+
+  // Các phương thức khác (removeCartItem, clearCart, applyCoupon, removeCoupon) giữ nguyên
   removeCartItem: async (userId, itemId) => {
     // Kiểm tra dữ liệu đầu vào
     if (!itemId) {
@@ -237,11 +302,6 @@ const cartService = {
     };
   },
 
-  /**
-   * Xóa toàn bộ giỏ hàng
-   * @param {String} userId - ID của người dùng
-   * @returns {Object} - Kết quả xóa
-   */
   clearCart: async (userId) => {
     // Lấy giỏ hàng của người dùng
     const cart = await Cart.findOne({ user: userId });
@@ -268,12 +328,6 @@ const cartService = {
     };
   },
 
-  /**
-   * Áp dụng mã giảm giá cho giỏ hàng
-   * @param {String} userId - ID của người dùng
-   * @param {String} couponCode - Mã giảm giá
-   * @returns {Object} - Giỏ hàng đã cập nhật
-   */
   applyCoupon: async (userId, couponCode) => {
     // Kiểm tra dữ liệu đầu vào
     if (!couponCode) {
@@ -329,11 +383,6 @@ const cartService = {
     };
   },
 
-  /**
-   * Hủy mã giảm giá cho giỏ hàng
-   * @param {String} userId - ID của người dùng
-   * @returns {Object} - Giỏ hàng đã cập nhật
-   */
   removeCoupon: async (userId) => {
     // Lấy giỏ hàng của người dùng
     const cart = await Cart.findOne({ user: userId });
@@ -354,84 +403,6 @@ const cartService = {
       success: true,
       message: "Đã hủy mã giảm giá",
       cart,
-    };
-  },
-
-  /**
-   * Chuẩn bị thông tin checkout từ giỏ hàng
-   * @param {String} userId - ID của người dùng
-   * @returns {Object} - Thông tin cần thiết cho checkout
-   */
-  prepareCheckout: async (userId) => {
-    // Lấy giỏ hàng của người dùng
-    const cart = await Cart.findOne({ user: userId })
-      .populate("cartItems.product", "name slug")
-      .populate("cartItems.variant", "name price priceFinal")
-      .populate("cartItems.size", "name value");
-
-    if (!cart) {
-      throw new ApiError(404, "Không tìm thấy giỏ hàng");
-    }
-
-    // Kiểm tra giỏ hàng có sản phẩm không
-    if (cart.cartItems.length === 0) {
-      throw new ApiError(400, "Giỏ hàng trống, không thể checkout");
-    }
-
-    // Kiểm tra tồn kho của từng sản phẩm
-    for (const item of cart.cartItems) {
-      const variant = await Variant.findById(item.variant);
-      if (!variant) {
-        throw new ApiError(404, `Không tìm thấy biến thể ${item.variantName}`);
-      }
-
-      const sizeInfo = variant.sizes.find(
-        (s) => s.size.toString() === item.size.toString()
-      );
-
-      if (
-        !sizeInfo ||
-        !sizeInfo.isSizeAvailable ||
-        sizeInfo.quantity < item.quantity
-      ) {
-        throw new ApiError(
-          400,
-          `Sản phẩm "${item.productName} - ${item.variantName} - ${item.sizeName}" đã hết hàng hoặc không đủ số lượng`
-        );
-      }
-    }
-
-    // Thêm phí vận chuyển mặc định
-    let shippingFee = 30000; // 30,000 VND
-
-    // Miễn phí vận chuyển nếu có > 2 sản phẩm và subtotal >= 1,000,000
-    let totalItems = cart.cartItems.reduce(
-      (total, item) => total + item.quantity,
-      0
-    );
-    if (totalItems > 2 && cart.subTotal >= 1000000) {
-      shippingFee = 0;
-    }
-
-    // Tính tổng tiền cuối cùng
-    const totalAmount = cart.subTotal - (cart.discount || 0) + shippingFee;
-
-    return {
-      success: true,
-      checkoutInfo: {
-        cartId: cart._id,
-        cartItems: cart.cartItems,
-        subTotal: cart.subTotal,
-        discount: cart.discount || 0,
-        coupon: cart.couponData || null,
-        shippingFee,
-        totalAmount,
-        // Thông tin thanh toán
-        paymentMethods: [
-          { id: "COD", name: "Thanh toán khi nhận hàng" },
-          { id: "VNPAY", name: "Thanh toán qua VNPAY" },
-        ],
-      },
     };
   },
 };

@@ -462,7 +462,6 @@ const adminUserService = {
       role,
       isActive,
       isVerified,
-      sort = "createdAt_desc",
     } = query;
 
     // Xây dựng điều kiện lọc
@@ -490,13 +489,6 @@ const adminUserService = {
 
     // Xử lý sắp xếp
     let sortOptions = { createdAt: -1 };
-
-    if (sort) {
-      const [field, order] = sort.split("_");
-      sortOptions = {
-        [field]: order === "asc" ? 1 : -1,
-      };
-    }
 
     // Thực hiện truy vấn phân trang
     const options = {
