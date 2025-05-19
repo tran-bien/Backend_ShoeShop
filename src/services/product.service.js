@@ -1361,16 +1361,45 @@ getPublicProductById: async (id) => {
   // Tạo collection ảnh từ tất cả các biến thể
   const variantImages = {};
   
+  // Tạo thông tin biến thể
+  const variantsInfo = {};
+  
   // Nhóm ảnh theo màu sắc và giới tính
   if (product.variants && product.variants.length > 0) {
     product.variants.forEach(variant => {
       const colorId = variant.color?._id?.toString();
       const gender = variant.gender;
+      const variantId = variant._id.toString();
       
       if (!colorId) return;
       
       // Tạo khóa cho màu và giới tính
       const key = `${gender}-${colorId}`;
+      
+      // Chuẩn bị thông tin sizes với số lượng
+      const sizesWithQuantity = variant.sizes.map(size => {
+        return {
+          sizeId: size.size?._id?.toString(),
+          sizeValue: size.size?.value,
+          sizeDescription: size.size?.description,
+          quantity: size.quantity,
+          sku: size.sku,
+          isAvailable: size.isSizeAvailable
+        };
+      });
+      
+      // Lưu thông tin biến thể với sizes đầy đủ
+      variantsInfo[key] = {
+        id: variantId,
+        colorId: colorId,
+        colorName: variant.color?.name || '',
+        gender: gender,
+        price: variant.price,
+        priceFinal: variant.priceFinal,
+        percentDiscount: variant.percentDiscount,
+        sizes: sizesWithQuantity, // Thêm thông tin sizes chi tiết
+        totalQuantity: sizesWithQuantity.reduce((sum, size) => sum + (size.quantity || 0), 0)
+      };
       
       if (!variantImages[key]) {
         variantImages[key] = [];
@@ -1392,7 +1421,7 @@ getPublicProductById: async (id) => {
           gender: variant.gender,
           colorId: colorId,
           colorName: variant.color?.name || '',
-          variantId: variant._id.toString()
+          variantId: variantId
         }));
       }
     });
@@ -1432,7 +1461,8 @@ getPublicProductById: async (id) => {
     product: publicProduct,
     attributes: optimizedAttributes,
     summary: summary,
-    images: variantImages // Chỉ trả về variantImages thay vì cấu trúc phức tạp hơn
+    images: variantImages,
+    variants: variantsInfo // Thêm thông tin biến thể với sizes chi tiết
   };
 },
 
@@ -1481,16 +1511,45 @@ getPublicProductBySlug: async (slug) => {
   // Tạo collection ảnh từ tất cả các biến thể
   const variantImages = {};
   
+  // Tạo thông tin biến thể
+  const variantsInfo = {};
+  
   // Nhóm ảnh theo màu sắc và giới tính
   if (product.variants && product.variants.length > 0) {
     product.variants.forEach(variant => {
       const colorId = variant.color?._id?.toString();
       const gender = variant.gender;
+      const variantId = variant._id.toString();
       
       if (!colorId) return;
       
       // Tạo khóa cho màu và giới tính
       const key = `${gender}-${colorId}`;
+      
+      // Chuẩn bị thông tin sizes với số lượng
+      const sizesWithQuantity = variant.sizes.map(size => {
+        return {
+          sizeId: size.size?._id?.toString(),
+          sizeValue: size.size?.value,
+          sizeDescription: size.size?.description,
+          quantity: size.quantity,
+          sku: size.sku,
+          isAvailable: size.isSizeAvailable
+        };
+      });
+      
+      // Lưu thông tin biến thể với sizes đầy đủ
+      variantsInfo[key] = {
+        id: variantId,
+        colorId: colorId,
+        colorName: variant.color?.name || '',
+        gender: gender,
+        price: variant.price,
+        priceFinal: variant.priceFinal,
+        percentDiscount: variant.percentDiscount,
+        sizes: sizesWithQuantity, // Thêm thông tin sizes chi tiết
+        totalQuantity: sizesWithQuantity.reduce((sum, size) => sum + (size.quantity || 0), 0)
+      };
       
       if (!variantImages[key]) {
         variantImages[key] = [];
@@ -1512,7 +1571,7 @@ getPublicProductBySlug: async (slug) => {
           gender: variant.gender,
           colorId: colorId,
           colorName: variant.color?.name || '',
-          variantId: variant._id.toString()
+          variantId: variantId
         }));
       }
     });
@@ -1542,7 +1601,7 @@ getPublicProductBySlug: async (slug) => {
 
   // Thêm thông tin tổng hợp quan trọng, bỏ các giá trị dễ tính từ client
   const summary = {
-    totalInventory: productAttributes.inventoryMatrix.summary.total,
+    totalInventity: productAttributes.inventoryMatrix.summary.total,
     priceRange: productAttributes.priceRange,
     stockStatus: publicProduct.stockStatus
   };
@@ -1552,7 +1611,8 @@ getPublicProductBySlug: async (slug) => {
     product: publicProduct,
     attributes: optimizedAttributes,
     summary: summary,
-    images: variantImages // Chỉ trả về variantImages thay vì cấu trúc phức tạp hơn
+    images: variantImages,
+    variants: variantsInfo // Thêm thông tin biến thể với sizes chi tiết
   };
 },
 
