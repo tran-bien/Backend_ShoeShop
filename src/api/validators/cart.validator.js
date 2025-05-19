@@ -73,6 +73,49 @@ const validateApplyCoupon = [
     .withMessage("Mã giảm giá phải là chuỗi")
     .isLength({ min: 3, max: 20 })
     .withMessage("Mã giảm giá phải có độ dài từ 3-20 ký tự"),
+    
+  body("itemIds")
+    .optional()
+    .isArray()
+    .withMessage("Danh sách sản phẩm phải là mảng"),
+  
+  body("itemIds.*")
+    .optional()
+    .custom(isValidObjectId)
+    .withMessage("ID sản phẩm không hợp lệ"),
+];
+
+/**
+ * Validator cho hủy mã giảm giá
+ */
+const validateRemoveCoupon = [
+  body("itemIds")
+    .optional()
+    .isArray()
+    .withMessage("Danh sách sản phẩm phải là mảng"),
+  
+  body("itemIds.*")
+    .optional()
+    .custom(isValidObjectId)
+    .withMessage("ID sản phẩm không hợp lệ"),
+];
+
+/**
+ * Validator cho chọn/bỏ chọn sản phẩm
+ */
+const validateToggleSelectItems = [
+  body("itemIds")
+    .isArray({ min: 1 })
+    .withMessage("Danh sách sản phẩm phải là mảng và có ít nhất một phần tử"),
+  
+  body("itemIds.*")
+    .custom(isValidObjectId)
+    .withMessage("ID sản phẩm không hợp lệ"),
+  
+  body("selected")
+    .optional()
+    .isBoolean()
+    .withMessage("Trạng thái chọn phải là boolean"),
 ];
 
 /**
@@ -109,5 +152,7 @@ module.exports = {
   validateUpdateCartItem,
   validateRemoveFromCart,
   validateApplyCoupon,
+  validateRemoveCoupon,
   validateCheckout,
+  validateToggleSelectItems
 };

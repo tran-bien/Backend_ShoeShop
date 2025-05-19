@@ -42,6 +42,26 @@ const CartSchema = new mongoose.Schema(
           type: Boolean,
           default: true,
         },
+        // Thêm trường đánh dấu item được chọn
+        isSelected: {
+          type: Boolean,
+          default: true,
+        },
+        // Thêm trường đánh dấu item áp dụng coupon
+        hasCoupon: {
+          type: Boolean,
+          default: false,
+        },
+        // Thêm trường giảm giá cho item
+        itemDiscount: {
+          type: Number,
+          default: 0,
+        },
+        // Lý do nếu sản phẩm không khả dụng
+        unavailableReason: {
+          type: String,
+          default: "",
+        },
         addedAt: {
           type: Date,
           default: Date.now,
@@ -83,11 +103,6 @@ const CartSchema = new mongoose.Schema(
     totalPrice: {
       type: Number,
       default: 0,
-    },
-    // Thời gian cập nhật cuối cùng
-    updatedAt: {
-      type: Date,
-      default: Date.now,
     },
   },
   {

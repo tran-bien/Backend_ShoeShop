@@ -38,14 +38,13 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/cart/items/:itemId
- * @desc    Xóa sản phẩm khỏi giỏ hàng
+ * @route   DELETE /api/cart/items
+ * @desc    Xóa sản phẩm đã chọn khỏi giỏ hàng
  * @access  Private
  */
 router.delete(
-  "/items/:itemId",
-  validate(cartValidator.validateRemoveFromCart),
-  cartController.removeCartItem
+  "/items",
+  cartController.removeCartItems
 );
 
 /**
@@ -67,11 +66,15 @@ router.post(
 );
 
 /**
- * @route   DELETE /api/cart/remove-coupon
+ * @route   POST /api/cart/remove-coupon
  * @desc    Hủy mã giảm giá
  * @access  Private
  */
-router.delete("/remove-coupon", cartController.removeCoupon);
+router.post(
+  "/remove-coupon",
+  validate(cartValidator.validateRemoveCoupon),
+  cartController.removeCoupon
+);
 
 /**
  * @route   POST /api/cart/checkout
@@ -79,5 +82,16 @@ router.delete("/remove-coupon", cartController.removeCoupon);
  * @access  Private
  */
 router.post("/checkout", cartController.checkout);
+
+/**
+ * @route   PATCH /api/cart/items/select
+ * @desc    Chọn/bỏ chọn sản phẩm trong giỏ hàng
+ * @access  Private
+ */
+router.patch(
+  "/items/select",
+  validate(cartValidator.validateToggleSelectItems),
+  cartController.toggleSelectCartItems
+);
 
 module.exports = router;

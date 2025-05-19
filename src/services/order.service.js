@@ -99,7 +99,6 @@ const orderService = {
       userId,
       addressId,
       paymentMethod = "COD",
-      shippingMethod,
       note,
     } = orderData;
 

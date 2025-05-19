@@ -64,8 +64,8 @@ const calculateSubTotal = (cartItems) => {
 const validateCoupon = async (coupon, subTotal) => {
   if (!coupon) return { isValid: false, discount: 0 };
 
-  // Kiểm tra ngày hết hạn
-  if (!coupon.isActive) {
+  // Kiểm tra trạng thái
+  if (coupon.status !== "active") {
     return {
       isValid: false,
       message: "Mã giảm giá không hoạt động",
@@ -195,32 +195,18 @@ const applyMiddlewares = () => {
       this.totalItems = calculateTotalItems(this.cartItems);
       this.subTotal = calculateSubTotal(this.cartItems);
 
-      // Xử lý coupon nếu có
-      if (this.coupon) {
-        const Coupon = mongoose.model("Coupon");
-        const coupon = await Coupon.findById(this.coupon);
+      // Tính tổng số tiền giảm giá từ các sản phẩm được áp dụng
+      const totalItemDiscount = this.cartItems.reduce(
+        (sum, item) => sum + (item.hasCoupon ? item.itemDiscount : 0),
+        0
+      );
+      this.discount = totalItemDiscount;
 
-        const validationResult = await validateCoupon(coupon, this.subTotal);
-
-        if (validationResult.isValid) {
-          this.discount = validationResult.discount;
-          this.couponData = {
-            code: coupon.code,
-            type: coupon.type,
-            value: coupon.value,
-            maxDiscount: coupon.maxDiscount,
-          };
-        } else {
-          // Nếu coupon không hợp lệ, xóa coupon
-          this.coupon = null;
-          this.couponData = null;
-          this.discount = 0;
-          this.couponError = validationResult.message;
-        }
-      } else {
-        this.discount = 0;
+      // Cập nhật thông tin coupon nếu cần
+      const hasAnyCoupon = this.cartItems.some(item => item.hasCoupon);
+      if (!hasAnyCoupon) {
+        this.coupon = null;
         this.couponData = null;
-        this.couponError = null;
       }
 
       // Tính toán giá cuối cùng
@@ -260,23 +246,18 @@ const applyMiddlewares = () => {
         doc.totalItems = calculateTotalItems(doc.cartItems);
         doc.subTotal = calculateSubTotal(doc.cartItems);
 
-        // Kiểm tra lại coupon nếu có
-        if (doc.coupon) {
-          const Coupon = mongoose.model("Coupon");
-          const coupon = await Coupon.findById(doc.coupon);
+        // Tính lại tổng giảm giá từ các sản phẩm
+        const totalItemDiscount = doc.cartItems.reduce(
+          (sum, item) => sum + (item.hasCoupon ? item.itemDiscount : 0),
+          0
+        );
+        doc.discount = totalItemDiscount;
 
-          const validationResult = await validateCoupon(coupon, doc.subTotal);
-
-          if (validationResult.isValid) {
-            doc.discount = validationResult.discount;
-          } else {
-            doc.coupon = null;
-            doc.couponData = null;
-            doc.discount = 0;
-            doc.couponError = validationResult.message;
-          }
-        } else {
-          doc.discount = 0;
+        // Kiểm tra nếu không còn sản phẩm nào có coupon
+        const hasAnyCoupon = doc.cartItems.some(item => item.hasCoupon);
+        if (!hasAnyCoupon) {
+          doc.coupon = null;
+          doc.couponData = null;
         }
 
         // Cập nhật tổng giá
