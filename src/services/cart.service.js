@@ -30,51 +30,91 @@ const cartService = {
     };
   },
 
-  /**
-   * Thêm sản phẩm vào giỏ hàng
-   * @param {String} userId - ID của người dùng
-   * @param {Object} itemData - Dữ liệu mặt hàng
-   * @returns {Object} - Giỏ hàng đã cập nhật
-   */
-  addToCart: async (userId, itemData) => {
-    const { variantId, sizeId, quantity = 1 } = itemData;
+/**
+ * Thêm sản phẩm vào giỏ hàng
+ * @param {String} userId - ID của người dùng
+ * @param {Object} itemData - Dữ liệu mặt hàng
+ * @returns {Object} - Giỏ hàng đã cập nhật
+ */
+addToCart: async (userId, itemData) => {
+  const { variantId, sizeId, quantity = 1 } = itemData;
+  
+  //console.log(`[${new Date().toISOString()}] Thêm sản phẩm vào giỏ hàng - User: ${userId}, Variant: ${variantId}, Size: ${sizeId}, Quantity: ${quantity}`);
 
-    // Kiểm tra dữ liệu đầu vào
-    if (!variantId || !sizeId) {
-      throw new ApiError(400, "Thông tin sản phẩm không đủ");
-    }
+  // Kiểm tra dữ liệu đầu vào
+  if (!variantId || !sizeId) {
+    throw new ApiError(400, "Thông tin sản phẩm không đủ");
+  }
 
+  try {
     // Kiểm tra biến thể và kích thước có tồn tại không
-    const variant = await Variant.findById(variantId).populate("product");
-    const size = await Size.findById(sizeId);
-
+    const Variant = mongoose.model("Variant");
+    const Size = mongoose.model("Size");
+    const Product = mongoose.model("Product");
+    
+    // Lấy thông tin biến thể
+    const variant = await Variant.findById(variantId);
+    
     if (!variant) {
+      //console.error(`[${new Date().toISOString()}] Không tìm thấy biến thể với ID: ${variantId}`);
       throw new ApiError(404, "Không tìm thấy biến thể sản phẩm");
     }
-
-    if (!variant.product) {
+    
+    // Kiểm tra và log trạng thái của biến thể
+    //console.log(`[${new Date().toISOString()}] Tìm thấy biến thể: ${variantId} - isActive: ${variant.isActive}`);
+    
+    if (variant.isActive === false) {
+      throw new ApiError(400, "Biến thể sản phẩm đang không được kích hoạt");
+    }
+    
+    // Lấy thông tin sản phẩm trực tiếp từ database
+    const productId = variant.product;
+    const product = await Product.findById(productId);
+    
+    if (!product) {
+      //console.error(`[${new Date().toISOString()}] Không tìm thấy sản phẩm liên kết với biến thể: ${variantId}`);
       throw new ApiError(404, "Không tìm thấy sản phẩm");
     }
+    
+    // Kiểm tra và log trạng thái của sản phẩm
+    //console.log(`[${new Date().toISOString()}] Sản phẩm: ${product._id} - Tên: ${product.name} - isActive: ${product.isActive} - deletedAt: ${product.deletedAt}`);
+    
+    if (product.isActive === false || product.deletedAt !== null) {
+      throw new ApiError(400, "Sản phẩm đang không được kích hoạt hoặc đã bị xóa");
+    }
 
+    // Kiểm tra kích thước
+    const size = await Size.findById(sizeId);
     if (!size) {
+      //console.error(`[${new Date().toISOString()}] Không tìm thấy kích thước với ID: ${sizeId}`);
       throw new ApiError(404, "Không tìm thấy kích thước sản phẩm");
     }
 
     // Kiểm tra tồn kho
     const sizeInfo = variant.sizes.find(
-      (s) => s.size.toString() === sizeId.toString()
+      (s) => s.size && s.size.toString() === sizeId.toString()
     );
-    if (
-      !sizeInfo ||
-      !sizeInfo.isSizeAvailable ||
-      sizeInfo.quantity < quantity
-    ) {
-      throw new ApiError(400, "Sản phẩm đã hết hàng hoặc không đủ số lượng");
+    
+    if (!sizeInfo) {
+      //console.error(`[${new Date().toISOString()}] Không tìm thấy kích thước ${sizeId} trong biến thể ${variantId}`);
+      throw new ApiError(400, "Sản phẩm không có kích thước này");
+    }
+    
+    if (!sizeInfo.isSizeAvailable) {
+      //console.error(`[${new Date().toISOString()}] Kích thước ${sizeId} không khả dụng trong biến thể ${variantId}`);
+      throw new ApiError(400, "Kích thước này hiện không có sẵn");
+    }
+    
+    if (sizeInfo.quantity < quantity) {
+      //console.error(`[${new Date().toISOString()}] Tồn kho không đủ: Yêu cầu ${quantity}, có sẵn ${sizeInfo.quantity}`);
+      throw new ApiError(400, `Sản phẩm đã hết hàng hoặc không đủ số lượng. Hiện chỉ còn ${sizeInfo.quantity} sản phẩm.`);
     }
 
     // Lấy giỏ hàng của người dùng, tạo mới nếu chưa có
+    const Cart = mongoose.model("Cart");
     let cart = await Cart.findOne({ user: userId });
     if (!cart) {
+      //console.log(`[${new Date().toISOString()}] Tạo giỏ hàng mới cho user: ${userId}`);
       cart = new Cart({
         user: userId,
         cartItems: [],
@@ -88,41 +128,66 @@ const cartService = {
         item.size.toString() === sizeId
     );
 
+    // Lấy hình ảnh từ biến thể hoặc sản phẩm
+    let imageUrl = "";
+    if (variant.imagesvariant && variant.imagesvariant.length > 0) {
+      const mainImage = variant.imagesvariant.find(img => img.isMain);
+      imageUrl = mainImage ? mainImage.url : variant.imagesvariant[0].url;
+    } else if (product.images && product.images.length > 0) {
+      const mainImage = product.images.find(img => img.isMain);
+      imageUrl = mainImage ? mainImage.url : product.images[0].url;
+    }
+
     if (existingItemIndex > -1) {
       // Nếu sản phẩm đã có trong giỏ hàng, cập nhật số lượng
+      //console.log(`[${new Date().toISOString()}] Cập nhật số lượng sản phẩm đã có trong giỏ hàng`);
       cart.cartItems[existingItemIndex].quantity += quantity;
 
       // Kiểm tra số lượng không vượt quá tồn kho
       if (cart.cartItems[existingItemIndex].quantity > sizeInfo.quantity) {
         cart.cartItems[existingItemIndex].quantity = sizeInfo.quantity;
       }
+      
+      // Cập nhật các thông tin khác nếu cần
+      cart.cartItems[existingItemIndex].isAvailable = true;
+      cart.cartItems[existingItemIndex].image = imageUrl;
+      cart.cartItems[existingItemIndex].price = variant.priceFinal || variant.price;
+      cart.cartItems[existingItemIndex].productName = product.name;
+      cart.cartItems[existingItemIndex].unavailableReason = "";
     } else {
       // Nếu sản phẩm chưa có trong giỏ hàng, thêm mới
+      //console.log(`[${new Date().toISOString()}] Thêm sản phẩm mới vào giỏ hàng`);
       cart.cartItems.push({
         variant: variantId,
         size: sizeId,
         quantity: Math.min(quantity, sizeInfo.quantity),
         price: variant.priceFinal || variant.price,
-        productName: variant.product.name,
-        image: variant.imagesvariant?.find(img => img.isMain)?.url || 
-               variant.product.images?.find(img => img.isMain)?.url || "",
+        productName: product.name,
+        image: imageUrl,
         isAvailable: true,
         isSelected: true,
         hasCoupon: false,
         itemDiscount: 0,
+        unavailableReason: "",
         addedAt: new Date(),
       });
     }
 
     // Lưu giỏ hàng
     await cart.save();
+    //console.log(`[${new Date().toISOString()}] Đã lưu giỏ hàng thành công với ${cart.cartItems.length} sản phẩm`);
 
     return {
       success: true,
       message: "Đã thêm sản phẩm vào giỏ hàng",
       cart,
     };
-  },
+  } catch (error) {
+    //console.error(`[${new Date().toISOString()}] Lỗi khi thêm sản phẩm vào giỏ hàng: ${error.message}`);
+    if (error.stack) console.error(error.stack);
+    throw error;
+  }
+},
 
   /**
    * Cập nhật số lượng sản phẩm trong giỏ hàng
