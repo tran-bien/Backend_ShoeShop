@@ -1,5 +1,6 @@
 const { Coupon, User, Product, Category } = require("@models");
 const paginate = require("@utils/pagination");
+const paginateDeleted = require("@utils/paginationDeleted");
 const ApiError = require("@utils/ApiError");
 
 const couponService = {
@@ -343,80 +344,61 @@ const couponService = {
  * ADMIN COUPON SERVICE - Quản lý mã giảm giá
  */
 const adminCouponService = {
-  /**
-   * Lấy danh sách tất cả mã giảm giá
-   * @param {Object} query - Các tham số truy vấn và phân trang
-   * @returns {Object} - Danh sách mã giảm giá phân trang
-   */
-  getAllCoupons: async (query = {}) => {
-    const {
-      page = 1,
-      limit = 10,
-      code,
-      type,
-      status,
-      isPublic,
-      startDate,
-      endDate,
-      sort = "createdAt_desc",
-    } = query;
+/**
+ * Lấy danh sách tất cả mã giảm giá
+ * @param {Object} query - Các tham số truy vấn và phân trang
+ * @returns {Object} - Danh sách mã giảm giá phân trang
+ */
+getAllCoupons: async (query = {}) => {
+  const {
+    page = 1,
+    limit = 10,
+    code,
+    type,
+    status,
+    isPublic,
+  } = query;
 
-    // Xây dựng điều kiện lọc
-    const filter = {};
+  // Xây dựng điều kiện lọc
+  const filter = {};
 
-    if (code) {
-      filter.code = { $regex: code, $options: "i" };
-    }
+  if (code) {
+    filter.code = { $regex: code, $options: "i" };
+  }
 
-    if (type && ["percent", "fixed"].includes(type)) {
-      filter.type = type;
-    }
+  if (type && ["percent", "fixed"].includes(type)) {
+    filter.type = type;
+  }
 
-    if (
-      status &&
-      ["active", "inactive", "expired", "archived"].includes(status)
-    ) {
-      filter.status = status;
-    }
+  if (
+    status &&
+    ["active", "inactive", "expired", "archived"].includes(status)
+  ) {
+    filter.status = status;
+  }
 
-    if (isPublic !== undefined) {
-      filter.isPublic = isPublic === "true" || isPublic === true;
-    }
+  if (isPublic !== undefined) {
+    filter.isPublic = isPublic === "true" || isPublic === true;
+  }
 
-    if (startDate) {
-      filter.startDate = { $gte: new Date(startDate) };
-    }
+  // Thực hiện truy vấn với phân trang
+  const options = {
+    page: parseInt(page, 10),
+    limit: parseInt(limit, 10),
+    select: "-__v",
+    populate: [
+      { path: "createdBy", select: "name" },
+      { path: "updatedBy", select: "name" },
+    ],
+  };
 
-    if (endDate) {
-      filter.endDate = { $lte: new Date(endDate) };
-    }
+  const result = await paginate(Coupon, filter, options);
 
-    // Xây dựng thông tin sắp xếp
-    const sortOptions = {};
-    if (sort) {
-      const [field, order] = sort.split("_");
-      sortOptions[field] = order === "desc" ? -1 : 1;
-    }
-
-    // Thực hiện truy vấn với phân trang
-    const options = {
-      page: parseInt(page, 10),
-      limit: parseInt(limit, 10),
-      sort: sortOptions,
-      select: "-__v",
-      populate: [
-        { path: "createdBy", select: "name" },
-        { path: "updatedBy", select: "name" },
-      ],
-    };
-
-    const result = await paginate(Coupon, filter, options);
-
-    return {
-      success: true,
-      ...result,
-    };
-  },
+  return {
+    success: true,
+    ...result,
+  };
+},
 
   /**
    * Lấy chi tiết mã giảm giá
@@ -438,134 +420,287 @@ const adminCouponService = {
     };
   },
 
-  /**
-   * Tạo mã giảm giá mới
-   * @param {Object} couponData - Dữ liệu mã giảm giá
-   * @param {String} adminId - ID của admin tạo
-   * @returns {Object} - Mã giảm giá đã tạo
-   */
-  createCoupon: async (couponData, adminId) => {
-    // Kiểm tra mã đã tồn tại chưa
+/**
+ * Tạo mã giảm giá mới
+ * @param {Object} couponData - Dữ liệu mã giảm giá
+ * @param {String} adminId - ID của admin tạo
+ * @returns {Object} - Mã giảm giá đã tạo
+ */
+createCoupon: async (couponData, adminId) => {
+
+  // Kiểm tra các ràng buộc dựa trên loại giảm giá
+  if (couponData.type === 'percent') {
+    if (couponData.value < 0 || couponData.value > 100) {
+      throw new ApiError(400, "Giá trị phần trăm giảm giá phải từ 0 đến 100");
+    }
+  }
+
+  // Kiểm tra mã đã tồn tại chưa
+  const existingCoupon = await Coupon.findOne({
+    code: couponData.code.toUpperCase(),
+  });
+  if (existingCoupon) {
+    throw new ApiError(400, "Mã giảm giá đã tồn tại");
+  }
+
+  // Đảm bảo code luôn viết hoa
+  couponData.code = couponData.code.toUpperCase();
+
+  // Kiểm tra sự phù hợp của dữ liệu dựa trên phạm vi áp dụng
+  if (couponData.applyFor === "all" || !couponData.applyFor) {
+    // Nếu áp dụng cho tất cả, không cần productIds và categoryIds
+    if (couponData.productIds && couponData.productIds.length > 0) {
+      throw new ApiError(
+        400, 
+        "Khi áp dụng cho tất cả sản phẩm, không cần chỉ định danh sách sản phẩm cụ thể"
+      );
+    }
+    if (couponData.categoryIds && couponData.categoryIds.length > 0) {
+      throw new ApiError(
+        400, 
+        "Khi áp dụng cho tất cả sản phẩm, không cần chỉ định danh sách danh mục cụ thể"
+      );
+    }
+    
+    // Đảm bảo giá trị mặc định là "all"
+    couponData.applyFor = "all";
+    couponData.productIds = [];
+    couponData.categoryIds = [];
+  } 
+  else if (couponData.applyFor === "categories") {
+    // Nếu áp dụng cho danh mục, không cần productIds
+    if (couponData.productIds && couponData.productIds.length > 0) {
+      throw new ApiError(
+        400, 
+        "Khi áp dụng cho danh mục cụ thể, không cần chỉ định danh sách sản phẩm"
+      );
+    }
+    
+    // Phải có ít nhất một danh mục
+    if (!couponData.categoryIds || couponData.categoryIds.length === 0) {
+      throw new ApiError(
+        400, 
+        "Khi áp dụng cho danh mục cụ thể, phải chọn ít nhất một danh mục"
+      );
+    }
+    
+    // Kiểm tra danh mục có tồn tại không
+    const categories = await Category.find({
+      _id: { $in: couponData.categoryIds },
+    });
+    
+    if (categories.length !== couponData.categoryIds.length) {
+      throw new ApiError(400, "Một số danh mục không tồn tại");
+    }
+    
+    // Đảm bảo rỗng cho productIds
+    couponData.productIds = [];
+  } 
+  else if (couponData.applyFor === "products") {
+    // Nếu áp dụng cho sản phẩm, không cần categoryIds
+    if (couponData.categoryIds && couponData.categoryIds.length > 0) {
+      throw new ApiError(
+        400, 
+        "Khi áp dụng cho sản phẩm cụ thể, không cần chỉ định danh sách danh mục"
+      );
+    }
+    
+    // Phải có ít nhất một sản phẩm
+    if (!couponData.productIds || couponData.productIds.length === 0) {
+      throw new ApiError(
+        400, 
+        "Khi áp dụng cho sản phẩm cụ thể, phải chọn ít nhất một sản phẩm"
+      );
+    }
+    
+    // Kiểm tra sản phẩm có tồn tại không
+    const products = await Product.find({
+      _id: { $in: couponData.productIds },
+    });
+    
+    if (products.length !== couponData.productIds.length) {
+      throw new ApiError(400, "Một số sản phẩm không tồn tại");
+    }
+    
+    // Đảm bảo rỗng cho categoryIds
+    couponData.categoryIds = [];
+  } else {
+    throw new ApiError(400, "Phạm vi áp dụng không hợp lệ. Chỉ chấp nhận 'all', 'categories' hoặc 'products'");
+  }
+
+  // Thêm thông tin người tạo
+  couponData.createdBy = adminId;
+  couponData.updatedBy = adminId;
+
+  // Tạo mã giảm giá mới
+  const coupon = new Coupon(couponData);
+  await coupon.save();
+
+  return {
+    success: true,
+    message: "Tạo mã giảm giá thành công",
+    coupon,
+  };
+},
+
+/**
+ * Cập nhật mã giảm giá
+ * @param {String} couponId - ID của mã giảm giá
+ * @param {Object} couponData - Dữ liệu cập nhật
+ * @param {String} adminId - ID của admin
+ * @returns {Object} - Mã giảm giá đã cập nhật
+ */
+updateCoupon: async (couponId, couponData, adminId) => {
+  // Kiểm tra mã giảm giá tồn tại
+  const coupon = await Coupon.findById(couponId);
+  if (!coupon) {
+    throw new ApiError(404, "Không tìm thấy mã giảm giá");
+  }
+
+  // Kiểm tra loại giảm giá nếu được cung cấp
+  if (couponData.type !== undefined) {
+    // Kiểm tra các ràng buộc dựa trên loại giảm giá
+    if (couponData.type === 'percent') {
+      const value = couponData.value !== undefined ? couponData.value : coupon.value;
+      if (value < 0 || value > 100) {
+        throw new ApiError(400, "Giá trị phần trăm giảm giá phải từ 0 đến 100");
+      }
+    }
+  }
+
+  // Nếu thay đổi code, kiểm tra trùng lặp
+  if (couponData.code && couponData.code !== coupon.code) {
     const existingCoupon = await Coupon.findOne({
       code: couponData.code.toUpperCase(),
+      _id: { $ne: couponId },
     });
+
     if (existingCoupon) {
       throw new ApiError(400, "Mã giảm giá đã tồn tại");
     }
 
-    // Kiểm tra danh mục và sản phẩm nếu cần
-    if (
-      couponData.applyFor === "categories" &&
-      couponData.categoryIds?.length > 0
-    ) {
-      const categories = await Category.find({
-        _id: { $in: couponData.categoryIds },
-      });
-      if (categories.length !== couponData.categoryIds.length) {
-        throw new ApiError(400, "Một số danh mục không tồn tại");
-      }
-    }
-
-    if (
-      couponData.applyFor === "products" &&
-      couponData.productIds?.length > 0
-    ) {
-      const products = await Product.find({
-        _id: { $in: couponData.productIds },
-      });
-      if (products.length !== couponData.productIds.length) {
-        throw new ApiError(400, "Một số sản phẩm không tồn tại");
-      }
-    }
-
     // Đảm bảo code luôn viết hoa
     couponData.code = couponData.code.toUpperCase();
+  }
 
-    // Thêm thông tin người tạo
-    couponData.createdBy = adminId;
-    couponData.updatedBy = adminId;
-
-    // Tạo mã giảm giá mới
-    const coupon = new Coupon(couponData);
-    await coupon.save();
-
-    return {
-      success: true,
-      message: "Tạo mã giảm giá thành công",
-      coupon,
-    };
-  },
-
-  /**
-   * Cập nhật mã giảm giá
-   * @param {String} couponId - ID của mã giảm giá
-   * @param {Object} couponData - Dữ liệu cập nhật
-   * @param {String} adminId - ID của admin
-   * @returns {Object} - Mã giảm giá đã cập nhật
-   */
-  updateCoupon: async (couponId, couponData, adminId) => {
-    // Kiểm tra mã giảm giá tồn tại
-    const coupon = await Coupon.findById(couponId);
-    if (!coupon) {
-      throw new ApiError(404, "Không tìm thấy mã giảm giá");
+  // Xác định applyFor hiện tại hoặc mới
+  const newApplyFor = couponData.applyFor || coupon.applyFor;
+  
+  // Kiểm tra phạm vi áp dụng
+  if (couponData.applyFor && !['all', 'categories', 'products'].includes(couponData.applyFor)) {
+    throw new ApiError(400, "Phạm vi áp dụng không hợp lệ. Chỉ chấp nhận 'all', 'categories' hoặc 'products'");
+  }
+  
+  // Kiểm tra sự phù hợp của dữ liệu dựa trên phạm vi áp dụng
+  if (newApplyFor === "all") {
+    // Nếu áp dụng cho tất cả, không cần productIds và categoryIds
+    if (couponData.productIds && couponData.productIds.length > 0) {
+      throw new ApiError(
+        400, 
+        "Khi áp dụng cho tất cả sản phẩm, không cần chỉ định danh sách sản phẩm cụ thể"
+      );
     }
-
-    // Nếu thay đổi code, kiểm tra trùng lặp
-    if (couponData.code && couponData.code !== coupon.code) {
-      const existingCoupon = await Coupon.findOne({
-        code: couponData.code.toUpperCase(),
-        _id: { $ne: couponId },
-      });
-
-      if (existingCoupon) {
-        throw new ApiError(400, "Mã giảm giá đã tồn tại");
-      }
-
-      // Đảm bảo code luôn viết hoa
-      couponData.code = couponData.code.toUpperCase();
+    if (couponData.categoryIds && couponData.categoryIds.length > 0) {
+      throw new ApiError(
+        400, 
+        "Khi áp dụng cho tất cả sản phẩm, không cần chỉ định danh sách danh mục cụ thể"
+      );
     }
-
-    // Kiểm tra danh mục và sản phẩm nếu cần
-    if (
-      couponData.applyFor === "categories" &&
-      couponData.categoryIds?.length > 0
-    ) {
+    
+    // Nếu cập nhật applyFor thành "all", xóa các IDs của phiên bản cũ
+    if (couponData.applyFor === "all" && coupon.applyFor !== "all") {
+      couponData.productIds = [];
+      couponData.categoryIds = [];
+    }
+  } 
+  else if (newApplyFor === "categories") {
+    // Nếu áp dụng cho danh mục, không cần productIds
+    if (couponData.productIds && couponData.productIds.length > 0) {
+      throw new ApiError(
+        400, 
+        "Khi áp dụng cho danh mục cụ thể, không cần chỉ định danh sách sản phẩm"
+      );
+    }
+    
+    // Phải có ít nhất một danh mục
+    const categoryIds = couponData.categoryIds || coupon.categoryIds;
+    if (!categoryIds || categoryIds.length === 0) {
+      throw new ApiError(
+        400, 
+        "Khi áp dụng cho danh mục cụ thể, phải chọn ít nhất một danh mục"
+      );
+    }
+    
+    // Kiểm tra danh mục có tồn tại không
+    if (couponData.categoryIds && couponData.categoryIds.length > 0) {
       const categories = await Category.find({
         _id: { $in: couponData.categoryIds },
       });
+      
       if (categories.length !== couponData.categoryIds.length) {
         throw new ApiError(400, "Một số danh mục không tồn tại");
       }
     }
-
-    if (
-      couponData.applyFor === "products" &&
-      couponData.productIds?.length > 0
-    ) {
+    
+    // Nếu chuyển sang chế độ áp dụng cho danh mục, xóa productIds cũ
+    if (couponData.applyFor === "categories" && coupon.applyFor !== "categories") {
+      couponData.productIds = [];
+    }
+  } 
+  else if (newApplyFor === "products") {
+    // Nếu áp dụng cho sản phẩm, không cần categoryIds
+    if (couponData.categoryIds && couponData.categoryIds.length > 0) {
+      throw new ApiError(
+        400, 
+        "Khi áp dụng cho sản phẩm cụ thể, không cần chỉ định danh sách danh mục"
+      );
+    }
+    
+    // Phải có ít nhất một sản phẩm
+    const productIds = couponData.productIds || coupon.productIds;
+    if (!productIds || productIds.length === 0) {
+      throw new ApiError(
+        400, 
+        "Khi áp dụng cho sản phẩm cụ thể, phải chọn ít nhất một sản phẩm"
+      );
+    }
+    
+    // Kiểm tra sản phẩm có tồn tại không
+    if (couponData.productIds && couponData.productIds.length > 0) {
       const products = await Product.find({
         _id: { $in: couponData.productIds },
       });
+      
       if (products.length !== couponData.productIds.length) {
         throw new ApiError(400, "Một số sản phẩm không tồn tại");
       }
     }
+    
+    // Nếu chuyển sang chế độ áp dụng cho sản phẩm, xóa categoryIds cũ
+    if (couponData.applyFor === "products" && coupon.applyFor !== "products") {
+      couponData.categoryIds = [];
+    }
+  }
 
-    // Thêm thông tin người cập nhật
-    couponData.updatedBy = adminId;
+  // Cập nhật thời gian
+  couponData.updatedAt = new Date();
+  
+  // Thêm thông tin người cập nhật
+  couponData.updatedBy = adminId;
 
-    // Cập nhật mã giảm giá
-    const updatedCoupon = await Coupon.findByIdAndUpdate(
-      couponId,
-      { $set: couponData },
-      { new: true, runValidators: true }
-    );
+  // Cập nhật mã giảm giá
+  const updatedCoupon = await Coupon.findByIdAndUpdate(
+    couponId,
+    { $set: couponData },
+    { new: true, runValidators: true }
+  );
 
-    return {
-      success: true,
-      message: "Cập nhật mã giảm giá thành công",
-      coupon: updatedCoupon,
-    };
-  },
+  return {
+    success: true,
+    message: "Cập nhật mã giảm giá thành công",
+    coupon: updatedCoupon,
+  };
+},
 
   /**
    * Xóa mã giảm giá

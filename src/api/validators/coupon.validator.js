@@ -57,7 +57,6 @@ const validateGetCoupons = [
     .optional()
     .isDate()
     .withMessage("Ngày kết thúc không hợp lệ"),
-  query("sort").optional().isString().withMessage("Sắp xếp phải là chuỗi"),
 ];
 
 /**

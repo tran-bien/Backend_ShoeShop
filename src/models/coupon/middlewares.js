@@ -60,28 +60,29 @@ const applyMiddlewares = (schema) => {
   });
 
   // Trước khi tìm, tự động cập nhật trạng thái expired nếu đã hết hạn
-  schema.pre("find", function () {
-    const now = new Date();
+schema.pre("find", function () {
+  const now = new Date();
 
-    // Cập nhật các mã giảm giá đã hết hạn nhưng chưa được đánh dấu
-    this.model
-      .updateMany(
-        {
-          status: "active",
-          $or: [
-            { endDate: { $lt: now } },
-            {
-              $and: [
-                { maxUses: { $ne: null } },
-                { currentUses: { $gte: "$maxUses" } },
-              ],
-            },
-          ],
-        },
-        { status: "expired" }
-      )
-      .exec();
-  });
+  // Cập nhật các mã giảm giá đã hết hạn nhưng chưa được đánh dấu
+  this.model
+    .updateMany(
+      {
+        status: "active",
+        $or: [
+          { endDate: { $lt: now } },
+          {
+            $and: [
+              { maxUses: { $ne: null } },
+              // Sử dụng $expr để so sánh hai trường
+              { $expr: { $gte: ["$currentUses", "$maxUses"] } }
+            ],
+          },
+        ],
+      },
+      { status: "expired" }
+    )
+    .exec();
+});
 
   // Trước khi xóa, kiểm tra xem mã giảm giá đã được sử dụng chưa
   schema.pre(

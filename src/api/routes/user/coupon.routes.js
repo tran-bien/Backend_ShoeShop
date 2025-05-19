@@ -8,26 +8,26 @@ const router = express.Router();
 // Middleware kiểm tra xác thực
 router.use(isAuthenticated);
 /**
- * @route   GET /api/coupons
+ * @route   GET /api/users/coupons
  * @desc    Lấy danh sách mã giảm giá công khai
  * @access  Private - User
  */
-router.get("/", couponController.getPublicCoupons);
+router.get("/coupons", couponController.getPublicCoupons);
 
 /**
- * @route   GET /api/coupons/collected
+ * @route   GET /api/users/coupons/collected
  * @desc    Lấy danh sách mã giảm giá đã thu thập của người dùng
  * @access  Private - User
  */
-router.get("/collected", couponController.getUserCoupons);
+router.get("/coupons/collected", couponController.getUserCoupons);
 
 /**
- * @route   POST /api/coupons/:id/collect
+ * @route   POST /api/users/coupons/:id/collect
  * @desc    Thu thập mã giảm giá
  * @access  Private - User
  */
 router.post(
-  "/:id/collect",
+  "/coupons/:id/collect",
   validate(validateCollectCoupon),
   couponController.collectCoupon
 );
