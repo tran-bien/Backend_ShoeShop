@@ -107,9 +107,10 @@ const checkout = asyncHandler(async (req, res) => {
  * @route   PATCH /api/cart/items/select
  * @access  Private
  */
-const toggleSelectCartItems = asyncHandler(async (req, res) => {
+const toggleSelectCartItem = asyncHandler(async (req, res) => {
   const userId = req.user.id;
-  const result = await cartService.toggleSelectCartItems(userId, req.body);
+  const { itemId } = req.params;
+  const result = await cartService.toggleSelectCartItem(userId, itemId);
   
   res.status(200).json(result);
 });
@@ -123,5 +124,5 @@ module.exports = {
   applyCoupon,
   removeCoupon,
   checkout,
-  toggleSelectCartItems
+  toggleSelectCartItem
 };

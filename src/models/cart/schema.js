@@ -45,7 +45,7 @@ const CartSchema = new mongoose.Schema(
         // Thêm trường đánh dấu item được chọn
         isSelected: {
           type: Boolean,
-          default: true,
+          default: false,
         },
         // Thêm trường đánh dấu item áp dụng coupon
         hasCoupon: {

@@ -165,7 +165,7 @@ addToCart: async (userId, itemData) => {
         productName: product.name,
         image: imageUrl,
         isAvailable: true,
-        isSelected: true,
+        isSelected: false,
         hasCoupon: false,
         itemDiscount: 0,
         unavailableReason: "",
@@ -253,17 +253,16 @@ addToCart: async (userId, itemData) => {
     };
   },
 
-  /**
-   * Chọn hoặc bỏ chọn sản phẩm trong giỏ hàng
+    /**
+   * Chuyển đổi trạng thái chọn sản phẩm trong giỏ hàng (toggle)
    * @param {String} userId - ID của người dùng
-   * @param {Object} data - Dữ liệu chọn sản phẩm
+   * @param {String} itemId - ID của sản phẩm
    * @returns {Object} - Giỏ hàng đã cập nhật
    */
-  toggleSelectCartItems: async (userId, data) => {
-    const { itemIds, selected } = data;
+  toggleSelectCartItem: async (userId, itemId) => {
     
-    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
-      throw new ApiError(400, "Danh sách sản phẩm không hợp lệ");
+    if (!itemId) {
+      throw new ApiError(400, "ID sản phẩm không hợp lệ");
     }
 
     // Lấy giỏ hàng của người dùng
@@ -272,26 +271,22 @@ addToCart: async (userId, itemData) => {
       throw new ApiError(404, "Không tìm thấy giỏ hàng");
     }
 
-    // Cập nhật trạng thái chọn cho các sản phẩm
-    let updatedCount = 0;
-    itemIds.forEach(itemId => {
-      const item = cart.cartItems.find(item => item._id.toString() === itemId);
-      if (item) {
-        item.isSelected = selected !== undefined ? selected : !item.isSelected;
-        updatedCount++;
-      }
-    });
-
-    if (updatedCount === 0) {
-      throw new ApiError(404, "Không tìm thấy sản phẩm nào để cập nhật");
+    // Tìm sản phẩm trong giỏ hàng
+    const item = cart.cartItems.find(item => item._id.toString() === itemId);
+    
+    if (!item) {
+      throw new ApiError(404, "Không tìm thấy sản phẩm trong giỏ hàng");
     }
+
+    // Toggle trạng thái isSelected
+    item.isSelected = !item.isSelected;
 
     // Lưu giỏ hàng
     await cart.save();
 
     return {
       success: true,
-      message: `Đã ${selected ? 'chọn' : 'bỏ chọn'} ${updatedCount} sản phẩm`,
+      message: `Đã ${item.isSelected ? 'chọn' : 'bỏ chọn'} sản phẩm`,
       cart,
     };
   },

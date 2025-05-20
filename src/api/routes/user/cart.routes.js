@@ -84,14 +84,13 @@ router.post(
 router.post("/checkout", cartController.checkout);
 
 /**
- * @route   PATCH /api/cart/items/select
- * @desc    Chọn/bỏ chọn sản phẩm trong giỏ hàng
+ * @route   PATCH /api/cart/items/:itemId/toggle
+ * @desc    Chuyển đổi trạng thái chọn sản phẩm trong giỏ hàng
  * @access  Private
  */
 router.patch(
-  "/items/select",
-  validate(cartValidator.validateToggleSelectItems),
-  cartController.toggleSelectCartItems
+  "/items/:itemId/toggle",
+  cartController.toggleSelectCartItem
 );
 
 module.exports = router;
