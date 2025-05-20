@@ -31,31 +31,6 @@ const applyMiddlewares = (schema) => {
       this.value = 100;
     }
 
-    // Đảm bảo applyFor phù hợp với dữ liệu
-    if (
-      this.applyFor === "products" &&
-      (!this.productIds || this.productIds.length === 0)
-    ) {
-      return next(
-        new ApiError(
-          400,
-          "Phải chỉ định ít nhất một sản phẩm khi applyFor là 'products'"
-        )
-      );
-    }
-
-    if (
-      this.applyFor === "categories" &&
-      (!this.categoryIds || this.categoryIds.length === 0)
-    ) {
-      return next(
-        new ApiError(
-          400,
-          "Phải chỉ định ít nhất một danh mục khi applyFor là 'categories'"
-        )
-      );
-    }
-
     next();
   });
 

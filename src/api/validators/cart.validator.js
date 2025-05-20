@@ -63,44 +63,6 @@ const validateRemoveFromCart = [
 ];
 
 /**
- * Validator cho áp dụng mã giảm giá
- */
-const validateApplyCoupon = [
-  body("couponCode")
-    .notEmpty()
-    .withMessage("Vui lòng cung cấp mã giảm giá")
-    .isString()
-    .withMessage("Mã giảm giá phải là chuỗi")
-    .isLength({ min: 3, max: 20 })
-    .withMessage("Mã giảm giá phải có độ dài từ 3-20 ký tự"),
-    
-  body("itemIds")
-    .optional()
-    .isArray()
-    .withMessage("Danh sách sản phẩm phải là mảng"),
-  
-  body("itemIds.*")
-    .optional()
-    .custom(isValidObjectId)
-    .withMessage("ID sản phẩm không hợp lệ"),
-];
-
-/**
- * Validator cho hủy mã giảm giá
- */
-const validateRemoveCoupon = [
-  body("itemIds")
-    .optional()
-    .isArray()
-    .withMessage("Danh sách sản phẩm phải là mảng"),
-  
-  body("itemIds.*")
-    .optional()
-    .custom(isValidObjectId)
-    .withMessage("ID sản phẩm không hợp lệ"),
-];
-
-/**
  * Validator cho chọn/bỏ chọn sản phẩm
  */
 const validateToggleSelectItems = [
@@ -119,40 +81,22 @@ const validateToggleSelectItems = [
 ];
 
 /**
- * Validator cho checkout
+ * Validator cho xem trước mã giảm giá
  */
-const validateCheckout = [
-  body("shippingAddress")
-    .optional()
-    .isObject()
-    .withMessage("Thông tin địa chỉ giao hàng không hợp lệ. Vui lòng nhập đúng định dạng"),
-
-  body("shippingAddress.name")
-    .optional()
+const validatePreviewCoupon = [
+  body("couponCode")
+    .notEmpty()
+    .withMessage("Vui lòng cung cấp mã giảm giá")
     .isString()
-    .withMessage("Tên người nhận phải là chuỗi")
-    .isLength({ min: 2, max: 100 })
-    .withMessage("Tên người nhận phải có độ dài từ 2-100 ký tự"),
-
-  body("shippingAddress.phone")
-    .optional()
-    .isString()
-    .withMessage("Số điện thoại phải là chuỗi")
-    .matches(/^(0[2-9]|84[2-9])[0-9]{8}$/)
-    .withMessage("Số điện thoại không hợp lệ"),
-
-  body("paymentMethod")
-    .optional()
-    .isIn(["COD", "VNPAY"])
-    .withMessage("Phương thức thanh toán không hợp lệ"),
+    .withMessage("Mã giảm giá phải là chuỗi")
+    .isLength({ min: 3, max: 20 })
+    .withMessage("Mã giảm giá phải có độ dài từ 3-20 ký tự"),
 ];
 
 module.exports = {
   validateAddToCart,
   validateUpdateCartItem,
   validateRemoveFromCart,
-  validateApplyCoupon,
-  validateRemoveCoupon,
-  validateCheckout,
-  validateToggleSelectItems
+  validateToggleSelectItems,
+  validatePreviewCoupon
 };

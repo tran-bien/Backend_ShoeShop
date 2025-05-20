@@ -126,10 +126,6 @@ const reviewService = {
       throw new ApiError(404, "Không tìm thấy biến thể sản phẩm");
     }
 
-    // Kiểm tra giới hạn ảnh (tối đa 5 ảnh)
-    if (reviewData.images && reviewData.images.length > 5) {
-      throw new ApiError(400, "Mỗi đánh giá chỉ được phép có tối đa 5 ảnh");
-    }
 
     // Lưu thông tin snapshot từ orderItem
     const productSnapshot = {
@@ -139,11 +135,6 @@ const reviewService = {
       name: orderItem.productName || product.name,
       variantName: orderItem.variantName || variant.name,
       sizeName: orderItem.sizeName,
-      image:
-        orderItem.image ||
-        (variant.images && variant.images[0]) ||
-        (product.images && product.images[0]) ||
-        "",
     };
 
     // Tạo đánh giá mới
@@ -154,7 +145,6 @@ const reviewService = {
       rating: reviewData.rating,
       title: reviewData.title,
       content: reviewData.content,
-      images: reviewData.images || [],
       isVerified: true,
     });
 
@@ -167,29 +157,6 @@ const reviewService = {
         { path: "user", select: "name avatar" },
       ]),
     };
-  },
-
-  /**
-   * Kiểm tra quyền sở hữu review
-   * @param {String} userId - ID của người dùng
-   * @param {String} reviewId - ID của đánh giá
-   * @returns {Object} - Review object nếu người dùng là chủ sở hữu
-   */
-  checkReviewOwnership: async (userId, reviewId) => {
-    const review = await Review.findOne({
-      _id: reviewId,
-      user: userId,
-      deletedAt: null,
-    });
-
-    if (!review) {
-      throw new ApiError(
-        403,
-        "Bạn không có quyền thực hiện thao tác này với đánh giá"
-      );
-    }
-
-    return review;
   },
 
   /**
@@ -215,7 +182,7 @@ const reviewService = {
     }
 
     // Những trường được phép cập nhật
-    const allowedFields = ["rating", "content", "images"];
+    const allowedFields = ["rating", "content"];
     const updateFields = {};
 
     allowedFields.forEach((field) => {
@@ -223,20 +190,6 @@ const reviewService = {
         updateFields[field] = updateData[field];
       }
     });
-
-    // Xử lý ảnh mới nếu có
-    if (updateData.newImages && updateData.newImages.length > 0) {
-      // Kết hợp ảnh mới với ảnh hiện tại
-      const currentImages = review.images || [];
-      const combinedImages = [...currentImages, ...updateData.newImages];
-
-      // Kiểm tra số lượng ảnh (tối đa 5)
-      if (combinedImages.length > 5) {
-        throw new ApiError(400, "Tổng số ảnh không được vượt quá 5 ảnh");
-      }
-
-      updateFields.images = combinedImages;
-    }
 
     // Cập nhật đánh giá
     const updatedReview = await Review.findByIdAndUpdate(

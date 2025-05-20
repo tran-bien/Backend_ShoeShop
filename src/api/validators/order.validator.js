@@ -27,6 +27,12 @@ const validateCreateOrder = [
     .isIn(["COD", "VNPAY"])
     .withMessage("Phương thức thanh toán không hợp lệ"),
   body("note").optional().isString().withMessage("Ghi chú phải là chuỗi"),
+  body("couponCode")
+    .optional()
+    .isString()
+    .withMessage("Mã giảm giá phải là chuỗi")
+    .isLength({ min: 3, max: 20 })
+    .withMessage("Mã giảm giá phải có độ dài từ 3-20 ký tự"),
 ];
 
 /**

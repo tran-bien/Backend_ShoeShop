@@ -90,7 +90,6 @@ const orderService = {
 
   /**
    * Tạo đơn hàng mới từ giỏ hàng
-   * @param {String} userId - ID của người dùng
    * @param {Object} orderData - Dữ liệu đơn hàng
    * @returns {Object} - Đơn hàng đã tạo
    */
@@ -100,6 +99,7 @@ const orderService = {
       addressId,
       paymentMethod = "COD",
       note,
+      couponCode // Thêm couponCode vào dữ liệu đầu vào
     } = orderData;
 
     // Kiểm tra dữ liệu đầu vào
@@ -132,16 +132,22 @@ const orderService = {
         path: "cartItems.variant",
         populate: { path: "product" }
       })
-      .populate("cartItems.size")
-      .populate("coupon");
+      .populate("cartItems.size");
 
     if (!cart || cart.cartItems.length === 0) {
       throw new ApiError(400, "Giỏ hàng trống, không thể tạo đơn hàng");
     }
 
+    // Lọc ra những sản phẩm được chọn và có sẵn
+    const selectedItems = cart.cartItems.filter(item => item.isSelected && item.isAvailable);
+    
+    if (selectedItems.length === 0) {
+      throw new ApiError(400, "Không có sản phẩm nào được chọn hoặc sẵn sàng để thanh toán");
+    }
+
     // Kiểm tra tồn kho cho từng sản phẩm
     const unavailableItems = [];
-    for (const item of cart.cartItems) {
+    for (const item of selectedItems) {
       if (!item.isAvailable) {
         unavailableItems.push({
           productName: item.productName,
@@ -156,20 +162,75 @@ const orderService = {
       );
     }
 
-    // Tính phí vận chuyển
-    let shippingFee = 30000; // 30,000 VND
-    const totalItems = cart.cartItems.reduce(
-      (total, item) => total + item.quantity,
+    // Tính tổng giá trị của các sản phẩm được chọn
+    const subTotal = selectedItems.reduce(
+      (total, item) => total + (item.price * item.quantity),
       0
     );
-    if (totalItems > 2 && cart.subTotal >= 1000000) {
-      shippingFee = 0;
+
+    // Xử lý mã giảm giá nếu có
+    let coupon = null;
+    let discount = 0;
+    let couponDetail = null;
+
+    if (couponCode) {
+      // Tìm mã giảm giá
+      coupon = await Coupon.findOne({
+        code: couponCode.toUpperCase(),
+        status: "active",
+        startDate: { $lte: new Date() },
+        endDate: { $gte: new Date() },
+        $or: [
+          { isPublic: true },
+          { users: userId }
+        ]
+      });
+
+      if (!coupon) {
+        throw new ApiError(400, "Mã giảm giá không hợp lệ, đã hết hạn hoặc bạn chưa thu thập");
+      }
+
+      // Kiểm tra số lần sử dụng
+      if (coupon.maxUses && coupon.currentUses >= coupon.maxUses) {
+        throw new ApiError(400, "Mã giảm giá đã hết lượt sử dụng");
+      }
+
+      // Kiểm tra giá trị đơn hàng tối thiểu
+      if (coupon.minOrderValue && subTotal < coupon.minOrderValue) {
+        throw new ApiError(
+          400,
+          `Giá trị đơn hàng chưa đạt tối thiểu ${coupon.minOrderValue.toLocaleString()}đ để áp dụng mã giảm giá`
+        );
+      }
+
+      // Tính giảm giá
+      if (coupon.type === "percent") {
+        discount = (subTotal * coupon.value) / 100;
+        if (coupon.maxDiscount) {
+          discount = Math.min(discount, coupon.maxDiscount);
+        }
+      } else { // fixed
+        discount = Math.min(coupon.value, subTotal);
+      }
+
+      // Lưu chi tiết coupon
+      couponDetail = {
+        code: coupon.code,
+        type: coupon.type,
+        value: coupon.value,
+        maxDiscount: coupon.maxDiscount,
+      };
     }
+
+    // Tính phí vận chuyển
+    const DEFAULT_SHIPPING_FEE = 30000;
+    const SHIPPING_FREE_THRESHOLD = 1000000;
+    const shippingFee = subTotal >= SHIPPING_FREE_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
 
     // Tạo đơn hàng mới
     const newOrder = new Order({
       user: userId,
-      orderItems: cart.cartItems.map((item) => ({
+      orderItems: selectedItems.map((item) => ({
         variant: item.variant._id,
         size: item.size._id,
         productName: item.productName,
@@ -179,11 +240,10 @@ const orderService = {
       })),
       shippingAddress,
       note: note || "",
-      subTotal: cart.subTotal,
-      discount: cart.discount || 0,
+      subTotal,
+      discount,
       shippingFee,
-      totalAfterDiscountAndShipping:
-        cart.subTotal - (cart.discount || 0) + shippingFee,
+      totalAfterDiscountAndShipping: subTotal - discount + shippingFee,
       status: "pending",
       payment: {
         method: paymentMethod,
@@ -191,15 +251,16 @@ const orderService = {
       },
     });
 
-    // Nếu có coupon, lưu thông tin
-    if (cart.coupon) {
-      newOrder.coupon = cart.coupon._id;
-      newOrder.couponDetail = {
-        code: cart.coupon.code,
-        type: cart.coupon.type,
-        value: cart.coupon.value,
-        maxDiscount: cart.coupon.maxDiscount,
-      };
+    // Nếu có coupon, lưu thông tin và tăng số lần sử dụng
+    if (coupon) {
+      newOrder.coupon = coupon._id;
+      newOrder.couponDetail = couponDetail;
+      
+      // Tăng số lần sử dụng mã giảm giá (chỉ khi thanh toán thành công)
+      if (paymentMethod === "COD") {
+        coupon.currentUses += 1;
+        await coupon.save();
+      }
     }
 
     // Lưu đơn hàng
@@ -207,12 +268,8 @@ const orderService = {
 
     // Sau khi tạo đơn hàng, xóa sạch giỏ hàng
     cart.cartItems = [];
-    cart.coupon = null;
-    cart.couponData = null;
-    cart.subTotal = 0;
-    cart.discount = 0;
-    cart.totalPrice = 0;
     cart.totalItems = 0;
+    cart.subTotal = 0;
     await cart.save();
 
     return newOrder;

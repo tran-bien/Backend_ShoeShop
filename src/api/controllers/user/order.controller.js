@@ -39,13 +39,14 @@ const getOrderById = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const createOrder = asyncHandler(async (req, res) => {
-  const { addressId, paymentMethod, note } = req.body;
+  const { addressId, paymentMethod, note, couponCode } = req.body;
 
   const order = await orderService.createOrder({
     userId: req.user.id,
     addressId,
     paymentMethod,
-    note
+    note,
+    couponCode
   });
 
   // Nếu thanh toán qua VNPAY, tạo URL thanh toán

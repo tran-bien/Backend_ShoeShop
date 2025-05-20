@@ -47,16 +47,6 @@ const CartSchema = new mongoose.Schema(
           type: Boolean,
           default: false,
         },
-        // Thêm trường đánh dấu item áp dụng coupon
-        hasCoupon: {
-          type: Boolean,
-          default: false,
-        },
-        // Thêm trường giảm giá cho item
-        itemDiscount: {
-          type: Number,
-          default: 0,
-        },
         // Lý do nếu sản phẩm không khả dụng
         unavailableReason: {
           type: String,
@@ -68,22 +58,6 @@ const CartSchema = new mongoose.Schema(
         },
       },
     ],
-    // Thông tin mã giảm giá
-    coupon: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Coupon",
-      default: null,
-    },
-    // Thông tin mã giảm giá (lưu trữ để tránh liên kết)
-    couponData: {
-      code: String,
-      type: {
-        type: String,
-        enum: ["percent", "fixed"],
-      },
-      value: Number,
-      maxDiscount: Number,
-    },
     // Tổng số sản phẩm trong giỏ hàng
     totalItems: {
       type: Number,
@@ -93,17 +67,7 @@ const CartSchema = new mongoose.Schema(
     subTotal: {
       type: Number,
       default: 0,
-    },
-    // Giá trị giảm giá
-    discount: {
-      type: Number,
-      default: 0,
-    },
-    // Tổng giá trị sau giảm giá
-    totalPrice: {
-      type: Number,
-      default: 0,
-    },
+    }
   },
   {
     timestamps: true,

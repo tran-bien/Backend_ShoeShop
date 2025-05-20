@@ -3,7 +3,6 @@ const { protect } = require("@middlewares/auth.middleware");
 const reviewController = require("@controllers/user/review.controller");
 const reviewValidator = require("@validators/review.validator");
 const validate = require("@utils/validatehelper");
-const uploadMiddleware = require("@middlewares/upload.middleware");
 
 const router = express.Router();
 
@@ -19,24 +18,22 @@ router.get("/my-reviews", reviewController.getUserReviews);
 
 /**
  * @route   POST /api/users/reviews
- * @desc    Tạo đánh giá mới (có thể kèm ảnh)
+ * @desc    Tạo đánh giá mới
  * @access  Private
  */
 router.post(
   "/",
-  uploadMiddleware.handleReviewImagesUpload,
   validate(reviewValidator.validateCreateReview),
   reviewController.createReview
 );
 
 /**
  * @route   PUT /api/users/reviews/:reviewId
- * @desc    Cập nhật đánh giá (có thể kèm ảnh mới)
+ * @desc    Cập nhật đánh giá
  * @access  Private
  */
 router.put(
   "/:reviewId",
-  uploadMiddleware.handleReviewImagesUpload,
   reviewValidator.validateReviewId,
   reviewValidator.validateReviewOwnership,
   validate(reviewValidator.validateUpdateReview),
@@ -64,33 +61,6 @@ router.post(
   "/:reviewId/like",
   validate(reviewValidator.validateToggleLikeReview),
   reviewController.toggleLikeReview
-);
-
-/**
- * @route   POST /api/users/reviews/:reviewId/images
- * @desc    Thêm ảnh vào đánh giá (bổ sung thêm ảnh)
- * @access  Private
- */
-router.post(
-  "/:reviewId/images",
-  uploadMiddleware.handleReviewImagesUpload,
-  reviewValidator.validateReviewId,
-  reviewValidator.validateReviewOwnership,
-  validate(reviewValidator.validateUploadReviewImages),
-  reviewController.uploadReviewImages
-);
-
-/**
- * @route   DELETE /api/users/reviews/:reviewId/images
- * @desc    Xóa ảnh khỏi đánh giá
- * @access  Private
- */
-router.delete(
-  "/:reviewId/images",
-  reviewValidator.validateReviewId,
-  reviewValidator.validateReviewOwnership,
-  validate(reviewValidator.validateImageIds),
-  reviewController.removeReviewImages
 );
 
 module.exports = router;

@@ -55,42 +55,24 @@ router.delete(
 router.delete("/", cartController.clearCart);
 
 /**
- * @route   POST /api/cart/apply-coupon
- * @desc    Áp dụng mã giảm giá
- * @access  Private
- */
-router.post(
-  "/apply-coupon",
-  validate(cartValidator.validateApplyCoupon),
-  cartController.applyCoupon
-);
-
-/**
- * @route   POST /api/cart/remove-coupon
- * @desc    Hủy mã giảm giá
- * @access  Private
- */
-router.post(
-  "/remove-coupon",
-  validate(cartValidator.validateRemoveCoupon),
-  cartController.removeCoupon
-);
-
-/**
- * @route   POST /api/cart/checkout
- * @desc    Chuẩn bị thanh toán
- * @access  Private
- */
-router.post("/checkout", cartController.checkout);
-
-/**
- * @route   PATCH /api/cart/items/:itemId/  
+ * @route   PATCH /api/cart/items/:itemId/toggle
  * @desc    Chuyển đổi trạng thái chọn sản phẩm trong giỏ hàng
  * @access  Private
  */
 router.patch(
   "/items/:itemId/toggle",
   cartController.toggleSelectCartItem
+);
+
+/**
+ * @route   POST /api/cart/preview-coupon
+ * @desc    Xem trước kết quả áp dụng mã giảm giá
+ * @access  Private
+ */
+router.post(
+  "/preview-coupon",
+  validate(cartValidator.validatePreviewCoupon),
+  cartController.previewCoupon
 );
 
 module.exports = router;

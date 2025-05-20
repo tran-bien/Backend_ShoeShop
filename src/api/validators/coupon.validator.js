@@ -139,49 +139,6 @@ const validateCreateCoupon = [
     .optional()
     .isBoolean()
     .withMessage("isPublic phải là boolean"),
-
-  body("applyFor")
-    .optional()
-    .isIn(["all", "categories", "products"])
-    .withMessage("Phạm vi áp dụng không hợp lệ"),
-
-  body("categoryIds")
-    .optional()
-    .isArray()
-    .withMessage("Danh sách danh mục phải là mảng")
-    .custom((categoryIds, { req }) => {
-      if (
-        req.body.applyFor === "categories" &&
-        (!categoryIds || categoryIds.length === 0)
-      ) {
-        throw new ApiError(400, "Phải chọn ít nhất một danh mục khi áp dụng cho danh mục");
-      }
-      return true;
-    }),
-
-  body("categoryIds.*")
-    .optional()
-    .isMongoId()
-    .withMessage("ID danh mục không hợp lệ"),
-
-  body("productIds")
-    .optional()
-    .isArray()
-    .withMessage("Danh sách sản phẩm phải là mảng")
-    .custom((productIds, { req }) => {
-      if (
-        req.body.applyFor === "products" &&
-        (!productIds || productIds.length === 0)
-      ) {
-        throw new ApiError(400, "Phải chọn ít nhất một sản phẩm khi áp dụng cho sản phẩm");
-      }
-      return true;
-    }),
-
-  body("productIds.*")
-    .optional()
-    .isMongoId()
-    .withMessage("ID sản phẩm không hợp lệ"),
 ];
 
 /**
@@ -266,49 +223,6 @@ const validateUpdateCoupon = [
     .optional()
     .isBoolean()
     .withMessage("isPublic phải là boolean"),
-
-  body("applyFor")
-    .optional()
-    .isIn(["all", "categories", "products"])
-    .withMessage("Phạm vi áp dụng không hợp lệ"),
-
-  body("categoryIds")
-    .optional()
-    .isArray()
-    .withMessage("Danh sách danh mục phải là mảng")
-    .custom((categoryIds, { req }) => {
-      if (
-        req.body.applyFor === "categories" &&
-        (!categoryIds || categoryIds.length === 0)
-      ) {
-        throw new ApiError(400, "Phải chọn ít nhất một danh mục khi áp dụng cho danh mục");
-      }
-      return true;
-    }),
-
-  body("categoryIds.*")
-    .optional()
-    .isMongoId()
-    .withMessage("ID danh mục không hợp lệ"),
-
-  body("productIds")
-    .optional()
-    .isArray()
-    .withMessage("Danh sách sản phẩm phải là mảng")
-    .custom((productIds, { req }) => {
-      if (
-        req.body.applyFor === "products" &&
-        (!productIds || productIds.length === 0)
-      ) {
-        throw new ApiError(400, "Phải chọn ít nhất một sản phẩm khi áp dụng cho sản phẩm");
-      }
-      return true;
-    }),
-
-  body("productIds.*")
-    .optional()
-    .isMongoId()
-    .withMessage("ID sản phẩm không hợp lệ"),
 ];
 
 /**

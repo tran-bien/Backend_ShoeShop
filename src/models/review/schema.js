@@ -1,23 +1,6 @@
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
-// Định nghĩa schema cho ảnh trong review
-const ReviewImageSchema = new Schema(
-  {
-    url: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    public_id: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-  },
-  { _id: false }
-);
-
 // Định nghĩa schema cho đánh giá (review)
 const ReviewSchema = new Schema(
   {
@@ -58,7 +41,6 @@ const ReviewSchema = new Schema(
       trim: true,
       maxlength: 1000,
     },
-    images: [ReviewImageSchema],
     isActive: {
       type: Boolean,
       default: true,

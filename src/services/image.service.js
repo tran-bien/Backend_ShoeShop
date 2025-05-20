@@ -1,5 +1,5 @@
 const cloudinary = require("cloudinary").v2;
-const { Product, Variant, Brand, User, Review } = require("@models");
+const { Product, Variant, Brand, User } = require("@models");
 const ApiError = require("@utils/ApiError");
 
 const imageService = {
@@ -500,109 +500,6 @@ const imageService = {
       success: true,
       message: "Đã cập nhật ảnh chính biến thể",
       images: variant.imagesvariant,
-    };
-  },
-
-  /**
-   * Thêm ảnh cho review
-   * @param {String} reviewId - ID đánh giá
-   * @param {Array} images - Mảng các đối tượng ảnh
-   * @returns {Promise<Object>} - Kết quả cập nhật
-   */
-  addReviewImages: async (reviewId, images) => {
-    const review = await Review.findById(reviewId);
-    if (!review) {
-      throw new ApiError(404, "Không tìm thấy đánh giá");
-    }
-
-    // Kiểm tra giới hạn số lượng ảnh (tối đa 5 ảnh)
-    if (review.images.length + images.length > 5) {
-      throw new ApiError(400, "Mỗi đánh giá chỉ được phép có tối đa 5 ảnh");
-    }
-
-    // Thêm ảnh mới vào mảng ảnh hiện có
-    review.images.push(...images);
-    await review.save();
-
-    return {
-      success: true,
-      message: "Thêm ảnh đánh giá thành công",
-      images: review.images,
-    };
-  },
-
-  /**
-   * Xóa ảnh của review
-   * @param {String} reviewId - ID đánh giá
-   * @param {Array} imageIds - Mảng ID ảnh cần xóa
-   * @returns {Promise<Object>} - Kết quả xóa
-   */
-  removeReviewImages: async (reviewId, imageIds) => {
-    const review = await Review.findById(reviewId);
-    if (!review) {
-      throw new ApiError(404, "Không tìm thấy đánh giá");
-    }
-
-    // Lọc ra những ảnh cần xóa
-    const imagesToDelete = review.images.filter((img) =>
-      imageIds.includes(img._id.toString())
-    );
-
-    if (imagesToDelete.length === 0) {
-      throw new ApiError(404, "Không tìm thấy ảnh cần xóa");
-    }
-
-    // Lấy public_id để xóa trên Cloudinary
-    const publicIds = imagesToDelete.map((img) => img.public_id);
-
-    // Xóa ảnh trên Cloudinary
-    await imageService.deleteImages(publicIds);
-
-    // Xóa ảnh khỏi model
-    review.images = review.images.filter(
-      (img) => !imageIds.includes(img._id.toString())
-    );
-
-    await review.save();
-
-    return {
-      success: true,
-      message: "Xóa ảnh đánh giá thành công",
-      images: review.images,
-    };
-  },
-
-  /**
-   * Xóa tất cả ảnh của review
-   * @param {String} reviewId - ID đánh giá
-   * @returns {Promise<Object>} - Kết quả xóa
-   */
-  removeAllReviewImages: async (reviewId) => {
-    const review = await Review.findById(reviewId);
-    if (!review) {
-      throw new ApiError(404, "Không tìm thấy đánh giá");
-    }
-
-    if (!review.images || review.images.length === 0) {
-      return {
-        success: true,
-        message: "Đánh giá không có ảnh nào",
-      };
-    }
-
-    // Lấy public_id để xóa trên Cloudinary
-    const publicIds = review.images.map((img) => img.public_id);
-
-    // Xóa ảnh trên Cloudinary
-    await imageService.deleteImages(publicIds);
-
-    // Xóa tất cả ảnh khỏi model
-    review.images = [];
-    await review.save();
-
-    return {
-      success: true,
-      message: "Xóa tất cả ảnh đánh giá thành công",
     };
   },
 };

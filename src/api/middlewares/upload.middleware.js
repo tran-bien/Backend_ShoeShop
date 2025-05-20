@@ -100,11 +100,7 @@ const uploadMiddleware = {
   ),
   uploadBrandLogo: createSingleUploadMiddleware("brands", "logo"),
   uploadAvatar: createSingleUploadMiddleware("users/avatars", "avatar"),
-  uploadReviewImages: createMultiUploadMiddleware(
-    "reviews/images",
-    "images",
-    5
-  ),
+
 
   /**
    * Middleware xử lý lỗi upload
@@ -190,17 +186,6 @@ const uploadMiddleware = {
     });
   },
 
-  /**
-   * Middleware xử lý upload review images
-   */
-  handleReviewImagesUpload: (req, res, next) => {
-    uploadMiddleware.uploadReviewImages(req, res, (err) => {
-      if (err) {
-        return uploadMiddleware.handleUploadError(err, req, res, next);
-      }
-      next();
-    });
-  },
 };
 
 module.exports = uploadMiddleware;

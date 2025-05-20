@@ -91,12 +91,6 @@ const validateCreateReview = [
     .withMessage("Nội dung đánh giá không được để trống")
     .isLength({ min: 10, max: 1500 })
     .withMessage("Nội dung đánh giá phải từ 10-1500 ký tự"),
-  body("images").optional().isArray().withMessage("Ảnh phải là một mảng"),
-  body("images.*.url").optional().isURL().withMessage("URL ảnh không hợp lệ"),
-  body("images.*.public_id")
-    .optional()
-    .isString()
-    .withMessage("Public ID ảnh không hợp lệ"),
 ];
 
 /**
@@ -111,12 +105,6 @@ const validateUpdateReview = [
     .optional()
     .isLength({ min: 10, max: 1500 })
     .withMessage("Nội dung đánh giá phải từ 10-1500 ký tự"),
-  body("images").optional().isArray().withMessage("Ảnh phải là một mảng"),
-  body("images.*.url").optional().isURL().withMessage("URL ảnh không hợp lệ"),
-  body("images.*.public_id")
-    .optional()
-    .isString()
-    .withMessage("Public ID ảnh không hợp lệ"),
 ];
 
 /**
@@ -198,29 +186,6 @@ const validateRestoreReview = [
     .withMessage("ID đánh giá không hợp lệ"),
 ];
 
-/**
- * Validator cho upload ảnh review
- */
-const validateUploadReviewImages = [
-  // Kiểm tra tồn tại của file
-  (req, res, next) => {
-    if (!req.files || req.files.length === 0) {
-      throw new ApiError(400, "Không có ảnh nào được tải lên");
-    }
-    next();
-  },
-
-  // Kiểm tra số lượng ảnh tối đa
-  (req, res, next) => {
-    if (req.files.length > 5) {
-      throw new ApiError(
-        400,
-        "Chỉ được phép tải lên tối đa 5 ảnh cho mỗi đánh giá"
-      );
-    }
-    next();
-  },
-];
 
 /**
  * Validator cho ID review
@@ -277,7 +242,6 @@ module.exports = {
   validateGetAllReviews,
   validateToggleReviewVisibility,
   validateRestoreReview,
-  validateUploadReviewImages,
   validateReviewId,
   validateReviewOwnership,
   validateImageIds,

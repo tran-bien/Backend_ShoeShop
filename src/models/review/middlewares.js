@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const cloudinary = require("cloudinary").v2;
 
 /**
  * Áp dụng middleware cho Review Schema
@@ -43,30 +42,6 @@ const applyMiddlewares = (schema) => {
     }
   };
 
-  // Xóa tất cả ảnh của review từ Cloudinary
-  const deleteReviewImages = async function (review) {
-    if (!review.images || review.images.length === 0) return;
-
-    try {
-      // Lấy tất cả public_id của ảnh
-      const publicIds = review.images
-        .filter((img) => img.public_id)
-        .map((img) => img.public_id);
-
-      if (publicIds.length > 0) {
-        // Xóa ảnh từ Cloudinary
-        const deletePromises = publicIds.map((publicId) =>
-          cloudinary.uploader.destroy(publicId)
-        );
-        await Promise.all(deletePromises);
-        console.log(`Đã xóa ${publicIds.length} ảnh của review ${review._id}`);
-      }
-    } catch (error) {
-      console.error(`Lỗi khi xóa ảnh review: ${error.message}`);
-      // Không throw lỗi - vẫn tiếp tục xóa review
-    }
-  };
-
   // Sau khi lưu đánh giá
   schema.post("save", async function () {
     await updateProductRating(this.productSnapshot.productId);
@@ -87,8 +62,6 @@ const applyMiddlewares = (schema) => {
       // Lưu id sản phẩm để cập nhật sau khi xóa
       this._productId = this.productSnapshot.productId;
 
-      // Xóa ảnh từ Cloudinary nếu có
-      await deleteReviewImages(this);
       next();
     }
   );
@@ -115,11 +88,6 @@ const applyMiddlewares = (schema) => {
             : null
         )
         .filter((id) => id !== null);
-
-      // Xóa ảnh của tất cả review bị ảnh hưởng
-      for (const review of reviews) {
-        await deleteReviewImages(review);
-      }
 
       next();
     } catch (error) {

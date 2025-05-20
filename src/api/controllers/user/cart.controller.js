@@ -65,46 +65,8 @@ const clearCart = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Áp dụng mã giảm giá
- * @route   POST /api/cart/apply-coupon
- * @access  Private
- */
-const applyCoupon = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
-  const { couponCode, itemIds } = req.body;
-  const result = await cartService.applyCoupon(userId, { couponCode, itemIds });
-  
-  res.status(200).json(result);
-});
-
-/**
- * @desc    Hủy mã giảm giá
- * @route   POST /api/cart/remove-coupon
- * @access  Private
- */
-const removeCoupon = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
-  const { itemIds } = req.body;
-  const result = await cartService.removeCoupon(userId, { itemIds });
-  
-  res.status(200).json(result);
-});
-
-/**
- * @desc    Chuẩn bị thanh toán
- * @route   POST /api/cart/checkout
- * @access  Private
- */
-const checkout = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
-  const result = await cartService.prepareCheckout(userId);
-  
-  res.status(200).json(result);
-});
-
-/**
  * @desc    Chọn/bỏ chọn sản phẩm trong giỏ hàng
- * @route   PATCH /api/cart/items/select
+ * @route   PATCH /api/cart/items/:itemId/toggle
  * @access  Private
  */
 const toggleSelectCartItem = asyncHandler(async (req, res) => {
@@ -115,14 +77,24 @@ const toggleSelectCartItem = asyncHandler(async (req, res) => {
   res.status(200).json(result);
 });
 
+/**
+ * @desc    Xem trước kết quả áp dụng mã giảm giá
+ * @route   POST /api/cart/preview-coupon
+ * @access  Private
+ */
+const previewCoupon = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const result = await cartService.previewCoupon(userId, req.body);
+  
+  res.status(200).json(result);
+});
+
 module.exports = {
   getCart,
   addToCart,
   updateCartItem,
   removeCartItems,
   clearCart,
-  applyCoupon,
-  removeCoupon,
-  checkout,
-  toggleSelectCartItem
+  toggleSelectCartItem,
+  previewCoupon
 };
