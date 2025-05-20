@@ -127,26 +127,35 @@ const applyMiddlewares = (schema) => {
   });
 
   // Xử lý sau khi lưu Order
+ // File middleware
   schema.post("save", async function (doc) {
     try {
       const previousStatus = this._previousStatus;
       const currentStatus = this.status;
 
-      // Nếu là đơn hàng mới được tạo, cập nhật inventory
+      // Nếu là đơn hàng mới được tạo
       if (!previousStatus && currentStatus === "pending") {
-        // Giảm số lượng tồn kho khi đơn hàng được tạo
-        for (const item of this.orderItems) {
-          await updateInventory(item, "decrement");
+        // Kiểm tra phương thức thanh toán
+        if (this.payment.method === "COD") {
+          // Nếu thanh toán COD, giảm số lượng tồn kho ngay
+          for (const item of this.orderItems) {
+            await updateInventory(item, "decrement");
+          }
+          this.inventoryDeducted = true;
+          await this.save(); // Lưu lại trạng thái đã trừ tồn kho
         }
+        // Nếu là VNPAY, sẽ trừ khi thanh toán thành công
       }
 
       // Xử lý khi trạng thái đơn hàng thay đổi
       if (previousStatus && previousStatus !== currentStatus) {
-        // Nếu đơn hàng bị hủy, trả lại số lượng tồn kho
-        if (currentStatus === "cancelled") {
+        // Nếu đơn hàng bị hủy và đã trừ tồn kho, trả lại số lượng
+        if (currentStatus === "cancelled" && this.inventoryDeducted) {
           for (const item of this.orderItems) {
             await updateInventory(item, "increment");
           }
+          this.inventoryDeducted = false;
+          await this.save(); // Cập nhật trạng thái
         }
 
         // Gửi thông báo khi trạng thái đơn hàng thay đổi

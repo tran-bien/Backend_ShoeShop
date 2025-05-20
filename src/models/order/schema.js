@@ -102,6 +102,12 @@ const OrderSchema = new mongoose.Schema(
       },
     },
 
+    // Đánh dấu nếu là COD thì trừ hàng, VNPAY thì không trừ đợi thanh toán
+    inventoryDeducted: {
+      type: Boolean,
+      default: false
+    },
+
     // Lịch sử trạng thái
     statusHistory: [
       {

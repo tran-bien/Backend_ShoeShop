@@ -319,7 +319,8 @@ const orderService = {
         status: "pending",
         updatedAt: new Date(),
         note: "Đơn hàng được tạo"
-      }]
+      }],
+      inventoryDeducted: paymentMethod === "COD" // Chỉ đánh dấu true nếu là COD
     });
 
     // Nếu có coupon, lưu thông tin và tăng số lần sử dụng

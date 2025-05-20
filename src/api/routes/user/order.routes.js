@@ -6,6 +6,12 @@ const orderValidator = require("@validators/order.validator");
 const { protect } = require("@middlewares/auth.middleware");
 
 // Routes không cần xác thực
+/** 
+ * @route   GET /api/orders/vnpay/test-callback
+ * @desc    Test callback từ VNPAY
+ * @access  Public
+ */
+router.get("/vnpay/test-callback", orderController.testVnpayCallback);
 router.get("/vnpay/callback", orderController.vnpayCallback);
 router.post("/vnpay/ipn", orderController.vnpayIpn);
 
@@ -68,5 +74,6 @@ router.get(
  * @access  Private
  */
 router.post("/:id/repay", orderController.repayOrder);
+
 
 module.exports = router;

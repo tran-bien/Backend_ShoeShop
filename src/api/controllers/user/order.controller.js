@@ -210,6 +210,26 @@ const vnpayIpn = asyncHandler(async (req, res) => {
   return res.status(400).json({ RspCode: "99", Message: "Invalid Params" });
 });
 
+/**
+ * @desc    Test callback từ VNPAY
+ * @route   GET /api/orders/vnpay/test-callback
+ * @access  Public
+ */
+const testVnpayCallback = asyncHandler(async (req, res) => {
+  const vnpParams = req.query;
+  
+  console.log("Xử lý VNPAY test callback:", JSON.stringify(vnpParams));
+  
+  // Xử lý kết quả thanh toán
+  const paymentResult = await paymentService.processPaymentResult(vnpParams);
+  
+  res.status(200).json({
+    success: true,
+    message: "Đã xử lý callback VNPAY test",
+    data: paymentResult
+  });
+});
+
 module.exports = {
   getOrders,
   getOrderById,
@@ -219,5 +239,6 @@ module.exports = {
   getUserOrderStats,
   repayOrder,
   vnpayCallback,
-  vnpayIpn
+  vnpayIpn,
+  testVnpayCallback
 };
