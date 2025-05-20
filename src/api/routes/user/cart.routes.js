@@ -84,7 +84,7 @@ router.post(
 router.post("/checkout", cartController.checkout);
 
 /**
- * @route   PATCH /api/cart/items/:itemId/toggle
+ * @route   PATCH /api/cart/items/:itemId/  
  * @desc    Chuyển đổi trạng thái chọn sản phẩm trong giỏ hàng
  * @access  Private
  */
