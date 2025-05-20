@@ -81,12 +81,11 @@ const validateToggleSelectItems = [
 ];
 
 /**
- * Validator cho xem trước mã giảm giá
+ * Validator cho xem trước kết quả tính toán đơn hàng trước khi tạo đơn hàng
  */
-const validatePreviewCoupon = [
+const validatePreviewBeforeOrder = [
   body("couponCode")
-    .notEmpty()
-    .withMessage("Vui lòng cung cấp mã giảm giá")
+    .optional()
     .isString()
     .withMessage("Mã giảm giá phải là chuỗi")
     .isLength({ min: 3, max: 20 })
@@ -98,5 +97,5 @@ module.exports = {
   validateUpdateCartItem,
   validateRemoveFromCart,
   validateToggleSelectItems,
-  validatePreviewCoupon
+  validatePreviewBeforeOrder
 };

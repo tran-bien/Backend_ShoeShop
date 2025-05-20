@@ -65,14 +65,14 @@ router.patch(
 );
 
 /**
- * @route   POST /api/cart/preview-coupon
- * @desc    Xem trước kết quả áp dụng mã giảm giá
+ * @route   POST /api/cart/preview-before-order
+ * @desc    Xem trước kết quả tính toán đơn hàng trước khi tạo đơn hàng
  * @access  Private
  */
 router.post(
-  "/preview-coupon",
-  validate(cartValidator.validatePreviewCoupon),
-  cartController.previewCoupon
+  "/preview-before-order",
+  validate(cartValidator.validatePreviewBeforeOrder),
+  cartController.previewBeforeOrder
 );
 
 module.exports = router;

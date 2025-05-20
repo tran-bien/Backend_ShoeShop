@@ -78,13 +78,13 @@ const toggleSelectCartItem = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Xem trước kết quả áp dụng mã giảm giá
- * @route   POST /api/cart/preview-coupon
+ * @desc    Xem trước kết quả áp dụng mã giảm giá trước khi tạo đơn hàng
+ * @route   POST /api/cart/preview-before-order
  * @access  Private
  */
-const previewCoupon = asyncHandler(async (req, res) => {
+const previewBeforeOrder = asyncHandler(async (req, res) => {
   const userId = req.user.id;
-  const result = await cartService.previewCoupon(userId, req.body);
+  const result = await cartService.previewBeforeOrder(userId, req.body);
   
   res.status(200).json(result);
 });
@@ -96,5 +96,5 @@ module.exports = {
   removeCartItems,
   clearCart,
   toggleSelectCartItem,
-  previewCoupon
+  previewBeforeOrder
 };

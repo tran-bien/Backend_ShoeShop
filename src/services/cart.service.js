@@ -3,14 +3,10 @@ const ApiError = require("@utils/ApiError");
 const mongoose = require("mongoose");
 
 const cartService = {
-  /**
-   * Lấy giỏ hàng của người dùng, tạo mới nếu chưa có
-   * @param {String} userId - ID của người dùng
-   * @returns {Object} - Giỏ hàng của người dùng
-   */
   getCartByUser: async (userId) => {
+    // Tìm giỏ hàng của người dùng
     let cart = await Cart.findOne({ user: userId });
-
+  
     // Nếu chưa có giỏ hàng, tạo mới
     if (!cart) {
       cart = new Cart({
@@ -20,8 +16,56 @@ const cartService = {
         subTotal: 0
       });
       await cart.save();
+      return { success: true, cart };
     }
-
+  
+    // Kiểm tra và cập nhật trạng thái các sản phẩm
+    const Variant = mongoose.model("Variant");
+    for (let i = 0; i < cart.cartItems.length; i++) {
+      const item = cart.cartItems[i];
+      
+      // Lấy ID thực của variant và size
+      const variantId = typeof item.variant === 'object' ? item.variant._id : item.variant;
+      const sizeId = typeof item.size === 'object' ? item.size._id : item.size;
+      
+      // Kiểm tra tồn kho
+      const variant = await Variant.findById(variantId);
+      if (!variant) {
+        item.isAvailable = false;
+        item.unavailableReason = "Không tìm thấy biến thể sản phẩm";
+        continue;
+      }
+      
+      const sizeInfo = variant.sizes.find(s => s.size && s.size.toString() === sizeId.toString());
+      if (!sizeInfo || !sizeInfo.isSizeAvailable || sizeInfo.quantity < item.quantity) {
+        item.isAvailable = false;
+        item.unavailableReason = !sizeInfo ? "Kích thước không có sẵn" : 
+                                !sizeInfo.isSizeAvailable ? "Kích thước này hiện không có sẵn" :
+                                `Chỉ còn ${sizeInfo.quantity} sản phẩm trong kho`;
+      } else {
+        item.isAvailable = true;
+        item.unavailableReason = "";
+      }
+    }
+    
+    // Cập nhật trạng thái sản phẩm trong DB
+    await cart.save();
+  
+    // Populate thông tin chi tiết
+    await cart.populate({
+      path: "cartItems.variant",
+      select: "color product price priceFinal isActive",
+      populate: [
+        { path: "color", select: "name code" },
+        { path: "product", select: "name slug isActive" }
+      ]
+    });
+    
+    await cart.populate({
+      path: "cartItems.size",
+      select: "value description"
+    });
+  
     return {
       success: true,
       cart,
@@ -269,19 +313,14 @@ const cartService = {
   },
 
   /**
-   * Xem trước kết quả áp dụng mã giảm giá và tính toán phí vận chuyển (không lưu vào DB)
-   * @param {String} userId - ID của người dùng
-   * @param {Object} data - Dữ liệu áp dụng coupon
-   * @returns {Object} - Kết quả tính toán
-   */
-  previewCoupon: async (userId, data) => {
+ * Xem trước kết quả tính toán đơn hàng bao gồm phí vận chuyển và giảm giá (nếu có)
+ * @param {String} userId - ID của người dùng
+ * @param {Object} data - Dữ liệu để tính toán (có thể có couponCode hoặc không)
+ * @returns {Object} - Kết quả tính toán đơn hàng
+ */
+  previewBeforeOrder: async (userId, data = {}) => {
     const { couponCode } = data;
     
-    // Kiểm tra dữ liệu đầu vào coupon
-    if (!couponCode) {
-      throw new ApiError(400, "Vui lòng nhập mã giảm giá");
-    }
-
     // Lấy giỏ hàng của người dùng
     const cart = await Cart.findOne({ user: userId });
     if (!cart) {
@@ -290,7 +329,7 @@ const cartService = {
 
     // Kiểm tra giỏ hàng có sản phẩm không
     if (cart.cartItems.length === 0) {
-      throw new ApiError(400, "Giỏ hàng trống, không thể áp dụng mã giảm giá");
+      throw new ApiError(400, "Giỏ hàng trống, không thể xem trước đơn hàng");
     }
 
     // Lọc các sản phẩm đã chọn và có sẵn
@@ -310,72 +349,168 @@ const cartService = {
     const SHIPPING_FREE_THRESHOLD = 1000000;
     const shippingFee = subtotalSelected >= SHIPPING_FREE_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
 
-    // Tìm mã giảm giá
-    const coupon = await Coupon.findOne({
-      code: couponCode.toUpperCase(),
-      status: "active",
-      startDate: { $lte: new Date() },
-      endDate: { $gte: new Date() },
-      $or: [
-        { isPublic: true },
-        { users: userId }
-      ]
-    });
-
-    if (!coupon) {
-      throw new ApiError(400, "Mã giảm giá không hợp lệ, đã hết hạn hoặc bạn chưa thu thập");
-    }
-
-    // Kiểm tra số lần sử dụng
-    if (coupon.maxUses && coupon.currentUses >= coupon.maxUses) {
-      throw new ApiError(400, "Mã giảm giá đã hết lượt sử dụng");
-    }
-
-    // Kiểm tra giá trị đơn hàng tối thiểu
-    if (coupon.minOrderValue && subtotalSelected < coupon.minOrderValue) {
-      throw new ApiError(
-        400,
-        `Giá trị đơn hàng được chọn chưa đạt tối thiểu ${coupon.minOrderValue.toLocaleString()}đ để áp dụng mã giảm giá`
-      );
-    }
-
-    // Tính toán giảm giá tổng thể
-    let totalDiscount = 0;
-    if (coupon.type === "percent") {
-      totalDiscount = (subtotalSelected * coupon.value) / 100;
-      if (coupon.maxDiscount) {
-        totalDiscount = Math.min(totalDiscount, coupon.maxDiscount);
-      }
-    } else { // fixed
-      totalDiscount = Math.min(coupon.value, subtotalSelected);
-    }
-
-    const totalAfterDiscount = subtotalSelected - totalDiscount;
-
-    // Tạo dữ liệu xem trước (không lưu vào DB)
-    const previewData = {
-      original: {
-        subTotal: subtotalSelected,
-        shippingFee,
-        totalPrice: subtotalSelected + shippingFee
-      },
-      withCoupon: {
-        couponCode: coupon.code,
-        couponType: coupon.type,
-        couponValue: coupon.value,
-        maxDiscount: coupon.maxDiscount || null,
-        discount: totalDiscount,
-        totalAfterDiscount,
-        shippingFee,
-        totalPrice: totalAfterDiscount + shippingFee
-      }
-    };
-
-    return {
+    // Khởi tạo kết quả mặc định (không có mã giảm giá)
+    const result = {
       success: true,
-      message: "Dự tính giảm giá và phí vận chuyển khi áp dụng mã",
-      preview: previewData
+      preview: {
+        items: selectedItems.length,
+        itemsDetail: await Promise.all(selectedItems.map(async item => {
+          const mongoose = require('mongoose');
+          const Variant = mongoose.model('Variant');
+          const Size = mongoose.model('Size');
+
+          // Fetch variant details including product reference and color name
+          const variantDoc = await Variant.findById(item.variant)
+            .populate('product', '_id')
+            .populate('color', 'name');
+
+          // Fetch size details to get the size value
+          const sizeDoc = await Size.findById(item.size, 'value description');
+
+          return {
+            productId: variantDoc?.product?._id || null,
+            productName: item.productName,
+            variantId: variantDoc?._id || item.variant,
+            color: (await mongoose.model('Color').findById(variantDoc.color, 'name type code').lean()) || { name: null, type: null, code: null },
+            sizeId: sizeDoc?._id || item.size,
+            sizeValue: sizeDoc?.value || null,
+            sizeDescription: sizeDoc?.description || null,
+            price: item.price,
+            quantity: item.quantity,
+            image: item.image,
+            totalPrice: item.price * item.quantity
+          };
+        })),
+        totalQuantity: selectedItems.reduce((sum, item) => sum + item.quantity, 0),
+        subTotal: subtotalSelected,
+        discount: 0,
+        shippingFee,
+        totalPrice: subtotalSelected + shippingFee,
+        couponApplied: false
+      }
     };
+
+    // Nếu không có mã giảm giá, trả về kết quả mặc định
+    if (!couponCode) {
+      return {
+        success: true,
+        message: "Dự tính đơn hàng (không có mã giảm giá)",
+        preview: result.preview
+      };
+    }
+
+    // Xử lý trường hợp có mã giảm giá
+    try {
+      // Tìm mã giảm giá
+      const coupon = await Coupon.findOne({
+        code: couponCode.toUpperCase(),
+        status: "active",
+        startDate: { $lte: new Date() },
+        endDate: { $gte: new Date() },
+        $or: [
+          { isPublic: true },
+          { users: userId }
+        ]
+      });
+
+      if (!coupon) {
+        return {
+          success: false,
+          message: "Mã giảm giá không hợp lệ, đã hết hạn hoặc bạn chưa thu thập",
+          preview: result.preview
+        };
+      }
+
+      // Kiểm tra số lần sử dụng
+      if (coupon.maxUses && coupon.currentUses >= coupon.maxUses) {
+        return {
+          success: false,
+          message: "Mã giảm giá đã hết lượt sử dụng",
+          preview: result.preview
+        };
+      }
+
+      // Kiểm tra giá trị đơn hàng tối thiểu
+      if (coupon.minOrderValue && subtotalSelected < coupon.minOrderValue) {
+        return {
+          success: false,
+          message: `Giá trị đơn hàng được chọn chưa đạt tối thiểu ${coupon.minOrderValue.toLocaleString()}đ để áp dụng mã giảm giá`,
+          preview: result.preview
+        };
+      }
+
+      // Tính toán giảm giá tổng thể
+      let totalDiscount = 0;
+      if (coupon.type === "percent") {
+        totalDiscount = (subtotalSelected * coupon.value) / 100;
+        if (coupon.maxDiscount) {
+          totalDiscount = Math.min(totalDiscount, coupon.maxDiscount);
+        }
+      } else { // fixed
+        totalDiscount = Math.min(coupon.value, subtotalSelected);
+      }
+
+      const totalAfterDiscount = subtotalSelected - totalDiscount;
+
+      // Tạo kết quả với mã giảm giá
+      const previewWithCoupon = {
+        items: selectedItems.length,
+        itemsDetail: await Promise.all(selectedItems.map(async item => {
+          const mongoose = require('mongoose');
+          const Variant = mongoose.model('Variant');
+          const Size = mongoose.model('Size');
+
+          // Fetch variant details including product reference and color name
+          const variantDoc = await Variant.findById(item.variant)
+            .populate('product', '_id')
+            .populate('color', 'name');
+
+          // Fetch size details to get the size value
+          const sizeDoc = await Size.findById(item.size, 'value description');
+
+          return {
+            productId: variantDoc?.product?._id || null,
+            productName: item.productName,
+            variantId: variantDoc?._id || item.variant,
+            color: (await mongoose.model('Color').findById(variantDoc.color, 'name type code').lean()) || { name: null, type: null, code: null },
+            sizeId: sizeDoc?._id || item.size,
+            sizeValue: sizeDoc?.value || null,
+            sizeDescription: sizeDoc?.description || null,
+            price: item.price,
+            quantity: item.quantity,
+            image: item.image,
+            totalPrice: item.price * item.quantity
+          };
+        })),
+        totalQuantity: selectedItems.reduce((sum, item) => sum + item.quantity, 0),
+        subTotal: subtotalSelected,
+        discount: totalDiscount,
+        shippingFee,
+        totalPrice: totalAfterDiscount + shippingFee,
+        couponApplied: true,
+        couponDetail: {
+          code: coupon.code,
+          type: coupon.type,
+          value: coupon.value,
+          maxDiscount: coupon.maxDiscount || null
+        }
+      };
+
+      return {
+        success: true,
+        message: "Dự tính đơn hàng với mã giảm giá",
+        preview: previewWithCoupon
+      };
+
+    } catch (error) {
+      console.error("Lỗi khi tính toán với mã giảm giá:", error);
+      // Nếu có lỗi khi xử lý mã giảm giá, vẫn trả về kết quả mặc định
+      return {
+        success: false,
+        message: "Có lỗi xảy ra khi áp dụng mã giảm giá: " + error.message,
+        preview: result.preview
+      };
+    }
   },
 
   /**

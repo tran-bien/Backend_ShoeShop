@@ -24,23 +24,22 @@ const calculateSubTotal = (cartItems) => {
   );
 };
 
-/**
- * Cập nhật thông tin của một mục trong giỏ hàng
- * @param {Object} cartItem - Mục cần cập nhật
- * @returns {Object} - Dữ liệu đã cập nhật
- */
 const updateCartItemInfo = async (cartItem) => {
   try {
     // Lấy thông tin biến thể và kích thước
     const Variant = mongoose.model("Variant");
     const Size = mongoose.model("Size");
-    const Product = mongoose.model("Product");  // Truy cập trực tiếp đến model Product
+    const Product = mongoose.model("Product");
 
-    // Kiểm tra biến thể có tồn tại không - lấy thông tin cơ bản
-    const variant = await Variant.findById(cartItem.variant);
+    // Xử lý ID của variant (có thể là ObjectId hoặc object đã được populate)
+    const variantId = typeof cartItem.variant === 'object' ? 
+                      cartItem.variant._id : cartItem.variant;
+    
+    // Kiểm tra biến thể có tồn tại không
+    const variant = await Variant.findById(variantId);
     
     if (!variant) {
-      console.error(`[${new Date().toISOString()}] Không tìm thấy biến thể với ID: ${cartItem.variant}`);
+      console.error(`[${new Date().toISOString()}] Không tìm thấy biến thể với ID: ${variantId}`);
       cartItem.isAvailable = false;
       cartItem.unavailableReason = "Không tìm thấy biến thể sản phẩm";
       return cartItem;
@@ -48,7 +47,7 @@ const updateCartItemInfo = async (cartItem) => {
 
     // Kiểm tra trạng thái biến thể
     if (variant.isActive === false) {
-      console.error(`[${new Date().toISOString()}] Biến thể với ID: ${cartItem.variant} đã bị vô hiệu hóa (isActive: false)`);
+      console.error(`[${new Date().toISOString()}] Biến thể đã bị vô hiệu hóa (isActive: false)`);
       cartItem.isAvailable = false;
       cartItem.unavailableReason = "Biến thể sản phẩm đã bị vô hiệu hóa";
       return cartItem;
@@ -57,7 +56,7 @@ const updateCartItemInfo = async (cartItem) => {
     // Lấy productId từ variant
     const productId = variant.product;
     
-    // Lấy thông tin sản phẩm TRỰC TIẾP từ database
+    // Lấy thông tin sản phẩm
     const product = await Product.findById(productId);
     
     if (!product) {
@@ -73,17 +72,21 @@ const updateCartItemInfo = async (cartItem) => {
       return cartItem;
     }
 
-    // Kiểm tra kích cỡ có tồn tại không
-    const size = await Size.findById(cartItem.size);
+    // Xử lý ID của size (có thể là ObjectId hoặc object đã được populate)
+    const sizeId = typeof cartItem.size === 'object' ? 
+                  cartItem.size._id : cartItem.size;
+    
+    // Kiểm tra kích cỡ tồn tại
+    const size = await Size.findById(sizeId);
     if (!size) {
       cartItem.isAvailable = false;
       cartItem.unavailableReason = "Kích cỡ không tồn tại";
       return cartItem;
     }
 
-    // Kiểm tra trong variant có size này không
+    // Kiểm tra trong variant có size này không - Fix chính là ở đây
     const sizeInVariant = variant.sizes.find(
-      (s) => s.size && s.size.toString() === cartItem.size.toString()
+      (s) => s.size && s.size.toString() === sizeId.toString()
     );
 
     if (!sizeInVariant) {
@@ -125,6 +128,7 @@ const updateCartItemInfo = async (cartItem) => {
 
     return cartItem;
   } catch (error) {
+    console.error(`[${new Date().toISOString()}] Lỗi khi cập nhật thông tin sản phẩm: ${error.message}`);
     cartItem.isAvailable = false;
     cartItem.unavailableReason = "Lỗi hệ thống khi xử lý thông tin sản phẩm";
     return cartItem;

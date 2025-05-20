@@ -99,7 +99,7 @@ const orderService = {
       addressId,
       paymentMethod = "COD",
       note,
-      couponCode // Thêm couponCode vào dữ liệu đầu vào
+      couponCode
     } = orderData;
 
     // Kiểm tra dữ liệu đầu vào
@@ -119,15 +119,25 @@ const orderService = {
     }
 
     // Tìm địa chỉ trong danh sách địa chỉ của người dùng
-    const shippingAddress = user.addresses.find(
+    const address = user.addresses.find(
       (addr) => addr._id.toString() === addressId
     );
-    if (!shippingAddress) {
+    if (!address) {
       throw new ApiError(404, "Không tìm thấy địa chỉ giao hàng");
     }
 
+    // Ánh xạ từ cấu trúc địa chỉ User sang cấu trúc địa chỉ Order
+    const shippingAddress = {
+      name: address.fullName,
+      phone: address.phone,
+      province: address.province,
+      district: address.district,
+      ward: address.ward,
+      detail: address.addressDetail
+    };
+
     // Lấy giỏ hàng hiện tại
-    const cart = await Cart.findOne({ user: userId })
+    let cart = await Cart.findOne({ user: userId })
       .populate({
         path: "cartItems.variant",
         populate: { path: "product" }
@@ -138,32 +148,93 @@ const orderService = {
       throw new ApiError(400, "Giỏ hàng trống, không thể tạo đơn hàng");
     }
 
-    // Lọc ra những sản phẩm được chọn và có sẵn
-    const selectedItems = cart.cartItems.filter(item => item.isSelected && item.isAvailable);
+    // Lọc ra những sản phẩm được chọn
+    const selectedItems = cart.cartItems.filter(item => item.isSelected);
     
     if (selectedItems.length === 0) {
-      throw new ApiError(400, "Không có sản phẩm nào được chọn hoặc sẵn sàng để thanh toán");
+      throw new ApiError(400, "Vui lòng chọn ít nhất một sản phẩm để thanh toán");
     }
 
-    // Kiểm tra tồn kho cho từng sản phẩm
+    console.log("Đang kiểm tra tồn kho cho các sản phẩm đã chọn...");
+    
+    // Kiểm tra trực tiếp tồn kho và chuẩn bị mảng orderItems
+    const Variant = mongoose.model("Variant");
+    const orderItems = [];
     const unavailableItems = [];
+    
     for (const item of selectedItems) {
-      if (!item.isAvailable) {
+      const itemId = item._id.toString();
+      const variantId = typeof item.variant === 'object' ? item.variant._id : item.variant;
+      const variant = await Variant.findById(variantId);
+      
+      if (!variant) {
         unavailableItems.push({
           productName: item.productName,
+          reason: "Không tìm thấy biến thể sản phẩm"
         });
+        continue;
       }
+      
+      const sizeId = typeof item.size === 'object' ? item.size._id : item.size;
+      const sizeInfo = variant.sizes.find(s => s.size.toString() === sizeId.toString());
+      
+      console.log(`Kiểm tra sản phẩm: ${item.productName}`);
+      console.log(`- Biến thể: ${variantId}`);
+      console.log(`- Kích thước: ${sizeId}`);
+      console.log(`- Yêu cầu số lượng: ${item.quantity}`);
+      
+      if (!sizeInfo) {
+        console.log(`- Kết quả: Không tìm thấy kích thước trong biến thể`);
+        unavailableItems.push({
+          productName: item.productName,
+          reason: "Không tìm thấy kích thước cho biến thể này"
+        });
+        continue;
+      }
+      
+      console.log(`- Trong kho: ${sizeInfo.quantity}`);
+      console.log(`- Có sẵn: ${sizeInfo.isSizeAvailable ? "Có" : "Không"}`);
+      
+      if (!sizeInfo.isSizeAvailable) {
+        unavailableItems.push({
+          productName: item.productName,
+          reason: "Kích thước này hiện không có sẵn"
+        });
+        continue;
+      }
+      
+      if (sizeInfo.quantity < item.quantity) {
+        unavailableItems.push({
+          productName: item.productName,
+          reason: `Không đủ tồn kho. Hiện còn ${sizeInfo.quantity} sản phẩm.`
+        });
+        continue;
+      }
+      
+      // Sản phẩm có sẵn, thêm vào danh sách orderItems
+      orderItems.push({
+        variant: variantId,
+        size: sizeId,
+        productName: item.productName,
+        quantity: item.quantity,
+        price: item.price,
+        image: item.image || "",
+      });
     }
-
+    
+    // Nếu có sản phẩm không khả dụng
     if (unavailableItems.length > 0) {
-      throw new ApiError(
-        400,
-        "Một số sản phẩm đã hết hàng hoặc không đủ số lượng"
-      );
+      const errorMessage = `Một số sản phẩm không có sẵn: ${unavailableItems.map(item => `${item.productName} (${item.reason})`).join(", ")}`;
+      throw new ApiError(400, errorMessage);
+    }
+    
+    // Kiểm tra nếu không có sản phẩm nào khả dụng
+    if (orderItems.length === 0) {
+      throw new ApiError(400, "Không có sản phẩm nào khả dụng trong giỏ hàng. Vui lòng kiểm tra lại.");
     }
 
-    // Tính tổng giá trị của các sản phẩm được chọn
-    const subTotal = selectedItems.reduce(
+    // Tính tổng giá trị của các sản phẩm
+    const subTotal = orderItems.reduce(
       (total, item) => total + (item.price * item.quantity),
       0
     );
@@ -173,8 +244,10 @@ const orderService = {
     let discount = 0;
     let couponDetail = null;
 
+    // Chỉ xử lý mã giảm giá nếu có couponCode
     if (couponCode) {
       // Tìm mã giảm giá
+      const Coupon = mongoose.model("Coupon");
       coupon = await Coupon.findOne({
         code: couponCode.toUpperCase(),
         status: "active",
@@ -230,15 +303,8 @@ const orderService = {
     // Tạo đơn hàng mới
     const newOrder = new Order({
       user: userId,
-      orderItems: selectedItems.map((item) => ({
-        variant: item.variant._id,
-        size: item.size._id,
-        productName: item.productName,
-        quantity: item.quantity,
-        price: item.price,
-        image: item.image,
-      })),
-      shippingAddress,
+      orderItems: orderItems,
+      shippingAddress, // Sử dụng đối tượng shippingAddress đã được ánh xạ
       note: note || "",
       subTotal,
       discount,
@@ -247,8 +313,13 @@ const orderService = {
       status: "pending",
       payment: {
         method: paymentMethod,
-        paymentStatus: paymentMethod === "COD" ? "pending" : "pending",
+        paymentStatus: "pending",
       },
+      statusHistory: [{
+        status: "pending",
+        updatedAt: new Date(),
+        note: "Đơn hàng được tạo"
+      }]
     });
 
     // Nếu có coupon, lưu thông tin và tăng số lần sử dụng
@@ -256,23 +327,33 @@ const orderService = {
       newOrder.coupon = coupon._id;
       newOrder.couponDetail = couponDetail;
       
-      // Tăng số lần sử dụng mã giảm giá (chỉ khi thanh toán thành công)
-      if (paymentMethod === "COD") {
-        coupon.currentUses += 1;
-        await coupon.save();
-      }
+      // Tăng số lần sử dụng mã giảm giá
+      coupon.currentUses += 1;
+      await coupon.save();
     }
 
-    // Lưu đơn hàng
-    await newOrder.save();
+    try {
+      console.log("Đang lưu đơn hàng mới...");
+      // Lưu đơn hàng
+      const savedOrder = await newOrder.save();
+      console.log("Đã lưu đơn hàng thành công, ID:", savedOrder._id);
 
-    // Sau khi tạo đơn hàng, xóa sạch giỏ hàng
-    cart.cartItems = [];
-    cart.totalItems = 0;
-    cart.subTotal = 0;
-    await cart.save();
+      // Sau khi tạo đơn hàng, xóa sạch giỏ hàng
+      cart.cartItems = [];
+      cart.totalItems = 0;
+      cart.subTotal = 0;
+      await cart.save();
+      console.log("Đã xóa sạch giỏ hàng");
 
-    return newOrder;
+      return savedOrder;
+    } catch (error) {
+      console.error("Lỗi khi lưu đơn hàng:", error);
+      if (error.name === 'ValidationError') {
+        console.error("Chi tiết lỗi validation:", JSON.stringify(error.errors, null, 2));
+        console.error("Dữ liệu shippingAddress:", JSON.stringify(shippingAddress, null, 2));
+      }
+      throw error;
+    }
   },
 
   /**
