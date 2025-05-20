@@ -51,19 +51,44 @@ const createOrder = asyncHandler(async (req, res) => {
 
   // Nếu thanh toán qua VNPAY, tạo URL thanh toán
   if (paymentMethod === "VNPAY") {
-    const paymentUrl = await paymentService.createVnpayPaymentUrl({
-      orderId: order._id,
-      amount: order.totalAfterDiscountAndShipping,
-      orderInfo: `Thanh toán đơn hàng #${order.code || order._id}`,
-      ipAddr: req.ip,
-      returnUrl: process.env.VNPAY_RETURN_URL
-    });
+    try {
+      console.log("Creating VNPAY payment for order:", {
+        id: order._id,
+        code: order.code,
+        amount: order.totalAfterDiscountAndShipping
+      });
+      
+      const paymentUrl = await paymentService.createVnpayPaymentUrl({
+        orderId: order._id,
+        amount: order.totalAfterDiscountAndShipping,
+        orderInfo: `Thanh toan don hang ${order.code || order._id}`,
+        ipAddr: req.ip || req.connection.remoteAddress || "127.0.0.1",
+        returnUrl: process.env.VNPAY_RETURN_URL
+      });
 
-    return res.status(200).json({
-      success: true,
-      message: "Đơn hàng đã được tạo, vui lòng thanh toán",
-      data: { order, paymentUrl }
-    });
+      return res.status(200).json({
+        success: true,
+        message: "Đơn hàng đã được tạo, vui lòng thanh toán",
+        data: { 
+          order: {
+            _id: order._id,
+            code: order.code,
+            totalAmount: order.totalAfterDiscountAndShipping
+          }, 
+          paymentUrl 
+        }
+      });
+    } catch (error) {
+      console.error("VNPAY payment URL creation failed:", error);
+      
+      // Nếu lỗi tạo URL thanh toán, vẫn trả về đơn hàng đã tạo
+      return res.status(201).json({
+        success: true,
+        message: "Đơn hàng đã tạo thành công, nhưng có lỗi khi tạo URL thanh toán",
+        error: error.message,
+        data: order
+      });
+    }
   }
 
   res.status(201).json({

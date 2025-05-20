@@ -338,12 +338,17 @@ const orderService = {
       const savedOrder = await newOrder.save();
       console.log("Đã lưu đơn hàng thành công, ID:", savedOrder._id);
 
-      // Sau khi tạo đơn hàng, xóa sạch giỏ hàng
-      cart.cartItems = [];
-      cart.totalItems = 0;
-      cart.subTotal = 0;
-      await cart.save();
-      console.log("Đã xóa sạch giỏ hàng");
+      // Start of Selection
+      // Sau khi tạo đơn hàng, xóa sản phẩm đã chọn trong giỏ hàng
+      const itemsToRemove = cart.cartItems.filter(item => item.isSelected && item.isAvailable);
+      if (itemsToRemove.length > 0) {
+        cart.cartItems = cart.cartItems.filter(item => !(item.isSelected && item.isAvailable));
+        cart.totalItems = cart.cartItems.reduce((sum, item) => sum + item.quantity, 0);
+        cart.subTotal = cart.cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        await cart.save();
+        console.log(`Đã xóa ${itemsToRemove.length} sản phẩm đã chọn khỏi giỏ hàng`);
+      }
+      // End of Selectio
 
       return savedOrder;
     } catch (error) {
