@@ -8,7 +8,7 @@ const orderService = {
    * Lấy danh sách đơn hàng của người dùng
    * @param {String} userId - ID của người dùng
    * @param {Object} query - Các tham số truy vấn
-   * @returns {Object} - Danh sách đơn hàng
+   * @returns {Object} - Danh sách đơn hàng và thống kê
    */
   getUserOrders: async (userId, query = {}) => {
     const { page = 1, limit = 10, status, search } = query;
@@ -44,6 +44,26 @@ const orderService = {
       populate,
     });
 
+    // Thống kê số đơn hàng theo trạng thái
+    const orderStatsAgg = await Order.aggregate([
+      { $match: { user: new mongoose.Types.ObjectId(userId) } },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]);
+
+    const stats = {
+      pending: 0,
+      confirmed: 0,
+      shipping: 0,
+      delivered: 0,
+      cancelled: 0,
+      total: 0,
+    };
+
+    orderStatsAgg.forEach(({ _id, count }) => {
+      stats[_id] = count;
+      stats.total += count;
+    });
+
     return {
       orders: result.data,
       pagination: {
@@ -54,6 +74,7 @@ const orderService = {
         hasNext: result.hasNextPage,
         hasPrev: result.hasPrevPage,
       },
+      stats,
     };
   },
 
@@ -974,44 +995,6 @@ const orderService = {
         }
       }
     };
-  },
-
-  /**
-   * Lấy thống kê đơn hàng của người dùng theo trạng thái
-   * @param {String} userId - ID của người dùng
-   * @returns {Object} - Thống kê số lượng đơn hàng theo trạng thái
-   */
-  getUserOrderStats: async (userId) => {
-    // Lấy tổng số đơn hàng theo từng trạng thái
-    const orderStats = await Order.aggregate([
-      {
-        $match: { user: mongoose.Types.ObjectId(userId) },
-      },
-      {
-        $group: {
-          _id: "$status",
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-
-    // Chuyển đổi kết quả thành đối tượng dễ sử dụng
-    const stats = {
-      pending: 0,
-      confirmed: 0,
-      shipping: 0,
-      delivered: 0,
-      cancelled: 0,
-      total: 0,
-    };
-
-    // Cập nhật số lượng cho từng trạng thái
-    orderStats.forEach((stat) => {
-      stats[stat._id] = stat.count;
-      stats.total += stat.count;
-    });
-
-    return stats;
   },
 };
 

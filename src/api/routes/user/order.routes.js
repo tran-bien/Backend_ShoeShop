@@ -20,17 +20,10 @@ router.use(protect);
 
 /**
  * @route   GET /api/orders
- * @desc    Lấy danh sách đơn hàng của người dùng
+ * @desc    Lấy danh sách đơn hàng của người dùng và thống kê theo trạng thái
  * @access  Private
  */
 router.get("/", validate(orderValidator.validateGetOrders), orderController.getOrders);
-
-/**
- * @route   GET /api/orders/stats
- * @desc    Lấy thống kê đơn hàng theo trạng thái
- * @access  Private
- */
-router.get("/stats", orderController.getUserOrderStats);
 
 /**
  * @route   POST /api/orders

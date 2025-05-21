@@ -297,13 +297,15 @@ const paymentService = {
       const transactionId = vnpayParams.vnp_TransactionNo || vnpayParams.vnp_TxnRef;
 
       // Cập nhật thông tin thanh toán
-      order.payment.transactionId = transactionId;
-      order.payment.paymentStatus = responseCode === "00" ? "paid" : "failed";
-      
+      // Dùng findByIdAndUpdate để đảm bảo cập nhật trực tiếp vào DB
       if (responseCode === "00") {
-        // Thanh toán thành công
-        order.payment.paidAt = new Date();
-        
+        // Thanh toán thành công - Cập nhật trực tiếp trạng thái thanh toán và transactionId
+        await Order.findByIdAndUpdate(order._id, {
+          "payment.transactionId": transactionId,
+          "payment.paymentStatus": "paid",
+          "payment.paidAt": new Date()
+        });
+
         // Trừ tồn kho khi thanh toán VNPAY thành công và chưa trừ trước đó
         if (!order.inventoryDeducted) {
           console.log(`Thanh toán VNPAY thành công cho đơn hàng ${order.code}, tiến hành trừ tồn kho`);
@@ -312,24 +314,35 @@ const paymentService = {
             await updateInventory(item, "decrement");
           }
           
-          order.inventoryDeducted = true; // Đánh dấu đã trừ tồn kho
+          // Cập nhật trạng thái đã trừ tồn kho
+          await Order.findByIdAndUpdate(order._id, {
+            inventoryDeducted: true
+          });
         }
 
         // Nếu thanh toán thành công và đơn hàng đang ở trạng thái pending
         if (order.status === "pending") {
-          order.status = "confirmed";
-          order.confirmedAt = new Date();
-
-          // Thêm vào lịch sử trạng thái
-          order.statusHistory.push({
+          const now = new Date();
+          await Order.findByIdAndUpdate(order._id, {
             status: "confirmed",
-            updatedAt: new Date(),
-            note: "Tự động xác nhận sau khi thanh toán thành công",
+            confirmedAt: now,
+            $push: {
+              statusHistory: {
+                status: "confirmed",
+                updatedAt: now,
+                note: "Tự động xác nhận sau khi thanh toán thành công",
+              }
+            }
           });
         }
       } else {
         // Thanh toán thất bại
         console.log(`Thanh toán VNPAY thất bại cho đơn hàng ${order.code}`);
+        
+        await Order.findByIdAndUpdate(order._id, {
+          "payment.transactionId": transactionId,
+          "payment.paymentStatus": "failed"
+        });
         
         // Nếu đã trừ tồn kho từ trước, cần hoàn lại tồn kho
         if (order.inventoryDeducted) {
@@ -339,36 +352,38 @@ const paymentService = {
             await updateInventory(item, "increment");
           }
           
-          order.inventoryDeducted = false;
+          // Cập nhật trạng thái chưa trừ tồn kho
+          await Order.findByIdAndUpdate(order._id, {
+            inventoryDeducted: false
+          });
         }
       }
 
-      // Đảm bảo mảng paymentHistory tồn tại
-      if (!order.paymentHistory) {
-        order.paymentHistory = [];
-      }
-
       // Thêm vào lịch sử thanh toán
-      order.paymentHistory.push({
-        status: order.payment.paymentStatus,
-        transactionId: transactionId,
-        amount: order.totalAfterDiscountAndShipping,
-        method: order.payment.method,
-        updatedAt: new Date(),
-        responseData: vnpayParams,
+      await Order.findByIdAndUpdate(order._id, {
+        $push: {
+          paymentHistory: {
+            status: responseCode === "00" ? "paid" : "failed",
+            transactionId: transactionId,
+            amount: order.totalAfterDiscountAndShipping,
+            method: order.payment.method,
+            updatedAt: new Date(),
+            responseData: vnpayParams,
+          }
+        }
       });
 
-      // Lưu đơn hàng
-      await order.save();
+      // Lấy đơn hàng đã cập nhật để trả về
+      const updatedOrder = await Order.findById(order._id);
 
       return {
         success: responseCode === "00",
         message: responseCode === "00" ? "Thanh toán thành công" : "Thanh toán thất bại",
         data: {
-          orderId: order._id,
-          amount: order.totalAfterDiscountAndShipping,
-          paymentStatus: order.payment.paymentStatus,
-          orderStatus: order.status,
+          orderId: updatedOrder._id,
+          amount: updatedOrder.totalAfterDiscountAndShipping,
+          paymentStatus: updatedOrder.payment.paymentStatus,
+          orderStatus: updatedOrder.status,
         },
       };
     } catch (error) {
