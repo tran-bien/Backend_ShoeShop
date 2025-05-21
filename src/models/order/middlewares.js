@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const { createNotification } = require("@services/notification.service");
 
 /**
  * Cập nhật số lượng tồn kho từ đơn hàng
@@ -80,52 +79,6 @@ const generateOrderCode = async () => {
 };
 
 /**
- * Gửi thông báo khi trạng thái đơn hàng thay đổi
- * @param {*} order - Đơn hàng
- * @param {*} oldStatus - Trạng thái cũ
- * @param {*} newStatus - Trạng thái mới
- */
-const sendOrderStatusNotification = async (order, oldStatus, newStatus) => {
-  try {
-    if (!order || !order.user || newStatus === oldStatus) return;
-
-    let title = "";
-    let message = "";
-
-    switch (newStatus) {
-      case "confirmed":
-        title = "Đơn hàng đã được xác nhận";
-        message = `Đơn hàng #${order.code} của bạn đã được xác nhận và đang được chuẩn bị.`;
-        break;
-      case "shipping":
-        title = "Đơn hàng đang được giao";
-        message = `Đơn hàng #${order.code} của bạn đang được giao đến địa chỉ của bạn.`;
-        break;
-      case "delivered":
-        title = "Đơn hàng đã được giao thành công";
-        message = `Đơn hàng #${order.code} của bạn đã được giao thành công. Cảm ơn bạn đã mua sắm!`;
-        break;
-      case "cancelled":
-        title = "Đơn hàng đã bị hủy";
-        message = `Đơn hàng #${order.code} của bạn đã bị hủy.`;
-        break;
-      default:
-        return; // Không thông báo cho các trạng thái khác
-    }
-
-    await createNotification(order.user, {
-      type: "order",
-      title,
-      message,
-      relatedId: order._id,
-      onModel: "Order",
-    });
-  } catch (error) {
-    console.error("Lỗi khi gửi thông báo trạng thái đơn hàng:", error);
-  }
-};
-
-/**
  * Áp dụng middlewares cho Order schema
  * @param {Schema} schema - Mongoose Schema
  */
@@ -194,55 +147,53 @@ const applyMiddlewares = (schema) => {
             { new: true }
           );
         }
-
-        // Gửi thông báo khi trạng thái đơn hàng thay đổi
-        await sendOrderStatusNotification(this, previousStatus, currentStatus);
       }
     } catch (error) {
-      console.error("Lỗi khi xử lý sau khi lưu đơn hàng:", error);
+      console.error("[Order]: Lỗi trong middleware post-save:", error);
     }
   });
 
-  // Xử lý trước khi cập nhật
-  schema.pre("findOneAndUpdate", async function (next) {
-    try {
-      const update = this.getUpdate();
-      const options = this.getOptions();
-
-      // Chỉ quan tâm đến việc cập nhật trạng thái
-      if (update.$set && update.$set.status) {
-        const order = await this.model.findOne(this.getQuery());
-        if (order) {
-          this._orderId = order._id;
-          this._oldStatus = order.status;
-          this._order = order;
-        }
-      }
-
-      next();
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Xử lý sau khi cập nhật
+  // Xử lý sau khi tìm thấy và cập nhật document
   schema.post("findOneAndUpdate", async function (doc) {
     try {
-      // Xử lý khi trạng thái đơn hàng thay đổi
-      if (doc && this._oldStatus && doc.status !== this._oldStatus) {
-        // Nếu đơn hàng bị hủy, trả lại số lượng tồn kho
-        if (doc.status === "cancelled") {
+      if (!doc) return;
+
+      // Xử lý cập nhật trạng thái
+      if (doc._oldStatus && doc._oldStatus !== doc.status) {
+        if (doc.status === "cancelled" && doc.inventoryDeducted) {
+          // Nếu đơn hàng bị hủy và đã trừ tồn kho, trả lại số lượng
           for (const item of doc.orderItems) {
             await updateInventory(item, "increment");
           }
+          
+          // Cập nhật trạng thái
+          await mongoose.model("Order").findByIdAndUpdate(
+            doc._id,
+            { inventoryDeducted: false },
+            { new: true }
+          );
+        } else if (doc._oldStatus === "cancelled" && doc.status !== "cancelled" && !doc.inventoryDeducted) {
+          // Nếu đơn hàng từ trạng thái hủy => không hủy, trừ lại tồn kho
+          for (const item of doc.orderItems) {
+            await updateInventory(item, "decrement");
+          }
+          
+          // Cập nhật trạng thái
+          await mongoose.model("Order").findByIdAndUpdate(
+            doc._id,
+            { inventoryDeducted: true },
+            { new: true }
+          );
         }
-
-        // Gửi thông báo khi trạng thái đơn hàng thay đổi
-        await sendOrderStatusNotification(doc, this._oldStatus, doc.status);
       }
     } catch (error) {
-      console.error("Lỗi khi xử lý sau khi cập nhật đơn hàng:", error);
+      console.error("[Order]: Lỗi trong middleware post-findOneAndUpdate:", error);
     }
+  });
+
+  // Thiết lập virtual cho email người dùng
+  schema.virtual("userEmail").get(function () {
+    return this.user?.email || "Không có email";
   });
 };
 

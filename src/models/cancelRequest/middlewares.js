@@ -1,173 +1,135 @@
 const mongoose = require("mongoose");
-const { createNotification } = require("@services/notification.service");
 const ApiError = require("@utils/ApiError");
 
 /**
- * Áp dụng middleware cho CancelRequest Schema
- * @param {mongoose.Schema} schema - Schema để áp dụng middleware
+ * Áp dụng middlewares cho CancelRequest schema
+ * @param {Schema} schema - Mongoose Schema
  */
 const applyMiddlewares = (schema) => {
-  // Kiểm tra tính hợp lệ của yêu cầu hủy trước khi tạo mới
+  // Xử lý trước khi lưu CancelRequest
   schema.pre("save", async function (next) {
     try {
+      // Khi tạo mới yêu cầu hủy
       if (this.isNew) {
+        // Lấy đơn hàng
         const Order = mongoose.model("Order");
         const order = await Order.findById(this.order);
 
-        // Kiểm tra đơn có tồn tại không
         if (!order) {
           throw new ApiError(404, "Không tìm thấy đơn hàng");
         }
 
-        // Kiểm tra đơn có thuộc về người dùng không
-        if (order.user.toString() !== this.user.toString()) {
-          throw new ApiError(403, "Đơn hàng không thuộc về bạn");
+        // Kiểm tra nếu đơn hàng đã được giao hoặc đã hủy
+        if (order.status === "delivered") {
+          throw new ApiError(400, "Không thể hủy đơn hàng đã giao");
         }
 
-        // Kiểm tra trạng thái đơn hàng có cho phép hủy không
-        if (!["pending", "confirmed"].includes(order.status)) {
-          throw new ApiError(
-            400,
-            "Chỉ có thể hủy đơn hàng ở trạng thái chờ xác nhận hoặc đã xác nhận"
-          );
+        if (order.status === "cancelled") {
+          throw new ApiError(400, "Đơn hàng đã bị hủy");
         }
 
-        // Kiểm tra đã có yêu cầu hủy đang chờ xử lý cho đơn hàng này chưa
-        const CancelRequest = this.constructor;
-        const existingRequest = await CancelRequest.findOne({
-          order: this.order,
-          status: "pending",
-        });
-
-        if (existingRequest) {
-          throw new ApiError(
-            400,
-            "Đã có yêu cầu hủy cho đơn hàng này đang chờ xử lý"
-          );
+        // Kiểm tra nếu đã có yêu cầu hủy đang chờ xử lý
+        if (order.hasCancelRequest) {
+          throw new ApiError(400, "Đã có yêu cầu hủy đơn hàng đang chờ xử lý");
         }
-      }
-      next();
-    } catch (error) {
-      next(error);
-    }
-  });
 
-  // Lưu trạng thái trước khi cập nhật để so sánh sau khi lưu
-  schema.pre("save", async function (next) {
-    // Nếu không phải document mới và field "status" được thay đổi
-    if (!this.isNew && this.isModified("status")) {
-      try {
-        // Truy vấn lấy trạng thái cũ từ database
-        const existingRequest = await this.constructor.findById(this._id);
-        if (existingRequest) {
-          this._previousStatus = existingRequest.status;
-        }
-      } catch (err) {
-        console.error("Lỗi lấy trạng thái cũ của yêu cầu hủy:", err);
-      }
-    }
-    next();
-  });
+        // Tự động chấp nhận yêu cầu hủy nếu đơn hàng chưa được xác nhận
+        if (order.status === "pending") {
+          this.status = "approved";
+          this.adminResponse = "Hủy tự động khi đơn hàng chưa được xác nhận";
+          this.resolvedAt = new Date();
 
-  // Sau khi lưu, xử lý cập nhật đơn hàng tùy theo trạng thái của yêu cầu hủy
-  schema.post("save", async function () {
-    try {
-      const currentStatus = this.status;
-      const previousStatus = this._previousStatus;
-
-      // Chỉ xử lý nếu có previousStatus (đã tồn tại trong db) và trạng thái đã thay đổi
-      if (previousStatus && currentStatus !== previousStatus) {
-        const Order = mongoose.model("Order");
-
-        // Nếu yêu cầu hủy được chấp nhận, cập nhật trạng thái đơn hàng thành "cancelled"
-        if (currentStatus === "approved") {
-          // Kiểm tra xem đơn hàng đã bị hủy chưa
-          const order = await Order.findById(this.order);
-          if (order && order.status !== "cancelled") {
-            await Order.findByIdAndUpdate(this.order, {
+          // Cập nhật thông tin đơn hàng: trạng thái, lý do hủy
+          await Order.findByIdAndUpdate(
+            this.order,
+            {
               status: "cancelled",
-              cancelRequestId: this._id,
-              hasCancelRequest: true,
               cancelReason: this.reason,
               cancelledAt: new Date(),
-              cancelledBy: this.processedBy,
               $push: {
                 statusHistory: {
                   status: "cancelled",
                   updatedAt: new Date(),
-                  updatedBy: this.processedBy,
-                  note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${this.reason}`,
+                  note: `Đơn hàng bị hủy tự động. Lý do: ${this.reason}`,
                 },
               },
-            });
-          }
-
-          // Tạo thông báo cho người dùng
-          await createNotification({
-            user: this.user,
-            type: "cancelRequest",
-            title: "Yêu cầu hủy đơn được chấp nhận",
-            message: `Yêu cầu hủy đơn hàng của bạn đã được chấp nhận.`,
-            relatedId: this.order,
-            onModel: "Order",
-          });
-        }
-
-        // Nếu yêu cầu hủy bị từ chối, tạo thông báo
-        if (currentStatus === "rejected") {
-          // Tạo thông báo cho người dùng
-          await createNotification({
-            user: this.user,
-            type: "cancelRequest",
-            title: "Yêu cầu hủy đơn bị từ chối",
-            message: `Yêu cầu hủy đơn hàng của bạn đã bị từ chối. ${
-              this.adminResponse || ""
-            }`,
-            relatedId: this.order,
-            onModel: "Order",
-          });
-        }
-
-        // Nếu trạng thái là "approved" hoặc "rejected", cập nhật thời gian xử lý
-        if (
-          ["approved", "rejected"].includes(currentStatus) &&
-          !this.resolvedAt
-        ) {
-          this.resolvedAt = new Date();
-          // Cập nhật không qua save để tránh vòng lặp vô hạn
-          await this.constructor.findByIdAndUpdate(
-            this._id,
-            { resolvedAt: new Date() },
+            },
             { new: true }
           );
         }
-      }
-    } catch (error) {
-      console.error("Lỗi khi xử lý yêu cầu hủy đơn:", error);
-    }
-  });
 
-  // Xử lý khi cập nhật thông qua findOneAndUpdate
-  schema.pre("findOneAndUpdate", async function (next) {
-    try {
-      const update = this.getUpdate();
-
-      // Lưu thông tin để sử dụng sau update
-      if (update.$set && update.$set.status) {
-        const doc = await this.model.findOne(this.getQuery());
-        this._oldStatus = doc ? doc.status : null;
-        this._requestId = doc ? doc._id : null;
-        this._orderId = doc ? doc.order : null;
-        this._userId = doc ? doc.user : null;
+        // Cập nhật đơn hàng có yêu cầu hủy
+        await Order.findByIdAndUpdate(
+          this.order,
+          {
+            cancelRequestId: this._id,
+            hasCancelRequest: true,
+          },
+          { new: true }
+        );
       }
 
-      // Nếu đang chuyển trạng thái sang approved/rejected, tự động cập nhật resolvedAt
-      if (
-        update.$set &&
-        ["approved", "rejected"].includes(update.$set.status) &&
-        !update.$set.resolvedAt
-      ) {
-        update.$set.resolvedAt = new Date();
+      // Khi cập nhật trạng thái yêu cầu hủy
+      if (this.isModified("status") && !this.isNew) {
+        const Order = mongoose.model("Order");
+        const order = await Order.findById(this.order);
+
+        if (!order) {
+          throw new ApiError(404, "Không tìm thấy đơn hàng");
+        }
+
+        // Nếu yêu cầu được chấp nhận
+        if (this.status === "approved") {
+          // Cập nhật resolvedAt nếu không có
+          if (!this.resolvedAt) {
+            this.resolvedAt = new Date();
+          }
+
+          // Cập nhật thông tin đơn hàng: trạng thái, lý do hủy
+          await Order.findByIdAndUpdate(
+            this.order,
+            {
+              status: "cancelled",
+              cancelReason: this.reason,
+              cancelledAt: new Date(),
+              $push: {
+                statusHistory: {
+                  status: "cancelled",
+                  updatedAt: new Date(),
+                  note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${this.reason}`,
+                },
+              },
+            },
+            { new: true }
+          );
+
+          console.log(`Yêu cầu hủy #${this._id} được chấp nhận cho đơn hàng #${order.code}`);
+        }
+        // Nếu yêu cầu bị từ chối
+        else if (this.status === "rejected") {
+          // Cập nhật resolvedAt nếu không có
+          if (!this.resolvedAt) {
+            this.resolvedAt = new Date();
+          }
+
+          // Khôi phục trạng thái đơn hàng trước đó
+          await Order.findByIdAndUpdate(
+            this.order,
+            {
+              hasCancelRequest: false,
+              $push: {
+                statusHistory: {
+                  status: order.status,
+                  updatedAt: new Date(),
+                  note: "Đơn hàng được khôi phục sau khi từ chối yêu cầu hủy",
+                },
+              },
+            },
+            { new: true }
+          );
+
+          console.log(`Yêu cầu hủy #${this._id} bị từ chối cho đơn hàng #${order.code}`);
+        }
       }
 
       next();
@@ -176,63 +138,24 @@ const applyMiddlewares = (schema) => {
     }
   });
 
-  // Xử lý sau khi cập nhật bằng findOneAndUpdate
-  schema.post("findOneAndUpdate", async function (doc) {
+  // Sau khi lưu yêu cầu hủy
+  schema.post("save", async function (doc) {
     try {
-      if (doc && this._oldStatus && doc.status !== this._oldStatus) {
-        const Order = mongoose.model("Order");
+      const Order = mongoose.model("Order");
+      const order = await Order.findById(doc.order);
 
-        // Nếu yêu cầu được chấp nhận
-        if (doc.status === "approved" && this._oldStatus !== "approved") {
-          // Kiểm tra xem đơn hàng đã bị hủy chưa trước khi cập nhật
-          const order = await Order.findById(doc.order);
-          if (order && order.status !== "cancelled") {
-            await Order.findByIdAndUpdate(doc.order, {
-              status: "cancelled",
-              cancelRequestId: doc._id,
-              hasCancelRequest: true,
-              cancelReason: doc.reason,
-              cancelledAt: new Date(),
-              cancelledBy: doc.processedBy || null,
-              $push: {
-                statusHistory: {
-                  status: "cancelled",
-                  updatedAt: new Date(),
-                  updatedBy: doc.processedBy || null,
-                  note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${doc.reason}`,
-                },
-              },
-            });
-          }
+      if (!order) return;
 
-          // Tạo thông báo
-          await createNotification({
-            user: doc.user,
-            type: "cancelRequest",
-            title: "Yêu cầu hủy đơn được chấp nhận",
-            message: `Yêu cầu hủy đơn hàng của bạn đã được chấp nhận.`,
-            relatedId: doc.order,
-            onModel: "Order",
-          });
-        }
-
-        // Nếu yêu cầu bị từ chối
-        if (doc.status === "rejected" && this._oldStatus !== "rejected") {
-          // Tạo thông báo
-          await createNotification({
-            user: doc.user,
-            type: "cancelRequest",
-            title: "Yêu cầu hủy đơn bị từ chối",
-            message: `Yêu cầu hủy đơn hàng của bạn đã bị từ chối. ${
-              doc.adminResponse || ""
-            }`,
-            relatedId: doc.order,
-            onModel: "Order",
-          });
-        }
+      // Ghi log thông tin cập nhật
+      if (doc.createdAt && doc.updatedAt && 
+          doc.createdAt.toString() === doc.updatedAt.toString()) {
+        console.log(`Đã tạo yêu cầu hủy mới #${doc._id} cho đơn hàng #${order.code}`);
+      } 
+      else if (doc.status === "approved" || doc.status === "rejected") {
+        console.log(`Yêu cầu hủy #${doc._id} được cập nhật trạng thái: ${doc.status}`);
       }
     } catch (error) {
-      console.error("Lỗi khi xử lý sau cập nhật yêu cầu hủy đơn:", error);
+      console.error("Lỗi khi xử lý yêu cầu hủy đơn:", error);
     }
   });
 };

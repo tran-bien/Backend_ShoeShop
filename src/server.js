@@ -5,8 +5,6 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const path = require("path");
-const http = require("http");
-const socketIo = require("socket.io");
 
 // Sử dụng đường dẫn mới theo cấu trúc thư mục trong src
 const connectDB = require("@config/db");
@@ -38,41 +36,6 @@ const setupSessionCleanup = () => {
 };
 
 const app = express();
-const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
-});
-
-// Socket.io connection handler
-io.on("connection", (socket) => {
-  console.log("Người dùng đã kết nối:", socket.id);
-
-  // Xác thực người dùng qua token
-  socket.on("authenticate", (token) => {
-    try {
-      const jwt = require("jsonwebtoken");
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      socket.userId = decoded.id;
-
-      // Thêm người dùng vào phòng cá nhân dựa trên id
-      socket.join(`user_${decoded.id}`);
-      console.log(`Người dùng ${decoded.id} đã xác thực`);
-    } catch (error) {
-      console.error("Lỗi xác thực socket:", error);
-    }
-  });
-
-  // Xử lý khi người dùng ngắt kết nối
-  socket.on("disconnect", () => {
-    console.log("Người dùng đã ngắt kết nối:", socket.id);
-  });
-});
-
-// Đặt socket.io vào app để sử dụng trong các controller
-app.set("io", io);
 
 // Các middleware
 app.use(cors());
@@ -97,7 +60,7 @@ if (process.env.NODE_ENV === "production") {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5005;
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   // Thiết lập dọn dẹp session
   setupSessionCleanup();
