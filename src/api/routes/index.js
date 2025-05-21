@@ -31,6 +31,7 @@ const adminReportRoutes = require("@routes/admin/report.routes");
 const publicCouponRoutes = require("@routes/public/coupon.routes");
 const productReviewRoutes = require("@routes/public/review.routes");
 const publicReviewRoutes = require("@routes/public/reviews.routes");
+const adminDashboardRoutes = require("@routes/admin/dashboard.routes");
 
 // Sử dụng các routes cho người dùng
 router.use("/auth", authRoutes);
@@ -64,5 +65,6 @@ router.use("/admin/reports", adminReportRoutes);
 router.use("/admin/users", adminUserRoutes);
 router.use("/admin/coupons", adminCouponRoutes);
 router.use("/admin/reviews", adminReviewRoutes);
+router.use("/admin/dashboard", adminDashboardRoutes);
 
 module.exports = router;
