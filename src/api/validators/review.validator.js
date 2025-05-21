@@ -1,248 +1,196 @@
 const { body, param, query } = require("express-validator");
 const mongoose = require("mongoose");
 const { Review } = require("@models");
-const ApiError = require("@utils/ApiError");
-/**
- * Validator cho API lấy danh sách đánh giá theo sản phẩm
- */
-const validateGetProductReviews = [
-  param("productId")
-    .notEmpty()
-    .withMessage("ID sản phẩm không được để trống")
-    .isMongoId()
-    .withMessage("ID sản phẩm không hợp lệ"),
-  query("page")
-    .optional()
-    .isInt({ min: 1 })
-    .withMessage("Trang phải là số nguyên dương"),
-  query("limit")
-    .optional()
-    .isInt({ min: 1 })
-    .withMessage("Giới hạn phải là số nguyên dương"),
-  query("rating")
-    .optional()
-    .isInt({ min: 1, max: 5 })
-    .withMessage("Đánh giá phải là số nguyên từ 1-5"),
-  query("sort").optional().isString().withMessage("Sắp xếp phải là chuỗi"),
-];
 
-/**
- * Validator cho API lấy chi tiết đánh giá
- */
-const validateGetReviewDetail = [
-  param("id")
-    .notEmpty()
-    .withMessage("ID đánh giá không được để trống")
-    .isMongoId()
-    .withMessage("ID đánh giá không hợp lệ"),
-];
-
-/**
- * Kiểm tra ID có phải là MongoDB ObjectId hợp lệ không
- */
-const isValidObjectId = (value) => {
-  if (!mongoose.Types.ObjectId.isValid(value)) {
-    throw new ApiError(400, "ID không hợp lệ");
-  }
-  return true;
-};
-
-/**
- * Kiểm tra mảng ID có đúng định dạng MongoDB ObjectId không
- */
-const areValidObjectIds = (value) => {
-  if (!Array.isArray(value)) {
-    throw new ApiError(400, "Phải là một mảng các ID");
-  }
-
-  if (!value.every((id) => mongoose.Types.ObjectId.isValid(id))) {
-    throw new ApiError(400, "Có ID không hợp lệ trong danh sách");
-  }
-
-  return true;
-};
-
-/**
- * Validator cho API tạo đánh giá
- */
 const validateCreateReview = [
-  body("orderItemId")
-    .notEmpty()
-    .withMessage("ID sản phẩm trong đơn hàng không được để trống")
-    .custom(isValidObjectId)
-    .withMessage("ID sản phẩm trong đơn hàng không hợp lệ"),
   body("orderId")
     .notEmpty()
     .withMessage("ID đơn hàng không được để trống")
-    .custom(isValidObjectId)
+    .custom((value) => mongoose.Types.ObjectId.isValid(value))
     .withMessage("ID đơn hàng không hợp lệ"),
+  body("orderItemId")
+    .notEmpty()
+    .withMessage("ID sản phẩm trong đơn hàng không được để trống")
+    .custom((value) => mongoose.Types.ObjectId.isValid(value))
+    .withMessage("ID sản phẩm trong đơn hàng không hợp lệ"),
   body("rating")
     .notEmpty()
-    .withMessage("Đánh giá sao không được để trống")
+    .withMessage("Điểm đánh giá không được để trống")
     .isInt({ min: 1, max: 5 })
-    .withMessage("Đánh giá phải từ 1-5 sao"),
-  body("title")
-    .notEmpty()
-    .withMessage("Tiêu đề đánh giá không được để trống")
-    .isLength({ min: 3, max: 100 })
-    .withMessage("Tiêu đề đánh giá phải từ 3-100 ký tự"),
+    .withMessage("Điểm đánh giá phải là số nguyên từ 1-5"),
   body("content")
     .notEmpty()
     .withMessage("Nội dung đánh giá không được để trống")
-    .isLength({ min: 10, max: 1500 })
-    .withMessage("Nội dung đánh giá phải từ 10-1500 ký tự"),
+    .isString()
+    .withMessage("Nội dung đánh giá phải là chuỗi")
+    .isLength({ min: 2, max: 1000 })
+    .withMessage("Nội dung đánh giá phải từ 2-1000 ký tự"),
 ];
 
-/**
- * Validator cho API cập nhật đánh giá
- */
 const validateUpdateReview = [
   body("rating")
     .optional()
     .isInt({ min: 1, max: 5 })
-    .withMessage("Đánh giá phải từ 1-5 sao"),
+    .withMessage("Điểm đánh giá phải là số nguyên từ 1-5"),
   body("content")
     .optional()
-    .isLength({ min: 10, max: 1500 })
-    .withMessage("Nội dung đánh giá phải từ 10-1500 ký tự"),
+    .isString()
+    .withMessage("Nội dung đánh giá phải là chuỗi")
+    .isLength({ min: 2, max: 1000 })
+    .withMessage("Nội dung đánh giá phải từ 2-1000 ký tự"),
 ];
 
-/**
- * Validator cho API thích/bỏ thích đánh giá
- */
-const validateToggleLikeReview = [
-  param("reviewId")
+const validateGetProductReviews = [
+  param("productId")
+    .notEmpty()
+    .withMessage("ID sản phẩm không được để trống")
+    .custom((value) => mongoose.Types.ObjectId.isValid(value))
+    .withMessage("ID sản phẩm không hợp lệ"),
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Số trang phải là số nguyên dương"),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage("Số lượng mỗi trang phải từ 1-50"),
+  query("rating")
+    .optional()
+    .isInt({ min: 1, max: 5 })
+    .withMessage("Rating phải từ 1-5"),
+  query("sort")
+    .optional()
+    .isString()
+    .withMessage("Tham số sắp xếp phải là chuỗi"),
+];
+
+const validateGetReviewDetail = [
+  param("id")
     .notEmpty()
     .withMessage("ID đánh giá không được để trống")
-    .custom(isValidObjectId)
+    .custom((value) => mongoose.Types.ObjectId.isValid(value))
     .withMessage("ID đánh giá không hợp lệ"),
 ];
 
-// ADMIN VALIDATORS
+const validateLikeReview = [
+  param("reviewId")
+    .notEmpty()
+    .withMessage("ID đánh giá không được để trống")
+    .custom((value) => mongoose.Types.ObjectId.isValid(value))
+    .withMessage("ID đánh giá không hợp lệ"),
+];
 
-/**
- * Validator cho API lấy danh sách đánh giá (admin)
- */
+const validateReviewId = async (req, res, next) => {
+  try {
+    const reviewId = req.params.reviewId || req.params.id;
+    if (!reviewId || !mongoose.Types.ObjectId.isValid(reviewId)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID đánh giá không hợp lệ"
+      });
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+const validateReviewOwnership = async (req, res, next) => {
+  try {
+    const reviewId = req.params.reviewId || req.params.id;
+    const userId = req.user.id;
+    
+    const review = await Review.findOne({
+      _id: reviewId,
+      user: userId,
+      deletedAt: null
+    });
+    
+    if (!review) {
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không có quyền thao tác với đánh giá này"
+      });
+    }
+    
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Admin validators
 const validateGetAllReviews = [
   query("page")
     .optional()
     .isInt({ min: 1 })
-    .withMessage("Trang phải là số nguyên dương"),
+    .withMessage("Số trang phải là số nguyên dương"),
   query("limit")
     .optional()
-    .isInt({ min: 1 })
-    .withMessage("Giới hạn phải là số nguyên dương"),
+    .isInt({ min: 1, max: 50 })
+    .withMessage("Số lượng mỗi trang phải từ 1-50"),
   query("productId")
     .optional()
-    .isMongoId()
+    .custom((value) => !value || mongoose.Types.ObjectId.isValid(value))
     .withMessage("ID sản phẩm không hợp lệ"),
   query("userId")
     .optional()
-    .isMongoId()
+    .custom((value) => !value || mongoose.Types.ObjectId.isValid(value))
     .withMessage("ID người dùng không hợp lệ"),
-  query("rating")
-    .optional()
-    .isInt({ min: 1, max: 5 })
-    .withMessage("Đánh giá phải là số nguyên từ 1-5"),
-  query("isVerified")
-    .optional()
-    .isBoolean()
-    .withMessage("isVerified phải là boolean"),
   query("isActive")
     .optional()
     .isBoolean()
-    .withMessage("isActive phải là boolean"),
+    .withMessage("Trạng thái kích hoạt phải là boolean"),
   query("showDeleted")
     .optional()
     .isBoolean()
-    .withMessage("showDeleted phải là boolean"),
-  query("sort").optional().isString().withMessage("Sắp xếp phải là chuỗi"),
+    .withMessage("Trạng thái hiển thị đã xóa phải là boolean"),
 ];
 
-/**
- * Validator cho API cập nhật trạng thái hiển thị của đánh giá
- */
 const validateToggleReviewVisibility = [
   param("id")
     .notEmpty()
     .withMessage("ID đánh giá không được để trống")
-    .isMongoId()
+    .custom((value) => mongoose.Types.ObjectId.isValid(value))
     .withMessage("ID đánh giá không hợp lệ"),
   body("isActive")
-    .notEmpty()
-    .withMessage("Trạng thái hiển thị không được để trống")
     .isBoolean()
     .withMessage("Trạng thái hiển thị phải là boolean"),
 ];
 
-/**
- * Validator cho API khôi phục đánh giá
- */
 const validateRestoreReview = [
   param("id")
     .notEmpty()
     .withMessage("ID đánh giá không được để trống")
-    .isMongoId()
+    .custom((value) => mongoose.Types.ObjectId.isValid(value))
     .withMessage("ID đánh giá không hợp lệ"),
 ];
 
-
-/**
- * Validator cho ID review
- */
-const validateReviewId = [
-  param("reviewId")
-    .custom(isValidObjectId)
-    .withMessage("ID đánh giá không hợp lệ"),
-];
-
-/**
- * Validator kiểm tra review thuộc người dùng hiện tại
- */
-const validateReviewOwnership = async (req, res, next) => {
-  try {
-    const { reviewId } = req.params;
-    const userId = req.user._id;
-
-    const review = await Review.findOne({
-      _id: reviewId,
-      user: userId,
-      deletedAt: null,
-    });
-
-    if (!review) {
-      throw new ApiError(403, "Bạn không có quyền thao tác với đánh giá này");
-    }
-
-    // Lưu thông tin review vào request để sử dụng sau này
-    req.review = review;
-    next();
-  } catch (error) {
-    throw new ApiError(500, "Lỗi kiểm tra quyền sở hữu đánh giá");
-  }
-};
-
-/**
- * Validator cho imageIds
- */
-const validateImageIds = [
-  body("imageIds")
-    .isArray({ min: 1 })
-    .withMessage("Vui lòng cung cấp ít nhất một ID ảnh")
-    .custom(areValidObjectIds)
-    .withMessage("Có ID ảnh không hợp lệ trong danh sách"),
+const validateGetUserCancelRequests = [
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Số trang phải là số nguyên dương"),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage("Số lượng mỗi trang phải từ 1-50"),
+  query("status")
+    .optional()
+    .isIn(["pending", "approved", "rejected"])
+    .withMessage("Trạng thái không hợp lệ"),
 ];
 
 module.exports = {
-  validateGetProductReviews,
-  validateGetReviewDetail,
   validateCreateReview,
   validateUpdateReview,
-  validateToggleLikeReview,
+  validateGetProductReviews,
+  validateGetReviewDetail,
+  validateLikeReview,
+  validateReviewId,
+  validateReviewOwnership,
   validateGetAllReviews,
   validateToggleReviewVisibility,
   validateRestoreReview,
-  validateReviewId,
-  validateReviewOwnership,
-  validateImageIds,
+  validateGetUserCancelRequests
 };

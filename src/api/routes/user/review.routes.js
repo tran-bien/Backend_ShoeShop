@@ -14,7 +14,7 @@ router.use(protect);
  * @desc    Lấy danh sách đánh giá của người dùng hiện tại
  * @access  Private
  */
-router.get("/my-reviews", reviewController.getUserReviews);
+router.get("/reviews/my-reviews", reviewController.getUserReviews);
 
 /**
  * @route   POST /api/users/reviews
@@ -22,7 +22,7 @@ router.get("/my-reviews", reviewController.getUserReviews);
  * @access  Private
  */
 router.post(
-  "/",
+  "/reviews",
   validate(reviewValidator.validateCreateReview),
   reviewController.createReview
 );
@@ -33,7 +33,7 @@ router.post(
  * @access  Private
  */
 router.put(
-  "/:reviewId",
+  "/reviews/:reviewId",
   reviewValidator.validateReviewId,
   reviewValidator.validateReviewOwnership,
   validate(reviewValidator.validateUpdateReview),
@@ -46,7 +46,7 @@ router.put(
  * @access  Private
  */
 router.delete(
-  "/:reviewId",
+  "/reviews/:reviewId",
   reviewValidator.validateReviewId,
   reviewValidator.validateReviewOwnership,
   reviewController.deleteReview
@@ -54,13 +54,13 @@ router.delete(
 
 /**
  * @route   POST /api/users/reviews/:reviewId/like
- * @desc    Thích/bỏ thích đánh giá
+ * @desc    Thích đánh giá
  * @access  Private
  */
 router.post(
-  "/:reviewId/like",
-  validate(reviewValidator.validateToggleLikeReview),
-  reviewController.toggleLikeReview
+  "/reviews/:reviewId/like",
+  validate(reviewValidator.validateLikeReview),
+  reviewController.likeReview
 );
 
 module.exports = router;

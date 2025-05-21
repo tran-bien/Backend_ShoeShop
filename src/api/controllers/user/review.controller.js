@@ -1,75 +1,80 @@
 const asyncHandler = require("express-async-handler");
 const reviewService = require("@services/review.service");
 
-const reviewController = {
-  /**
-   * @desc    Lấy danh sách đánh giá của người dùng hiện tại
-   * @route   GET /api/users/reviews/my-reviews
-   * @access  Private
-   */
-  getUserReviews: asyncHandler(async (req, res) => {
-    const userId = req.user._id;
-    const result = await reviewService.getUserReviews(userId, req.query);
-    res.json(result);
-  }),
+/**
+ * @desc    Lấy danh sách đánh giá của người dùng hiện tại
+ * @route   GET /api/users/reviews/my-reviews
+ * @access  Private
+ */
+const getUserReviews = asyncHandler(async (req, res) => {
+  const result = await reviewService.getUserReviews(req.user.id, req.query);
 
-  /**
-   * @desc    Tạo đánh giá sản phẩm mới
-   * @route   POST /api/users/reviews
-   * @access  Private
-   */
-  createReview: asyncHandler(async (req, res) => {
-    const userId = req.user._id;
+  res.status(200).json({
+    success: true,
+    message: "Lấy danh sách đánh giá thành công",
+    data: result.data,
+    pagination: result.pagination,
+  });
+});
 
-    // Chuẩn bị dữ liệu review
-    const reviewData = { ...req.body };
-    const result = await reviewService.createReview(userId, reviewData);
-    res.status(201).json(result);
-  }),
+/**
+ * @desc    Tạo đánh giá mới
+ * @route   POST /api/users/reviews
+ * @access  Private
+ */
+const createReview = asyncHandler(async (req, res) => {
+  const result = await reviewService.createReview(req.user.id, req.body);
 
-  /**
-   * @desc    Cập nhật đánh giá
-   * @route   PUT /api/users/reviews/:reviewId
-   * @access  Private
-   */
-  updateReview: asyncHandler(async (req, res) => {
-    const userId = req.user._id;
-    const { reviewId } = req.params;
+  res.status(201).json(result);
+});
 
-    // Chuẩn bị dữ liệu cập nhật
-    const updateData = { ...req.body };
+/**
+ * @desc    Cập nhật đánh giá
+ * @route   PUT /api/users/reviews/:reviewId
+ * @access  Private
+ */
+const updateReview = asyncHandler(async (req, res) => {
+  const result = await reviewService.updateReview(
+    req.user.id,
+    req.params.reviewId,
+    req.body
+  );
 
-    const result = await reviewService.updateReview(
-      userId,
-      reviewId,
-      updateData
-    );
-    res.json(result);
-  }),
+  res.status(200).json(result);
+});
 
-  /**
-   * @desc    Xóa đánh giá
-   * @route   DELETE /api/users/reviews/:reviewId
-   * @access  Private
-   */
-  deleteReview: asyncHandler(async (req, res) => {
-    const userId = req.user._id;
-    const { reviewId } = req.params;
-    const result = await reviewService.deleteReview(userId, reviewId);
-    res.json(result);
-  }),
+/**
+ * @desc    Xóa đánh giá
+ * @route   DELETE /api/users/reviews/:reviewId
+ * @access  Private
+ */
+const deleteReview = asyncHandler(async (req, res) => {
+  const result = await reviewService.deleteReview(
+    req.user.id,
+    req.params.reviewId
+  );
 
-  /**
-   * @desc    Thích/bỏ thích đánh giá
-   * @route   POST /api/users/reviews/:reviewId/like
-   * @access  Private
-   */
-  toggleLikeReview: asyncHandler(async (req, res) => {
-    const userId = req.user._id;
-    const { reviewId } = req.params;
-    const result = await reviewService.toggleLikeReview(userId, reviewId);
-    res.json(result);
-  }),
+  res.status(200).json(result);
+});
+
+/**
+ * @desc    Thích đánh giá
+ * @route   POST /api/users/reviews/:reviewId/like
+ * @access  Private
+ */
+const likeReview = asyncHandler(async (req, res) => {
+  const result = await reviewService.likeReview(
+    req.user.id,
+    req.params.reviewId
+  );
+
+  res.status(200).json(result);
+});
+
+module.exports = {
+  getUserReviews,
+  createReview,
+  updateReview,
+  deleteReview,
+  likeReview,
 };
-
-module.exports = reviewController;

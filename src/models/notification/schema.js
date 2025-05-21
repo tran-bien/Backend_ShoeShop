@@ -20,14 +20,6 @@ const NotificationSchema = new mongoose.Schema(
       ],
       required: true,
     },
-    relatedId: {
-      type: mongoose.Schema.Types.ObjectId,
-      refPath: "onModel",
-    },
-    onModel: {
-      type: String,
-      enum: ["Order", "Review", "Coupon", "Product", "User", "CancelRequest"],
-    },
     title: {
       type: String,
       required: true,
@@ -52,7 +44,7 @@ const NotificationSchema = new mongoose.Schema(
       type: Date,
       default: function () {
         const date = new Date();
-        date.setDate(date.getDate() + 30);
+        date.setDate(date.getDate() + 10);
         return date;
       },
     },

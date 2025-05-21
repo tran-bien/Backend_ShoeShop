@@ -21,6 +21,17 @@ router.get(
   reviewController.getAllReviews
 );
 
+/** 
+ * @route   GET /api/admin/reviews/deleted
+ * @desc    Lấy danh sách tất cả đánh giá đã xóa
+ * @access  Admin
+ */
+router.get(
+  "/deleted",
+  validate(reviewValidator.validateGetAllReviews),
+  reviewController.getAllReviewsDeleted
+);
+
 /**
  * @route   GET /api/admin/reviews/:id
  * @desc    Lấy chi tiết đánh giá (bao gồm cả đánh giá đã xóa)
@@ -41,17 +52,6 @@ router.patch(
   "/:id/visibility",
   validate(reviewValidator.validateToggleReviewVisibility),
   reviewController.toggleReviewVisibility
-);
-
-/**
- * @route   PATCH /api/admin/reviews/:id/restore
- * @desc    Khôi phục đánh giá đã xóa
- * @access  Admin
- */
-router.patch(
-  "/:id/restore",
-  validate(reviewValidator.validateRestoreReview),
-  reviewController.restoreReview
 );
 
 /**
