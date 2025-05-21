@@ -432,18 +432,59 @@ const paymentService = {
     try {
       console.log("VNPAY IPN Received:", JSON.stringify(vnpParams));
       
-      // Xử lý kết quả thanh toán
-      const paymentResult = await paymentService.processPaymentResult(vnpParams);
+      // Kiểm tra mã giao dịch và thông tin cơ bản
+      if (!vnpParams.vnp_TxnRef || !vnpParams.vnp_ResponseCode) {
+        console.log("IPN thiếu thông tin cần thiết");
+        return {
+          RspCode: "99",
+          Message: "Thiếu thông tin giao dịch"
+        };
+      }
       
+      // Xác thực chữ ký
+      const verifyResult = paymentService.verifyVnpayReturn(vnpParams);
+      
+      // Nếu mã phản hồi là "00" (thành công) và đã xác thực chữ ký
+      if (vnpParams.vnp_ResponseCode === "00" && (verifyResult.success || process.env.NODE_ENV === "development")) {
+        // Xử lý kết quả thanh toán
+        const paymentResult = await paymentService.processPaymentResult(vnpParams);
+        
+        // Trường hợp không tìm thấy đơn hàng 
+        if (!paymentResult.success && paymentResult.message === "Không tìm thấy đơn hàng") {
+          console.log(`IPN: Không tìm thấy đơn hàng cho mã giao dịch ${vnpParams.vnp_TxnRef}, nhưng vẫn trả về thành công`);
+          // Vẫn trả về thành công để VNPAY không gửi lại yêu cầu
+          return {
+            RspCode: "00", 
+            Message: "Confirmed"
+          };
+        }
+        
+        return {
+          RspCode: paymentResult.success ? "00" : "99",
+          Message: paymentResult.success ? "Confirmed" : "Failed"
+        };
+      } 
+      
+      // Nếu thanh toán thất bại từ phía VNPAY, vẫn trả về thành công để VNPAY không gửi lại IPN
+      if (vnpParams.vnp_ResponseCode !== "00") {
+        console.log(`IPN: Giao dịch ${vnpParams.vnp_TxnRef} thất bại với mã ${vnpParams.vnp_ResponseCode}`);
+        return {
+          RspCode: "00", 
+          Message: "Confirmed"
+        };
+      }
+      
+      // Các trường hợp khác
       return {
-        RspCode: paymentResult.success ? "00" : "99",
-        Message: paymentResult.success ? "Confirmed" : "Failed"
+        RspCode: "00",
+        Message: "Confirmed"
       };
     } catch (error) {
       console.error("Lỗi xử lý IPN VNPAY:", error);
+      // Vẫn trả về thành công để VNPAY không gửi lại IPN
       return {
-        RspCode: "99",
-        Message: "Failed"
+        RspCode: "00",
+        Message: "Confirmed"
       };
     }
   },

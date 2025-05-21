@@ -120,21 +120,6 @@ const cancelOrder = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Lấy thống kê đơn hàng theo trạng thái
- * @route   GET /api/orders/stats
- * @access  Private
- */
-const getUserOrderStats = asyncHandler(async (req, res) => {
-  const stats = await orderService.getUserOrderStats(req.user.id);
-  
-  res.status(200).json({
-    success: true,
-    message: "Lấy thống kê đơn hàng thành công",
-    data: stats
-  });
-});
-
-/**
  * @desc    Thanh toán lại đơn hàng
  * @route   POST /api/orders/:id/repay
  * @access  Private
@@ -176,20 +161,42 @@ const vnpayCallback = asyncHandler(async (req, res) => {
 
 /**
  * @desc    IPN từ VNPAY
- * @route   POST /api/orders/vnpay/ipn
+ * @route   POST/GET /api/orders/vnpay/ipn
  * @access  Public
  */
 const vnpayIpn = asyncHandler(async (req, res) => {
-  const vnpParams = req.query;
+  // Kiểm tra và lấy tham số từ cả query và body
+  let vnpParams = {};
   
-  // Xử lý thông báo thanh toán
-  const result = await paymentService.processVnpayIpn(vnpParams);
-  
-  if (result.success) {
-    return res.status(200).json({ RspCode: "00", Message: "Confirmed" });
+  if (req.method === 'GET') {
+    // Nếu là GET request, lấy từ query string
+    vnpParams = req.query;
+  } else {
+    // Nếu là POST request, kiểm tra cả body và query
+    // TH VNPAY gửi POST nhưng tham số nằm trong URL
+    if (Object.keys(req.body).length > 0) {
+      vnpParams = req.body;
+    } else if (Object.keys(req.query).length > 0) {
+      vnpParams = req.query;
+    }
   }
   
-  return res.status(400).json({ RspCode: "99", Message: "Invalid Params" });
+  console.log(`VNPAY IPN ${req.method} Request:`, JSON.stringify(vnpParams));
+  
+  // Xử lý thông báo thanh toán
+  try {
+    const result = await paymentService.processVnpayIpn(vnpParams);
+    
+    // VNPAY yêu cầu luôn trả về status code 200 cho IPN
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Lỗi xử lý IPN:", error);
+    // Vẫn trả về 200 nhưng với thông báo lỗi theo định dạng VNPAY
+    return res.status(200).json({ 
+      RspCode: "99", 
+      Message: "Error Processing" 
+    });
+  }
 });
 
 /**
@@ -232,7 +239,6 @@ module.exports = {
   getOrderById,
   createOrder,
   cancelOrder,
-  getUserOrderStats,
   repayOrder,
   vnpayCallback,
   vnpayIpn,

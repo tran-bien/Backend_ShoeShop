@@ -14,6 +14,7 @@ const { protect } = require("@middlewares/auth.middleware");
 router.get("/vnpay/test-callback", orderController.testVnpayCallback);
 router.get("/vnpay/callback", orderController.vnpayCallback);
 router.post("/vnpay/ipn", orderController.vnpayIpn);
+router.get("/vnpay/ipn", orderController.vnpayIpn);
 
 // Áp dụng middleware xác thực cho các routes còn lại
 router.use(protect);
