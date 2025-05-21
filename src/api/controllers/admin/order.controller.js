@@ -54,7 +54,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 
 /**
  * @desc    Lấy danh sách yêu cầu hủy đơn hàng
- * @route   GET /api/admin/cancel-requests
+ * @route   GET /api/admin/orders/cancel-requests
  * @access  Admin
  */
 const getCancelRequests = asyncHandler(async (req, res) => {
@@ -69,7 +69,7 @@ const getCancelRequests = asyncHandler(async (req, res) => {
 
 /**
  * @desc    Xử lý yêu cầu hủy đơn hàng
- * @route   PATCH /api/admin/cancel-requests/:id
+ * @route   PATCH /api/admin/orders/cancel-requests/:id
  * @access  Admin
  */
 const processCancelRequest = asyncHandler(async (req, res) => {

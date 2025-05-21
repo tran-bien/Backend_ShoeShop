@@ -230,6 +230,21 @@ const testVnpayCallback = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Lấy danh sách yêu cầu hủy đơn hàng của người dùng
+ * @route   GET /api/orders/cancel-requests
+ * @access  Private
+ */
+const getUserCancelRequests = asyncHandler(async (req, res) => {
+  const result = await orderService.getUserCancelRequests(req.user.id, req.query);
+  
+  res.status(200).json({
+    success: true,
+    message: "Lấy danh sách yêu cầu hủy đơn hàng thành công",
+    data: result
+  });
+});
+
 module.exports = {
   getOrders,
   getOrderById,
@@ -240,5 +255,6 @@ module.exports = {
   repayOrder,
   vnpayCallback,
   vnpayIpn,
-  testVnpayCallback
+  testVnpayCallback,
+  getUserCancelRequests,
 };

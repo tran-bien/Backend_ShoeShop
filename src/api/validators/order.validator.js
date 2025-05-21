@@ -97,21 +97,21 @@ const validateOrderTracking = [
  */
 const validateUpdateOrderStatus = [
   param("id")
-    .notEmpty()
-    .withMessage("ID đơn hàng không được để trống")
-    .custom(isValidObjectId)
-    .withMessage("ID đơn hàng không hợp lệ"),
-  body("status")
-    .notEmpty()
-    .withMessage("Trạng thái không được để trống")
-    .isIn(["pending", "confirmed", "shipping", "delivered", "cancelled"])
-    .withMessage("Trạng thái không hợp lệ"),
-  body("note")
-    .optional()
-    .isString()
-    .withMessage("Ghi chú phải là chuỗi")
-    .isLength({ max: 500 })
-    .withMessage("Ghi chú không được vượt quá 500 ký tự"),
+  .notEmpty()
+  .withMessage("ID đơn hàng không được để trống")
+  .custom(isValidObjectId)
+  .withMessage("ID đơn hàng không hợp lệ"),
+body("status")
+  .notEmpty()
+  .withMessage("Trạng thái không được để trống")
+  .isIn(["confirmed", "shipping", "delivered"])  // Không cho phép trực tiếp chuyển sang cancelled
+  .withMessage("Trạng thái không hợp lệ (chỉ chấp nhận confirmed, shipping, delivered)"),
+body("note")
+  .optional()
+  .isString()
+  .withMessage("Ghi chú phải là chuỗi")
+  .isLength({ max: 500 })
+  .withMessage("Ghi chú không được vượt quá 500 ký tự"),
 ];
 
 /**
@@ -136,6 +136,44 @@ const validateProcessCancelRequest = [
     .withMessage("Phản hồi không được vượt quá 500 ký tự"),
 ];
 
+/**
+ * Validate tham số để lấy danh sách yêu cầu hủy đơn hàng
+ */
+const validateGetCancelRequests = [
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Trang phải là số nguyên và lớn hơn 0"),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage("Giới hạn phải là số nguyên và từ 1-50"),
+  query("status")
+    .optional()
+    .isIn(["pending", "approved", "rejected"])
+    .withMessage("Trạng thái không hợp lệ"),
+  query("sort").optional().isString().withMessage("Sắp xếp phải là chuỗi"),
+];
+
+/**
+ * Validate tham số để lấy danh sách yêu cầu hủy đơn hàng của người dùng
+ */
+const validateGetUserCancelRequests = [
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Trang phải là số nguyên và lớn hơn 0"),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage("Giới hạn phải là số nguyên và từ 1-50"),
+  query("status")
+    .optional()
+    .isIn(["pending", "approved", "rejected"])
+    .withMessage("Trạng thái không hợp lệ"),
+  query("sort").optional().isString().withMessage("Sắp xếp phải là chuỗi"),
+];
+
 module.exports = {
   validateCreateOrder,
   validateGetOrders,
@@ -143,5 +181,7 @@ module.exports = {
   validateCancelOrder,
   validateOrderTracking,
   validateUpdateOrderStatus,
-  validateProcessCancelRequest
+  validateProcessCancelRequest,
+  validateGetCancelRequests,
+  validateGetUserCancelRequests
 };

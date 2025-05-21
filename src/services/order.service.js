@@ -440,6 +440,121 @@ const orderService = {
     };
   },
 
+    /**
+   * Lấy danh sách yêu cầu hủy đơn hàng (cho admin)
+   * @param {Object} query - Các tham số truy vấn
+   * @returns {Object} - Danh sách yêu cầu hủy đơn hàng
+   */
+  getCancelRequests: async (query = {}) => {
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      search,
+    } = query;
+
+    const filter = {};
+
+    // Lọc theo trạng thái nếu có
+    if (status) {
+      filter.status = status;
+    } 
+
+    // Tìm kiếm
+    if (search) {
+      // Tìm user phù hợp với từ khóa tìm kiếm
+      const User = mongoose.model("User");
+      const userIds = await User.find({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { phone: { $regex: search, $options: "i" } },
+        ],
+      }).distinct("_id");
+      
+      // Tìm order phù hợp với từ khóa tìm kiếm
+      const Order = mongoose.model("Order");
+      const orderIds = await Order.find({
+        code: { $regex: search, $options: "i" }
+      }).distinct("_id");
+      
+      filter.$or = [
+        { user: { $in: userIds } },
+        { order: { $in: orderIds } }
+      ];
+    }
+
+    const populate = [
+      { path: "user", select: "name email phone avatar" },
+      { 
+        path: "order", 
+        select: "code status payment totalAfterDiscountAndShipping createdAt",
+        populate: { path: "user", select: "name email" }
+      },
+      { path: "processedBy", select: "name email" }
+    ];
+
+    const result = await paginate(CancelRequest, filter, {
+      page,
+      limit,
+      populate,
+      sort: { createdAt: -1 } // Sắp xếp theo thời gian tạo mới nhất
+    });
+
+    return {
+      cancelRequests: result.data,
+      pagination: {
+        page: result.currentPage,
+        limit: parseInt(limit),
+        total: result.total,
+        totalPages: result.totalPages,
+        hasNext: result.hasNextPage,
+        hasPrev: result.hasPrevPage,
+      },
+    };
+  }, 
+
+    /**
+   * Lấy danh sách yêu cầu hủy đơn hàng của người dùng
+   * @param {String} userId - ID của người dùng
+   * @param {Object} query - Các tham số truy vấn
+   * @returns {Object} - Danh sách yêu cầu hủy đơn hàng
+   */
+  getUserCancelRequests: async (userId, query = {}) => {
+    const { page = 1, limit = 10, status } = query;
+
+    const filter = { user: userId };
+    if (status) {
+      filter.status = status;
+    }
+
+    const populate = [
+      { 
+        path: "order", 
+        select: "code status payment totalAfterDiscountAndShipping createdAt"
+      }
+    ];
+
+    const result = await paginate(CancelRequest, filter, {
+      page,
+      limit,
+      populate,
+      sort: { createdAt: -1 }
+    });
+
+    return {
+      cancelRequests: result.data,
+      pagination: {
+        page: result.currentPage,
+        limit: parseInt(limit),
+        total: result.total,
+        totalPages: result.totalPages,
+        hasNext: result.hasNextPage,
+        hasPrev: result.hasPrevPage,
+      },
+    };
+  },
+
   /**
    * Lấy danh sách tất cả đơn hàng (cho admin)
    * @param {Object} query - Các tham số truy vấn
@@ -537,7 +652,7 @@ const orderService = {
     return order;
   },
 
-  /**
+      /**
    * Cập nhật trạng thái đơn hàng
    * @param {String} orderId - ID của đơn hàng
    * @param {Object} updateData - Dữ liệu cập nhật
@@ -547,120 +662,203 @@ const orderService = {
     const { status, note } = updateData;
 
     // Kiểm tra đơn hàng có tồn tại không
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(orderId).populate("cancelRequestId");
     if (!order) {
       throw new ApiError(404, "Không tìm thấy đơn hàng");
     }
 
-    // Kiểm tra trạng thái hợp lệ
+    // Kiểm tra nếu trạng thái không thay đổi
+    if (order.status === status) {
+      throw new ApiError(
+        400, 
+        `Đơn hàng đã ở trạng thái ${status}`
+      );
+    }
+
+    // Kiểm tra các trạng thái chuyển đổi hợp lệ
     const validStatusTransitions = {
-      pending: ["confirmed", "cancelled"],
-      confirmed: ["shipping", "cancelled"],
-      shipping: ["delivered", "cancelled"],
+      pending: ["confirmed"],
+      confirmed: ["shipping"],
+      shipping: ["delivered"],
       delivered: [],
       cancelled: [],
     };
 
-    if (!validStatusTransitions[order.status].includes(status)) {
+    // Xử lý riêng trường hợp chuyển sang trạng thái "cancelled"
+    if (status === "cancelled") {
+      // Admin không thể trực tiếp hủy đơn hàng mà phải thông qua yêu cầu hủy
+      if (!order.hasCancelRequest) {
+        throw new ApiError(
+          400,
+          "Không thể hủy đơn hàng trực tiếp. Cần có yêu cầu hủy từ khách hàng."
+        );
+      }
+
+      // Kiểm tra yêu cầu hủy có hợp lệ không
+      if (!order.cancelRequestId) {
+        throw new ApiError(
+          400,
+          "Không tìm thấy thông tin yêu cầu hủy đơn hàng"
+        );
+      }
+
+      // Kiểm tra trạng thái của yêu cầu hủy
+      const cancelRequest = order.cancelRequestId instanceof mongoose.Document 
+        ? order.cancelRequestId 
+        : await CancelRequest.findById(order.cancelRequestId);
+        
+      if (!cancelRequest) {
+        throw new ApiError(
+          404,
+          "Không tìm thấy yêu cầu hủy đơn hàng"
+        );
+      }
+      
+      if (cancelRequest.status !== "pending") {
+        throw new ApiError(
+          400,
+          `Yêu cầu hủy đã được xử lý với trạng thái: ${cancelRequest.status}`
+        );
+      }
+    } 
+    // Kiểm tra trạng thái chuyển đổi thông thường nếu không phải trường hợp hủy
+    else if (!validStatusTransitions[order.status].includes(status)) {
       throw new ApiError(
         400,
         `Không thể chuyển từ trạng thái ${order.status} sang ${status}`
       );
     }
 
-    // Kiểm tra nếu đơn hàng có yêu cầu hủy đang chờ xử lý
-    if (order.hasCancelRequest && status !== "cancelled") {
+    // Kiểm tra thanh toán VNPAY: đảm bảo đã thanh toán trước khi chuyển sang các trạng thái tiếp theo
+    if (
+      order.payment.method === "VNPAY" &&
+      ["confirmed", "shipping", "delivered"].includes(status) &&
+      order.payment.paymentStatus !== "paid"
+    ) {
       throw new ApiError(
         400,
-        "Đơn hàng có yêu cầu hủy đang chờ xử lý, không thể chuyển sang trạng thái khác"
+        `Đơn hàng VNPAY chưa được thanh toán, không thể chuyển sang trạng thái ${status}`
       );
     }
 
-    // Cập nhật trạng thái
+    // Kiểm tra nếu đơn hàng có yêu cầu hủy đang chờ xử lý và đang cố gắng chuyển sang trạng thái khác
+    if (order.hasCancelRequest && status !== "cancelled") {
+      throw new ApiError(
+        400,
+        "Đơn hàng có yêu cầu hủy đang chờ xử lý, phải xử lý yêu cầu hủy trước khi thay đổi trạng thái"
+      );
+    }
+
+    // Lưu trạng thái trước khi cập nhật
     const previousStatus = order.status;
+
+    // Cập nhật trạng thái đơn hàng
     order.status = status;
+    
+    // Thêm vào lịch sử trạng thái
     order.statusHistory.push({
       status,
       note: note || "",
       updatedAt: new Date(),
+      // Có thể thêm updatedBy nếu có thông tin người cập nhật
     });
 
     // Cập nhật thông tin thêm tùy thuộc vào trạng thái
-    if (status === "confirmed") {
-      order.confirmedAt = new Date();
-    } else if (status === "shipping") {
-      order.shippingAt = new Date();
-    } else if (status === "delivered") {
-      order.deliveredAt = new Date();
-
-      // Cập nhật trạng thái thanh toán nếu là COD
-      if (order.payment.method === "COD") {
-        order.payment.paymentStatus = "paid";
-        order.payment.paidAt = new Date();
-      }
-    } else if (status === "cancelled") {
-      order.cancelledAt = new Date();
-      
-      // Nếu đơn hàng có yêu cầu hủy, đánh dấu đã xử lý
-      if (order.hasCancelRequest && order.cancelRequestId) {
-        // Cập nhật cancel request nếu có
-        await CancelRequest.findByIdAndUpdate(order.cancelRequestId, {
-          status: "approved",
-          resolvedAt: new Date(),
-          adminResponse: note || "Yêu cầu hủy đơn hàng được chấp nhận"
-        });
+    switch (status) {
+      case "confirmed":
+        order.confirmedAt = new Date();
+        break;
+      case "shipping":
+        order.shippingAt = new Date();
+        break;
+      case "delivered":
+        order.deliveredAt = new Date();
+        // Cập nhật trạng thái thanh toán cho COD
+        if (order.payment.method === "COD" && order.payment.paymentStatus !== "paid") {
+          order.payment.paymentStatus = "paid";
+          order.payment.paidAt = new Date();
+        }
+        break;
+      case "cancelled":
+        order.cancelledAt = new Date();
         
-        order.hasCancelRequest = false;
-      }
+        // Nếu đơn hàng có yêu cầu hủy, đánh dấu đã xử lý
+        if (order.cancelRequestId) {
+          // Cập nhật cancel request 
+          await CancelRequest.findByIdAndUpdate(order.cancelRequestId, {
+            status: "approved",
+            resolvedAt: new Date(),
+            adminResponse: note || "Yêu cầu hủy đơn hàng được chấp nhận"
+          });
+          order.hasCancelRequest = false;
+          order.cancelReason = order.cancelRequestId.reason || "Đã chấp nhận yêu cầu hủy từ khách hàng";
+        }
+        break;
     }
 
     // Lưu đơn hàng
     await order.save();
 
     return {
-      message: "Cập nhật trạng thái đơn hàng thành công",
-      order,
-      previousStatus,
+      success: true,
+      message: `Đã cập nhật trạng thái đơn hàng từ ${previousStatus} sang ${status}`,
+      data: {
+        orderId: order._id,
+        code: order.code,
+        previousStatus,
+        currentStatus: status,
+        updatedAt: new Date()
+      }
     };
   },
 
   /**
    * Xử lý yêu cầu hủy đơn hàng
-   * @param {String} requestId - ID của yêu cầu hủy
+   * @param {String} requestId - ID của yêu cầu hủy đơn hàng
    * @param {Object} updateData - Dữ liệu cập nhật
    * @returns {Object} - Kết quả xử lý
    */
   processCancelRequest: async (requestId, updateData) => {
     const { status, adminResponse } = updateData;
-
+  
     // Kiểm tra yêu cầu hủy có tồn tại không
     const cancelRequest = await CancelRequest.findById(requestId);
     if (!cancelRequest) {
       throw new ApiError(404, "Không tìm thấy yêu cầu hủy đơn hàng");
     }
-
+  
     // Kiểm tra trạng thái hiện tại
     if (cancelRequest.status !== "pending") {
-      throw new ApiError(400, "Yêu cầu hủy đơn hàng này đã được xử lý");
+      throw new ApiError(400, `Yêu cầu hủy đơn hàng này đã được xử lý với trạng thái: ${cancelRequest.status}`);
     }
-
+  
     // Kiểm tra trạng thái cập nhật hợp lệ
     if (!["approved", "rejected"].includes(status)) {
       throw new ApiError(400, "Trạng thái không hợp lệ");
     }
-
+  
+    // Tìm đơn hàng liên quan
+    const order = await Order.findById(cancelRequest.order);
+    if (!order) {
+      throw new ApiError(404, "Không tìm thấy đơn hàng liên quan");
+    }
+  
     // Cập nhật yêu cầu hủy
     cancelRequest.status = status;
     cancelRequest.adminResponse = adminResponse || "";
     cancelRequest.resolvedAt = new Date();
-
+    cancelRequest.processedBy = updateData.adminId; // ID của admin xử lý
+  
     // Nếu được chấp nhận, cập nhật đơn hàng
     if (status === "approved") {
-      const order = await Order.findById(cancelRequest.order);
-      if (!order) {
-        throw new ApiError(404, "Không tìm thấy đơn hàng liên quan");
+      // Kiểm tra nếu đơn hàng đã không còn ở trạng thái có thể hủy
+      if (!["pending", "confirmed"].includes(order.status)) {
+        throw new ApiError(
+          400,
+          `Đơn hàng hiện đang ở trạng thái ${order.status}, không thể hủy`
+        );
       }
-
+  
       order.status = "cancelled";
       order.cancelledAt = new Date();
       order.hasCancelRequest = false;
@@ -669,27 +867,37 @@ const orderService = {
         status: "cancelled",
         note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${cancelRequest.reason}`,
         updatedAt: new Date(),
+        updatedBy: updateData.adminId,
       });
-
+  
       await order.save();
     } else if (status === "rejected") {
       // Nếu từ chối, cập nhật đơn hàng để loại bỏ trạng thái yêu cầu hủy
-      const order = await Order.findById(cancelRequest.order);
-      if (order) {
-        order.hasCancelRequest = false;
-        await order.save();
-      }
+      order.hasCancelRequest = false;
+      await order.save();
     }
-
+  
     // Lưu yêu cầu hủy
     await cancelRequest.save();
-
+  
     return {
-      message:
-        status === "approved"
-          ? "Đã chấp nhận yêu cầu hủy đơn hàng"
-          : "Đã từ chối yêu cầu hủy đơn hàng",
-      cancelRequest,
+      success: true,
+      message: status === "approved" 
+        ? "Đã chấp nhận yêu cầu hủy đơn hàng" 
+        : "Đã từ chối yêu cầu hủy đơn hàng",
+      data: {
+        cancelRequest: {
+          _id: cancelRequest._id,
+          status: cancelRequest.status,
+          adminResponse: cancelRequest.adminResponse,
+          resolvedAt: cancelRequest.resolvedAt
+        },
+        order: {
+          _id: order._id,
+          code: order.code,
+          status: order.status
+        }
+      }
     };
   },
 

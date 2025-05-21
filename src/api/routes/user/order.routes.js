@@ -40,6 +40,13 @@ router.get("/stats", orderController.getUserOrderStats);
 router.post("/", validate(orderValidator.validateCreateOrder), orderController.createOrder);
 
 /**
+ * @route   GET /api/orders/user-cancel-requests
+ * @desc    Lấy danh sách yêu cầu hủy đơn hàng của người dùng
+ * @access  Private
+ */
+router.get("/user-cancel-requests", validate(orderValidator.validateGetUserCancelRequests), orderController.getUserCancelRequests);
+
+/**
  * @route   GET /api/orders/:id
  * @desc    Lấy chi tiết đơn hàng
  * @access  Private
@@ -74,6 +81,5 @@ router.get(
  * @access  Private
  */
 router.post("/:id/repay", orderController.repayOrder);
-
 
 module.exports = router;
