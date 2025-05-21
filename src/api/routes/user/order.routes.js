@@ -65,17 +65,6 @@ router.post(
 );
 
 /**
- * @route   GET /api/orders/:id/tracking
- * @desc    Lấy thông tin theo dõi đơn hàng
- * @access  Private
- */
-router.get(
-  "/:id/tracking",
-  validate(orderValidator.validateOrderTracking),
-  orderController.getOrderTracking
-);
-
-/**
  * @route   POST /api/orders/:id/repay
  * @desc    Thanh toán lại đơn hàng
  * @access  Private

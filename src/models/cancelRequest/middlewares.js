@@ -81,25 +81,30 @@ const applyMiddlewares = (schema) => {
 
         // Nếu yêu cầu hủy được chấp nhận, cập nhật trạng thái đơn hàng thành "cancelled"
         if (currentStatus === "approved") {
-          await Order.findByIdAndUpdate(this.order, {
-            status: "cancelled",
-            cancelRequestId: this._id,
-            hasCancelRequest: true,
-            cancelReason: this.reason,
-            cancelledAt: new Date(),
-            cancelledBy: this.processedBy,
-            $push: {
-              statusHistory: {
-                status: "cancelled",
-                updatedAt: new Date(),
-                updatedBy: this.processedBy,
-                note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${this.reason}`,
+          // Kiểm tra xem đơn hàng đã bị hủy chưa
+          const order = await Order.findById(this.order);
+          if (order && order.status !== "cancelled") {
+            await Order.findByIdAndUpdate(this.order, {
+              status: "cancelled",
+              cancelRequestId: this._id,
+              hasCancelRequest: true,
+              cancelReason: this.reason,
+              cancelledAt: new Date(),
+              cancelledBy: this.processedBy,
+              $push: {
+                statusHistory: {
+                  status: "cancelled",
+                  updatedAt: new Date(),
+                  updatedBy: this.processedBy,
+                  note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${this.reason}`,
+                },
               },
-            },
-          });
+            });
+          }
 
           // Tạo thông báo cho người dùng
-          await createNotification(this.user, {
+          await createNotification({
+            user: this.user,
             type: "cancelRequest",
             title: "Yêu cầu hủy đơn được chấp nhận",
             message: `Yêu cầu hủy đơn hàng của bạn đã được chấp nhận.`,
@@ -111,7 +116,8 @@ const applyMiddlewares = (schema) => {
         // Nếu yêu cầu hủy bị từ chối, tạo thông báo
         if (currentStatus === "rejected") {
           // Tạo thông báo cho người dùng
-          await createNotification(this.user, {
+          await createNotification({
+            user: this.user,
             type: "cancelRequest",
             title: "Yêu cầu hủy đơn bị từ chối",
             message: `Yêu cầu hủy đơn hàng của bạn đã bị từ chối. ${
@@ -128,7 +134,12 @@ const applyMiddlewares = (schema) => {
           !this.resolvedAt
         ) {
           this.resolvedAt = new Date();
-          await this.save();
+          // Cập nhật không qua save để tránh vòng lặp vô hạn
+          await this.constructor.findByIdAndUpdate(
+            this._id,
+            { resolvedAt: new Date() },
+            { new: true }
+          );
         }
       }
     } catch (error) {
@@ -173,25 +184,30 @@ const applyMiddlewares = (schema) => {
 
         // Nếu yêu cầu được chấp nhận
         if (doc.status === "approved" && this._oldStatus !== "approved") {
-          await Order.findByIdAndUpdate(doc.order, {
-            status: "cancelled",
-            cancelRequestId: doc._id,
-            hasCancelRequest: true,
-            cancelReason: doc.reason,
-            cancelledAt: new Date(),
-            cancelledBy: doc.processedBy || null,
-            $push: {
-              statusHistory: {
-                status: "cancelled",
-                updatedAt: new Date(),
-                updatedBy: doc.processedBy || null,
-                note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${doc.reason}`,
+          // Kiểm tra xem đơn hàng đã bị hủy chưa trước khi cập nhật
+          const order = await Order.findById(doc.order);
+          if (order && order.status !== "cancelled") {
+            await Order.findByIdAndUpdate(doc.order, {
+              status: "cancelled",
+              cancelRequestId: doc._id,
+              hasCancelRequest: true,
+              cancelReason: doc.reason,
+              cancelledAt: new Date(),
+              cancelledBy: doc.processedBy || null,
+              $push: {
+                statusHistory: {
+                  status: "cancelled",
+                  updatedAt: new Date(),
+                  updatedBy: doc.processedBy || null,
+                  note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${doc.reason}`,
+                },
               },
-            },
-          });
+            });
+          }
 
           // Tạo thông báo
-          await createNotification(doc.user, {
+          await createNotification({
+            user: doc.user,
             type: "cancelRequest",
             title: "Yêu cầu hủy đơn được chấp nhận",
             message: `Yêu cầu hủy đơn hàng của bạn đã được chấp nhận.`,
@@ -203,7 +219,8 @@ const applyMiddlewares = (schema) => {
         // Nếu yêu cầu bị từ chối
         if (doc.status === "rejected" && this._oldStatus !== "rejected") {
           // Tạo thông báo
-          await createNotification(doc.user, {
+          await createNotification({
+            user: doc.user,
             type: "cancelRequest",
             title: "Yêu cầu hủy đơn bị từ chối",
             message: `Yêu cầu hủy đơn hàng của bạn đã bị từ chối. ${

@@ -51,6 +51,35 @@ const updateInventory = async (orderItem, action) => {
 };
 
 /**
+ * Tạo mã đơn hàng không trùng
+ * @returns {String} Mã đơn hàng mới
+ */
+const generateOrderCode = async () => {
+  try {
+    // Lấy đơn hàng mới nhất
+    const latestOrder = await mongoose.model("Order").findOne().sort({ createdAt: -1 });
+    
+    if (!latestOrder || !latestOrder.code) {
+      // Nếu không có đơn hàng hoặc không có mã, bắt đầu từ 1
+      return "ORD000001";
+    }
+    
+    // Lấy số từ mã đơn hàng hiện tại và tăng lên 1
+    const currentCode = latestOrder.code;
+    const numericPart = currentCode.replace("ORD", "");
+    const nextNumericValue = parseInt(numericPart, 10) + 1;
+    
+    // Đảm bảo có đủ số 0 phía trước
+    return `ORD${String(nextNumericValue).padStart(6, "0")}`;
+  } catch (error) {
+    console.error("Lỗi khi tạo mã đơn hàng:", error);
+    // Tạo mã ngẫu nhiên để tránh lỗi
+    const randomPart = Math.floor(Math.random() * 1000000).toString().padStart(6, "0");
+    return `ORD${randomPart}`;
+  }
+};
+
+/**
  * Gửi thông báo khi trạng thái đơn hàng thay đổi
  * @param {*} order - Đơn hàng
  * @param {*} oldStatus - Trạng thái cũ
@@ -106,9 +135,8 @@ const applyMiddlewares = (schema) => {
     try {
       // Tạo mã đơn hàng nếu là đơn hàng mới
       if (this.isNew) {
-        // Đếm số lượng đơn hàng hiện tại để tạo mã
-        const count = await mongoose.model("Order").countDocuments();
-        this.code = `ORD${String(count + 1).padStart(6, "0")}`;
+        // Sử dụng phương thức mới để tạo mã không trùng
+        this.code = await generateOrderCode();
       }
 
       // Lưu trạng thái cũ trước khi cập nhật
@@ -127,7 +155,6 @@ const applyMiddlewares = (schema) => {
   });
 
   // Xử lý sau khi lưu Order
- // File middleware
   schema.post("save", async function (doc) {
     try {
       const previousStatus = this._previousStatus;
@@ -136,13 +163,18 @@ const applyMiddlewares = (schema) => {
       // Nếu là đơn hàng mới được tạo
       if (!previousStatus && currentStatus === "pending") {
         // Kiểm tra phương thức thanh toán
-        if (this.payment.method === "COD") {
-          // Nếu thanh toán COD, giảm số lượng tồn kho ngay
+        if (this.payment.method === "COD" && !this.inventoryDeducted) {
+          // Nếu thanh toán COD và chưa trừ tồn kho, giảm số lượng tồn kho
           for (const item of this.orderItems) {
             await updateInventory(item, "decrement");
           }
-          this.inventoryDeducted = true;
-          await this.save(); // Lưu lại trạng thái đã trừ tồn kho
+          
+          // Cập nhật trạng thái không qua this.save() để tránh vòng lặp vô hạn
+          await mongoose.model("Order").findByIdAndUpdate(
+            this._id,
+            { inventoryDeducted: true },
+            { new: true }
+          );
         }
         // Nếu là VNPAY, sẽ trừ khi thanh toán thành công
       }
@@ -154,8 +186,13 @@ const applyMiddlewares = (schema) => {
           for (const item of this.orderItems) {
             await updateInventory(item, "increment");
           }
-          this.inventoryDeducted = false;
-          await this.save(); // Cập nhật trạng thái
+          
+          // Cập nhật trạng thái không qua this.save() để tránh vòng lặp vô hạn
+          await mongoose.model("Order").findByIdAndUpdate(
+            this._id,
+            { inventoryDeducted: false },
+            { new: true }
+          );
         }
 
         // Gửi thông báo khi trạng thái đơn hàng thay đổi

@@ -120,24 +120,6 @@ const cancelOrder = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Lấy thông tin theo dõi đơn hàng
- * @route   GET /api/orders/:id/tracking
- * @access  Private
- */
-const getOrderTracking = asyncHandler(async (req, res) => {
-  const tracking = await orderService.getOrderTracking(
-    req.params.id,
-    req.user.id
-  );
-  
-  res.status(200).json({
-    success: true,
-    message: "Lấy thông tin theo dõi đơn hàng thành công",
-    data: tracking
-  });
-});
-
-/**
  * @desc    Lấy thống kê đơn hàng theo trạng thái
  * @route   GET /api/orders/stats
  * @access  Private
@@ -250,7 +232,6 @@ module.exports = {
   getOrderById,
   createOrder,
   cancelOrder,
-  getOrderTracking,
   getUserOrderStats,
   repayOrder,
   vnpayCallback,
