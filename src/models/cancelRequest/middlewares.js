@@ -28,9 +28,15 @@ const applyMiddlewares = (schema) => {
           throw new ApiError(400, "Đơn hàng đã bị hủy");
         }
 
-        // Kiểm tra nếu đã có yêu cầu hủy đang chờ xử lý
-        if (order.hasCancelRequest) {
-          throw new ApiError(400, "Đã có yêu cầu hủy đơn hàng đang chờ xử lý");
+        // Kiểm tra xem có yêu cầu hủy nào đang chờ xử lý cho đơn hàng này không
+        const CancelRequest = mongoose.model("CancelRequest");
+        const existingPendingRequest = await CancelRequest.findOne({
+          order: this.order,
+          status: "pending"
+        });
+
+        if (existingPendingRequest) {
+          throw new ApiError(400, "Đã có yêu cầu hủy cho đơn hàng này đang chờ xử lý");
         }
 
         // Tự động chấp nhận yêu cầu hủy nếu đơn hàng chưa được xác nhận

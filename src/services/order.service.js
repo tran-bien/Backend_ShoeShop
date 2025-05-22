@@ -442,7 +442,7 @@ const orderService = {
       order.cancelledAt = new Date();
       order.cancelReason = reason;
       order.cancelRequestId = cancelRequest._id;
-      order.hasCancelRequest = false; // Không còn yêu cầu hủy đang chờ xử lý
+      order.hasCancelRequest = false; // Cập nhật lại đơn hàng không còn yêu cầu hủy đang chờ xử lý
       
       // Thêm vào lịch sử
       order.statusHistory.push({
