@@ -41,6 +41,13 @@ router.get(
 router.get("/new-arrivals", productController.getNewArrivals);
 
 /**
+ * @route   GET /api/products/best-sellers
+ * @desc    Lấy danh sách sản phẩm bán chạy
+ * @access  Public
+ */
+router.get("/best-sellers", productController.getBestSellers);
+
+/**
  * @route   GET /api/products/related/:id
  * @desc    Lấy danh sách sản phẩm liên quan
  * @access  Public

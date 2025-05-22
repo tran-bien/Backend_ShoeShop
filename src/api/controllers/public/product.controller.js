@@ -44,6 +44,18 @@ const productController = {
   }),
 
   /**
+   * @desc    Lấy danh sách sản phẩm bán chạy
+   * @route   GET /api/products/best-sellers
+   * @access  Public
+   */
+  getBestSellers: asyncHandler(async (req, res) => {
+    const limit = req.query.limit || 20;
+    const result = await productService.getBestSellers(limit);
+    res.json(result);
+  }
+  ),
+
+  /**
    * @desc    Lấy danh sách sản phẩm mới nhất
    * @route   GET /api/products/new-arrivals
    * @access  Public

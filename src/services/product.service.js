@@ -1704,90 +1704,142 @@ getPublicProductBySlug: async (slug) => {
    * @param {Number} limit Số lượng sản phẩm trả về
    */
   getBestSellers: async (limit = 20) => {
-    // 1. Tính tổng số lượng sản phẩm đã bán từ các đơn hàng đã giao thành công
-    const productSales = await Order.aggregate([
-      // Chỉ lấy đơn hàng đã giao thành công (trạng thái delivered)
-      {
-        $match: {
-          status: "delivered", // Chỉ tính đơn hàng hoàn tất giao dịch
+    try {
+      // 1. Tính tổng số lượng biến thể đã bán từ các đơn hàng đã giao thành công
+      const variantSales = await Order.aggregate([
+        // Chỉ lấy đơn hàng đã giao thành công (trạng thái delivered)
+        {
+          $match: {
+            status: "delivered", // Chỉ tính đơn hàng hoàn tất giao dịch
+          },
         },
-      },
-      // Tách mỗi sản phẩm trong orderItems thành một document riêng
-      { $unwind: "$orderItems" },
-      // Nhóm theo sản phẩm và tính tổng số lượng đã bán
-      {
-        $group: {
-          _id: "$orderItems.product",
-          totalSold: { $sum: "$orderItems.quantity" },
+        // Tách mỗi sản phẩm trong orderItems thành một document riêng
+        { $unwind: "$orderItems" },
+        // Nhóm theo variant và tính tổng số lượng đã bán
+        {
+          $group: {
+            _id: "$orderItems.variant", // Thay đổi từ product sang variant
+            totalSold: { $sum: "$orderItems.quantity" },
+          },
         },
-      },
+        // Sắp xếp theo số lượng bán giảm dần
+        { $sort: { totalSold: -1 } },
+        // Giới hạn số lượng kết quả
+        { $limit: Number(limit) * 2 }, // Lấy nhiều hơn để lọc sản phẩm không hợp lệ
+      ]);
+
+      if (variantSales.length === 0) {
+        // Nếu không có dữ liệu bán hàng, lấy sản phẩm mới nhất thay thế
+        return await productService.getNewArrivals(limit);
+      }
+
+      // 2. Lấy thông tin product từ variant
+      const Variant = mongoose.model("Variant");
+      const variantIds = variantSales
+        .filter(item => item._id !== null && item._id !== undefined)
+        .map(item => item._id);
+      
+      // Lấy thông tin variant kèm product
+      const variants = await Variant.find({
+        _id: { $in: variantIds },
+        isActive: true,
+        deletedAt: null
+      }).select("product");
+      
+      // Tạo map lưu tổng số lượng bán của từng variant
+      const variantSalesMap = {};
+      variantSales.forEach(item => {
+        if (item._id) { // Kiểm tra null/undefined
+          variantSalesMap[item._id.toString()] = item.totalSold;
+        }
+      });
+      
+      // Tạo map từ variant sang product và tính tổng số lượng bán cho mỗi product
+      const productSalesMap = {};
+      variants.forEach(variant => {
+        if (variant.product) {
+          const productId = variant.product.toString();
+          const variantId = variant._id.toString();
+          const soldCount = variantSalesMap[variantId] || 0;
+          
+          if (!productSalesMap[productId]) {
+            productSalesMap[productId] = 0;
+          }
+          productSalesMap[productId] += soldCount;
+        }
+      });
+      
+      // Chuyển map thành mảng để sắp xếp
+      const productSales = Object.entries(productSalesMap).map(([productId, totalSold]) => ({
+        _id: productId,
+        totalSold
+      }));
+      
       // Sắp xếp theo số lượng bán giảm dần
-      { $sort: { totalSold: -1 } },
-      // Giới hạn số lượng kết quả
-      { $limit: Number(limit) * 2 }, // Lấy nhiều hơn để lọc sản phẩm không hợp lệ
-    ]);
+      productSales.sort((a, b) => b.totalSold - a.totalSold);
+      
+      // Lấy danh sách ID product - SỬA DÒNG GÂY LỖI Ở ĐÂY
+      const productIds = productSales.map(item => new mongoose.Types.ObjectId(item._id));
+      
+      if (productIds.length === 0) {
+        // Nếu không có sản phẩm hợp lệ, trả về danh sách trống
+        return { success: true, products: [] };
+      }
 
-    // 2. Lấy thông tin chi tiết của những sản phẩm bán chạy
-    const productIds = productSales.map((item) => item._id);
+      // 3. Lấy thông tin chi tiết của những sản phẩm bán chạy
+      const products = await Product.find({
+        _id: { $in: productIds },
+        isActive: true,
+        deletedAt: null,
+      })
+        .populate("category", "name")
+        .populate("brand", "name logo")
+        .populate({
+          path: "variants",
+          match: { isActive: true, deletedAt: null },
+          select:
+            "price priceFinal percentDiscount color imagesvariant sizes isActive",
+          populate: [
+            { path: "color", select: "name code type colors" },
+            { path: "sizes.size", select: "value description" },
+          ],
+        });
 
-    if (productIds.length === 0) {
-      // Nếu không có dữ liệu bán hàng, lấy sản phẩm mới nhất thay thế
-      return await productService.getNewArrivals(limit);
-    }
+      // Lọc bỏ các sản phẩm không có variants hợp lệ
+      const filteredProducts = products.filter(
+        (product) => product.variants && product.variants.length > 0
+      );
 
-    // Lấy thông tin chi tiết các sản phẩm bán chạy - chỉ lấy sản phẩm active và không bị xóa mềm
-    const products = await Product.find({
-      _id: { $in: productIds },
-      isActive: true,
-      deletedAt: null,
-    })
-      .populate("category", "name")
-      .populate("brand", "name logo")
-      .populate({
-        path: "variants",
-        match: { isActive: true, deletedAt: null },
-        select:
-          "price priceFinal percentDiscount color imagesvariant sizes isActive",
-        populate: [
-          { path: "color", select: "name code type colors" },
-          { path: "sizes.size", select: "value description" },
-        ],
+      // 4. Sắp xếp lại đúng thứ tự theo số lượng bán
+      const sortedProducts = filteredProducts.sort((a, b) => {
+        const aSold = productSalesMap[a._id.toString()] || 0;
+        const bSold = productSalesMap[b._id.toString()] || 0;
+        return bSold - aSold;
       });
 
-    // Lọc bỏ các sản phẩm không có variants hợp lệ
-    const filteredProducts = products.filter(
-      (product) => product.variants && product.variants.length > 0
-    );
+      // Giới hạn số lượng sản phẩm trả về theo limit
+      const limitedProducts = sortedProducts.slice(0, Number(limit));
 
-    // 3. Sắp xếp lại đúng thứ tự theo số lượng bán
-    // Tạo map để tra cứu nhanh số lượng bán của mỗi sản phẩm
-    const salesMap = {};
-    productSales.forEach((item) => {
-      salesMap[item._id.toString()] = item.totalSold;
-    });
+      // 5. Chuyển đổi và trả về kết quả
+      const result = {
+        success: true,
+        products: limitedProducts.map((product) => {
+          const transformedProduct = transformProductForPublicList(product);
+          // Thêm thông tin số lượng đã bán vào kết quả để frontend có thể hiển thị
+          transformedProduct.totalSold = productSalesMap[product._id.toString()] || 0;
+          return transformedProduct;
+        }),
+      };
 
-    // Sắp xếp sản phẩm theo đúng thứ tự số lượng bán
-    const sortedProducts = filteredProducts.sort((a, b) => {
-      const aSold = salesMap[a._id.toString()] || 0;
-      const bSold = salesMap[b._id.toString()] || 0;
-      return bSold - aSold;
-    });
-
-    // Giới hạn số lượng sản phẩm trả về theo limit
-    const limitedProducts = sortedProducts.slice(0, Number(limit));
-
-    // 4. Chuyển đổi và trả về kết quả
-    const result = {
-      success: true,
-      products: limitedProducts.map((product) => {
-        const transformedProduct = transformProductForPublicList(product);
-        // Thêm thông tin số lượng đã bán vào kết quả để frontend có thể hiển thị
-        transformedProduct.totalSold = salesMap[product._id.toString()] || 0;
-        return transformedProduct;
-      }),
-    };
-
-    return result;
+      return result;
+    } catch (error) {
+      console.error("Lỗi khi lấy sản phẩm bán chạy:", error);
+      return { 
+        success: false, 
+        error: error.message,
+        products: [] 
+      };
+    }
   },
 
   /**
