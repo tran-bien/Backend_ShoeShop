@@ -91,23 +91,31 @@ const applyMiddlewares = (schema) => {
             this.resolvedAt = new Date();
           }
 
-          // Cập nhật thông tin đơn hàng: trạng thái, lý do hủy
-          await Order.findByIdAndUpdate(
-            this.order,
-            {
-              status: "cancelled",
-              cancelReason: this.reason,
-              cancelledAt: new Date(),
-              $push: {
-                statusHistory: {
-                  status: "cancelled",
-                  updatedAt: new Date(),
-                  note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${this.reason}`,
+          // Kiểm tra trạng thái hiện tại của đơn hàng
+          // Chỉ cập nhật nếu đơn hàng chưa ở trạng thái cancelled
+          if (order.status !== "cancelled") {
+            console.log(`[CancelRequest] Cập nhật đơn hàng #${order.code} sang trạng thái cancelled`);
+            
+            // Cập nhật thông tin đơn hàng: trạng thái, lý do hủy
+            await Order.findByIdAndUpdate(
+              this.order,
+              {
+                status: "cancelled",
+                cancelReason: this.reason,
+                cancelledAt: new Date(),
+                $push: {
+                  statusHistory: {
+                    status: "cancelled",
+                    updatedAt: new Date(),
+                    note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${this.reason}`,
+                  },
                 },
               },
-            },
-            { new: true }
-          );
+              { new: true }
+            );
+          } else {
+            console.log(`[CancelRequest] Đơn hàng #${order.code} đã ở trạng thái cancelled, bỏ qua cập nhật`);
+          }
 
           console.log(`Yêu cầu hủy #${this._id} được chấp nhận cho đơn hàng #${order.code}`);
         }
@@ -119,20 +127,23 @@ const applyMiddlewares = (schema) => {
           }
 
           // Khôi phục trạng thái đơn hàng trước đó
-          await Order.findByIdAndUpdate(
-            this.order,
-            {
-              hasCancelRequest: false,
-              $push: {
-                statusHistory: {
-                  status: order.status,
-                  updatedAt: new Date(),
-                  note: "Đơn hàng được khôi phục sau khi từ chối yêu cầu hủy",
+          // Chỉ cập nhật nếu đơn hàng vẫn có yêu cầu hủy
+          if (order.hasCancelRequest) {
+            await Order.findByIdAndUpdate(
+              this.order,
+              {
+                hasCancelRequest: false,
+                $push: {
+                  statusHistory: {
+                    status: order.status,
+                    updatedAt: new Date(),
+                    note: "Đơn hàng được khôi phục sau khi từ chối yêu cầu hủy",
+                  },
                 },
               },
-            },
-            { new: true }
-          );
+              { new: true }
+            );
+          }
 
           console.log(`Yêu cầu hủy #${this._id} bị từ chối cho đơn hàng #${order.code}`);
         }
