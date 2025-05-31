@@ -28,6 +28,13 @@ router.get("/revenue/daily", dashboardController.getDailyRevenue);
  */
 router.get("/revenue/monthly", dashboardController.getMonthlyRevenue);
 
+/**
+ * @route   GET /api/v1/admin/dashboard/top-selling-products
+ * @desc    Lấy dữ liệu sản phẩm bán chạy nhất với các tham số truy vấn (period: 'week', 'month', 'year')
+ * @access  Admin
+ */
+router.get("/top-selling-products", dashboardController.getTopSellingProducts);
+
 module.exports = router;
 
 

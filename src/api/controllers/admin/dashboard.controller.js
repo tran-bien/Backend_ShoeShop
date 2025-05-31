@@ -31,6 +31,16 @@ const dashboardController = {
         const result = await dashboardService.getMonthlyRevenue(req.query);
         res.status(200).json(result);
     }),
+
+    /**
+     * @route   GET /api/admin/dashboard/top-selling-products
+     * @desc    Lấy dữ liệu sản phẩm bán chạy nhất với các tham số truy vấn (period: 'week', 'month', 'year')
+     * @access  Admin
+     */
+    getTopSellingProducts: asyncHandler(async (req, res) => {
+        const result = await dashboardService.getTopSellingProducts(req.query);
+        res.status(200).json(result);
+    }),
 }
 
 module.exports = dashboardController;
