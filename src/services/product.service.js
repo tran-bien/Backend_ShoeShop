@@ -1203,8 +1203,21 @@ getPublicProducts: async (query) => {
                   // Chuyển đổi điều kiện cho $filter
                   return Object.entries(condition).reduce((result, [key, value]) => {
                     if (key === 'priceFinal') {
-                      if (value.$gte) result = { ...result, $gte: ["$$variant.priceFinal", value.$gte] };
-                      if (value.$lte) result = { ...result, $lte: ["$$variant.priceFinal", value.$lte] };
+                      let priceConditions = [];
+                      if (value.$gte) {
+                        priceConditions.push({ $gte: ["$$variant.priceFinal", value.$gte] });
+                      }
+                      if (value.$lte) {
+                        priceConditions.push({ $lte: ["$$variant.priceFinal", value.$lte] });
+                      }
+                      
+                      if (priceConditions.length === 1) {
+                        // Nếu chỉ có một điều kiện
+                        result = priceConditions[0];
+                      } else if (priceConditions.length > 1) {
+                        // Nếu có nhiều điều kiện, dùng $and
+                        result = { $and: priceConditions };
+                      }
                     } else if (key === 'color') {
                       result = { ...result, $in: ["$$variant.color", value.$in] };
                     } else if (key === 'sizes.size') {
