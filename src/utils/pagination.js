@@ -3,20 +3,38 @@
  * @param {Object} model - Mongoose model cần truy vấn
  * @param {Object} query - Đối tượng lọc dữ liệu
  * @param {Object} options - Các tùy chọn phân trang: page, limit, sort, select, populate
- * @returns {Promise<Object>} - Kết quả phân trang chứa tổng số bản ghi, số trang, trang hiện tại và dữ liệu
+ * @returns {Promise<Object>} - Kết quả phân trang
  */
 const paginate = async (model, query, options = {}) => {
-  // Trang hiện tại (mặc định là 1 nếu không cung cấp)
-  const page = parseInt(options.page, 1) || 1;
-  // Số bản ghi mỗi trang (mặc định là 15 nếu không cung cấp)
-  const limit = parseInt(options.limit, 15) || 15;
+  // Xử lý page - đảm bảo luôn là số nguyên dương
+  let page = 1; // Giá trị mặc định
+  if (options.page !== undefined) {
+    // Chuyển đổi sang số
+    const parsedPage = Number(options.page);
+    // Kiểm tra có phải là số hợp lệ không
+    if (!isNaN(parsedPage) && parsedPage > 0) {
+      page = Math.floor(parsedPage); // Đảm bảo là số nguyên
+    }
+  }
+
+  // Xử lý limit - đảm bảo luôn là số nguyên dương
+  let limit = 15; // Giá trị mặc định
+  if (options.limit !== undefined) {
+    // Chuyển đổi sang số
+    const parsedLimit = Number(options.limit);
+    // Kiểm tra có phải là số hợp lệ không
+    if (!isNaN(parsedLimit) && parsedLimit > 0) {
+      limit = Math.floor(parsedLimit); // Đảm bảo là số nguyên
+    }
+  }
+
   // Tính toán số bản ghi cần bỏ qua
   const skip = (page - 1) * limit;
 
   // Xử lý truy vấn cơ bản
   let queryBuilder = model.find(query);
 
-  // Thêm select để chỉ lấy các trường cần thiết
+  // Thêm select nếu cần
   if (options.select) {
     queryBuilder = queryBuilder.select(options.select);
   }
@@ -35,19 +53,19 @@ const paginate = async (model, query, options = {}) => {
   // Thêm sắp xếp
   queryBuilder = queryBuilder.sort(options.sort || { createdAt: -1 });
 
-  // Đếm tổng số bản ghi thỏa mãn query
+  // Đếm tổng số bản ghi
   const countPromise = model.countDocuments(query);
 
   // Thêm phân trang
   queryBuilder = queryBuilder.skip(skip).limit(limit);
 
-  // Thực hiện cả hai truy vấn đồng thời để tối ưu hiệu suất
+  // Thực hiện cả hai truy vấn
   const [total, data] = await Promise.all([countPromise, queryBuilder]);
 
   // Tính tổng số trang
   const totalPages = Math.ceil(total / limit);
 
-  // Trả về đối tượng kết quả
+  // Trả về kết quả
   return {
     success: true,
     count: data.length,

@@ -1208,9 +1208,12 @@ getPublicProducts: async (query) => {
   const pageNum = Number(page) || 1;
   const limitNum = Number(limit) || 18;
 
+  const fetchMultiplier = 3; // Hệ số lấy nhiều hơn, điều chỉnh nếu cần
+  const fetchLimit = limitNum * fetchMultiplier;
+
   const options = {
     page: pageNum,
-    limit: limitNum * 2, // Lấy nhiều hơn để đảm bảo đủ sau khi lọc
+    limit: fetchLimit, // Lấy nhiều hơn để đảm bảo đủ sau khi lọc
     sort: sortOption,
     populate: [
       { path: "category", select: "name" },
@@ -1264,7 +1267,7 @@ getPublicProducts: async (query) => {
   const rawProducts = await Product.find(filter)
     .sort(sortOption)
     .skip(skip)
-    .limit(limitNum * 2) // Lấy nhiều hơn để đủ sau khi lọc
+    .limit(fetchLimit) // Lấy nhiều hơn để đủ sau khi lọc
     .populate(options.populate);
 
   // Xử lý kết quả để tối ưu cho client

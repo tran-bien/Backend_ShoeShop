@@ -42,7 +42,7 @@ const variantService = {
   getAdminVariants: async (query) => {
     const {
       page = 1,
-      limit = 10,
+      limit = 15,
       productId,
       color,
       gender,
