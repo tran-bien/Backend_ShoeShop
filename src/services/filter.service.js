@@ -106,11 +106,18 @@ const filterService = {
     const sanitizedKeyword = keyword.trim();
     const limitNum = Number(limit) || 5;
 
-    // Tìm kiếm sản phẩm theo tên
+    // Tìm ID của các sản phẩm có biến thể hợp lệ (chưa bị xóa và đang active)
+    const productIdsWithVariants = await Variant.distinct('product', {
+      isActive: true,
+      deletedAt: null
+    });
+
+    // Tìm kiếm sản phẩm theo tên và chỉ lấy những sản phẩm có biến thể hợp lệ
     const productSuggestions = await Product.find({
       name: { $regex: sanitizedKeyword, $options: "i" },
       isActive: true,
       deletedAt: null,
+      _id: { $in: productIdsWithVariants }  // Chỉ lấy sản phẩm có biến thể
     })
       .limit(limitNum)
       .select("name slug images")
