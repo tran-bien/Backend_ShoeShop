@@ -12,7 +12,7 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   POST /api/admin/images/brand/:brandId/logo
+ * @route   POST /api/v1/admin/images/brand/:brandId/logo
  * @desc    Upload logo cho brand
  * @access  Admin
  */
@@ -29,7 +29,7 @@ router.post(
 );
 
 /**
- * @route   DELETE /api/admin/images/brand/:brandId/logo
+ * @route   DELETE /api/v1/admin/images/brand/:brandId/logo
  * @desc    Xóa logo của brand
  * @access  Admin
  */
@@ -40,7 +40,7 @@ router.delete(
 );
 
 /**
- * @route   POST /api/admin/images/product/:productId
+ * @route   POST /api/v1/admin/images/product/:productId
  * @desc    Upload ảnh cho product
  * @access  Admin
  */
@@ -58,7 +58,7 @@ router.post(
 );
 
 /**
- * @route   DELETE /api/admin/images/product/:productId
+ * @route   DELETE /api/v1/admin/images/product/:productId
  * @desc    Xóa ảnh của product
  * @access  Admin
  */
@@ -72,7 +72,7 @@ router.delete(
 );
 
 /**
- * @route   POST /api/admin/images/variant/:variantId
+ * @route   POST /api/v1/admin/images/variant/:variantId
  * @desc    Upload ảnh cho variant
  * @access  Admin
  */
@@ -90,7 +90,7 @@ router.post(
 );
 
 /**
- * @route   DELETE /api/admin/images/variant/:variantId
+ * @route   DELETE /api/v1/admin/images/variant/:variantId
  * @desc    Xóa ảnh của variant
  * @access  Admin
  */
@@ -104,7 +104,7 @@ router.delete(
 );
 
 /**
- * @route   PUT /api/admin/images/product/:productId/reorder
+ * @route   PUT /api/v1/admin/images/product/:productId/reorder
  * @desc    Thay đổi thứ tự ảnh product
  * @access  Admin
  */
@@ -118,7 +118,7 @@ router.put(
 );
 
 /**
- * @route   PUT /api/admin/images/variant/:variantId/reorder
+ * @route   PUT /api/v1/admin/images/variant/:variantId/reorder
  * @desc    Thay đổi thứ tự ảnh variant
  * @access  Admin
  */
@@ -132,7 +132,7 @@ router.put(
 );
 
 /**
- * @route   PUT /api/admin/images/product/:productId/set-main
+ * @route   PUT /api/v1/admin/images/product/:productId/set-main
  * @desc    Đặt ảnh chính cho product
  * @access  Admin
  */
@@ -146,7 +146,7 @@ router.put(
 );
 
 /**
- * @route   PUT /api/admin/images/variant/:variantId/set-main
+ * @route   PUT /api/v1/admin/images/variant/:variantId/set-main
  * @desc    Đặt ảnh chính cho variant
  * @access  Admin
  */
@@ -160,7 +160,7 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/admin/images/cloudinary
+ * @route   DELETE /api/v1/admin/images/cloudinary
  * @desc    Xóa ảnh trực tiếp từ Cloudinary
  * @access  Admin
  */

@@ -11,14 +11,14 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/sessions
+ * @route   GET /api/v1/admin/sessions
  * @desc    Lấy toàn bộ session
  * @access  Admin
  */
 router.get("/sessions", authController.getAllSessions);
 
 /**
- * @route   DELETE /api/admin/logout/:userId
+ * @route   DELETE /api/v1/admin/logout/:userId
  * @desc    Đăng xuất user bất kỳ
  * @access  Admin
  */

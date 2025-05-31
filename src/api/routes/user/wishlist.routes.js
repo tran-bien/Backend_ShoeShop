@@ -10,14 +10,14 @@ const router = express.Router();
 router.use(protect);
 
 /**
- * @route   GET /api/users/wishlist
+ * @route   GET /api/v1/users/wishlist
  * @desc    Lấy danh sách yêu thích
  * @access  Private
  */
 router.get("/wishlist", wishlistController.getUserWishlist);
 
 /**
- * @route   POST /api/users/wishlist
+ * @route   POST /api/v1/users/wishlist
  * @desc    Thêm sản phẩm vào danh sách yêu thích
  * @access  Private
  */
@@ -28,7 +28,7 @@ router.post(
 );
 
 /**
- * @route   DELETE /api/users/wishlist/:id
+ * @route   DELETE /api/v1/users/wishlist/:id
  * @desc    Xóa sản phẩm khỏi danh sách yêu thích
  * @access  Private
  */

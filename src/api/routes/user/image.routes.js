@@ -11,7 +11,7 @@ const router = express.Router();
 router.use(protect);
 
 /**
- * @route   POST /api/images/avatar
+ * @route   POST /api/v1/images/avatar
  * @desc    Upload ảnh đại diện cho chính mình
  * @access  Private
  */
@@ -27,7 +27,7 @@ router.post(
 );
 
 /**
- * @route   DELETE /api/images/avatar
+ * @route   DELETE /api/v1/images/avatar
  * @desc    Xóa ảnh đại diện của chính mình
  * @access  Private
  */

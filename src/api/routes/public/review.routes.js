@@ -6,7 +6,7 @@ const validate = require("@utils/validatehelper");
 const router = express.Router();
 
 /**
- * @route   GET /api/products/:productId/reviews
+ * @route   GET /api/v1/products/:productId/reviews
  * @desc    Lấy danh sách đánh giá của sản phẩm
  * @access  Public
  */

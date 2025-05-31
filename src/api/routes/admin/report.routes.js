@@ -8,28 +8,28 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/reports/dashboard
+ * @route   GET /api/v1/admin/reports/dashboard
  * @desc    Thống kê tổng quan cho dashboard
  * @access  Admin
  */
 router.get("/dashboard", reportController.getDashboardStats);
 
 /**
- * @route   GET /api/admin/reports/revenue
+ * @route   GET /api/v1/admin/reports/revenue
  * @desc    Báo cáo doanh thu
  * @access  Admin
  */
 router.get("/revenue", reportController.getRevenueReport);
 
 /**
- * @route   GET /api/admin/reports/top-selling
+ * @route   GET /api/v1/admin/reports/top-selling
  * @desc    Báo cáo sản phẩm bán chạy
  * @access  Admin
  */
 router.get("/top-selling", reportController.getTopSellingProducts);
 
 /**
- * @route   GET /api/admin/reports/inventory
+ * @route   GET /api/v1/admin/reports/inventory
  * @desc    Báo cáo tồn kho
  * @access  Admin
  */

@@ -3,7 +3,7 @@ const couponController = require("@controllers/public/coupon.controller");
 const router = express.Router();
 
 /**
- * @route   GET /api/coupons/public
+ * @route   GET /api/v1/coupons/public
  * @desc    Lấy danh sách mã giảm giá công khai
  * @access  Public
  */

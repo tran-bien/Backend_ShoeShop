@@ -8,21 +8,21 @@ const router = express.Router();
 // Middleware kiểm tra xác thực
 router.use(isAuthenticated);
 /**
- * @route   GET /api/users/coupons
+ * @route   GET /api/v1/users/coupons
  * @desc    Lấy danh sách mã giảm giá công khai
  * @access  Private - User
  */
 router.get("/coupons", couponController.getPublicCoupons);
 
 /**
- * @route   GET /api/users/coupons/collected
+ * @route   GET /api/v1/users/coupons/collected
  * @desc    Lấy danh sách mã giảm giá đã thu thập của người dùng
  * @access  Private - User
  */
 router.get("/coupons/collected", couponController.getUserCoupons);
 
 /**
- * @route   POST /api/users/coupons/:id/collect
+ * @route   POST /api/v1/users/coupons/:id/collect
  * @desc    Thu thập mã giảm giá
  * @access  Private - User
  */

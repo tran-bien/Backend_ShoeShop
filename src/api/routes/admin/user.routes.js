@@ -11,21 +11,21 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/users
+ * @route   GET /api/v1/admin/users
  * @desc    Lấy danh sách người dùng (phân trang)
  * @access  Admin
  */
 router.get("/", userController.getAllUsers);
 
 /**
- * @route   GET /api/admin/users/:id
+ * @route   GET /api/v1/admin/users/:id
  * @desc    Lấy chi tiết người dùng
  * @access  Admin
  */
 router.get("/:id", userController.getUserDetails);
 
 /**
- * @route   PUT /api/admin/users/:id/block
+ * @route   PUT /api/v1/admin/users/:id/block
  * @desc    Khóa/mở khóa tài khoản người dùng
  * @access  Admin
  */

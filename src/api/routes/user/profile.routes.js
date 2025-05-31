@@ -10,14 +10,14 @@ const router = express.Router();
 router.use(protect);
 
 /**
- * @route   GET /api/users/profile
+ * @route   GET /api/v1/users/profile
  * @desc    Lấy thông tin cá nhân
  * @access  Private
  */
 router.get("/profile", profileController.getUserProfile);
 
 /**
- * @route   PUT /api/users/profile
+ * @route   PUT /api/v1/users/profile
  * @desc    Cập nhật thông tin cá nhân
  * @access  Private
  */
@@ -28,14 +28,14 @@ router.put(
 );
 
 /**
- * @route   GET /api/users/addresses
+ * @route   GET /api/v1/users/addresses
  * @desc    Lấy danh sách địa chỉ
  * @access  Private
  */
 router.get("/addresses", profileController.getUserAddresses);
 
 /**
- * @route   POST /api/users/addresses
+ * @route   POST /api/v1/users/addresses
  * @desc    Thêm địa chỉ mới
  * @access  Private
  */
@@ -46,7 +46,7 @@ router.post(
 );
 
 /**
- * @route   PUT /api/users/addresses/:id
+ * @route   PUT /api/v1/users/addresses/:id
  * @desc    Cập nhật địa chỉ
  * @access  Private
  */
@@ -57,14 +57,14 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/users/addresses/:id
+ * @route   DELETE /api/v1/users/addresses/:id
  * @desc    Xóa địa chỉ
  * @access  Private
  */
 router.delete("/addresses/:id", profileController.deleteUserAddress);
 
 /**
- * @route   PUT /api/users/addresses/:id/default
+ * @route   PUT /api/v1/users/addresses/:id/default
  * @desc    Đặt địa chỉ mặc định
  * @access  Private
  */

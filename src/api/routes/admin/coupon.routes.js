@@ -11,7 +11,7 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/coupons
+ * @route   GET /api/v1/admin/coupons
  * @desc    Lấy danh sách mã giảm giá
  * @access  Admin
  */
@@ -22,14 +22,14 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/coupons/:id
+ * @route   GET /api/v1/admin/coupons/:id
  * @desc    Lấy chi tiết mã giảm giá
  * @access  Admin
  */
 router.get("/:id", protect, admin, couponController.getCouponById);
 
 /**
- * @route   POST /api/admin/coupons
+ * @route   POST /api/v1/admin/coupons
  * @desc    Tạo mã giảm giá mới
  * @access  Admin
  */
@@ -40,7 +40,7 @@ router.post(
 );
 
 /**
- * @route   PUT /api/admin/coupons/:id
+ * @route   PUT /api/v1/admin/coupons/:id
  * @desc    Cập nhật mã giảm giá
  * @access  Admin
  */
@@ -51,14 +51,14 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/admin/coupons/:id
+ * @route   DELETE /api/v1/admin/coupons/:id
  * @desc    Xóa mã giảm giá
  * @access  Admin
  */
 router.delete("/:id", couponController.deleteCoupon);
 
 /**
- * @route   PATCH /api/admin/coupons/:id/status
+ * @route   PATCH /api/v1/admin/coupons/:id/status
  * @desc    Cập nhật trạng thái mã giảm giá
  * @access  Admin
  */

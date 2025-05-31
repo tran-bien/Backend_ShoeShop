@@ -10,7 +10,7 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/sizes
+ * @route   GET /api/v1/admin/sizes
  * @desc    Lấy danh sách tất cả kích thước (admin)
  * @access  Admin
  */
@@ -21,7 +21,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/sizes/deleted
+ * @route   GET /api/v1/admin/sizes/deleted
  * @desc    Lấy danh sách kích thước đã xóa
  * @access  Admin
  */
@@ -32,7 +32,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/sizes/:id
+ * @route   GET /api/v1/admin/sizes/:id
  * @desc    Lấy thông tin chi tiết kích thước theo ID
  * @access  Admin
  */
@@ -43,7 +43,7 @@ router.get(
 );
 
 /**
- * @route   POST /api/admin/sizes
+ * @route   POST /api/v1/admin/sizes
  * @desc    Tạo kích thước mới
  * @access  Admin
  */
@@ -54,7 +54,7 @@ router.post(
 );
 
 /**
- * @route   PUT /api/admin/sizes/:id
+ * @route   PUT /api/v1/admin/sizes/:id
  * @desc    Cập nhật kích thước
  * @access  Admin
  */
@@ -65,7 +65,7 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/admin/sizes/:id
+ * @route   DELETE /api/v1/admin/sizes/:id
  * @desc    Xóa kích thước (soft delete)
  * @access  Admin
  */
@@ -76,7 +76,7 @@ router.delete(
 );
 
 /**
- * @route   PUT /api/admin/sizes/:id/restore
+ * @route   PUT /api/v1/admin/sizes/:id/restore
  * @desc    Khôi phục kích thước đã xóa
  * @access  Admin
  */

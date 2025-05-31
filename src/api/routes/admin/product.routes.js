@@ -10,7 +10,7 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/products
+ * @route   GET /api/v1/admin/products
  * @desc    Lấy danh sách tất cả sản phẩm
  * @access  Admin
  */
@@ -21,7 +21,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/products/deleted
+ * @route   GET /api/v1/admin/products/deleted
  * @desc    Lấy danh sách sản phẩm đã xóa
  * @access  Admin
  */
@@ -32,7 +32,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/products/:id
+ * @route   GET /api/v1/admin/products/:id
  * @desc    Lấy chi tiết sản phẩm theo ID
  * @access  Admin
  */
@@ -43,7 +43,7 @@ router.get(
 );
 
 /**
- * @route   POST /api/admin/products
+ * @route   POST /api/v1/admin/products
  * @desc    Tạo sản phẩm mới
  * @access  Admin
  */
@@ -54,7 +54,7 @@ router.post(
 );
 
 /**
- * @route   PUT /api/admin/products/:id
+ * @route   PUT /api/v1/admin/products/:id
  * @desc    Cập nhật thông tin sản phẩm
  * @access  Admin
  */
@@ -65,7 +65,7 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/admin/products/:id
+ * @route   DELETE /api/v1/admin/products/:id
  * @desc    Xóa mềm sản phẩm
  * @access  Admin
  */
@@ -76,7 +76,7 @@ router.delete(
 );
 
 /**
- * @route   PUT /api/admin/products/:id/restore
+ * @route   PUT /api/v1/admin/products/:id/restore
  * @desc    Khôi phục sản phẩm đã xóa
  * @access  Admin
  */
@@ -87,7 +87,7 @@ router.put(
 );
 
 /**
- * @route   PATCH /api/admin/products/:id/status
+ * @route   PATCH /api/v1/admin/products/:id/status
  * @desc    Cập nhật trạng thái active của sản phẩm
  * @access  Admin
  */
@@ -98,7 +98,7 @@ router.patch(
 );
 
 /**
- * @route   POST /api/admin/products/:id/update-stock-status
+ * @route   POST /api/v1/admin/products/:id/update-stock-status
  * @desc    Cập nhật trạng thái tồn kho sản phẩm
  * @access  Admin
  */

@@ -7,7 +7,7 @@ const validate = require("@utils/validatehelper");
 const router = express.Router();
 
 /**
- * @route   POST /api/register
+ * @route   POST /api/v1/auth/register
  * @desc    Đăng ký tài khoản
  * @access  Public
  */
@@ -21,7 +21,7 @@ router.post(
 );
 
 /**
- * @route   POST /api/verify-otp
+ * @route   POST /api/v1/auth/verify-otp
  * @desc    Xác thực OTP
  * @access  Public
  */
@@ -32,7 +32,7 @@ router.post(
 );
 
 /**
- * @route   POST /api/login
+ * @route   POST /api/v1/auth/login
  * @desc    Đăng nhập
  * @access  Public
  */
@@ -43,14 +43,14 @@ router.post(
 );
 
 /**
- * @route   DELETE /api/logout
+ * @route   DELETE /api/v1/auth/logout
  * @desc    Đăng xuất
  * @access  Private
  */
 router.delete("/logout", protect, authController.logout);
 
 /**
- * @route   POST /api/forgot-password
+ * @route   POST /api/v1/auth/forgot-password
  * @desc    Quên mật khẩu
  * @access  Public
  */
@@ -61,7 +61,7 @@ router.post(
 );
 
 /**
- * @route   POST /api/reset-password
+ * @route   POST /api/v1/auth/reset-password
  * @desc    Đặt lại mật khẩu
  * @access  Public
  */
@@ -72,7 +72,7 @@ router.post(
 );
 
 /**
- * @route   POST /api/refresh-token
+ * @route   POST /api/v1/auth/refresh-token
  * @desc    Làm mới token
  * @access  Public
  */
@@ -83,7 +83,7 @@ router.post(
 );
 
 /**
- * @route   POST /api/change-password
+ * @route   POST /api/v1/auth/change-password
  * @desc    Thay đổi mật khẩu
  * @access  Private
  */
@@ -95,14 +95,14 @@ router.post(
 );
 
 /**
- * @route   GET /api/sessions
+ * @route   GET /api/v1/auth/sessions
  * @desc    Lấy danh sách phiên đăng nhập
  * @access  Private
  */
 router.get("/sessions", protect, authController.getCurrentSessions);
 
 /**
- * @route   DELETE /api/sessions/:sessionId
+ * @route   DELETE /api/v1/auth/sessions/:sessionId
  * @desc    Đăng xuất khỏi một phiên
  * @access  Private
  */
@@ -114,14 +114,14 @@ router.delete(
 );
 
 /**
- * @route   DELETE /api/sessions
+ * @route   DELETE /api/v1/auth/sessions
  * @desc    Đăng xuất khỏi tất cả phiên trừ phiên hiện tại
  * @access  Private
  */
 router.delete("/sessions", protect, authController.logoutAllOtherSessions);
 
 /**
- * @route   DELETE /api/logout-all
+ * @route   DELETE /api/v1/auth/logout-all
  * @desc    Đăng xuất khỏi tất cả phiên
  * @access  Private
  */

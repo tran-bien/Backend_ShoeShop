@@ -10,14 +10,14 @@ const router = express.Router();
 router.use(protect);
 
 /**
- * @route   GET /api/users/reviews/my-reviews
+ * @route   GET /api/v1/users/reviews/my-reviews
  * @desc    Lấy danh sách đánh giá của người dùng hiện tại
  * @access  Private
  */
 router.get("/reviews/my-reviews", reviewController.getUserReviews);
 
 /**
- * @route   POST /api/users/reviews
+ * @route   POST /api/v1/users/reviews
  * @desc    Tạo đánh giá mới
  * @access  Private
  */
@@ -28,7 +28,7 @@ router.post(
 );
 
 /**
- * @route   PUT /api/users/reviews/:reviewId
+ * @route   PUT /api/v1/users/reviews/:reviewId
  * @desc    Cập nhật đánh giá
  * @access  Private
  */
@@ -41,7 +41,7 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/users/reviews/:reviewId
+ * @route   DELETE /api/v1/users/reviews/:reviewId
  * @desc    Xóa đánh giá (xóa mềm)
  * @access  Private
  */
@@ -53,7 +53,7 @@ router.delete(
 );
 
 /**
- * @route   POST /api/users/reviews/:reviewId/like
+ * @route   POST /api/v1/users/reviews/:reviewId/like
  * @desc    Thích đánh giá
  * @access  Private
  */

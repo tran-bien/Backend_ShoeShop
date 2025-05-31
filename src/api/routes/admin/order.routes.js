@@ -11,21 +11,21 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/orders
+ * @route   GET /api/v1/admin/orders
  * @desc    Lấy danh sách tất cả đơn hàng
  * @access  Admin
  */
 router.get("/", validate(orderValidator.validateGetOrders), orderController.getOrders);
 
 /**
- * @route   GET /api/admin/orders/cancel-requests
+ * @route   GET /api/v1/admin/orders/cancel-requests
  * @desc    Lấy danh sách yêu cầu hủy đơn hàng
  * @access  Admin
  */
 router.get("/cancel-requests", validate(orderValidator.validateGetCancelRequests), orderController.getCancelRequests);
 
 /**
- * @route   PATCH /api/admin/orders/cancel-requests/:id
+ * @route   PATCH /api/v1/admin/orders/cancel-requests/:id
  * @desc    Xử lý yêu cầu hủy đơn hàng
  * @access  Admin
  */
@@ -36,14 +36,14 @@ router.patch(
 );
 
 /**
- * @route   GET /api/admin/orders/:id
+ * @route   GET /api/v1/admin/orders/:id
  * @desc    Lấy chi tiết đơn hàng
  * @access  Admin
  */
 router.get("/:id", validate(orderValidator.validateGetOrder), orderController.getOrderById);
 
 /**
- * @route   PATCH /api/admin/orders/:id/status
+ * @route   PATCH /api/v1/admin/orders/:id/status
  * @desc    Cập nhật trạng thái đơn hàng
  * @access  Admin
  */

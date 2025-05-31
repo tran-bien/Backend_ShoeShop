@@ -9,14 +9,14 @@ const { protect } = require("@middlewares/auth.middleware");
 router.use(protect);
 
 /**
- * @route   GET /api/cart
+ * @route   GET /api/v1/cart
  * @desc    Lấy giỏ hàng hiện tại
  * @access  Private
  */
 router.get("/", cartController.getCart);
 
 /**
- * @route   POST /api/cart/items
+ * @route   POST /api/v1/cart/items
  * @desc    Thêm sản phẩm vào giỏ hàng
  * @access  Private
  */
@@ -27,7 +27,7 @@ router.post(
 );
 
 /**
- * @route   PUT /api/cart/items/:itemId
+ * @route   PUT /api/v1/cart/items/:itemId
  * @desc    Cập nhật số lượng sản phẩm
  * @access  Private
  */
@@ -38,7 +38,7 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/cart/items
+ * @route   DELETE /api/v1/cart/items
  * @desc    Xóa sản phẩm đã chọn khỏi giỏ hàng
  * @access  Private
  */
@@ -48,14 +48,14 @@ router.delete(
 );
 
 /**
- * @route   DELETE /api/cart
+ * @route   DELETE /api/v1/cart
  * @desc    Xóa toàn bộ giỏ hàng
  * @access  Private
  */
 router.delete("/", cartController.clearCart);
 
 /**
- * @route   PATCH /api/cart/items/:itemId/toggle
+ * @route   PATCH /api/v1/cart/items/:itemId/toggle
  * @desc    Chuyển đổi trạng thái chọn sản phẩm trong giỏ hàng
  * @access  Private
  */
@@ -65,7 +65,7 @@ router.patch(
 );
 
 /**
- * @route   POST /api/cart/preview-before-order
+ * @route   POST /api/v1/cart/preview-before-order
  * @desc    Xem trước kết quả tính toán đơn hàng trước khi tạo đơn hàng
  * @access  Private
  */

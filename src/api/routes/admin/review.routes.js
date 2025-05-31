@@ -11,7 +11,7 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/reviews
+ * @route   GET /api/v1/admin/reviews
  * @desc    Lấy danh sách tất cả đánh giá
  * @access  Admin
  */
@@ -22,7 +22,7 @@ router.get(
 );
 
 /** 
- * @route   GET /api/admin/reviews/deleted
+ * @route   GET /api/v1/admin/reviews/deleted
  * @desc    Lấy danh sách tất cả đánh giá đã xóa
  * @access  Admin
  */
@@ -33,7 +33,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/reviews/:id
+ * @route   GET /api/v1/admin/reviews/:id
  * @desc    Lấy chi tiết đánh giá (bao gồm cả đánh giá đã xóa)
  * @access  Admin
  */
@@ -44,7 +44,7 @@ router.get(
 );
 
 /**
- * @route   PATCH /api/admin/reviews/:id/visibility
+ * @route   PATCH /api/v1/admin/reviews/:id/visibility
  * @desc    Ẩn/hiện đánh giá
  * @access  Admin
  */
@@ -55,7 +55,7 @@ router.patch(
 );
 
 /**
- * @route   GET /api/admin/reviews/:productId/stats
+ * @route   GET /api/v1/admin/reviews/:productId/stats
  * @desc    Lấy thống kê đánh giá của sản phẩm
  * @access  Admin
  */

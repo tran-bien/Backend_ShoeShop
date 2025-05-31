@@ -10,7 +10,7 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/brands
+ * @route   GET /api/v1/admin/brands
  * @desc    Lấy tất cả thương hiệu (có phân trang, filter)
  * @access  Admin
  */
@@ -21,7 +21,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/brands/deleted
+ * @route   GET /api/v1/admin/brands/deleted
  * @desc    Lấy danh sách thương hiệu đã xóa
  * @access  Admin
  */
@@ -32,7 +32,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/brands/:id
+ * @route   GET /api/v1/admin/brands/:id
  * @desc    Lấy chi tiết thương hiệu theo ID
  * @access  Admin
  */
@@ -43,7 +43,7 @@ router.get(
 );
 
 /**
- * @route   POST /api/admin/brands
+ * @route   POST /api/v1/admin/brands
  * @desc    Tạo mới thương hiệu
  * @access  Admin
  */
@@ -54,7 +54,7 @@ router.post(
 );
 
 /**
- * @route   PUT /api/admin/brands/:id
+ * @route   PUT /api/v1/admin/brands/:id
  * @desc    Cập nhật thương hiệu
  * @access  Admin
  */
@@ -68,7 +68,7 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/admin/brands/:id
+ * @route   DELETE /api/v1/admin/brands/:id
  * @desc    Xóa mềm thương hiệu
  * @access  Admin
  */
@@ -79,7 +79,7 @@ router.delete(
 );
 
 /**
- * @route   PUT /api/admin/brands/:id/restore
+ * @route   PUT /api/v1/admin/brands/:id/restore
  * @desc    Khôi phục thương hiệu đã xóa
  * @access  Admin
  */
@@ -90,7 +90,7 @@ router.put(
 );
 
 /**
- * @route   PATCH /api/admin/brands/:id/status
+ * @route   PATCH /api/v1/admin/brands/:id/status
  * @desc    Cập nhật trạng thái active của thương hiệu
  * @access  Admin
  */

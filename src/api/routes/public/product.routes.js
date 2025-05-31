@@ -5,7 +5,7 @@ const productValidator = require("@validators/product.validator");
 const validate = require("@utils/validatehelper");
 
 /**
- * @route   GET /api/products
+ * @route   GET /api/v1/products
  * @desc    Lấy danh sách sản phẩm với bộ lọc phức tạp
  * @access  Public
  */
@@ -16,14 +16,14 @@ router.get(
 );
 
 /**
- * @route   GET /api/products/featured
+ * @route   GET /api/v1/products/featured
  * @desc    Lấy danh sách sản phẩm nổi bật
  * @access  Public
  */
 router.get("/featured", productController.getFeaturedProducts);
 
 /**
- * @route   GET /api/products/slug/:slug
+ * @route   GET /api/v1/products/slug/:slug
  * @desc    Lấy chi tiết sản phẩm theo slug
  * @access  Public
  */
@@ -34,21 +34,21 @@ router.get(
 );
 
 /**
- * @route   GET /api/products/new-arrivals
+ * @route   GET /api/v1/products/new-arrivals
  * @desc    Lấy danh sách sản phẩm mới nhất
  * @access  Public
  */
 router.get("/new-arrivals", productController.getNewArrivals);
 
 /**
- * @route   GET /api/products/best-sellers
+ * @route   GET /api/v1/products/best-sellers
  * @desc    Lấy danh sách sản phẩm bán chạy
  * @access  Public
  */
 router.get("/best-sellers", productController.getBestSellers);
 
 /**
- * @route   GET /api/products/related/:id
+ * @route   GET /api/v1/products/related/:id
  * @desc    Lấy danh sách sản phẩm liên quan
  * @access  Public
  */
@@ -59,7 +59,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/products/:id
+ * @route   GET /api/v1/products/:id
  * @desc    Lấy chi tiết sản phẩm theo ID
  * @access  Public
  */

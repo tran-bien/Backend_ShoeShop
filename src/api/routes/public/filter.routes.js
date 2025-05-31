@@ -5,14 +5,14 @@ const filterValidator = require("@validators/filter.validator");
 const validate = require("@utils/validatehelper");
 
 /**
- * @route   GET /api/filters/attributes
+ * @route   GET /api/v1/filters/attributes
  * @desc    Lấy thuộc tính lọc cho sản phẩm
  * @access  Public
  */
 router.get("/attributes", filterController.getFilterAttributes);
 
 /**
- * @route   GET /api/filters/suggestions
+ * @route   GET /api/v1/filters/suggestions
  * @desc    Lấy gợi ý tìm kiếm
  * @access  Public
  */

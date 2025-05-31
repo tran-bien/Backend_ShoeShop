@@ -7,7 +7,7 @@ const { protect } = require("@middlewares/auth.middleware");
 
 // Routes không cần xác thực
 /** 
- * @route   GET /api/orders/vnpay/test-callback
+ * @route   GET /api/v1/orders/vnpay/test-callback
  * @desc    Test callback từ VNPAY
  * @access  Public
  */
@@ -20,35 +20,35 @@ router.get("/vnpay/ipn", orderController.vnpayIpn);
 router.use(protect);
 
 /**
- * @route   GET /api/orders
+ * @route   GET /api/v1/orders
  * @desc    Lấy danh sách đơn hàng của người dùng và thống kê theo trạng thái
  * @access  Private
  */
 router.get("/", validate(orderValidator.validateGetOrders), orderController.getOrders);
 
 /**
- * @route   POST /api/orders
+ * @route   POST /api/v1/orders
  * @desc    Tạo đơn hàng mới
  * @access  Private
  */
 router.post("/", validate(orderValidator.validateCreateOrder), orderController.createOrder);
 
 /**
- * @route   GET /api/orders/user-cancel-requests
+ * @route   GET /api/v1/orders/user-cancel-requests
  * @desc    Lấy danh sách yêu cầu hủy đơn hàng của người dùng
  * @access  Private
  */
 router.get("/user-cancel-requests", validate(orderValidator.validateGetUserCancelRequests), orderController.getUserCancelRequests);
 
 /**
- * @route   GET /api/orders/:id
+ * @route   GET /api/v1/orders/:id
  * @desc    Lấy chi tiết đơn hàng
  * @access  Private
  */
 router.get("/:id", validate(orderValidator.validateGetOrder), orderController.getOrderById);
 
 /**
- * @route   POST /api/orders/:id/cancel
+ * @route   POST /api/v1/orders/:id/cancel
  * @desc    Gửi yêu cầu hủy đơn hàng
  * @access  Private
  */
@@ -59,7 +59,7 @@ router.post(
 );
 
 /**
- * @route   POST /api/orders/:id/repay
+ * @route   POST /api/v1/orders/:id/repay
  * @desc    Thanh toán lại đơn hàng
  * @access  Private
  */

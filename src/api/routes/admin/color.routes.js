@@ -10,7 +10,7 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/colors
+ * @route   GET /api/v1/admin/colors
  * @desc    Lấy danh sách tất cả màu sắc (admin)
  * @access  Admin
  */
@@ -21,7 +21,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/colors/deleted
+ * @route   GET /api/v1/admin/colors/deleted
  * @desc    Lấy danh sách màu sắc đã xóa
  * @access  Admin
  */
@@ -32,7 +32,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/colors/:id
+ * @route   GET /api/v1/admin/colors/:id
  * @desc    Lấy thông tin chi tiết màu sắc theo ID
  * @access  Admin
  */
@@ -43,7 +43,7 @@ router.get(
 );
 
 /**
- * @route   POST /api/admin/colors
+ * @route   POST /api/v1/admin/colors
  * @desc    Tạo màu sắc mới
  * @access  Admin
  */
@@ -54,7 +54,7 @@ router.post(
 );
 
 /**
- * @route   PUT /api/admin/colors/:id
+ * @route   PUT /api/v1/admin/colors/:id
  * @desc    Cập nhật màu sắc
  * @access  Admin
  */
@@ -65,7 +65,7 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/admin/colors/:id
+ * @route   DELETE /api/v1/admin/colors/:id
  * @desc    Xóa màu sắc (soft delete)
  * @access  Admin
  */
@@ -76,7 +76,7 @@ router.delete(
 );
 
 /**
- * @route   PUT /api/admin/colors/:id/restore
+ * @route   PUT /api/v1/admin/colors/:id/restore
  * @desc    Khôi phục màu sắc đã xóa
  * @access  Admin
  */

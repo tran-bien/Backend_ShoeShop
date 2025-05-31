@@ -6,14 +6,14 @@ const validate = require("@utils/validatehelper");
 const router = express.Router();
 
 /**
- * @route   GET /api/categories
+ * @route   GET /api/v1/categories
  * @desc    Lấy tất cả danh mục đang active và chưa xóa
  * @access  Public
  */
 router.get("/", categoryController.getPublicAllCategories);
 
 /**
- * @route   GET /api/categories/slug/:slug
+ * @route   GET /api/v1/categories/slug/:slug
  * @desc    Lấy chi tiết danh mục theo slug
  * @access  Public
  */
@@ -24,7 +24,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/categories/:id
+ * @route   GET /api/v1/categories/:id
  * @desc    Lấy chi tiết danh mục theo ID
  * @access  Public
  */

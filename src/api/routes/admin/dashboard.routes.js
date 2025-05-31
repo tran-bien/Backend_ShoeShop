@@ -8,21 +8,21 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/dashboard
+ * @route   GET /api/v1/admin/dashboard
  * @desc    Lấy dữ liệu dashboard
  * @access  Admin
  */
 router.get("/", dashboardController.getDashboardData);
 
 /**
- * @route   GET /api/admin/dashboard/revenue/daily
+ * @route   GET /api/v1/admin/dashboard/revenue/daily
  * @desc    Lấy dữ liệu doanh thu theo ngày
  * @access  Admin
  */
 router.get("/revenue/daily", dashboardController.getDailyRevenue);
 
 /**
- * @route   GET /api/admin/dashboard/revenue/monthly
+ * @route   GET /api/v1/admin/dashboard/revenue/monthly
  * @desc    Lấy dữ liệu doanh thu theo tháng
  * @access  Admin
  */

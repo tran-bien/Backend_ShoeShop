@@ -10,7 +10,7 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/variants
+ * @route   GET /api/v1/admin/variants
  * @desc    Lấy danh sách biến thể (có phân trang, filter)
  * @access  Admin
  */
@@ -21,7 +21,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/variants/deleted
+ * @route   GET /api/v1/admin/variants/deleted
  * @desc    Lấy danh sách biến thể đã xóa
  * @access  Admin
  */
@@ -32,7 +32,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/variants/:id
+ * @route   GET /api/v1/admin/variants/:id
  * @desc    Lấy chi tiết biến thể theo ID
  * @access  Admin
  */
@@ -43,7 +43,7 @@ router.get(
 );
 
 /**
- * @route   POST /api/admin/variants
+ * @route   POST /api/v1/admin/variants
  * @desc    Tạo biến thể mới
  * @access  Admin
  */
@@ -54,7 +54,7 @@ router.post(
 );
 
 /**
- * @route   PUT /api/admin/variants/:id
+ * @route   PUT /api/v1/admin/variants/:id
  * @desc    Cập nhật thông tin biến thể
  * @access  Admin
  */
@@ -65,7 +65,7 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/admin/variants/:id
+ * @route   DELETE /api/v1/admin/variants/:id
  * @desc    Xóa mềm biến thể
  * @access  Admin
  */
@@ -76,7 +76,7 @@ router.delete(
 );
 
 /**
- * @route   POST /api/admin/variants/:id/restore
+ * @route   POST /api/v1/admin/variants/:id/restore
  * @desc    Khôi phục biến thể đã xóa
  * @access  Admin
  */
@@ -87,7 +87,7 @@ router.post(
 );
 
 /**
- * @route   PATCH /api/admin/variants/:id/inventory
+ * @route   PATCH /api/v1/admin/variants/:id/inventory
  * @desc    Cập nhật số lượng tồn kho của biến thể
  * @access  Admin
  */
@@ -98,7 +98,7 @@ router.patch(
 );
 
 /**
- * @route   PATCH /api/admin/variants/:id/status
+ * @route   PATCH /api/v1/admin/variants/:id/status
  * @desc    Cập nhật trạng thái active của biến thể
  * @access  Admin
  */

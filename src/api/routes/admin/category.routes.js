@@ -11,7 +11,7 @@ router.use(protect);
 router.use(admin);
 
 /**
- * @route   GET /api/admin/categories
+ * @route   GET /api/v1/admin/categories
  * @desc    Lấy tất cả danh mục (có phân trang, filter)
  * @access  Admin
  */
@@ -22,7 +22,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/categories/deleted
+ * @route   GET /api/v1/admin/categories/deleted
  * @desc    Lấy danh sách danh mục đã xóa
  * @access  Admin
  */
@@ -33,7 +33,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/categories/:id
+ * @route   GET /api/v1/admin/categories/:id
  * @desc    Lấy chi tiết danh mục theo ID
  * @access  Admin
  */
@@ -44,7 +44,7 @@ router.get(
 );
 
 /**
- * @route   POST /api/admin/categories
+ * @route   POST /api/v1/admin/categories
  * @desc    Tạo mới danh mục
  * @access  Admin
  */
@@ -55,7 +55,7 @@ router.post(
 );
 
 /**
- * @route   PUT /api/admin/categories/:id
+ * @route   PUT /api/v1/admin/categories/:id
  * @desc    Cập nhật danh mục
  * @access  Admin
  */
@@ -69,7 +69,7 @@ router.put(
 );
 
 /**
- * @route   DELETE /api/admin/categories/:id
+ * @route   DELETE /api/v1/admin/categories/:id
  * @desc    Xóa mềm danh mục
  * @access  Admin
  */
@@ -80,7 +80,7 @@ router.delete(
 );
 
 /**
- * @route   PUT /api/admin/categories/:id/restore
+ * @route   PUT /api/v1/admin/categories/:id/restore
  * @desc    Khôi phục danh mục đã xóa
  * @access  Admin
  */
@@ -91,7 +91,7 @@ router.put(
 );
 
 /**
- * @route   PATCH /api/admin/categories/:id/status
+ * @route   PATCH /api/v1/admin/categories/:id/status
  * @desc    Cập nhật trạng thái active của danh mục
  * @access  Admin
  */

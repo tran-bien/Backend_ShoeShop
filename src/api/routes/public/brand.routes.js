@@ -6,14 +6,14 @@ const validate = require("@utils/validatehelper");
 const router = express.Router();
 
 /**
- * @route   GET /api/brands
+ * @route   GET /api/v1/brands
  * @desc    Lấy tất cả thương hiệu đang active và chưa xóa
  * @access  Public
  */
 router.get("/", brandController.getPublicAllBrands);
 
 /**
- * @route   GET /api/brands/slug/:slug
+ * @route   GET /api/v1/brands/slug/:slug
  * @desc    Lấy chi tiết thương hiệu theo slug
  * @access  Public
  */
@@ -24,7 +24,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/brands/:id
+ * @route   GET /api/v1/brands/:id
  * @desc    Lấy chi tiết thương hiệu theo ID
  * @access  Public
  */
