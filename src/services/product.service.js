@@ -1092,8 +1092,9 @@ const productService = {
 
   // === PUBLIC API METHODS ===
 /**
- * [PUBLIC] Lấy danh sách sản phẩm với lọc phức tạp (màu, size, giá...)
+ * [PUBLIC] Lấy danh sách sản phẩm (có phân trang, filter) với thông tin tóm tắt
  * @param {Object} query Tham số truy vấn
+ * @return {Promise<Object>} Kết quả phân trang
  */
 getPublicProducts: async (query) => {
   const {
@@ -1109,90 +1110,178 @@ getPublicProducts: async (query) => {
     gender,
     sort = "newest",
   } = query;
+
+  // Chuyển đổi page và limit sang số
+  const pageNum = Number(page) || 1;
+  const limitNum = Number(limit) || 18;
   
-  // Chỉ lấy sản phẩm active và chưa xóa
-  const filter = {
+  // Bắt đầu xây dựng pipeline aggregation
+  const pipeline = [];
+  
+  // Stage 1: Lọc sản phẩm cơ bản
+  const matchStage = {
     isActive: true,
     deletedAt: null,
   };
 
-  // Tìm theo tên
   if (name) {
-    filter.name = { $regex: name, $options: "i" };
+    matchStage.name = { $regex: name, $options: "i" };
   }
 
-  // Tìm theo danh mục
-  if (category) {
-    filter.category = mongoose.Types.ObjectId.isValid(category)
-      ? new mongoose.Types.ObjectId(String(category))
-      : null;
+  if (category && mongoose.Types.ObjectId.isValid(category)) {
+    matchStage.category = new mongoose.Types.ObjectId(String(category));
   }
 
-  // Tìm theo thương hiệu
-  if (brand) {
-    filter.brand = mongoose.Types.ObjectId.isValid(brand)
-      ? new mongoose.Types.ObjectId(String(brand))
-      : null;
+  if (brand && mongoose.Types.ObjectId.isValid(brand)) {
+    matchStage.brand = new mongoose.Types.ObjectId(String(brand));
   }
-
-  // Thêm bộ lọc nâng cao (màu, size, giá, giới tính)
-  const advancedFilter = {};
-
-  // Nếu có lọc theo màu
-  if (colors) {
-    const colorIds = colors.split(",");
-    const validColorIds = colorIds.filter((id) =>
-      mongoose.Types.ObjectId.isValid(id)
-    );
-
-    if (validColorIds.length > 0) {
-      advancedFilter["color"] = {
-        $in: validColorIds.map((id) => new mongoose.Types.ObjectId(id)),
-      };
+  
+  pipeline.push({ $match: matchStage });
+  
+  // Stage 2: Lookup variants và chỉ lấy các variants active
+  pipeline.push({
+    $lookup: {
+      from: "variants",
+      let: { productId: "$_id" },
+      pipeline: [
+        { 
+          $match: { 
+            $expr: { $eq: ["$product", "$$productId"] },
+            isActive: true,
+            deletedAt: null
+          } 
+        }
+      ],
+      as: "activeVariants"
     }
-  }
-
-  // Nếu có lọc theo kích thước
-  if (sizes) {
-    const sizeIds = sizes.split(",");
-    const validSizeIds = sizeIds.filter((id) =>
-      mongoose.Types.ObjectId.isValid(id)
-    );
-
-    if (validSizeIds.length > 0) {
-      advancedFilter["sizes.size"] = {
-        $in: validSizeIds.map((id) => new mongoose.Types.ObjectId(id)),
-      };
+  });
+  
+  // Stage 3: Filter theo các điều kiện variant (lọc nâng cao)
+  if (minPrice !== undefined || maxPrice !== undefined || colors || sizes || gender) {
+    let variantMatch = { $and: [] };
+    
+    // Lọc theo giá
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      const priceFilter = {};
+      if (minPrice !== undefined) priceFilter.$gte = Number(minPrice);
+      if (maxPrice !== undefined) priceFilter.$lte = Number(maxPrice);
+      variantMatch.$and.push({ priceFinal: priceFilter });
     }
-  }
-
-  // Nếu có lọc theo giới tính
-  if (gender && ["male", "female"].includes(gender)) {
-    advancedFilter["gender"] = gender;
-  }
-
-  // Nếu có lọc theo khoảng giá
-  if (minPrice !== undefined || maxPrice !== undefined) {
-    advancedFilter["priceFinal"] = {};
-
-    if (minPrice !== undefined) {
-      advancedFilter["priceFinal"].$gte = Number(minPrice);
+    
+    // Lọc theo màu
+    if (colors) {
+      const colorIds = colors.split(",").filter(id => mongoose.Types.ObjectId.isValid(id))
+                      .map(id => new mongoose.Types.ObjectId(id));
+      if (colorIds.length > 0) {
+        variantMatch.$and.push({ color: { $in: colorIds } });
+      }
     }
-
-    if (maxPrice !== undefined) {
-      advancedFilter["priceFinal"].$lte = Number(maxPrice);
+    
+    // Lọc theo size
+    if (sizes) {
+      const sizeIds = sizes.split(",").filter(id => mongoose.Types.ObjectId.isValid(id))
+                      .map(id => new mongoose.Types.ObjectId(id));
+      if (sizeIds.length > 0) {
+        variantMatch.$and.push({ "sizes.size": { $in: sizeIds } });
+      }
     }
+    
+    // Lọc theo gender
+    if (gender && ["male", "female"].includes(gender)) {
+      variantMatch.$and.push({ gender: gender });
+    }
+    
+    // Thêm pipeline lọc biến thể
+    if (variantMatch.$and.length > 0) {
+      pipeline.push({
+        $addFields: {
+          filteredVariants: {
+            $filter: {
+              input: "$activeVariants",
+              as: "variant",
+              cond: { $and: variantMatch.$and.map(condition => {
+                  // Chuyển đổi điều kiện cho $filter
+                  return Object.entries(condition).reduce((result, [key, value]) => {
+                    if (key === 'priceFinal') {
+                      if (value.$gte) result = { ...result, $gte: ["$$variant.priceFinal", value.$gte] };
+                      if (value.$lte) result = { ...result, $lte: ["$$variant.priceFinal", value.$lte] };
+                    } else if (key === 'color') {
+                      result = { ...result, $in: ["$$variant.color", value.$in] };
+                    } else if (key === 'sizes.size') {
+                      // Đối với sizes cần logic khác
+                      result = { 
+                        $gt: [{ 
+                          $size: { 
+                            $filter: {
+                              input: "$$variant.sizes",
+                              as: "size",
+                              cond: { $in: ["$$size.size", value.$in] }
+                            }
+                          }
+                        }, 0]
+                      };
+                    } else {
+                      result = { ...result, $eq: ["$$variant." + key, value] };
+                    }
+                    return result;
+                  }, {});
+                })
+              }
+            }
+          }
+        }
+      });
+    } else {
+      pipeline.push({
+        $addFields: {
+          filteredVariants: "$activeVariants"
+        }
+      });
+    }
+  } else {
+    // Nếu không có lọc nâng cao, tất cả variants đều phù hợp
+    pipeline.push({
+      $addFields: {
+        filteredVariants: "$activeVariants"
+      }
+    });
   }
-
+  
+  // Stage 4: Chỉ giữ lại sản phẩm có ít nhất 1 variant thỏa mãn điều kiện
+  pipeline.push({
+    $match: {
+      "filteredVariants.0": { $exists: true }
+    }
+  });
+  
+  // Stage 5: Project để giữ các trường cần thiết
+  pipeline.push({
+    $project: {
+      _id: 1,
+      name: 1,
+      slug: 1,
+      description: 1,
+      category: 1, 
+      brand: 1,
+      isActive: 1,
+      rating: 1,
+      numReviews: 1,
+      stockStatus: 1,
+      totalQuantity: 1,
+      images: 1,
+      createdAt: 1,
+      filteredVariantsCount: { $size: "$filteredVariants" }
+    }
+  });
+  
   // Sắp xếp
   let sortOption = { createdAt: -1 }; // Mặc định theo mới nhất
-
   switch (sort) {
     case "price-asc":
-      sortOption = { priceFinal: 1 };
+      sortOption = { "filteredVariants.priceFinal": 1 };
       break;
     case "price-desc":
-      sortOption = { priceFinal: -1 };
+      sortOption = { "filteredVariants.priceFinal": -1 };
       break;
     case "popular":
       sortOption = { totalQuantity: -1 };
@@ -1200,122 +1289,133 @@ getPublicProducts: async (query) => {
     case "rating":
       sortOption = { rating: -1 };
       break;
-    default:
-      sortOption = { createdAt: -1 };
   }
-
-  // Cải thiện: Chuyển đổi page và limit sang số để đảm bảo tính đúng đắn
-  const pageNum = Number(page) || 1;
-  const limitNum = Number(limit) || 18;
-
-  const fetchMultiplier = 3; // Hệ số lấy nhiều hơn, điều chỉnh nếu cần
-  const fetchLimit = limitNum * fetchMultiplier;
-
-  const options = {
-    page: pageNum,
-    limit: fetchLimit, // Lấy nhiều hơn để đảm bảo đủ sau khi lọc
-    sort: sortOption,
-    populate: [
-      { path: "category", select: "name" },
-      { path: "brand", select: "name logo" },
-      // Thêm populate variants để lấy thông tin giá
-      {
-        path: "variants",
-        match: { isActive: true, deletedAt: null },
-        select:
-          "price priceFinal percentDiscount color gender imagesvariant sizes isActive",
-        populate: [
-          { path: "color", select: "name code type colors" },
-          { path: "sizes.size", select: "value description" },
-        ],
-      },
-    ],
-  };
-
-  // Nếu có filter nâng cao, sử dụng lookup aggregation
-  if (Object.keys(advancedFilter).length > 0) {
-    // Tìm ID của các sản phẩm có variant phù hợp
-    const variantMatchingProducts = await Variant.find({
-      ...advancedFilter,
-      isActive: true,
-      deletedAt: null,
-    }).distinct("product");
-
-    // Thêm điều kiện vào filter
-    if (variantMatchingProducts.length > 0) {
-      filter._id = { $in: variantMatchingProducts };
-    } else {
-      // Nếu không có variant nào phù hợp, trả về kết quả rỗng
-      return {
-        success: true,
-        count: 0,
-        total: 0,
-        totalPages: 0,
-        currentPage: pageNum,
-        hasNextPage: false,
-        hasPrevPage: false,
-        data: [],
-      };
-    }
-  }
-
-  // Đếm tổng số sản phẩm thỏa mãn điều kiện trước khi phân trang
-  const totalCount = await Product.countDocuments(filter);
-
-  // Lấy kết quả từ database với phân trang
-  const skip = (pageNum - 1) * limitNum;
-  const rawProducts = await Product.find(filter)
-    .sort(sortOption)
-    .skip(skip)
-    .limit(fetchLimit) // Lấy nhiều hơn để đủ sau khi lọc
-    .populate(options.populate);
-
-  // Xử lý kết quả để tối ưu cho client
-  const transformedData = rawProducts.map((product) =>
-    transformProductForPublicList(product)
-  );
-
-  // Lọc các sản phẩm không có variants hợp lệ
-  const filteredData = transformedData.filter(
-    (product) => 
-      product.variantSummary && 
-      product.variantSummary.colors && 
-      product.variantSummary.colors.length > 0
-  );
-
-  // Đảm bảo đúng limit sản phẩm trả về
-  const limitedData = filteredData.slice(0, limitNum);
-
-  // Đếm tổng số sản phẩm hợp lệ (có variants) để tính toán phân trang chính xác
-  const validProductCount = await Product.aggregate([
-    { $match: filter },
-    {
+  
+  sortOption._id = 1; // Đảm bảo sắp xếp ổn định
+  pipeline.push({ $sort: sortOption });
+  
+  // Tạo pipeline đếm tổng
+  const countPipeline = [...pipeline];
+  countPipeline.push({ $count: "total" });
+  
+  // Thêm phân trang vào pipeline chính
+  pipeline.push({ $skip: (pageNum - 1) * limitNum });
+  pipeline.push({ $limit: limitNum });
+  
+  // Thêm lookup để lấy đầy đủ thông tin
+  pipeline.push(
+    { 
       $lookup: {
-        from: "variants",
-        localField: "_id",
-        foreignField: "product",
-        as: "variants",
-        pipeline: [
-          { $match: { isActive: true, deletedAt: null } }
-        ]
+        from: "categories",
+        localField: "category",
+        foreignField: "_id",
+        as: "category"
       }
     },
-    { $match: { "variants.0": { $exists: true } } }, // Chỉ lấy sản phẩm có ít nhất 1 variant
-    { $count: "total" }
+    { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } },
+    { 
+      $lookup: {
+        from: "brands",
+        localField: "brand",
+        foreignField: "_id",
+        as: "brand"
+      }
+    },
+    { $unwind: { path: "$brand", preserveNullAndEmptyArrays: true } }
+  );
+  
+  // Lookup variants chi tiết cho display
+  pipeline.push({
+    $lookup: {
+      from: "variants",
+      let: { productId: "$_id" },
+      pipeline: [
+        { 
+          $match: { 
+            $expr: { $eq: ["$product", "$$productId"] },
+            isActive: true,
+            deletedAt: null
+          } 
+        },
+        { 
+          $lookup: {
+            from: "colors",
+            localField: "color",
+            foreignField: "_id",
+            as: "color"
+          }
+        },
+        { $unwind: { path: "$color", preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: "sizes",
+            localField: "sizes.size",
+            foreignField: "_id",
+            as: "allSizes"
+          }
+        },
+        {
+          $addFields: {
+            "sizes": {
+              $map: {
+                input: "$sizes",
+                as: "sizeItem",
+                in: {
+                  "_id": "$$sizeItem._id",
+                  "size": {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: "$allSizes",
+                          as: "s",
+                          cond: { $eq: ["$$s._id", "$$sizeItem.size"] }
+                        }
+                      },
+                      0
+                    ]
+                  },
+                  "quantity": "$$sizeItem.quantity",
+                  "sku": "$$sizeItem.sku",
+                  "isSizeAvailable": "$$sizeItem.isSizeAvailable"
+                }
+              }
+            }
+          }
+        },
+        { $project: { allSizes: 0 } }
+      ],
+      as: "variants"
+    }
+  });
+  
+  // Thực hiện aggregation
+  const [countResult, products] = await Promise.all([
+    Product.aggregate(countPipeline),
+    Product.aggregate(pipeline)
   ]);
+  
+  const totalCount = countResult.length > 0 ? countResult[0].total : 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / limitNum));
 
-  const totalValidProducts = validProductCount.length > 0 ? validProductCount[0].total : 0;
-  const totalPages = Math.max(1, Math.ceil(totalValidProducts / limitNum));
+  // Chuyển đổi kết quả - cần xử lý đặc biệt vì là kết quả từ aggregation
+  const transformedData = products.map(product => {
+    // Bỏ trường trung gian
+    delete product.filteredVariantsCount;
+    delete product.filteredVariants;
+    
+    // Sử dụng hàm chuyển đổi hiện có
+    return transformProductForPublicList(product);
+  });
   
   return {
     success: true,
-    count: limitedData.length,
-    total: totalValidProducts,
+    count: transformedData.length,
+    total: totalCount,
     totalPages: totalPages,
     currentPage: pageNum,
     hasNextPage: pageNum < totalPages,
     hasPrevPage: pageNum > 1,
-    data: limitedData,
+    data: transformedData,
   };
 },
 
