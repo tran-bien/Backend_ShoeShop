@@ -501,6 +501,163 @@ const reviewService = {
     };
   },
 
+      /**
+   * Lấy danh sách sản phẩm có thể đánh giá từ các đơn hàng đã giao
+   * @param {String} userId - ID của người dùng
+   * @param {Object} query - Các tham số truy vấn
+   * @returns {Object} - Danh sách sản phẩm có thể đánh giá
+   */
+  getReviewableProducts: async (userId, query = {}) => {
+    try {
+      const { page = 1, limit = 10, sort = "deliveredAt_desc" } = query;
+
+      // Tìm tất cả đơn hàng đã giao của người dùng
+      const orders = await Order.find({
+        user: userId, 
+        status: "delivered"
+      }).sort({ deliveredAt: -1 });
+
+      if (!orders || orders.length === 0) {
+        return {
+          success: true,
+          message: "Không có đơn hàng đã giao nào để đánh giá",
+          data: [],
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: 0,
+            totalPages: 0,
+          }
+        };
+      }
+
+      // Tạo mảng chứa tất cả các orderItems từ các đơn hàng đã giao
+      let allOrderItems = [];
+      
+      for (const order of orders) {
+        // Thêm thông tin đơn hàng vào mỗi orderItem
+        const orderItemsWithOrderInfo = order.orderItems.map(item => ({
+          ...item.toObject(),
+          orderId: order._id,
+          orderCode: order.code,
+          deliveredAt: order.deliveredAt
+        }));
+        
+        allOrderItems = [...allOrderItems, ...orderItemsWithOrderInfo];
+      }
+      
+      if (allOrderItems.length === 0) {
+        return {
+          success: true,
+          message: "Không có sản phẩm nào trong các đơn hàng đã giao",
+          data: [],
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: 0,
+            totalPages: 0,
+          }
+        };
+      }
+      
+      // Lấy danh sách OrderItem IDs
+      const orderItemIds = allOrderItems.map(item => item._id);
+      
+      // Tìm các đánh giá đã tồn tại cho các orderItems này
+      const existingReviews = await Review.find({
+        orderItem: { $in: orderItemIds },
+        user: userId,
+        deletedAt: null
+      });
+      
+      // Tạo Set các orderItem IDs đã được đánh giá
+      const reviewedOrderItemIds = new Set(existingReviews.map(review => 
+        review.orderItem.toString()
+      ));
+      
+      // Lọc ra các orderItems chưa được đánh giá
+      let reviewableItems = allOrderItems.filter(item => 
+        !reviewedOrderItemIds.has(item._id.toString())
+      );
+
+      // Sắp xếp theo yêu cầu
+      const [sortField, sortOrder] = sort.split("_");
+      if (sortField && sortOrder) {
+        reviewableItems.sort((a, b) => {
+          if (sortField === "deliveredAt") {
+            const valA = a.deliveredAt ? new Date(a.deliveredAt).getTime() : 0;
+            const valB = b.deliveredAt ? new Date(b.deliveredAt).getTime() : 0;
+            return sortOrder === "desc" ? valB - valA : valA - valB;
+          }
+          return 0;
+        });
+      }
+
+      // Phân trang thủ công
+      const startIndex = (parseInt(page) - 1) * parseInt(limit);
+      const endIndex = startIndex + parseInt(limit);
+      const paginatedItems = reviewableItems.slice(startIndex, endIndex);
+
+      // Populate thông tin chi tiết cho các sản phẩm
+      const populatedItems = await Promise.all(paginatedItems.map(async (item) => {
+        // Lấy thông tin variant
+        const variant = await Variant.findById(item.variant)
+          .populate("product", "name slug images price")
+          .populate("color", "name code");
+
+        // Lấy thông tin size
+        const size = await mongoose.model("Size").findById(item.size, "value description");
+
+        // Kiểm tra thời hạn có thể đánh giá (ví dụ: 30 ngày sau khi giao hàng)
+        const deliveryDate = new Date(item.deliveredAt);
+        const currentDate = new Date();
+        const daysSinceDelivery = Math.floor(
+          (currentDate - deliveryDate) / (1000 * 60 * 60 * 24)
+        );
+        const REVIEW_WINDOW_DAYS = 30; // Có thể cấu hình theo yêu cầu
+        const canReview = daysSinceDelivery <= REVIEW_WINDOW_DAYS;
+        const reviewExpiresAt = new Date(deliveryDate);
+        reviewExpiresAt.setDate(reviewExpiresAt.getDate() + REVIEW_WINDOW_DAYS);
+
+        return {
+          orderItemId: item._id,
+          orderId: item.orderId,
+          orderCode: item.orderCode,
+          product: variant?.product || null,
+          variant: {
+            _id: variant?._id || null,
+            color: variant?.color || null
+          },
+          size: size || null,
+          quantity: item.quantity,
+          price: item.price,
+          image: item.image || (variant?.product?.images && variant.product.images.length > 0 
+            ? variant.product.images[0].url 
+            : null),
+          deliveredAt: item.deliveredAt,
+          canReview,
+          reviewExpiresAt: canReview ? reviewExpiresAt : null,
+          daysLeftToReview: canReview ? REVIEW_WINDOW_DAYS - daysSinceDelivery : 0
+        };
+      }));
+
+      return {
+        success: true,
+        message: "Danh sách sản phẩm có thể đánh giá",
+        data: populatedItems,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: reviewableItems.length,
+          totalPages: Math.ceil(reviewableItems.length / parseInt(limit)),
+        }
+      };
+    } catch (error) {
+      console.error("Lỗi khi lấy sản phẩm có thể đánh giá:", error);
+      throw new ApiError(500, "Lỗi khi lấy sản phẩm có thể đánh giá: " + error.message);
+    }
+  },
+
   /**
    * Lấy danh sách đánh giá của người dùng
    * @param {String} userId - ID người dùng

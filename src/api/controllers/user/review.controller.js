@@ -71,10 +71,30 @@ const likeReview = asyncHandler(async (req, res) => {
   res.status(200).json(result);
 });
 
+/**
+ * @desc    Lấy danh sách sản phẩm có thể đánh giá
+ * @route   GET /api/users/reviews/reviewable-products
+ * @access  Private
+ */
+const getReviewableProducts = asyncHandler(async (req, res) => {
+  const result = await reviewService.getReviewableProducts(
+    req.user.id,
+    req.query
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Lấy danh sách sản phẩm có thể đánh giá thành công",
+    data: result.data,
+    pagination: result.pagination,
+  });
+});
+
 module.exports = {
   getUserReviews,
   createReview,
   updateReview,
   deleteReview,
   likeReview,
+  getReviewableProducts,
 };

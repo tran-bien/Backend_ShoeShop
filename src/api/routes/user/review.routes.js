@@ -28,6 +28,16 @@ router.post(
 );
 
 /**
+ * @route   GET /api/v1/users/reviews/reviewable-products
+ * @desc    Lấy danh sách sản phẩm có thể đánh giá từ đơn hàng đã giao
+ * @access  Private
+ */
+router.get(
+  "/reviews/reviewable-products",
+  reviewController.getReviewableProducts
+);
+
+/**
  * @route   PUT /api/v1/users/reviews/:reviewId
  * @desc    Cập nhật đánh giá
  * @access  Private
