@@ -267,31 +267,25 @@ const reviewService = {
       throw new ApiError(404, "Không tìm thấy sản phẩm");
     }
 
-    // Kiểm tra người dùng đã đánh giá orderItem này chưa (không tính xóa mềm)
-    const existingActiveReview = await Review.findOne({
+    //Kiểm tra người dùng đã đánh giá orderItem này chưa (bao gồm cả đánh giá đã xóa mềm)
+    const existingReview = await Review.findOne({
       user: userId,
-      orderItem: reviewData.orderItemId,
-      deletedAt: null,
-    });
+      orderItem: reviewData.orderItemId
+    }).setOptions({ includeDeleted: true }); // Bao gồm cả đánh giá đã xóa mềm
 
-    if (existingActiveReview) {
-      throw new ApiError(
-        400,
-        "Bạn đã đánh giá sản phẩm này trong đơn hàng rồi"
-      );
-    }
-
-    // Kiểm tra người dùng đã đánh giá sản phẩm này chưa (bao gồm cả đã xóa mềm)
-    const existingDeletedReview = await Review.findOne({
-      user: userId,
-      product: productId,
-    }).setOptions({ includeDeleted: true });
-
-    if (existingDeletedReview && existingDeletedReview.deletedAt) {
-      throw new ApiError(
-        400,
-        "Bạn đã đánh giá sản phẩm này trước đây và đã xóa. Không thể đánh giá lại."
-      );
+    if (existingReview) {
+      // Kiểm tra xem đánh giá đã bị xóa mềm hay chưa
+      if (existingReview.deletedAt) {
+        throw new ApiError(
+          400,
+          "Bạn đã đánh giá và sau đó đã xóa đánh giá cho sản phẩm này trong đơn hàng. Không thể đánh giá lại."
+        );
+      } else {
+        throw new ApiError(
+          400,
+          "Bạn đã đánh giá sản phẩm này trong đơn hàng rồi"
+        );
+      }
     }
 
     // Tạo đánh giá mới
@@ -310,7 +304,6 @@ const reviewService = {
       console.log("Review đã lưu:", savedReview);
 
       // Lấy đánh giá đã tạo kèm theo thông tin người dùng và sản phẩm
-      // Sử dụng lean() để chuyển đổi document Mongoose thành plain JavaScript object
       const createdReview = await Review.findById(newReview._id)
         .populate("user", "name avatar")
         .populate("product", "name images slug")
@@ -350,28 +343,28 @@ const reviewService = {
         review: createdReview,
       };
     } catch (error) {
+      console.error("Lỗi khi tạo đánh giá:", error);
+      
       // Bắt lỗi duplicate key và cung cấp thông báo cụ thể
       if (error.code === 11000) {
-        // Nếu lỗi trùng lặp liên quan đến cặp user_product
-        if (error.keyPattern && error.keyPattern.user && error.keyPattern.product) {
-          throw new ApiError(
-            400,
-            "Bạn đã đánh giá sản phẩm này rồi. Mỗi người chỉ được đánh giá một sản phẩm một lần."
-          );
-        }
+        console.log("Lỗi trùng lặp dữ liệu:", error.keyPattern);
+        
         // Nếu lỗi trùng lặp liên quan đến cặp user_orderItem
         if (error.keyPattern && error.keyPattern.user && error.keyPattern.orderItem) {
           throw new ApiError(
             400,
-            "Bạn đã đánh giá sản phẩm trong đơn hàng này rồi."
+            "Bạn đã đánh giá sản phẩm trong đơn hàng này rồi. Mỗi sản phẩm trong đơn hàng chỉ được đánh giá một lần."
           );
         }
+        
         // Trường hợp khác
         throw new ApiError(
           400,
-          "Không thể tạo đánh giá do trùng lặp dữ liệu."
+          `Không thể tạo đánh giá do trùng lặp dữ liệu ${JSON.stringify(error.keyPattern || {})}.`
         );
       }
+      
+      // Các lỗi khác
       throw error;
     }
   },
@@ -567,8 +560,7 @@ const reviewService = {
       const existingReviews = await Review.find({
         orderItem: { $in: orderItemIds },
         user: userId,
-        deletedAt: null
-      });
+      }).setOptions({ includeDeleted: true });
       
       // Tạo Set các orderItem IDs đã được đánh giá
       const reviewedOrderItemIds = new Set(existingReviews.map(review => 
