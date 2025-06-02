@@ -382,11 +382,6 @@ const cartService = {
       throw new ApiError(404, "Không tìm thấy giỏ hàng");
     }
 
-    // Kiểm tra giỏ hàng có sản phẩm không
-    if (cart.cartItems.length === 0) {
-      throw new ApiError(400, "Giỏ hàng trống, không thể xem trước đơn hàng");
-    }
-
     // Lọc các sản phẩm đã chọn và có sẵn
     const selectedItems = cart.cartItems.filter(
       (item) => item.isSelected && item.isAvailable
