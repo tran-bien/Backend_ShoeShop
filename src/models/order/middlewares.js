@@ -79,6 +79,27 @@ const generateOrderCode = async () => {
 };
 
 /**
+ * Kiểm tra xem đã có bản ghi tương tự trong lịch sử trạng thái gần đây chưa
+ * @param {Array} statusHistory - Mảng lịch sử trạng thái
+ * @param {String} status - Trạng thái cần kiểm tra
+ * @param {Number} timeThresholdMs - Ngưỡng thời gian (mili giây)
+ * @returns {Boolean} - true nếu đã có bản ghi tương tự gần đây
+ */
+const hasSimilarRecentEntry = (statusHistory, status, timeThresholdMs = 5000) => {
+  if (!statusHistory || !statusHistory.length) return false;
+  
+  const now = new Date();
+  const recentEntries = statusHistory.filter(entry => {
+    if (entry.status !== status) return false;
+    const entryTime = new Date(entry.updatedAt);
+    const timeDiff = now - entryTime;
+    return timeDiff < timeThresholdMs; // Trong khoảng 5 giây
+  });
+  
+  return recentEntries.length > 0;
+};
+
+/**
  * Áp dụng middlewares cho Order schema
  * @param {Schema} schema - Mongoose Schema
  */
@@ -112,48 +133,74 @@ const applyMiddlewares = (schema) => {
     try {
       const previousStatus = this._previousStatus;
       const currentStatus = this.status;
-
-      // Nếu là đơn hàng mới được tạo
-      if (!previousStatus && currentStatus === "pending") {
-        // Kiểm tra phương thức thanh toán
-        if (this.payment.method === "COD" && !this.inventoryDeducted) {
+      
+      // Nếu là đơn hàng mới hoặc có sự thay đổi trạng thái
+      if ((!previousStatus && currentStatus === "pending") || 
+          (previousStatus && previousStatus !== currentStatus)) {
+          
+        // Xử lý tồn kho - Giữ nguyên logic này
+        if (currentStatus === "cancelled" && this.inventoryDeducted) {
+          // Nếu đơn hàng bị hủy và đã trừ tồn kho, trả lại số lượng
+          for (const item of this.orderItems) {
+            await updateInventory(item, "increment");
+          }
+          
+          // Cập nhật trạng thái không qua this.save()
+          await mongoose.model("Order").updateOne(
+            { _id: this._id },
+            { inventoryDeducted: false }
+          );
+        } else if (!previousStatus && currentStatus === "pending" && 
+                   this.payment.method === "COD" && !this.inventoryDeducted) {
           // Nếu thanh toán COD và chưa trừ tồn kho, giảm số lượng tồn kho
           for (const item of this.orderItems) {
             await updateInventory(item, "decrement");
           }
           
-          // Cập nhật trạng thái không qua this.save() để tránh vòng lặp vô hạn
-          await mongoose.model("Order").findByIdAndUpdate(
-            this._id,
-            { inventoryDeducted: true },
-            { new: true }
+          // Cập nhật trạng thái không qua this.save()
+          await mongoose.model("Order").updateOne(
+            { _id: this._id },
+            { inventoryDeducted: true }
           );
         }
-        // Nếu là VNPAY, sẽ trừ khi thanh toán thành công
+        
+        // Sửa đổi phần xử lý statusHistory để tránh trùng lặp
+        // Chỉ thêm statusHistory khi:
+        // 1. Không có marker _statusHistoryAdded 
+        // 2. Có sự thay đổi trạng thái thực sự
+        // 3. Không có bản ghi tương tự gần đây
+        if (previousStatus && 
+            previousStatus !== currentStatus && 
+            !this._statusHistoryAdded &&
+            !hasSimilarRecentEntry(this.statusHistory, currentStatus)) {
+            
+          const statusEntry = {
+            status: currentStatus,
+            updatedAt: new Date(),
+            note: `Trạng thái đơn hàng thay đổi từ ${previousStatus} sang ${currentStatus}`
+          };
+          
+          // Sử dụng updateOne để tránh gọi lại middleware
+          await mongoose.model("Order").updateOne(
+            { _id: this._id },
+            { $push: { statusHistory: statusEntry } }
+          );
+        }
       }
 
-      // Xử lý khi trạng thái đơn hàng thay đổi
-      if (previousStatus && previousStatus !== currentStatus) {
-        // Nếu đơn hàng bị hủy và đã trừ tồn kho, trả lại số lượng
-        if (currentStatus === "cancelled" && this.inventoryDeducted) {
-          for (const item of this.orderItems) {
-            await updateInventory(item, "increment");
-          }
-          
-          // Cập nhật trạng thái không qua this.save() để tránh vòng lặp vô hạn
-          await mongoose.model("Order").findByIdAndUpdate(
-            this._id,
-            { inventoryDeducted: false },
-            { new: true }
-          );
-        }
+      // Xóa marker nếu có
+      if (this._statusHistoryAdded) {
+        await mongoose.model("Order").updateOne(
+          { _id: this._id },
+          { $unset: { _statusHistoryAdded: "" } }
+        );
       }
     } catch (error) {
       console.error("[Order]: Lỗi trong middleware post-save:", error);
     }
   });
 
-  // Xử lý sau khi tìm thấy và cập nhật document
+  // Xử lý sau khi tìm thấy và cập nhật document - giữ nguyên
   schema.post("findOneAndUpdate", async function (doc) {
     try {
       if (!doc) return;

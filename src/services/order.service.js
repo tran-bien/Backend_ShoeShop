@@ -431,37 +431,109 @@ const orderService = {
       status: "pending",
     });
 
+    // Lưu yêu cầu hủy
+    await cancelRequest.save();
+
     // Nếu đơn hàng đang ở trạng thái pending, cho phép hủy ngay
     if (order.status === "pending") {
-      cancelRequest.status = "approved";
-      cancelRequest.resolvedAt = new Date();
-      cancelRequest.adminResponse = "Đơn hàng đã được chấp nhận. Hủy thành công";
-
-      // Cập nhật đơn hàng
-      order.status = "cancelled";
-      order.cancelledAt = new Date();
-      order.cancelReason = reason;
-      order.cancelRequestId = cancelRequest._id;
-      order.hasCancelRequest = false; // Cập nhật lại đơn hàng không còn yêu cầu hủy đang chờ xử lý
+      // Cập nhật yêu cầu hủy thành đã duyệt
+      await CancelRequest.updateOne(
+        { _id: cancelRequest._id },
+        {
+          status: "approved",
+          resolvedAt: new Date(),
+          adminResponse: "Đơn hàng đã được chấp nhận. Hủy thành công"
+        }
+      );
       
-      // Thêm vào lịch sử
-      order.statusHistory.push({
+      // Tạo bản ghi lịch sử mới
+      const newHistoryEntry = {
         status: "cancelled",
         updatedAt: new Date(),
-        note: `Đơn hàng bị hủy tự động. Lý do: ${reason}`,
-      });
-    } else {
-      // Nếu đơn hàng đã xác nhận, cần chờ admin phê duyệt
-      order.cancelRequestId = cancelRequest._id;
-      order.hasCancelRequest = true;
-    }
+        note: `Đơn hàng bị hủy tự động. Lý do: ${reason}`
+      };
+      
+      // Cập nhật trạng thái đơn hàng KHÔNG sử dụng $push để tránh trùng lặp
+      const updatedOrder = await Order.findOneAndUpdate(
+        { _id: orderId },
+        {
+          $set: {
+            status: "cancelled",
+            cancelledAt: new Date(),
+            cancelReason: reason,
+            cancelRequestId: cancelRequest._id,
+            hasCancelRequest: false
+          },
+          // Thêm vào statusHistory chỉ khi THỰC SỰ cần
+          $addToSet: { statusHistory: newHistoryEntry }
+        },
+        { new: true }
+      );
 
-    // Lưu thay đổi
-    await Promise.all([cancelRequest.save(), order.save()]);
+      // Kiểm tra xem có bao nhiêu bản ghi statusHistory có cùng trạng thái "cancelled"
+      const cancelledEntries = updatedOrder.statusHistory.filter(
+        entry => entry.status === "cancelled"
+      );
+      
+      // Nếu có nhiều hơn một, xóa các bản ghi trùng lặp
+      if (cancelledEntries.length > 1) {
+        const latestCancelledEntry = cancelledEntries[cancelledEntries.length - 1];
+        
+        // Lọc lại mảng statusHistory, loại bỏ các bản ghi trùng lặp
+        const uniqueHistory = updatedOrder.statusHistory.filter((entry, index) => {
+          // Giữ lại bản ghi không phải "cancelled" hoặc bản ghi "cancelled" mới nhất
+          return entry.status !== "cancelled" || 
+                entry._id.toString() === latestCancelledEntry._id.toString();
+        });
+        
+        // Cập nhật lại với mảng đã lọc
+        await Order.updateOne(
+          { _id: orderId },
+          { $set: { statusHistory: uniqueHistory } }
+        );
+      }
+      
+      // Cập nhật lại tồn kho nếu cần
+      if (order.inventoryDeducted) {
+        for (const item of order.orderItems) {
+          // Hàm updateInventory được định nghĩa trong middlewares.js
+          const Variant = mongoose.model("Variant");
+          const variant = await Variant.findById(item.variant);
+          if (!variant) continue;
+          
+          // Tìm size trong biến thể
+          const sizeIndex = variant.sizes.findIndex(
+            (s) => s.size.toString() === item.size.toString()
+          );
+          
+          if (sizeIndex === -1) continue;
+          
+          // Tăng số lượng tồn kho lại
+          variant.sizes[sizeIndex].quantity += item.quantity;
+          variant.sizes[sizeIndex].isSizeAvailable = variant.sizes[sizeIndex].quantity > 0;
+          await variant.save();
+        }
+        
+        // Đánh dấu là đã trả lại tồn kho
+        await Order.updateOne(
+          { _id: orderId },
+          { inventoryDeducted: false }
+        );
+      }
+    } else {
+      // Nếu đơn hàng đã xác nhận, chỉ cần đánh dấu có yêu cầu hủy
+      await Order.updateOne(
+        { _id: orderId },
+        {
+          cancelRequestId: cancelRequest._id,
+          hasCancelRequest: true
+        }
+      );
+    }
 
     return {
       message:
-        order.status === "cancelled"
+        order.status === "pending"
           ? "Đơn hàng đã được hủy thành công"
           : "Yêu cầu hủy đơn hàng đã được gửi và đang chờ xử lý",
       cancelRequest,
