@@ -391,9 +391,6 @@ const cartService = {
     const selectedItems = cart.cartItems.filter(
       (item) => item.isSelected && item.isAvailable
     );
-    if (selectedItems.length === 0) {
-      throw new ApiError(400, "Không có sản phẩm nào được chọn trong giỏ hàng");
-    }
 
     // Tính tổng giá trị của các sản phẩm được chọn
     const subtotalSelected = selectedItems.reduce(
