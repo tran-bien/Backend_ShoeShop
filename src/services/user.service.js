@@ -456,7 +456,7 @@ const adminUserService = {
   getAllUsers: async (query) => {
     const {
       page = 1,
-      limit = 10,
+      limit = 50,
       name,
       email,
       role,

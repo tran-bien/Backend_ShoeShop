@@ -38,7 +38,7 @@ const colorService = {
    * @param {Object} query - Các tham số truy vấn
    */
 getAdminColors: async (query) => {
-  const { page = 1, limit = 15, name, type, sort } = query;
+  const { page = 1, limit = 50, name, type, sort } = query;
   
   // Chuyển đổi page và limit sang number
   const pageNum = Number(page) || 1;

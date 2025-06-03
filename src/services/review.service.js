@@ -720,7 +720,7 @@ const adminReviewService = {
   getAllReviews: async (query = {}) => {
     const {
       page = 1,
-      limit = 10,
+      limit = 90,
       productId,
       userId,
       rating,

@@ -40,7 +40,7 @@ const brandService = {
    * [ADMIN] Lấy tất cả brand (bao gồm cả inactive)
    */
   getAdminAllBrands: async (query) => {
-    const { page = 1, limit = 15, name, isActive, sort } = query;
+    const { page = 1, limit = 30, name, isActive, sort } = query;
     const filter = { deletedAt: null }; // Mặc định chỉ lấy các brand chưa xóa
 
     if (name) {

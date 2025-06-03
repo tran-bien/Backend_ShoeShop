@@ -227,7 +227,7 @@ const adminCouponService = {
 getAllCoupons: async (query = {}) => {
   const {
     page = 1,
-    limit = 10,
+    limit = 50,
     code,
     type,
     status,

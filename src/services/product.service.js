@@ -608,7 +608,7 @@ const productService = {
   getAdminProducts: async (query) => {
     const {
       page = 1,
-      limit = 10,
+      limit = 50,
       name,
       category,
       brand,

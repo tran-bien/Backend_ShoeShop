@@ -38,7 +38,7 @@ const sizeService = {
    * @param {Object} query - Các tham số truy vấn
    */
   getAdminSizes: async (query) => {
-    const { page = 1, limit = 15, value, description, sort } = query;
+    const { page = 1, limit = 50, value, description, sort } = query;
     
     // Chuyển đổi page và limit sang number
     const pageNum = Number(page) || 1;

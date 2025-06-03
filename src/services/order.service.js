@@ -11,7 +11,7 @@ const orderService = {
    * @returns {Object} - Danh sách đơn hàng và thống kê
    */
   getUserOrders: async (userId, query = {}) => {
-    const { page = 1, limit = 10, status, search } = query;
+    const { page = 1, limit = 90, status, search } = query;
 
     // Xây dựng điều kiện lọc
     const filter = { user: userId };
@@ -548,7 +548,7 @@ const orderService = {
   getCancelRequests: async (query = {}) => {
     const {
       page = 1,
-      limit = 10,
+      limit = 50,
       status,
       search,
     } = query;
@@ -621,7 +621,7 @@ const orderService = {
    * @returns {Object} - Danh sách yêu cầu hủy đơn hàng
    */
   getUserCancelRequests: async (userId, query = {}) => {
-    const { page = 1, limit = 10, status } = query;
+    const { page = 1, limit = 50, status } = query;
 
     const filter = { user: userId };
     if (status) {
@@ -663,7 +663,7 @@ const orderService = {
   getAllOrders: async (query = {}) => {
     const {
       page = 1,
-      limit = 10,
+      limit = 90,
       status,
       search,
     } = query;

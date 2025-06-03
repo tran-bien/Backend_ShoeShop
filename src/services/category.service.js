@@ -40,7 +40,7 @@ const categoryService = {
    * [ADMIN] Lấy tất cả category (bao gồm cả inactive)
    */
   getAdminAllCategories: async (query) => {
-    const { page = 1, limit = 15, name, sort, isActive } = query;
+    const { page = 1, limit = 30, name, sort, isActive } = query;
     const filter = { deletedAt: null }; // Mặc định chỉ lấy các category chưa xóa
 
     if (name) {
