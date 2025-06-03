@@ -50,37 +50,79 @@ const updateInventory = async (orderItem, action) => {
 };
 
 /**
- * Tạo mã đơn hàng không trùng
+ * Tạo mã đơn hàng không trùng (cải thiện để tránh race condition)
  * @returns {String} Mã đơn hàng mới
  */
 const generateOrderCode = async () => {
-  try {
-    // Lấy đơn hàng mới nhất
-    const latestOrder = await mongoose
-      .model("Order")
-      .findOne()
-      .sort({ createdAt: -1 });
+  const maxRetries = 5;
+  let attempt = 0;
 
-    if (!latestOrder || !latestOrder.code) {
-      // Nếu không có đơn hàng hoặc không có mã, bắt đầu từ 1
-      return "ORD000001";
+  while (attempt < maxRetries) {
+    try {
+      // Tạo mã dựa trên timestamp để tránh trùng lặp
+      const now = new Date();
+      const year = now.getFullYear().toString().slice(-2); // 2 số cuối của năm
+      const month = (now.getMonth() + 1).toString().padStart(2, "0");
+      const day = now.getDate().toString().padStart(2, "0");
+      const hours = now.getHours().toString().padStart(2, "0");
+      const minutes = now.getMinutes().toString().padStart(2, "0");
+      const seconds = now.getSeconds().toString().padStart(2, "0");
+      const milliseconds = now.getMilliseconds().toString().padStart(3, "0");
+
+      // Format: ORD + YY + MM + DD + HH + MM + SS + milliseconds (3 chữ số cuối)
+      const timeBasedCode = `ORD${year}${month}${day}${hours}${minutes}${seconds}${milliseconds.slice(
+        -2
+      )}`;
+
+      // Kiểm tra xem mã này đã tồn tại chưa
+      const existingOrder = await mongoose
+        .model("Order")
+        .findOne({ code: timeBasedCode });
+
+      if (!existingOrder) {
+        return timeBasedCode;
+      }
+
+      // Nếu trùng, thêm số ngẫu nhiên vào cuối
+      const randomSuffix = Math.floor(Math.random() * 99)
+        .toString()
+        .padStart(2, "0");
+      const finalCode = `${timeBasedCode}${randomSuffix}`;
+
+      const duplicateCheck = await mongoose
+        .model("Order")
+        .findOne({ code: finalCode });
+
+      if (!duplicateCheck) {
+        return finalCode;
+      }
+
+      attempt++;
+
+      // Chờ một chút trước khi thử lại
+      await new Promise((resolve) => setTimeout(resolve, Math.random() * 100));
+    } catch (error) {
+      console.error(`Attempt ${attempt + 1} failed:`, error);
+      attempt++;
+
+      if (attempt >= maxRetries) {
+        // Phương án cuối cùng: sử dụng timestamp + random
+        const fallbackCode = `ORD${Date.now()}${Math.floor(
+          Math.random() * 1000
+        )}`;
+        console.warn(`Using fallback code: ${fallbackCode}`);
+        return fallbackCode;
+      }
+
+      // Chờ trước khi thử lại
+      await new Promise((resolve) => setTimeout(resolve, Math.random() * 200));
     }
-
-    // Lấy số từ mã đơn hàng hiện tại và tăng lên 1
-    const currentCode = latestOrder.code;
-    const numericPart = currentCode.replace("ORD", "");
-    const nextNumericValue = parseInt(numericPart, 10) + 1;
-
-    // Đảm bảo có đủ số 0 phía trước
-    return `ORD${String(nextNumericValue).padStart(6, "0")}`;
-  } catch (error) {
-    console.error("Lỗi khi tạo mã đơn hàng:", error);
-    // Tạo mã ngẫu nhiên để tránh lỗi
-    const randomPart = Math.floor(Math.random() * 1000000)
-      .toString()
-      .padStart(6, "0");
-    return `ORD${randomPart}`;
   }
+
+  // Nếu tất cả attempts đều thất bại, tạo mã với UUID
+  const crypto = require("crypto");
+  const uuid = crypto.randomUUID().replace(/-/g, "").substring(0, 8);
+  return `ORD${Date.now().toString().slice(-6)}${uuid}`;
 };
 
 /**
@@ -117,9 +159,37 @@ const applyMiddlewares = (schema) => {
   schema.pre("save", async function (next) {
     try {
       // Tạo mã đơn hàng nếu là đơn hàng mới
-      if (this.isNew) {
-        // Sử dụng phương thức mới để tạo mã không trùng
-        this.code = await generateOrderCode();
+      if (this.isNew && !this.code) {
+        // Thử tạo mã đơn hàng với retry logic
+        let codeGenerated = false;
+        let retryCount = 0;
+        const maxRetries = 3;
+
+        while (!codeGenerated && retryCount < maxRetries) {
+          try {
+            this.code = await generateOrderCode();
+            codeGenerated = true;
+          } catch (error) {
+            retryCount++;
+            console.error(
+              `Retry ${retryCount} for generating order code:`,
+              error
+            );
+
+            if (retryCount >= maxRetries) {
+              // Tạo mã dự phòng đơn giản
+              const timestamp = Date.now();
+              const random = Math.floor(Math.random() * 10000);
+              this.code = `ORD${timestamp}${random}`;
+              console.warn(`Used emergency code: ${this.code}`);
+            } else {
+              // Chờ một chút trước khi thử lại
+              await new Promise((resolve) =>
+                setTimeout(resolve, 100 * retryCount)
+              );
+            }
+          }
+        }
       }
 
       // Lưu trạng thái cũ trước khi cập nhật
