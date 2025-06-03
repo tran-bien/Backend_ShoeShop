@@ -32,8 +32,8 @@ const orderService = {
         select: "color product",
         populate: [
           { path: "color", select: "name code" },
-          { path: "product", select: "name slug images price" }
-        ]
+          { path: "product", select: "name slug images price" },
+        ],
       },
       { path: "orderItems.size", select: "value description" },
     ];
@@ -93,8 +93,8 @@ const orderService = {
         select: "color price",
         populate: [
           { path: "color", select: "name code" },
-          { path: "product", select: "name slug images price description" }
-        ]
+          { path: "product", select: "name slug images price description" },
+        ],
       })
       .populate({
         path: "orderItems.size",
@@ -127,7 +127,7 @@ const orderService = {
       addressId,
       paymentMethod = "COD",
       note,
-      couponCode
+      couponCode,
     } = orderData;
 
     // Kiểm tra dữ liệu đầu vào
@@ -161,14 +161,14 @@ const orderService = {
       province: address.province,
       district: address.district,
       ward: address.ward,
-      detail: address.addressDetail
+      detail: address.addressDetail,
     };
 
     // Lấy giỏ hàng hiện tại
     let cart = await Cart.findOne({ user: userId })
       .populate({
         path: "cartItems.variant",
-        populate: { path: "product" }
+        populate: { path: "product" },
       })
       .populate("cartItems.size");
 
@@ -177,68 +177,74 @@ const orderService = {
     }
 
     // Lọc ra những sản phẩm được chọn
-    const selectedItems = cart.cartItems.filter(item => item.isSelected);
-    
+    const selectedItems = cart.cartItems.filter((item) => item.isSelected);
+
     if (selectedItems.length === 0) {
-      throw new ApiError(400, "Vui lòng chọn ít nhất một sản phẩm để thanh toán");
+      throw new ApiError(
+        400,
+        "Vui lòng chọn ít nhất một sản phẩm để thanh toán"
+      );
     }
 
     console.log("Đang kiểm tra tồn kho cho các sản phẩm đã chọn...");
-    
+
     // Kiểm tra trực tiếp tồn kho và chuẩn bị mảng orderItems
     const Variant = mongoose.model("Variant");
     const orderItems = [];
     const unavailableItems = [];
-    
+
     for (const item of selectedItems) {
       const itemId = item._id.toString();
-      const variantId = typeof item.variant === 'object' ? item.variant._id : item.variant;
+      const variantId =
+        typeof item.variant === "object" ? item.variant._id : item.variant;
       const variant = await Variant.findById(variantId);
-      
+
       if (!variant) {
         unavailableItems.push({
           productName: item.productName,
-          reason: "Không tìm thấy biến thể sản phẩm"
+          reason: "Không tìm thấy biến thể sản phẩm",
         });
         continue;
       }
-      
-      const sizeId = typeof item.size === 'object' ? item.size._id : item.size;
-      const sizeInfo = variant.sizes.find(s => s.size.toString() === sizeId.toString());
-      
+
+      const sizeId = typeof item.size === "object" ? item.size._id : item.size;
+      const sizeInfo = variant.sizes.find(
+        (s) => s.size.toString() === sizeId.toString()
+      );
+
       console.log(`Kiểm tra sản phẩm: ${item.productName}`);
       console.log(`- Biến thể: ${variantId}`);
       console.log(`- Kích thước: ${sizeId}`);
       console.log(`- Yêu cầu số lượng: ${item.quantity}`);
-      
+
       if (!sizeInfo) {
         console.log(`- Kết quả: Không tìm thấy kích thước trong biến thể`);
         unavailableItems.push({
           productName: item.productName,
-          reason: "Không tìm thấy kích thước cho biến thể này"
+          reason: "Không tìm thấy kích thước cho biến thể này",
         });
         continue;
       }
-      
+
       console.log(`- Trong kho: ${sizeInfo.quantity}`);
       console.log(`- Có sẵn: ${sizeInfo.isSizeAvailable ? "Có" : "Không"}`);
-      
+
       if (!sizeInfo.isSizeAvailable) {
         unavailableItems.push({
           productName: item.productName,
-          reason: "Kích thước này hiện không có sẵn"
+          reason: "Kích thước này hiện không có sẵn",
         });
         continue;
       }
-      
+
       if (sizeInfo.quantity < item.quantity) {
         unavailableItems.push({
           productName: item.productName,
-          reason: `Không đủ tồn kho. Hiện còn ${sizeInfo.quantity} sản phẩm.`
+          reason: `Không đủ tồn kho. Hiện còn ${sizeInfo.quantity} sản phẩm.`,
         });
         continue;
       }
-      
+
       // Sản phẩm có sẵn, thêm vào danh sách orderItems
       orderItems.push({
         variant: variantId,
@@ -249,21 +255,26 @@ const orderService = {
         image: item.image || "",
       });
     }
-    
+
     // Nếu có sản phẩm không khả dụng
     if (unavailableItems.length > 0) {
-      const errorMessage = `Một số sản phẩm không có sẵn: ${unavailableItems.map(item => `${item.productName} (${item.reason})`).join(", ")}`;
+      const errorMessage = `Một số sản phẩm không có sẵn: ${unavailableItems
+        .map((item) => `${item.productName} (${item.reason})`)
+        .join(", ")}`;
       throw new ApiError(400, errorMessage);
     }
-    
+
     // Kiểm tra nếu không có sản phẩm nào khả dụng
     if (orderItems.length === 0) {
-      throw new ApiError(400, "Không có sản phẩm nào khả dụng trong giỏ hàng. Vui lòng kiểm tra lại.");
+      throw new ApiError(
+        400,
+        "Không có sản phẩm nào khả dụng trong giỏ hàng. Vui lòng kiểm tra lại."
+      );
     }
 
     // Tính tổng giá trị của các sản phẩm
     const subTotal = orderItems.reduce(
-      (total, item) => total + (item.price * item.quantity),
+      (total, item) => total + item.price * item.quantity,
       0
     );
 
@@ -281,14 +292,14 @@ const orderService = {
         status: "active",
         startDate: { $lte: new Date() },
         endDate: { $gte: new Date() },
-        $or: [
-          { isPublic: true },
-          { users: userId }
-        ]
+        $or: [{ isPublic: true }, { users: userId }],
       });
 
       if (!coupon) {
-        throw new ApiError(400, "Mã giảm giá không hợp lệ, đã hết hạn hoặc bạn chưa thu thập");
+        throw new ApiError(
+          400,
+          "Mã giảm giá không hợp lệ, đã hết hạn hoặc bạn chưa thu thập"
+        );
       }
 
       // Kiểm tra số lần sử dụng
@@ -310,7 +321,8 @@ const orderService = {
         if (coupon.maxDiscount) {
           discount = Math.min(discount, coupon.maxDiscount);
         }
-      } else { // fixed
+      } else {
+        // fixed
         discount = Math.min(coupon.value, subTotal);
       }
 
@@ -326,7 +338,8 @@ const orderService = {
     // Tính phí vận chuyển
     const DEFAULT_SHIPPING_FEE = 30000;
     const SHIPPING_FREE_THRESHOLD = 1000000;
-    const shippingFee = subTotal >= SHIPPING_FREE_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
+    const shippingFee =
+      subTotal >= SHIPPING_FREE_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
 
     // Tạo đơn hàng mới
     const newOrder = new Order({
@@ -343,19 +356,21 @@ const orderService = {
         method: paymentMethod,
         paymentStatus: "pending",
       },
-      statusHistory: [{
-        status: "pending",
-        updatedAt: new Date(),
-        note: "Đơn hàng được tạo"
-      }],
-      inventoryDeducted: paymentMethod === "COD" // Chỉ đánh dấu true nếu là COD
+      statusHistory: [
+        {
+          status: "pending",
+          updatedAt: new Date(),
+          note: "Đơn hàng được tạo",
+        },
+      ],
+      inventoryDeducted: paymentMethod === "COD", // Chỉ đánh dấu true nếu là COD
     });
 
     // Nếu có coupon, lưu thông tin và tăng số lần sử dụng
     if (coupon) {
       newOrder.coupon = coupon._id;
       newOrder.couponDetail = couponDetail;
-      
+
       // Tăng số lần sử dụng mã giảm giá
       coupon.currentUses += 1;
       await coupon.save();
@@ -367,24 +382,79 @@ const orderService = {
       const savedOrder = await newOrder.save();
       console.log("Đã lưu đơn hàng thành công, ID:", savedOrder._id);
 
+      // Trừ tồn kho ngay sau khi tạo đơn hàng COD thành công
+      if (paymentMethod === "COD") {
+        console.log("Đang trừ tồn kho cho đơn hàng COD...");
+        const Variant = mongoose.model("Variant");
+
+        for (const item of orderItems) {
+          const variant = await Variant.findById(item.variant);
+          if (variant) {
+            const sizeIndex = variant.sizes.findIndex(
+              (s) => s.size.toString() === item.size.toString()
+            );
+
+            if (sizeIndex !== -1) {
+              const oldQuantity = variant.sizes[sizeIndex].quantity;
+              variant.sizes[sizeIndex].quantity = Math.max(
+                0,
+                variant.sizes[sizeIndex].quantity - item.quantity
+              );
+              variant.sizes[sizeIndex].isSizeAvailable =
+                variant.sizes[sizeIndex].quantity > 0;
+
+              await variant.save();
+              console.log(
+                `Đã trừ ${item.quantity} sản phẩm cho variant ${variant._id}, size ${item.size}: ${oldQuantity} → ${variant.sizes[sizeIndex].quantity}`
+              );
+            }
+          }
+        }
+
+        // Cập nhật trạng thái đã trừ tồn kho
+        await Order.updateOne(
+          { _id: savedOrder._id },
+          { inventoryDeducted: true }
+        );
+        console.log("Đã cập nhật trạng thái inventoryDeducted = true");
+      }
+
       // Start of Selection
       // Sau khi tạo đơn hàng, xóa sản phẩm đã chọn trong giỏ hàng
-      const itemsToRemove = cart.cartItems.filter(item => item.isSelected && item.isAvailable);
+      const itemsToRemove = cart.cartItems.filter(
+        (item) => item.isSelected && item.isAvailable
+      );
       if (itemsToRemove.length > 0) {
-        cart.cartItems = cart.cartItems.filter(item => !(item.isSelected && item.isAvailable));
-        cart.totalItems = cart.cartItems.reduce((sum, item) => sum + item.quantity, 0);
-        cart.subTotal = cart.cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        cart.cartItems = cart.cartItems.filter(
+          (item) => !(item.isSelected && item.isAvailable)
+        );
+        cart.totalItems = cart.cartItems.reduce(
+          (sum, item) => sum + item.quantity,
+          0
+        );
+        cart.subTotal = cart.cartItems.reduce(
+          (sum, item) => sum + item.price * item.quantity,
+          0
+        );
         await cart.save();
-        console.log(`Đã xóa ${itemsToRemove.length} sản phẩm đã chọn khỏi giỏ hàng`);
+        console.log(
+          `Đã xóa ${itemsToRemove.length} sản phẩm đã chọn khỏi giỏ hàng`
+        );
       }
       // End of Selectio
 
       return savedOrder;
     } catch (error) {
       console.error("Lỗi khi lưu đơn hàng:", error);
-      if (error.name === 'ValidationError') {
-        console.error("Chi tiết lỗi validation:", JSON.stringify(error.errors, null, 2));
-        console.error("Dữ liệu shippingAddress:", JSON.stringify(shippingAddress, null, 2));
+      if (error.name === "ValidationError") {
+        console.error(
+          "Chi tiết lỗi validation:",
+          JSON.stringify(error.errors, null, 2)
+        );
+        console.error(
+          "Dữ liệu shippingAddress:",
+          JSON.stringify(shippingAddress, null, 2)
+        );
       }
       throw error;
     }
@@ -442,17 +512,17 @@ const orderService = {
         {
           status: "approved",
           resolvedAt: new Date(),
-          adminResponse: "Đơn hàng đã được chấp nhận. Hủy thành công"
+          adminResponse: "Đơn hàng đã được chấp nhận. Hủy thành công",
         }
       );
-      
+
       // Tạo bản ghi lịch sử mới
       const newHistoryEntry = {
         status: "cancelled",
         updatedAt: new Date(),
-        note: `Đơn hàng bị hủy tự động. Lý do: ${reason}`
+        note: `Đơn hàng bị hủy tự động. Lý do: ${reason}`,
       };
-      
+
       // Cập nhật trạng thái đơn hàng KHÔNG sử dụng $push để tránh trùng lặp
       const updatedOrder = await Order.findOneAndUpdate(
         { _id: orderId },
@@ -462,62 +532,74 @@ const orderService = {
             cancelledAt: new Date(),
             cancelReason: reason,
             cancelRequestId: cancelRequest._id,
-            hasCancelRequest: false
+            hasCancelRequest: false,
           },
           // Thêm vào statusHistory chỉ khi THỰC SỰ cần
-          $addToSet: { statusHistory: newHistoryEntry }
+          $addToSet: { statusHistory: newHistoryEntry },
         },
         { new: true }
       );
 
       // Kiểm tra xem có bao nhiêu bản ghi statusHistory có cùng trạng thái "cancelled"
       const cancelledEntries = updatedOrder.statusHistory.filter(
-        entry => entry.status === "cancelled"
+        (entry) => entry.status === "cancelled"
       );
-      
+
       // Nếu có nhiều hơn một, xóa các bản ghi trùng lặp
       if (cancelledEntries.length > 1) {
-        const latestCancelledEntry = cancelledEntries[cancelledEntries.length - 1];
-        
+        const latestCancelledEntry =
+          cancelledEntries[cancelledEntries.length - 1];
+
         // Lọc lại mảng statusHistory, loại bỏ các bản ghi trùng lặp
-        const uniqueHistory = updatedOrder.statusHistory.filter((entry, index) => {
-          // Giữ lại bản ghi không phải "cancelled" hoặc bản ghi "cancelled" mới nhất
-          return entry.status !== "cancelled" || 
-                entry._id.toString() === latestCancelledEntry._id.toString();
-        });
-        
+        const uniqueHistory = updatedOrder.statusHistory.filter(
+          (entry, index) => {
+            // Giữ lại bản ghi không phải "cancelled" hoặc bản ghi "cancelled" mới nhất
+            return (
+              entry.status !== "cancelled" ||
+              entry._id.toString() === latestCancelledEntry._id.toString()
+            );
+          }
+        );
+
         // Cập nhật lại với mảng đã lọc
         await Order.updateOne(
           { _id: orderId },
           { $set: { statusHistory: uniqueHistory } }
         );
       }
-      
-      // Cập nhật lại tồn kho nếu cần
+
+      // Hoàn trả tồn kho nếu đã trừ
       if (order.inventoryDeducted) {
+        console.log(
+          `Đang hoàn trả tồn kho cho đơn hàng pending bị hủy: ${order.code}`
+        );
+        const Variant = mongoose.model("Variant");
+
         for (const item of order.orderItems) {
-          // Hàm updateInventory được định nghĩa trong middlewares.js
-          const Variant = mongoose.model("Variant");
           const variant = await Variant.findById(item.variant);
-          if (!variant) continue;
-          
-          // Tìm size trong biến thể
-          const sizeIndex = variant.sizes.findIndex(
-            (s) => s.size.toString() === item.size.toString()
-          );
-          
-          if (sizeIndex === -1) continue;
-          
-          // Tăng số lượng tồn kho lại
-          variant.sizes[sizeIndex].quantity += item.quantity;
-          variant.sizes[sizeIndex].isSizeAvailable = variant.sizes[sizeIndex].quantity > 0;
-          await variant.save();
+          if (variant) {
+            const sizeIndex = variant.sizes.findIndex(
+              (s) => s.size.toString() === item.size.toString()
+            );
+
+            if (sizeIndex !== -1) {
+              const oldQuantity = variant.sizes[sizeIndex].quantity;
+              variant.sizes[sizeIndex].quantity += item.quantity;
+              variant.sizes[sizeIndex].isSizeAvailable =
+                variant.sizes[sizeIndex].quantity > 0;
+
+              await variant.save();
+              console.log(
+                `Đã hoàn ${item.quantity} sản phẩm cho variant ${variant._id}, size ${item.size}: ${oldQuantity} → ${variant.sizes[sizeIndex].quantity}`
+              );
+            }
+          }
         }
-        
+
         // Đánh dấu là đã trả lại tồn kho
-        await Order.updateOne(
-          { _id: orderId },
-          { inventoryDeducted: false }
+        await Order.updateOne({ _id: orderId }, { inventoryDeducted: false });
+        console.log(
+          `Đã cập nhật inventoryDeducted = false cho đơn hàng: ${order.code}`
         );
       }
     } else {
@@ -526,7 +608,7 @@ const orderService = {
         { _id: orderId },
         {
           cancelRequestId: cancelRequest._id,
-          hasCancelRequest: true
+          hasCancelRequest: true,
         }
       );
     }
@@ -540,25 +622,20 @@ const orderService = {
     };
   },
 
-    /**
+  /**
    * Lấy danh sách yêu cầu hủy đơn hàng (cho admin)
    * @param {Object} query - Các tham số truy vấn
    * @returns {Object} - Danh sách yêu cầu hủy đơn hàng
    */
   getCancelRequests: async (query = {}) => {
-    const {
-      page = 1,
-      limit = 50,
-      status,
-      search,
-    } = query;
+    const { page = 1, limit = 50, status, search } = query;
 
     const filter = {};
 
     // Lọc theo trạng thái nếu có
     if (status) {
       filter.status = status;
-    } 
+    }
 
     // Tìm kiếm
     if (search) {
@@ -571,34 +648,31 @@ const orderService = {
           { phone: { $regex: search, $options: "i" } },
         ],
       }).distinct("_id");
-      
+
       // Tìm order phù hợp với từ khóa tìm kiếm
       const Order = mongoose.model("Order");
       const orderIds = await Order.find({
-        code: { $regex: search, $options: "i" }
+        code: { $regex: search, $options: "i" },
       }).distinct("_id");
-      
-      filter.$or = [
-        { user: { $in: userIds } },
-        { order: { $in: orderIds } }
-      ];
+
+      filter.$or = [{ user: { $in: userIds } }, { order: { $in: orderIds } }];
     }
 
     const populate = [
       { path: "user", select: "name email phone avatar" },
-      { 
-        path: "order", 
+      {
+        path: "order",
         select: "code status payment totalAfterDiscountAndShipping createdAt",
-        populate: { path: "user", select: "name email" }
+        populate: { path: "user", select: "name email" },
       },
-      { path: "processedBy", select: "name email" }
+      { path: "processedBy", select: "name email" },
     ];
 
     const result = await paginate(CancelRequest, filter, {
       page,
       limit,
       populate,
-      sort: { createdAt: -1 } // Sắp xếp theo thời gian tạo mới nhất
+      sort: { createdAt: -1 }, // Sắp xếp theo thời gian tạo mới nhất
     });
 
     return {
@@ -612,9 +686,9 @@ const orderService = {
         hasPrev: result.hasPrevPage,
       },
     };
-  }, 
+  },
 
-    /**
+  /**
    * Lấy danh sách yêu cầu hủy đơn hàng của người dùng
    * @param {String} userId - ID của người dùng
    * @param {Object} query - Các tham số truy vấn
@@ -629,17 +703,17 @@ const orderService = {
     }
 
     const populate = [
-      { 
-        path: "order", 
-        select: "code status payment totalAfterDiscountAndShipping createdAt"
-      }
+      {
+        path: "order",
+        select: "code status payment totalAfterDiscountAndShipping createdAt",
+      },
     ];
 
     const result = await paginate(CancelRequest, filter, {
       page,
       limit,
       populate,
-      sort: { createdAt: -1 }
+      sort: { createdAt: -1 },
     });
 
     return {
@@ -661,12 +735,7 @@ const orderService = {
    * @returns {Object} - Danh sách đơn hàng
    */
   getAllOrders: async (query = {}) => {
-    const {
-      page = 1,
-      limit = 90,
-      status,
-      search,
-    } = query;
+    const { page = 1, limit = 90, status, search } = query;
 
     // Xây dựng điều kiện lọc
     const filter = {};
@@ -734,8 +803,8 @@ const orderService = {
         select: "color price",
         populate: [
           { path: "color", select: "name code" },
-          { path: "product", select: "name slug images price" }
-        ]
+          { path: "product", select: "name slug images price" },
+        ],
       })
       .populate({
         path: "orderItems.size",
@@ -752,7 +821,7 @@ const orderService = {
     return order;
   },
 
-      /**
+  /**
    * Cập nhật trạng thái đơn hàng
    * @param {String} orderId - ID của đơn hàng
    * @param {Object} updateData - Dữ liệu cập nhật
@@ -769,10 +838,7 @@ const orderService = {
 
     // Kiểm tra nếu trạng thái không thay đổi
     if (order.status === status) {
-      throw new ApiError(
-        400, 
-        `Đơn hàng đã ở trạng thái ${status}`
-      );
+      throw new ApiError(400, `Đơn hàng đã ở trạng thái ${status}`);
     }
 
     // Kiểm tra các trạng thái chuyển đổi hợp lệ
@@ -803,24 +869,22 @@ const orderService = {
       }
 
       // Kiểm tra trạng thái của yêu cầu hủy
-      const cancelRequest = order.cancelRequestId instanceof mongoose.Document 
-        ? order.cancelRequestId 
-        : await CancelRequest.findById(order.cancelRequestId);
-        
+      const cancelRequest =
+        order.cancelRequestId instanceof mongoose.Document
+          ? order.cancelRequestId
+          : await CancelRequest.findById(order.cancelRequestId);
+
       if (!cancelRequest) {
-        throw new ApiError(
-          404,
-          "Không tìm thấy yêu cầu hủy đơn hàng"
-        );
+        throw new ApiError(404, "Không tìm thấy yêu cầu hủy đơn hàng");
       }
-      
+
       if (cancelRequest.status !== "pending") {
         throw new ApiError(
           400,
           `Yêu cầu hủy đã được xử lý với trạng thái: ${cancelRequest.status}`
         );
       }
-    } 
+    }
     // Kiểm tra trạng thái chuyển đổi thông thường nếu không phải trường hợp hủy
     else if (!validStatusTransitions[order.status].includes(status)) {
       throw new ApiError(
@@ -854,7 +918,7 @@ const orderService = {
 
     // Cập nhật trạng thái đơn hàng
     order.status = status;
-    
+
     // Thêm vào lịch sử trạng thái
     order.statusHistory.push({
       status,
@@ -874,24 +938,29 @@ const orderService = {
       case "delivered":
         order.deliveredAt = new Date();
         // Cập nhật trạng thái thanh toán cho COD
-        if (order.payment.method === "COD" && order.payment.paymentStatus !== "paid") {
+        if (
+          order.payment.method === "COD" &&
+          order.payment.paymentStatus !== "paid"
+        ) {
           order.payment.paymentStatus = "paid";
           order.payment.paidAt = new Date();
         }
         break;
       case "cancelled":
         order.cancelledAt = new Date();
-        
+
         // Nếu đơn hàng có yêu cầu hủy, đánh dấu đã xử lý
         if (order.cancelRequestId) {
-          // Cập nhật cancel request 
+          // Cập nhật cancel request
           await CancelRequest.findByIdAndUpdate(order.cancelRequestId, {
             status: "approved",
             resolvedAt: new Date(),
-            adminResponse: note || "Yêu cầu hủy đơn hàng được chấp nhận"
+            adminResponse: note || "Yêu cầu hủy đơn hàng được chấp nhận",
           });
           order.hasCancelRequest = false;
-          order.cancelReason = order.cancelRequestId.reason || "Đã chấp nhận yêu cầu hủy từ khách hàng";
+          order.cancelReason =
+            order.cancelRequestId.reason ||
+            "Đã chấp nhận yêu cầu hủy từ khách hàng";
         }
         break;
     }
@@ -907,12 +976,12 @@ const orderService = {
         code: order.code,
         previousStatus,
         currentStatus: status,
-        updatedAt: new Date()
-      }
+        updatedAt: new Date(),
+      },
     };
   },
 
-    /**
+  /**
    * Xử lý yêu cầu hủy đơn hàng cho admin
    * @param {String} requestId - ID của yêu cầu hủy đơn hàng
    * @param {Object} updateData - Dữ liệu cập nhật
@@ -931,7 +1000,7 @@ const orderService = {
     if (!["approved", "rejected"].includes(status)) {
       throw new ApiError(400, "Trạng thái không hợp lệ");
     }
-    
+
     // Kiểm tra nếu đang thay đổi sang trạng thái giống với trạng thái hiện tại
     if (cancelRequest.status === status) {
       throw new ApiError(400, `Yêu cầu hủy đã ở trạng thái ${status}`);
@@ -942,7 +1011,7 @@ const orderService = {
     if (!order) {
       throw new ApiError(404, "Không tìm thấy đơn hàng liên quan");
     }
-    
+
     // Lưu trạng thái trước đó để xử lý logic
     const previousStatus = cancelRequest.status;
     const isChangingDecision = previousStatus !== "pending";
@@ -952,28 +1021,35 @@ const orderService = {
     // Xử lý logic khi thay đổi từ approved sang rejected
     if (wasApproved && status === "rejected") {
       // Kiểm tra nếu đơn hàng đã bị hủy do yêu cầu hủy trước đó
-      if (order.status === "cancelled" && order.cancelRequestId?.toString() === requestId) {
+      if (
+        order.status === "cancelled" &&
+        order.cancelRequestId?.toString() === requestId
+      ) {
         // Kiểm tra nếu đơn hàng đã bị hủy quá lâu (ví dụ 24 giờ) thì không cho phép khôi phục
         const cancelledTime = new Date(order.cancelledAt).getTime();
         const currentTime = new Date().getTime();
-        const hoursSinceCancelled = (currentTime - cancelledTime) / (1000 * 60 * 60);
-        
+        const hoursSinceCancelled =
+          (currentTime - cancelledTime) / (1000 * 60 * 60);
+
         if (hoursSinceCancelled > 24) {
-          throw new ApiError(400, "Không thể từ chối yêu cầu hủy vì đơn hàng đã bị hủy quá 24 giờ");
+          throw new ApiError(
+            400,
+            "Không thể từ chối yêu cầu hủy vì đơn hàng đã bị hủy quá 24 giờ"
+          );
         }
-        
+
         // Khôi phục trạng thái đơn hàng về trạng thái trước khi bị hủy
         // Tìm trạng thái trước đó trong lịch sử
         const statusHistoryReversed = [...order.statusHistory].reverse();
         let previousOrderStatus = "pending"; // Mặc định
-        
+
         for (let i = 1; i < statusHistoryReversed.length; i++) {
           if (statusHistoryReversed[i].status !== "cancelled") {
             previousOrderStatus = statusHistoryReversed[i].status;
             break;
           }
         }
-        
+
         order.status = previousOrderStatus;
         order.cancelReason = "";
         order.cancelledAt = null;
@@ -981,20 +1057,26 @@ const orderService = {
           status: previousOrderStatus,
           note: `Đơn hàng được khôi phục sau khi từ chối yêu cầu hủy`,
           updatedAt: new Date(),
-          updatedBy: adminId
+          updatedBy: adminId,
         });
       } else {
         // Nếu đơn hàng không ở trạng thái cancelled hoặc đã bị hủy bởi lý do khác
-        throw new ApiError(400, "Không thể từ chối yêu cầu hủy vì đơn hàng không ở trạng thái bị hủy hoặc đã bị hủy bởi lý do khác");
+        throw new ApiError(
+          400,
+          "Không thể từ chối yêu cầu hủy vì đơn hàng không ở trạng thái bị hủy hoặc đã bị hủy bởi lý do khác"
+        );
       }
-    } 
+    }
     // Xử lý logic khi thay đổi từ rejected sang approved
     else if (wasRejected && status === "approved") {
       // Kiểm tra xem đơn hàng có còn ở trạng thái có thể hủy không
       if (!["pending", "confirmed"].includes(order.status)) {
-        throw new ApiError(400, `Không thể chấp nhận yêu cầu hủy vì đơn hàng hiện đang ở trạng thái ${order.status}`);
+        throw new ApiError(
+          400,
+          `Không thể chấp nhận yêu cầu hủy vì đơn hàng hiện đang ở trạng thái ${order.status}`
+        );
       }
-      
+
       // Tiến hành hủy đơn hàng
       order.status = "cancelled";
       order.cancelledAt = new Date();
@@ -1003,7 +1085,7 @@ const orderService = {
         status: "cancelled",
         note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${cancelRequest.reason}`,
         updatedAt: new Date(),
-        updatedBy: adminId
+        updatedBy: adminId,
       });
     }
     // Xử lý yêu cầu hủy lần đầu (từ pending)
@@ -1012,9 +1094,12 @@ const orderService = {
       if (status === "approved") {
         // Kiểm tra nếu đơn hàng không còn ở trạng thái có thể hủy
         if (!["pending", "confirmed"].includes(order.status)) {
-          throw new ApiError(400, `Đơn hàng hiện đang ở trạng thái ${order.status}, không thể hủy`);
+          throw new ApiError(
+            400,
+            `Đơn hàng hiện đang ở trạng thái ${order.status}, không thể hủy`
+          );
         }
-        
+
         // Cập nhật đơn hàng thành "cancelled"
         order.status = "cancelled";
         order.cancelledAt = new Date();
@@ -1023,7 +1108,7 @@ const orderService = {
           status: "cancelled",
           note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${cancelRequest.reason}`,
           updatedAt: new Date(),
-          updatedBy: adminId
+          updatedBy: adminId,
         });
       }
     }
@@ -1043,29 +1128,30 @@ const orderService = {
 
     return {
       success: true,
-      message: status === "approved" 
-        ? wasRejected 
-          ? "Đã thay đổi quyết định và chấp nhận yêu cầu hủy đơn hàng" 
-          : "Đã chấp nhận yêu cầu hủy đơn hàng"
-        : wasApproved
-          ? "Đã thay đổi quyết định và từ chối yêu cầu hủy đơn hàng" 
+      message:
+        status === "approved"
+          ? wasRejected
+            ? "Đã thay đổi quyết định và chấp nhận yêu cầu hủy đơn hàng"
+            : "Đã chấp nhận yêu cầu hủy đơn hàng"
+          : wasApproved
+          ? "Đã thay đổi quyết định và từ chối yêu cầu hủy đơn hàng"
           : "Đã từ chối yêu cầu hủy đơn hàng",
       data: {
         cancelRequest: {
           _id: cancelRequest._id,
           status: cancelRequest.status,
           previousStatus: previousStatus,
-          adminResponse: cancelRequest.adminResponse,
+          decisionChanged: isChangingDecision,
           resolvedAt: cancelRequest.resolvedAt,
-          decisionChanged: isChangingDecision
+          adminResponse: cancelRequest.adminResponse,
         },
         order: {
           _id: order._id,
           code: order.code,
           status: order.status,
-          previouslyHadCancelRequest: isChangingDecision
-        }
-      }
+          previouslyHadCancelRequest: isChangingDecision,
+        },
+      },
     };
   },
 };
