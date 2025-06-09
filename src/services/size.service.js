@@ -42,7 +42,7 @@ const sizeService = {
     
     // Chuyển đổi page và limit sang number
     const pageNum = Number(page) || 1;
-    const limitNum = Number(limit) || 15;
+    const limitNum = Number(limit) || 50;
     
     const filter = { deletedAt: null }; // Mặc định chỉ lấy các kích thước chưa xóa
 

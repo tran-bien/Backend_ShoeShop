@@ -18,7 +18,7 @@ const paginate = async (model, query, options = {}) => {
   }
 
   // Xử lý limit - đảm bảo luôn là số nguyên dương
-  let limit = 15; // Giá trị mặc định
+  let limit = 50; // Giá trị mặc định
   if (options.limit !== undefined) {
     // Chuyển đổi sang số
     const parsedLimit = Number(options.limit);
