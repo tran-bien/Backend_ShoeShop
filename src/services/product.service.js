@@ -1331,9 +1331,7 @@ const productService = {
       $match: {
         "filteredVariants.0": { $exists: true },
       },
-    });
-
-    // Stage 5: Project để giữ các trường cần thiết
+    }); // Stage 5: Project để giữ các trường cần thiết và tính giá min/max
     pipeline.push({
       $project: {
         _id: 1,
@@ -1350,6 +1348,14 @@ const productService = {
         images: 1,
         createdAt: 1,
         filteredVariantsCount: { $size: "$filteredVariants" },
+        // Tính giá nhỏ nhất và lớn nhất từ các variants được lọc
+        minPrice: {
+          $ifNull: [{ $min: "$filteredVariants.priceFinal" }, 0],
+        },
+        maxPrice: {
+          $ifNull: [{ $max: "$filteredVariants.priceFinal" }, 0],
+        },
+        filteredVariants: 1, // Giữ lại để dùng sau này
       },
     });
 
@@ -1357,10 +1363,10 @@ const productService = {
     let sortOption = { createdAt: -1 }; // Mặc định theo mới nhất
     switch (sort) {
       case "price-asc":
-        sortOption = { "filteredVariants.priceFinal": 1 };
+        sortOption = { minPrice: 1 }; // Sắp xếp theo giá thấp nhất tăng dần
         break;
       case "price-desc":
-        sortOption = { "filteredVariants.priceFinal": -1 };
+        sortOption = { maxPrice: -1 }; // Sắp xếp theo giá cao nhất giảm dần
         break;
       case "popular":
         sortOption = { totalQuantity: -1 };
@@ -1474,13 +1480,13 @@ const productService = {
     ]);
 
     const totalCount = countResult.length > 0 ? countResult[0].total : 0;
-    const totalPages = Math.max(1, Math.ceil(totalCount / limitNum));
-
-    // Chuyển đổi kết quả - cần xử lý đặc biệt vì là kết quả từ aggregation
+    const totalPages = Math.max(1, Math.ceil(totalCount / limitNum)); // Chuyển đổi kết quả - cần xử lý đặc biệt vì là kết quả từ aggregation
     const transformedData = products.map((product) => {
       // Bỏ trường trung gian
       delete product.filteredVariantsCount;
       delete product.filteredVariants;
+      delete product.minPrice;
+      delete product.maxPrice;
 
       // Sử dụng hàm chuyển đổi hiện có
       return transformProductForPublicList(product);
