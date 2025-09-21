@@ -3,11 +3,16 @@ const router = express.Router();
 const variantController = require("@controllers/admin/variant.controller");
 const variantValidator = require("@validators/variant.validator");
 const validate = require("@utils/validatehelper");
-const { protect, admin } = require("@middlewares/auth.middleware");
+const {
+  protect,
+  requireStaff,
+  requireAdminOnly,
+} = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
 router.use(protect);
-router.use(admin);
+// Variant thuộc quản lý sản phẩm, staff có thể truy cập
+// Riêng DELETE sẽ dùng requireAdminOnly cho từng route
 
 /**
  * @route   GET /api/v1/admin/variants

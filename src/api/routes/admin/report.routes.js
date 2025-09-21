@@ -1,11 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const reportController = require("@controllers/admin/report.controller");
-const { protect, admin } = require("@middlewares/auth.middleware");
+const { protect, requireAdminOnly } = require("@middlewares/auth.middleware");
 
-// Áp dụng middleware xác thực cho tất cả các routes
+// Áp dụng middleware xác thực cho tất cả các routes - CHỈ ADMIN
 router.use(protect);
-router.use(admin);
+router.use(requireAdminOnly);
 
 /**
  * @route   GET /api/v1/admin/reports/dashboard

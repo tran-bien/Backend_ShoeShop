@@ -97,6 +97,32 @@ exports.admin = (req, res, next) => {
   throw new ApiError(403, "Bạn không có quyền admin");
 };
 
+// Middleware cho phép cả Staff và Admin truy cập
+exports.requireStaff = (req, res, next) => {
+  if (!req.user) {
+    throw new ApiError(401, "Bạn cần đăng nhập để truy cập");
+  }
+
+  if (req.user.role !== "staff" && req.user.role !== "admin") {
+    throw new ApiError(403, "Bạn không có quyền truy cập tính năng này");
+  }
+
+  next();
+};
+
+// Middleware chỉ dành riêng cho Admin
+exports.requireAdminOnly = (req, res, next) => {
+  if (!req.user) {
+    throw new ApiError(401, "Bạn cần đăng nhập để truy cập");
+  }
+
+  if (req.user.role !== "admin") {
+    throw new ApiError(403, "Tính năng này chỉ dành cho quản trị viên cấp cao");
+  }
+
+  next();
+};
+
 // Middleware kiểm tra xác thực
 exports.isAuthenticated = (req, res, next) => {
   if (!req.user) {

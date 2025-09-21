@@ -3,11 +3,14 @@ const router = express.Router();
 const colorController = require("@controllers/admin/color.controller");
 const colorValidator = require("@validators/color.validator");
 const validate = require("@utils/validatehelper");
-const { protect, admin } = require("@middlewares/auth.middleware");
+const {
+  protect,
+  requireStaff,
+  requireAdminOnly,
+} = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
 router.use(protect);
-router.use(admin);
 
 /**
  * @route   GET /api/v1/admin/colors

@@ -3,19 +3,23 @@ const router = express.Router();
 const productController = require("@controllers/admin/product.controller");
 const productValidator = require("@validators/product.validator");
 const validate = require("@utils/validatehelper");
-const { protect, admin } = require("@middlewares/auth.middleware");
+const {
+  protect,
+  requireStaff,
+  requireAdminOnly,
+} = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
 router.use(protect);
-router.use(admin);
 
 /**
  * @route   GET /api/v1/admin/products
  * @desc    Lấy danh sách tất cả sản phẩm
- * @access  Admin
+ * @access  Staff, Admin
  */
 router.get(
   "/",
+  requireStaff,
   validate(productValidator.validateAdminProductQuery),
   productController.getAllProducts
 );
@@ -23,10 +27,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/products/deleted
  * @desc    Lấy danh sách sản phẩm đã xóa
- * @access  Admin
+ * @access  Admin Only
  */
 router.get(
   "/deleted",
+  requireAdminOnly,
   validate(productValidator.validateAdminProductQuery),
   productController.getDeletedProducts
 );
@@ -34,10 +39,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/products/:id
  * @desc    Lấy chi tiết sản phẩm theo ID
- * @access  Admin
+ * @access  Staff, Admin
  */
 router.get(
   "/:id",
+  requireStaff,
   validate(productValidator.validateProductId),
   productController.getProductById
 );
@@ -45,10 +51,11 @@ router.get(
 /**
  * @route   POST /api/v1/admin/products
  * @desc    Tạo sản phẩm mới
- * @access  Admin
+ * @access  Staff, Admin
  */
 router.post(
   "/",
+  requireStaff,
   validate(productValidator.validateCreateProduct),
   productController.createProduct
 );
@@ -56,10 +63,11 @@ router.post(
 /**
  * @route   PUT /api/v1/admin/products/:id
  * @desc    Cập nhật thông tin sản phẩm
- * @access  Admin
+ * @access  Staff, Admin
  */
 router.put(
   "/:id",
+  requireStaff,
   validate(productValidator.validateUpdateProduct),
   productController.updateProduct
 );
@@ -67,10 +75,11 @@ router.put(
 /**
  * @route   DELETE /api/v1/admin/products/:id
  * @desc    Xóa mềm sản phẩm
- * @access  Admin
+ * @access  Admin Only
  */
 router.delete(
   "/:id",
+  requireAdminOnly,
   validate(productValidator.validateProductId),
   productController.deleteProduct
 );
@@ -78,10 +87,11 @@ router.delete(
 /**
  * @route   PUT /api/v1/admin/products/:id/restore
  * @desc    Khôi phục sản phẩm đã xóa
- * @access  Admin
+ * @access  Admin Only
  */
 router.put(
   "/:id/restore",
+  requireAdminOnly,
   validate(productValidator.validateProductId),
   productController.restoreProduct
 );
@@ -89,10 +99,11 @@ router.put(
 /**
  * @route   PATCH /api/v1/admin/products/:id/status
  * @desc    Cập nhật trạng thái active của sản phẩm
- * @access  Admin
+ * @access  Staff, Admin
  */
 router.patch(
   "/:id/status",
+  requireStaff,
   validate(productValidator.validateStatusUpdate),
   productController.updateProductStatus
 );
@@ -100,10 +111,11 @@ router.patch(
 /**
  * @route   POST /api/v1/admin/products/:id/update-stock-status
  * @desc    Cập nhật trạng thái tồn kho sản phẩm
- * @access  Admin
+ * @access  Staff, Admin
  */
 router.post(
   "/:id/update-stock-status",
+  requireStaff,
   validate(productValidator.validateProductId),
   productController.updateProductStockStatus
 );

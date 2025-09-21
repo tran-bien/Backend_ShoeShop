@@ -1,18 +1,21 @@
 const express = require("express");
 const router = express.Router();
 const dashboardController = require("@controllers/admin/dashboard.controller");
-const { protect, admin } = require("@middlewares/auth.middleware");
+const {
+  protect,
+  requireStaff,
+  requireAdminOnly,
+} = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
 router.use(protect);
-router.use(admin);
 
 /**
  * @route   GET /api/v1/admin/dashboard
- * @desc    Lấy dữ liệu dashboard
- * @access  Admin
+ * @desc    Lấy dữ liệu dashboard cơ bản (không có thông tin tài chính)
+ * @access  Staff, Admin
  */
-router.get("/", dashboardController.getDashboardData);
+router.get("/", requireStaff, dashboardController.getDashboardData);
 
 /**
  * @route   GET /api/v1/admin/dashboard/revenue/daily
@@ -36,7 +39,3 @@ router.get("/revenue/monthly", dashboardController.getMonthlyRevenue);
 router.get("/top-selling-products", dashboardController.getTopSellingProducts);
 
 module.exports = router;
-
-
-
-

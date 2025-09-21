@@ -1,14 +1,14 @@
 const express = require("express");
-const { protect, admin } = require("@middlewares/auth.middleware");
+const { protect, requireAdminOnly } = require("@middlewares/auth.middleware");
 const userController = require("@controllers/admin/user.controller");
 const userValidator = require("@validators/user.validator");
 const validate = require("@utils/validatehelper");
 
 const router = express.Router();
 
-// Áp dụng middleware xác thực cho tất cả các routes
+// Áp dụng middleware xác thực cho tất cả các routes - CHỈ ADMIN
 router.use(protect);
-router.use(admin);
+router.use(requireAdminOnly);
 
 /**
  * @route   GET /api/v1/admin/users
