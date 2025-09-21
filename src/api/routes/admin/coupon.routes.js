@@ -1,5 +1,10 @@
 const express = require("express");
-const { protect, admin } = require("@middlewares/auth.middleware");
+const {
+  protect,
+  admin,
+  requireStaffReadOnly,
+  requireAdminOnly,
+} = require("@middlewares/auth.middleware");
 const couponController = require("@controllers/admin/coupon.controller");
 const couponValidator = require("@validators/coupon.validator");
 const validate = require("@utils/validatehelper");
@@ -8,15 +13,16 @@ const router = express.Router();
 
 // Áp dụng middleware xác thực cho tất cả các routes
 router.use(protect);
-router.use(admin);
+// Bỏ router.use(admin) để phân quyền chi tiết cho từng route
 
 /**
  * @route   GET /api/v1/admin/coupons
  * @desc    Lấy danh sách mã giảm giá
- * @access  Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/",
+  requireStaffReadOnly,
   validate(couponValidator.validateGetCoupons),
   couponController.getAllCoupons
 );
@@ -24,17 +30,18 @@ router.get(
 /**
  * @route   GET /api/v1/admin/coupons/:id
  * @desc    Lấy chi tiết mã giảm giá
- * @access  Admin
+ * @access  Staff (read-only), Admin
  */
-router.get("/:id", protect, admin, couponController.getCouponById);
+router.get("/:id", requireStaffReadOnly, couponController.getCouponById);
 
 /**
  * @route   POST /api/v1/admin/coupons
  * @desc    Tạo mã giảm giá mới
- * @access  Admin
+ * @access  Admin Only
  */
 router.post(
   "/",
+  requireAdminOnly,
   validate(couponValidator.validateCreateCoupon),
   couponController.createCoupon
 );
@@ -42,10 +49,11 @@ router.post(
 /**
  * @route   PUT /api/v1/admin/coupons/:id
  * @desc    Cập nhật mã giảm giá
- * @access  Admin
+ * @access  Admin Only
  */
 router.put(
   "/:id",
+  requireAdminOnly,
   validate(couponValidator.validateUpdateCoupon),
   couponController.updateCoupon
 );
@@ -53,17 +61,18 @@ router.put(
 /**
  * @route   DELETE /api/v1/admin/coupons/:id
  * @desc    Xóa mã giảm giá
- * @access  Admin
+ * @access  Admin Only
  */
-router.delete("/:id", couponController.deleteCoupon);
+router.delete("/:id", requireAdminOnly, couponController.deleteCoupon);
 
 /**
  * @route   PATCH /api/v1/admin/coupons/:id/status
  * @desc    Cập nhật trạng thái mã giảm giá
- * @access  Admin
+ * @access  Admin Only
  */
 router.patch(
   "/:id/status",
+  requireAdminOnly,
   validate(couponValidator.validateUpdateCouponStatus),
   couponController.updateCouponStatus
 );

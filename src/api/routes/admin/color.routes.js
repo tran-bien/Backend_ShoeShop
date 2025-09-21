@@ -7,6 +7,7 @@ const {
   protect,
   requireStaff,
   requireAdminOnly,
+  requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
@@ -15,10 +16,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/colors
  * @desc    Lấy danh sách tất cả màu sắc (admin)
- * @access  Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/",
+  requireStaffReadOnly,
   validate(colorValidator.validateListQuery),
   colorController.getAllColors
 );
@@ -26,10 +28,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/colors/deleted
  * @desc    Lấy danh sách màu sắc đã xóa
- * @access  Admin
+ * @access  Admin Only
  */
 router.get(
   "/deleted",
+  requireAdminOnly,
   validate(colorValidator.validateListQuery),
   colorController.getDeletedColors
 );
@@ -37,10 +40,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/colors/:id
  * @desc    Lấy thông tin chi tiết màu sắc theo ID
- * @access  Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/:id",
+  requireStaffReadOnly,
   validate(colorValidator.validateColorId),
   colorController.getColorById
 );
@@ -48,10 +52,11 @@ router.get(
 /**
  * @route   POST /api/v1/admin/colors
  * @desc    Tạo màu sắc mới
- * @access  Admin
+ * @access  Admin Only
  */
 router.post(
   "/",
+  requireAdminOnly,
   validate(colorValidator.validateCreateColor),
   colorController.createColor
 );
@@ -59,10 +64,11 @@ router.post(
 /**
  * @route   PUT /api/v1/admin/colors/:id
  * @desc    Cập nhật màu sắc
- * @access  Admin
+ * @access  Admin Only
  */
 router.put(
   "/:id",
+  requireAdminOnly,
   validate(colorValidator.validateUpdateColor),
   colorController.updateColor
 );
@@ -70,10 +76,11 @@ router.put(
 /**
  * @route   DELETE /api/v1/admin/colors/:id
  * @desc    Xóa màu sắc (soft delete)
- * @access  Admin
+ * @access  Admin Only
  */
 router.delete(
   "/:id",
+  requireAdminOnly,
   validate(colorValidator.validateColorId),
   colorController.deleteColor
 );
@@ -81,10 +88,11 @@ router.delete(
 /**
  * @route   PUT /api/v1/admin/colors/:id/restore
  * @desc    Khôi phục màu sắc đã xóa
- * @access  Admin
+ * @access  Admin Only
  */
 router.put(
   "/:id/restore",
+  requireAdminOnly,
   validate(colorValidator.validateColorId),
   colorController.restoreColor
 );

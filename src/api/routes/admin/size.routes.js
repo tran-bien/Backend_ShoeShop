@@ -7,6 +7,7 @@ const {
   protect,
   requireStaff,
   requireAdminOnly,
+  requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
@@ -15,10 +16,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/sizes
  * @desc    Lấy danh sách tất cả kích thước (admin)
- * @access  Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/",
+  requireStaffReadOnly,
   validate(sizeValidator.validateListQuery),
   sizeController.getAllSizes
 );
@@ -26,10 +28,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/sizes/deleted
  * @desc    Lấy danh sách kích thước đã xóa
- * @access  Admin
+ * @access  Admin Only
  */
 router.get(
   "/deleted",
+  requireAdminOnly,
   validate(sizeValidator.validateListQuery),
   sizeController.getDeletedSizes
 );
@@ -37,10 +40,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/sizes/:id
  * @desc    Lấy thông tin chi tiết kích thước theo ID
- * @access  Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/:id",
+  requireStaffReadOnly,
   validate(sizeValidator.validateSizeId),
   sizeController.getSizeById
 );
@@ -48,10 +52,11 @@ router.get(
 /**
  * @route   POST /api/v1/admin/sizes
  * @desc    Tạo kích thước mới
- * @access  Admin
+ * @access  Admin Only
  */
 router.post(
   "/",
+  requireAdminOnly,
   validate(sizeValidator.validateCreateSize),
   sizeController.createSize
 );
@@ -59,10 +64,11 @@ router.post(
 /**
  * @route   PUT /api/v1/admin/sizes/:id
  * @desc    Cập nhật kích thước
- * @access  Admin
+ * @access  Admin Only
  */
 router.put(
   "/:id",
+  requireAdminOnly,
   validate(sizeValidator.validateUpdateSize),
   sizeController.updateSize
 );
@@ -70,10 +76,11 @@ router.put(
 /**
  * @route   DELETE /api/v1/admin/sizes/:id
  * @desc    Xóa kích thước (soft delete)
- * @access  Admin
+ * @access  Admin Only
  */
 router.delete(
   "/:id",
+  requireAdminOnly,
   validate(sizeValidator.validateSizeId),
   sizeController.deleteSize
 );
@@ -81,10 +88,11 @@ router.delete(
 /**
  * @route   PUT /api/v1/admin/sizes/:id/restore
  * @desc    Khôi phục kích thước đã xóa
- * @access  Admin
+ * @access  Admin Only
  */
 router.put(
   "/:id/restore",
+  requireAdminOnly,
   validate(sizeValidator.validateSizeId),
   sizeController.restoreSize
 );

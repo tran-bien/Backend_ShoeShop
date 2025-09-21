@@ -7,6 +7,7 @@ const {
   protect,
   requireStaff,
   requireAdminOnly,
+  requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
@@ -15,11 +16,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/products
  * @desc    Lấy danh sách tất cả sản phẩm
- * @access  Staff, Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/",
-  requireStaff,
+  requireStaffReadOnly,
   validate(productValidator.validateAdminProductQuery),
   productController.getAllProducts
 );
@@ -39,11 +40,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/products/:id
  * @desc    Lấy chi tiết sản phẩm theo ID
- * @access  Staff, Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/:id",
-  requireStaff,
+  requireStaffReadOnly,
   validate(productValidator.validateProductId),
   productController.getProductById
 );
@@ -51,11 +52,11 @@ router.get(
 /**
  * @route   POST /api/v1/admin/products
  * @desc    Tạo sản phẩm mới
- * @access  Staff, Admin
+ * @access  Admin Only
  */
 router.post(
   "/",
-  requireStaff,
+  requireAdminOnly,
   validate(productValidator.validateCreateProduct),
   productController.createProduct
 );
@@ -63,11 +64,11 @@ router.post(
 /**
  * @route   PUT /api/v1/admin/products/:id
  * @desc    Cập nhật thông tin sản phẩm
- * @access  Staff, Admin
+ * @access  Admin Only
  */
 router.put(
   "/:id",
-  requireStaff,
+  requireAdminOnly,
   validate(productValidator.validateUpdateProduct),
   productController.updateProduct
 );
@@ -99,11 +100,11 @@ router.put(
 /**
  * @route   PATCH /api/v1/admin/products/:id/status
  * @desc    Cập nhật trạng thái active của sản phẩm
- * @access  Staff, Admin
+ * @access  Admin Only
  */
 router.patch(
   "/:id/status",
-  requireStaff,
+  requireAdminOnly,
   validate(productValidator.validateStatusUpdate),
   productController.updateProductStatus
 );
@@ -111,11 +112,11 @@ router.patch(
 /**
  * @route   POST /api/v1/admin/products/:id/update-stock-status
  * @desc    Cập nhật trạng thái tồn kho sản phẩm
- * @access  Staff, Admin
+ * @access  Admin Only
  */
 router.post(
   "/:id/update-stock-status",
-  requireStaff,
+  requireAdminOnly,
   validate(productValidator.validateProductId),
   productController.updateProductStockStatus
 );

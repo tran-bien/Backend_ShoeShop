@@ -3,6 +3,7 @@ const {
   protect,
   requireStaff,
   requireAdminOnly,
+  requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 const categoryController = require("@controllers/admin/category.controller");
 const categoryValidator = require("@validators/category.validator");
@@ -16,11 +17,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/categories
  * @desc    Lấy tất cả danh mục (có phân trang, filter)
- * @access  Staff, Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/",
-  requireStaff,
+  requireStaffReadOnly,
   validate(categoryValidator.validateCategoryQuery),
   categoryController.getAllCategories
 );
@@ -40,11 +41,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/categories/:id
  * @desc    Lấy chi tiết danh mục theo ID
- * @access  Staff, Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/:id",
-  requireStaff,
+  requireStaffReadOnly,
   validate(categoryValidator.validateCategoryId),
   categoryController.getCategoryById
 );
@@ -52,11 +53,11 @@ router.get(
 /**
  * @route   POST /api/v1/admin/categories
  * @desc    Tạo mới danh mục
- * @access  Staff, Admin
+ * @access  Admin Only
  */
 router.post(
   "/",
-  requireStaff,
+  requireAdminOnly,
   validate(categoryValidator.validateCategoryData),
   categoryController.createCategory
 );
@@ -64,11 +65,11 @@ router.post(
 /**
  * @route   PUT /api/v1/admin/categories/:id
  * @desc    Cập nhật danh mục
- * @access  Staff, Admin
+ * @access  Admin Only
  */
 router.put(
   "/:id",
-  requireStaff,
+  requireAdminOnly,
   validate([
     ...categoryValidator.validateCategoryId,
     ...categoryValidator.validateCategoryData,
@@ -103,11 +104,11 @@ router.put(
 /**
  * @route   PATCH /api/v1/admin/categories/:id/status
  * @desc    Cập nhật trạng thái active của danh mục
- * @access  Staff, Admin
+ * @access  Admin Only
  */
 router.patch(
   "/:id/status",
-  requireStaff,
+  requireAdminOnly,
   validate(categoryValidator.validateStatusUpdate),
   categoryController.updateCategoryStatus
 );

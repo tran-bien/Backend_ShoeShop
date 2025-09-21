@@ -3,6 +3,7 @@ const {
   protect,
   requireStaff,
   requireAdminOnly,
+  requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 const brandController = require("@controllers/admin/brand.controller");
 const brandValidator = require("@validators/brand.validator");
@@ -15,11 +16,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/brands
  * @desc    Lấy tất cả thương hiệu (có phân trang, filter)
- * @access  Staff, Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/",
-  requireStaff,
+  requireStaffReadOnly,
   validate(brandValidator.validateBrandQuery),
   brandController.getAllBrands
 );
@@ -39,11 +40,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/brands/:id
  * @desc    Lấy chi tiết thương hiệu theo ID
- * @access  Staff, Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/:id",
-  requireStaff,
+  requireStaffReadOnly,
   validate(brandValidator.validateBrandId),
   brandController.getBrandById
 );
@@ -51,11 +52,11 @@ router.get(
 /**
  * @route   POST /api/v1/admin/brands
  * @desc    Tạo mới thương hiệu
- * @access  Staff, Admin
+ * @access  Admin Only
  */
 router.post(
   "/",
-  requireStaff,
+  requireAdminOnly,
   validate(brandValidator.validateBrandData),
   brandController.createBrand
 );
@@ -63,11 +64,11 @@ router.post(
 /**
  * @route   PUT /api/v1/admin/brands/:id
  * @desc    Cập nhật thương hiệu
- * @access  Staff, Admin
+ * @access  Admin Only
  */
 router.put(
   "/:id",
-  requireStaff,
+  requireAdminOnly,
   validate([
     ...brandValidator.validateBrandId,
     ...brandValidator.validateBrandData,
@@ -102,11 +103,11 @@ router.put(
 /**
  * @route   PATCH /api/v1/admin/brands/:id/status
  * @desc    Cập nhật trạng thái active của thương hiệu
- * @access  Staff, Admin
+ * @access  Admin Only
  */
 router.patch(
   "/:id/status",
-  requireStaff,
+  requireAdminOnly,
   validate(brandValidator.validateStatusUpdate),
   brandController.updateBrandStatus
 );

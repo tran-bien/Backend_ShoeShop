@@ -7,6 +7,7 @@ const {
   protect,
   requireStaff,
   requireAdminOnly,
+  requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
@@ -17,10 +18,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/variants
  * @desc    Lấy danh sách biến thể (có phân trang, filter)
- * @access  Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/",
+  requireStaffReadOnly,
   validate(variantValidator.validateVariantQuery),
   variantController.getAllVariants
 );
@@ -28,10 +30,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/variants/deleted
  * @desc    Lấy danh sách biến thể đã xóa
- * @access  Admin
+ * @access  Admin Only
  */
 router.get(
   "/deleted",
+  requireAdminOnly,
   validate(variantValidator.validateVariantQuery),
   variantController.getDeletedVariants
 );
@@ -39,10 +42,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/variants/:id
  * @desc    Lấy chi tiết biến thể theo ID
- * @access  Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/:id",
+  requireStaffReadOnly,
   validate(variantValidator.validateVariantId),
   variantController.getVariantById
 );
@@ -50,10 +54,11 @@ router.get(
 /**
  * @route   POST /api/v1/admin/variants
  * @desc    Tạo biến thể mới
- * @access  Admin
+ * @access  Admin Only
  */
 router.post(
   "/",
+  requireAdminOnly,
   validate(variantValidator.validateVariantData),
   variantController.createVariant
 );
@@ -61,10 +66,11 @@ router.post(
 /**
  * @route   PUT /api/v1/admin/variants/:id
  * @desc    Cập nhật thông tin biến thể
- * @access  Admin
+ * @access  Admin Only
  */
 router.put(
   "/:id",
+  requireAdminOnly,
   validate(variantValidator.validateUpdateVariant),
   variantController.updateVariant
 );
@@ -72,10 +78,11 @@ router.put(
 /**
  * @route   DELETE /api/v1/admin/variants/:id
  * @desc    Xóa mềm biến thể
- * @access  Admin
+ * @access  Admin Only
  */
 router.delete(
   "/:id",
+  requireAdminOnly,
   validate(variantValidator.validateVariantId),
   variantController.deleteVariant
 );
@@ -83,10 +90,11 @@ router.delete(
 /**
  * @route   POST /api/v1/admin/variants/:id/restore
  * @desc    Khôi phục biến thể đã xóa
- * @access  Admin
+ * @access  Admin Only
  */
 router.post(
   "/:id/restore",
+  requireAdminOnly,
   validate(variantValidator.validateVariantId),
   variantController.restoreVariant
 );
@@ -94,10 +102,11 @@ router.post(
 /**
  * @route   PATCH /api/v1/admin/variants/:id/inventory
  * @desc    Cập nhật số lượng tồn kho của biến thể
- * @access  Admin
+ * @access  Admin Only
  */
 router.patch(
   "/:id/inventory",
+  requireAdminOnly,
   validate(variantValidator.validateInventoryUpdate),
   variantController.updateInventory
 );
@@ -105,10 +114,11 @@ router.patch(
 /**
  * @route   PATCH /api/v1/admin/variants/:id/status
  * @desc    Cập nhật trạng thái active của biến thể
- * @access  Admin
+ * @access  Admin Only
  */
 router.patch(
   "/:id/status",
+  requireAdminOnly,
   validate(variantValidator.validateStatusUpdate),
   variantController.updateVariantStatus
 );

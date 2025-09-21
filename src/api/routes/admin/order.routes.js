@@ -4,19 +4,25 @@ const router = express.Router();
 const orderController = require("@controllers/admin/order.controller");
 const orderValidator = require("@validators/order.validator");
 const validate = require("@utils/validatehelper");
-const { protect, requireStaff } = require("@middlewares/auth.middleware");
+const {
+  protect,
+  requireStaff,
+  requireAdminOnly,
+  requireStaffReadOnly,
+} = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
 router.use(protect);
-router.use(requireStaff); // Staff và Admin đều có thể xử lý đơn hàng
+// Bỏ router.use(requireStaff) để phân quyền chi tiết cho từng route
 
 /**
  * @route   GET /api/v1/admin/orders
  * @desc    Lấy danh sách tất cả đơn hàng
- * @access  Staff, Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/",
+  requireStaffReadOnly,
   validate(orderValidator.validateGetOrders),
   orderController.getOrders
 );
@@ -24,10 +30,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/orders/cancel-requests
  * @desc    Lấy danh sách yêu cầu hủy đơn hàng
- * @access  Staff, Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/cancel-requests",
+  requireStaffReadOnly,
   validate(orderValidator.validateGetCancelRequests),
   orderController.getCancelRequests
 );
@@ -39,6 +46,7 @@ router.get(
  */
 router.patch(
   "/cancel-requests/:id",
+  requireStaff,
   validate(orderValidator.validateProcessCancelRequest),
   orderController.processCancelRequest
 );
@@ -46,10 +54,11 @@ router.patch(
 /**
  * @route   GET /api/v1/admin/orders/:id
  * @desc    Lấy chi tiết đơn hàng
- * @access  Staff, Admin
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/:id",
+  requireStaffReadOnly,
   validate(orderValidator.validateGetOrder),
   orderController.getOrderById
 );
@@ -61,6 +70,7 @@ router.get(
  */
 router.patch(
   "/:id/status",
+  requireStaff,
   validate(orderValidator.validateUpdateOrderStatus),
   orderController.updateOrderStatus
 );

@@ -123,6 +123,27 @@ exports.requireAdminOnly = (req, res, next) => {
   next();
 };
 
+// Middleware cho Staff - chỉ cho phép xem (READ ONLY)
+exports.requireStaffReadOnly = (req, res, next) => {
+  if (!req.user) {
+    throw new ApiError(401, "Bạn cần đăng nhập để truy cập");
+  }
+
+  if (req.user.role !== "staff" && req.user.role !== "admin") {
+    throw new ApiError(403, "Bạn không có quyền truy cập tính năng này");
+  }
+
+  // Nếu là staff, chỉ cho phép GET requests
+  if (req.user.role === "staff" && req.method !== "GET") {
+    throw new ApiError(
+      403,
+      "Staff chỉ có quyền xem, không thể thực hiện thao tác này"
+    );
+  }
+
+  next();
+};
+
 // Middleware kiểm tra xác thực
 exports.isAuthenticated = (req, res, next) => {
   if (!req.user) {
