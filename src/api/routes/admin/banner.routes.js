@@ -1,0 +1,122 @@
+const express = require("express");
+const router = express.Router();
+const bannerController = require("@controllers/admin/banner.controller");
+const { protect, requireStaff } = require("@middlewares/auth.middleware");
+const { handleBannerImageUpload } = require("@middlewares/upload.middleware");
+const {
+  validateBannerId,
+  validateCreateBanner,
+  validateUpdateBanner,
+  validateReorderBanners,
+} = require("@validators/banner.validator");
+
+// Áp dụng middleware protect cho tất cả routes
+router.use(protect);
+
+/**
+ * @route GET /api/admin/banners
+ * @desc Lấy danh sách banner với phân trang và filter
+ * @access Staff/Admin
+ */
+router.get("/", requireStaff, bannerController.getAllBanners);
+
+/**
+ * @route PUT /api/admin/banners/reorder
+ * @desc Sắp xếp lại thứ tự banner
+ * @access Staff/Admin
+ */
+router.put(
+  "/reorder",
+  requireStaff,
+  validateReorderBanners,
+  bannerController.reorderBanners
+);
+
+/**
+ * @route GET /api/admin/banners/:id
+ * @desc Lấy chi tiết banner theo ID
+ * @access Staff/Admin
+ */
+router.get(
+  "/:id",
+  requireStaff,
+  validateBannerId,
+  bannerController.getBannerById
+);
+
+/**
+ * @route POST /api/admin/banners
+ * @desc Tạo banner mới với upload ảnh
+ * @access Staff/Admin
+ */
+router.post(
+  "/",
+  requireStaff,
+  handleBannerImageUpload,
+  validateCreateBanner,
+  bannerController.createBanner
+);
+
+/**
+ * @route PUT /api/admin/banners/:id
+ * @desc Cập nhật thông tin banner (không bao gồm ảnh)
+ * @access Staff/Admin
+ */
+router.put(
+  "/:id",
+  requireStaff,
+  validateBannerId,
+  validateUpdateBanner,
+  bannerController.updateBanner
+);
+
+/**
+ * @route PUT /api/admin/banners/:id/image
+ * @desc Cập nhật ảnh banner
+ * @access Staff/Admin
+ */
+router.put(
+  "/:id/image",
+  requireStaff,
+  validateBannerId,
+  handleBannerImageUpload,
+  bannerController.updateBannerImage
+);
+
+/**
+ * @route DELETE /api/admin/banners/:id
+ * @desc Xóa mềm banner
+ * @access Staff/Admin
+ */
+router.delete(
+  "/:id",
+  requireStaff,
+  validateBannerId,
+  bannerController.deleteBanner
+);
+
+/**
+ * @route PUT /api/admin/banners/:id/restore
+ * @desc Khôi phục banner đã xóa
+ * @access Staff/Admin
+ */
+router.put(
+  "/:id/restore",
+  requireStaff,
+  validateBannerId,
+  bannerController.restoreBanner
+);
+
+/**
+ * @route PUT /api/admin/banners/:id/toggle-status
+ * @desc Toggle trạng thái active của banner
+ * @access Staff/Admin
+ */
+router.put(
+  "/:id/toggle-status",
+  requireStaff,
+  validateBannerId,
+  bannerController.toggleBannerStatus
+);
+
+module.exports = router;

@@ -1,5 +1,5 @@
 const cloudinary = require("cloudinary").v2;
-const { Product, Variant, Brand, User } = require("@models");
+const { Product, Variant, Brand, User, Banner } = require("@models");
 const ApiError = require("@utils/ApiError");
 
 const imageService = {
@@ -500,6 +500,186 @@ const imageService = {
       success: true,
       message: "Đã cập nhật ảnh chính biến thể",
       images: variant.imagesvariant,
+    };
+  },
+
+  // ======================== BANNER IMAGE OPERATIONS ========================
+
+  /**
+   * Upload ảnh banner mới
+   * @param {Object} imageData - Dữ liệu ảnh { url, public_id }
+   * @param {Object} bannerData - Dữ liệu banner { title, displayOrder, link, isActive }
+   * @returns {Promise<Object>} - Banner mới được tạo
+   */
+  uploadBannerImage: async (imageData, bannerData) => {
+    const { Banner } = require("@models");
+
+    // Kiểm tra displayOrder có hợp lệ không
+    if (bannerData.displayOrder < 1 || bannerData.displayOrder > 5) {
+      throw new ApiError(400, "Vị trí hiển thị phải từ 1 đến 5");
+    }
+
+    // Kiểm tra xem vị trí đã được sử dụng chưa
+    const existingBanner = await Banner.findOne({
+      displayOrder: bannerData.displayOrder,
+      isActive: true,
+      deletedAt: null,
+    });
+
+    if (existingBanner) {
+      throw new ApiError(
+        409,
+        `Vị trí ${bannerData.displayOrder} đã được sử dụng`
+      );
+    }
+
+    // Tạo banner mới
+    const banner = new Banner({
+      title: bannerData.title,
+      image: {
+        url: imageData.url,
+        public_id: imageData.public_id,
+      },
+      displayOrder: bannerData.displayOrder,
+      isActive: bannerData.isActive !== undefined ? bannerData.isActive : true,
+      link: bannerData.link || "",
+    });
+
+    await banner.save();
+
+    return {
+      success: true,
+      message: "Upload ảnh banner thành công",
+      banner,
+    };
+  },
+
+  /**
+   * Cập nhật ảnh banner
+   * @param {String} bannerId - ID banner
+   * @param {Object} imageData - Dữ liệu ảnh mới { url, public_id }
+   * @returns {Promise<Object>} - Banner đã cập nhật
+   */
+  updateBannerImage: async (bannerId, imageData) => {
+    const { Banner } = require("@models");
+
+    const banner = await Banner.findById(bannerId);
+    if (!banner) {
+      throw new ApiError(404, "Không tìm thấy banner");
+    }
+
+    // Xóa ảnh cũ từ Cloudinary
+    if (banner.image && banner.image.public_id) {
+      try {
+        await cloudinary.uploader.destroy(banner.image.public_id);
+      } catch (err) {
+        console.error("Không thể xóa ảnh banner cũ:", err);
+      }
+    }
+
+    // Cập nhật ảnh mới
+    banner.image = {
+      url: imageData.url,
+      public_id: imageData.public_id,
+    };
+
+    await banner.save();
+
+    return {
+      success: true,
+      message: "Cập nhật ảnh banner thành công",
+      banner,
+    };
+  },
+
+  /**
+   * Xóa banner và ảnh của nó
+   * @param {String} bannerId - ID banner
+   * @param {String} userId - ID người xóa
+   * @returns {Promise<Object>} - Kết quả xóa
+   */
+  deleteBannerImage: async (bannerId, userId) => {
+    const { Banner } = require("@models");
+
+    const banner = await Banner.findById(bannerId);
+    if (!banner) {
+      throw new ApiError(404, "Không tìm thấy banner");
+    }
+
+    const displayOrder = banner.displayOrder;
+
+    // Xóa ảnh từ Cloudinary
+    if (banner.image && banner.image.public_id) {
+      try {
+        await cloudinary.uploader.destroy(banner.image.public_id);
+      } catch (err) {
+        console.error("Không thể xóa ảnh banner từ Cloudinary:", err);
+      }
+    }
+
+    // Xóa mềm banner
+    banner.deletedAt = new Date();
+    banner.deletedBy = userId;
+    banner.isActive = false;
+    await banner.save();
+
+    // Điều chỉnh displayOrder của các banner khác
+    await Banner.updateMany(
+      {
+        displayOrder: { $gt: displayOrder },
+        isActive: true,
+        deletedAt: null,
+      },
+      { $inc: { displayOrder: -1 } }
+    );
+
+    return {
+      success: true,
+      message: "Xóa banner thành công",
+    };
+  },
+
+  /**
+   * Sắp xếp lại thứ tự banner
+   * @param {Array} bannerOrders - Mảng { bannerId, newOrder }
+   * @returns {Promise<Object>} - Kết quả sắp xếp
+   */
+  reorderBanners: async (bannerOrders) => {
+    const { Banner } = require("@models");
+
+    // Validate dữ liệu đầu vào
+    if (!Array.isArray(bannerOrders) || bannerOrders.length === 0) {
+      throw new ApiError(400, "Dữ liệu sắp xếp không hợp lệ");
+    }
+
+    // Kiểm tra tất cả orders phải từ 1-5 và không trùng lặp
+    const orders = bannerOrders.map((item) => item.newOrder);
+    const uniqueOrders = [...new Set(orders)];
+
+    if (uniqueOrders.length !== bannerOrders.length) {
+      throw new ApiError(400, "Vị trí hiển thị không được trùng lặp");
+    }
+
+    if (orders.some((order) => order < 1 || order > 5)) {
+      throw new ApiError(400, "Vị trí hiển thị phải từ 1 đến 5");
+    }
+
+    // Cập nhật từng banner
+    const updatePromises = bannerOrders.map(async ({ bannerId, newOrder }) => {
+      const banner = await Banner.findById(bannerId);
+      if (!banner) {
+        throw new ApiError(404, `Không tìm thấy banner ${bannerId}`);
+      }
+
+      banner.displayOrder = newOrder;
+      return await banner.save();
+    });
+
+    await Promise.all(updatePromises);
+
+    return {
+      success: true,
+      message: "Sắp xếp banner thành công",
     };
   },
 };

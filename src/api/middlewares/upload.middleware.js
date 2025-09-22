@@ -147,6 +147,7 @@ const uploadMiddleware = {
   ),
   uploadBrandLogo: createSingleUploadMiddleware("brands", "logo"),
   uploadAvatar: createSingleUploadMiddleware("users/avatars", "avatar"),
+  uploadBannerImage: createSingleUploadMiddleware("banners", "banner"),
 
   /**
    * Middleware xử lý lỗi upload
@@ -254,6 +255,18 @@ const uploadMiddleware = {
    */
   handleBrandLogoUpload: (req, res, next) => {
     uploadMiddleware.uploadBrandLogo(req, res, (err) => {
+      if (err) {
+        return uploadMiddleware.handleUploadError(err, req, res, next);
+      }
+      next();
+    });
+  },
+
+  /**
+   * Middleware xử lý upload banner image
+   */
+  handleBannerImageUpload: (req, res, next) => {
+    uploadMiddleware.uploadBannerImage(req, res, (err) => {
       if (err) {
         return uploadMiddleware.handleUploadError(err, req, res, next);
       }

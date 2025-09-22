@@ -31,6 +31,8 @@ const publicCouponRoutes = require("@routes/public/coupon.routes");
 const productReviewRoutes = require("@routes/public/review.routes");
 const publicReviewRoutes = require("@routes/public/reviews.routes");
 const adminDashboardRoutes = require("@routes/admin/dashboard.routes");
+const adminBannerRoutes = require("@routes/admin/banner.routes");
+const publicBannerRoutes = require("@routes/public/banner.routes");
 
 // Sử dụng các routes cho người dùng
 router.use("/auth", authRoutes);
@@ -42,6 +44,7 @@ router.use("/products", productReviewRoutes);
 router.use("/reviews", publicReviewRoutes);
 router.use("/filters", filterRoutes);
 router.use("/coupons", publicCouponRoutes);
+router.use("/banners", publicBannerRoutes);
 router.use("/cart", userCartRoutes);
 router.use("/orders", userOrderRoutes);
 router.use("/users", userProfileRoutes);
@@ -58,6 +61,7 @@ router.use("/admin/colors", adminColorRoutes);
 router.use("/admin/sizes", adminSizeRoutes);
 router.use("/admin/products", adminProductRoutes);
 router.use("/admin/variants", adminVariantRoutes);
+router.use("/admin/banners", adminBannerRoutes);
 router.use("/admin/orders", adminOrderRoutes);
 router.use("/admin/reports", adminReportRoutes);
 router.use("/admin/users", adminUserRoutes);
