@@ -28,11 +28,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/brands/deleted
  * @desc    Lấy danh sách thương hiệu đã xóa
- * @access  Admin Only
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/deleted",
-  requireAdminOnly,
+  requireStaffReadOnly,
   validate(brandValidator.validateBrandQuery),
   brandController.getDeletedBrands
 );

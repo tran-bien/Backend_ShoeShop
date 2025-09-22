@@ -30,11 +30,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/variants/deleted
  * @desc    Lấy danh sách biến thể đã xóa
- * @access  Admin Only
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/deleted",
-  requireAdminOnly,
+  requireStaffReadOnly,
   validate(variantValidator.validateVariantQuery),
   variantController.getDeletedVariants
 );

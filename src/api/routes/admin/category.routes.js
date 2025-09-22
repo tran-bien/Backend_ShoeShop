@@ -29,11 +29,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/categories/deleted
  * @desc    Lấy danh sách danh mục đã xóa
- * @access  Admin Only
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/deleted",
-  requireAdminOnly,
+  requireStaffReadOnly,
   validate(categoryValidator.validateCategoryQuery),
   categoryController.getDeletedCategories
 );

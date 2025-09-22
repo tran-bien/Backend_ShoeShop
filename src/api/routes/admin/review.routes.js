@@ -29,11 +29,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/reviews/deleted
  * @desc    Lấy danh sách tất cả đánh giá đã xóa
- * @access  Admin Only
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/deleted",
-  requireAdminOnly,
+  requireStaffReadOnly,
   validate(reviewValidator.validateGetAllReviews),
   reviewController.getAllReviewsDeleted
 );

@@ -28,11 +28,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/colors/deleted
  * @desc    Lấy danh sách màu sắc đã xóa
- * @access  Admin Only
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/deleted",
-  requireAdminOnly,
+  requireStaffReadOnly,
   validate(colorValidator.validateListQuery),
   colorController.getDeletedColors
 );

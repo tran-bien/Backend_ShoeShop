@@ -1,5 +1,5 @@
 const express = require("express");
-const { protect, admin } = require("@middlewares/auth.middleware");
+const { protect, requireAdminOnly } = require("@middlewares/auth.middleware");
 const imageController = require("@controllers/admin/image.controller");
 const uploadMiddleware = require("@middlewares/upload.middleware");
 const uploadValidator = require("@validators/upload.validator");
@@ -9,7 +9,7 @@ const router = express.Router();
 
 // Áp dụng middleware auth cho tất cả routes
 router.use(protect);
-router.use(admin);
+router.use(requireAdminOnly);
 
 /**
  * @route   POST /api/v1/admin/images/brand/:brandId/logo

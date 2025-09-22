@@ -28,11 +28,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/sizes/deleted
  * @desc    Lấy danh sách kích thước đã xóa
- * @access  Admin Only
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/deleted",
-  requireAdminOnly,
+  requireStaffReadOnly,
   validate(sizeValidator.validateListQuery),
   sizeController.getDeletedSizes
 );

@@ -28,11 +28,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/products/deleted
  * @desc    Lấy danh sách sản phẩm đã xóa
- * @access  Admin Only
+ * @access  Staff (read-only), Admin
  */
 router.get(
   "/deleted",
-  requireAdminOnly,
+  requireStaffReadOnly,
   validate(productValidator.validateAdminProductQuery),
   productController.getDeletedProducts
 );
