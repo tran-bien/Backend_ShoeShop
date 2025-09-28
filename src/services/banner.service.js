@@ -182,8 +182,8 @@ const bannerService = {
 
     // Kiểm tra displayOrder nếu có thay đổi
     if (updateData.displayOrder !== undefined) {
-      if (updateData.displayOrder < 1 || updateData.displayOrder > 4) {
-        throw new ApiError(400, "Vị trí hiển thị phải từ 1 đến 4");
+      if (updateData.displayOrder < 1 || updateData.displayOrder > 5) {
+        throw new ApiError(400, "Vị trí hiển thị phải từ 1 đến 5");
       }
 
       // Kiểm tra xung đột vị trí nếu banner active hoặc sẽ active
