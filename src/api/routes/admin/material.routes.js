@@ -22,7 +22,7 @@ router.use(protect);
 router.get(
   "/",
   requireStaffReadOnly,
-  validate(materialValidator.validateMaterialQuery),
+  validate(materialValidator.validateGetMaterials),
   materialController.getAllMaterials
 );
 
@@ -34,7 +34,7 @@ router.get(
 router.get(
   "/deleted",
   requireStaffReadOnly,
-  validate(materialValidator.validateMaterialQuery),
+  validate(materialValidator.validateGetMaterials),
   materialController.getDeletedMaterials
 );
 

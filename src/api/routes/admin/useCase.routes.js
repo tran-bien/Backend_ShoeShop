@@ -22,7 +22,7 @@ router.use(protect);
 router.get(
   "/",
   requireStaffReadOnly,
-  validate(useCaseValidator.validateUseCaseQuery),
+  validate(useCaseValidator.validateGetUseCases),
   useCaseController.getAllUseCases
 );
 
@@ -34,7 +34,7 @@ router.get(
 router.get(
   "/deleted",
   requireStaffReadOnly,
-  validate(useCaseValidator.validateUseCaseQuery),
+  validate(useCaseValidator.validateGetUseCases),
   useCaseController.getDeletedUseCases
 );
 
