@@ -1,4 +1,13 @@
-const { Product, Category, Brand, Color, Size, Variant } = require("@models");
+const {
+  Product,
+  Category,
+  Brand,
+  Color,
+  Size,
+  Variant,
+  Material,
+  UseCase,
+} = require("@models");
 const ApiError = require("@utils/ApiError");
 
 const filterService = {
@@ -8,24 +17,34 @@ const filterService = {
    */
   getFilterAttributes: async () => {
     // Lấy các danh mục đang active
-    const categories = await Category.find({ isActive: true, deletedAt: null }).select(
-      "name _id slug"
-    ).sort({ name: 1 });
+    const categories = await Category.find({ isActive: true, deletedAt: null })
+      .select("name _id slug")
+      .sort({ name: 1 });
 
     // Lấy các thương hiệu đang active
-    const brands = await Brand.find({ isActive: true, deletedAt: null }).select(
-      "name logo _id slug"
-    ).sort({ name: 1 });
+    const brands = await Brand.find({ isActive: true, deletedAt: null })
+      .select("name logo _id slug")
+      .sort({ name: 1 });
 
     // Lấy các màu sắc (chưa bị xóa mềm)
-    const colors = await Color.find({ deletedAt: null }).select(
-      "name code type colors _id"
-    ).sort({ name: 1 });
+    const colors = await Color.find({ deletedAt: null })
+      .select("name code type colors _id")
+      .sort({ name: 1 });
 
     // Lấy các kích thước (chưa bị xóa mềm)
-    const sizes = await Size.find({ deletedAt: null }).select(
-      "value description _id"
-    ).sort({ value: 1 });
+    const sizes = await Size.find({ deletedAt: null })
+      .select("value description _id")
+      .sort({ value: 1 });
+
+    // Lấy các vật liệu đang active
+    const materials = await Material.find({ isActive: true, deletedAt: null })
+      .select("name description _id")
+      .sort({ name: 1 });
+
+    // Lấy các nhu cầu sử dụng đang active
+    const useCases = await UseCase.find({ isActive: true, deletedAt: null })
+      .select("name description _id")
+      .sort({ name: 1 });
 
     // Tính khoảng giá từ variants có sẵn (chỉ lấy các variant đang active)
     const priceRange = await Variant.aggregate([
@@ -52,29 +71,33 @@ const filterService = {
     ];
 
     // Chuyển đổi màu sắc để dễ sử dụng cho frontend
-    const formattedColors = colors.map(color => {
+    const formattedColors = colors.map((color) => {
       const formattedColor = {
         _id: color._id,
         id: color._id,
         name: color.name,
-        type: color.type
+        type: color.type,
       };
-      
+
       if (color.type === "solid") {
         formattedColor.code = color.code;
-      } else if (color.type === "half" && Array.isArray(color.colors) && color.colors.length === 2) {
+      } else if (
+        color.type === "half" &&
+        Array.isArray(color.colors) &&
+        color.colors.length === 2
+      ) {
         formattedColor.colors = color.colors;
       }
-      
+
       return formattedColor;
     });
 
     // Định dạng lại sizes để dễ sử dụng
-    const formattedSizes = sizes.map(size => ({
+    const formattedSizes = sizes.map((size) => ({
       _id: size._id,
       id: size._id,
       value: size.value,
-      description: size.description
+      description: size.description,
     }));
 
     return {
@@ -84,6 +107,8 @@ const filterService = {
         brands,
         colors: formattedColors,
         sizes: formattedSizes,
+        materials,
+        useCases,
         priceRange: { min: minPrice, max: maxPrice },
         genders,
       },
@@ -107,9 +132,9 @@ const filterService = {
     const limitNum = Number(limit) || 5;
 
     // Tìm ID của các sản phẩm có biến thể hợp lệ (chưa bị xóa và đang active)
-    const productIdsWithVariants = await Variant.distinct('product', {
+    const productIdsWithVariants = await Variant.distinct("product", {
       isActive: true,
-      deletedAt: null
+      deletedAt: null,
     });
 
     // Tìm kiếm sản phẩm theo tên và chỉ lấy những sản phẩm có biến thể hợp lệ
@@ -117,7 +142,7 @@ const filterService = {
       name: { $regex: sanitizedKeyword, $options: "i" },
       isActive: true,
       deletedAt: null,
-      _id: { $in: productIdsWithVariants }  // Chỉ lấy sản phẩm có biến thể
+      _id: { $in: productIdsWithVariants }, // Chỉ lấy sản phẩm có biến thể
     })
       .limit(limitNum)
       .select("name slug images")
@@ -127,7 +152,7 @@ const filterService = {
     const categorySuggestions = await Category.find({
       name: { $regex: sanitizedKeyword, $options: "i" },
       isActive: true,
-      deletedAt: null
+      deletedAt: null,
     })
       .limit(3)
       .select("name slug")
@@ -137,10 +162,30 @@ const filterService = {
     const brandSuggestions = await Brand.find({
       name: { $regex: sanitizedKeyword, $options: "i" },
       isActive: true,
-      deletedAt: null
+      deletedAt: null,
     })
       .limit(3)
       .select("name logo slug")
+      .lean();
+
+    // Tìm kiếm vật liệu theo tên
+    const materialSuggestions = await Material.find({
+      name: { $regex: sanitizedKeyword, $options: "i" },
+      isActive: true,
+      deletedAt: null,
+    })
+      .limit(3)
+      .select("name description")
+      .lean();
+
+    // Tìm kiếm nhu cầu sử dụng theo tên
+    const useCaseSuggestions = await UseCase.find({
+      name: { $regex: sanitizedKeyword, $options: "i" },
+      isActive: true,
+      deletedAt: null,
+    })
+      .limit(3)
+      .select("name description")
       .lean();
 
     // Định dạng kết quả gợi ý
@@ -171,11 +216,27 @@ const filterService = {
       logo: brand.logo,
     }));
 
+    const formatMaterials = materialSuggestions.map((material) => ({
+      type: "material",
+      id: material._id,
+      name: material.name,
+      description: material.description,
+    }));
+
+    const formatUseCases = useCaseSuggestions.map((useCase) => ({
+      type: "useCase",
+      id: useCase._id,
+      name: useCase.name,
+      description: useCase.description,
+    }));
+
     // Gộp và sắp xếp kết quả
     const suggestions = [
       ...formatProducts,
       ...formatCategories,
       ...formatBrands,
+      ...formatMaterials,
+      ...formatUseCases,
     ].slice(0, limitNum);
 
     return {

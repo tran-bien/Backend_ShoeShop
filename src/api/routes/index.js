@@ -33,12 +33,18 @@ const publicReviewRoutes = require("@routes/public/reviews.routes");
 const adminDashboardRoutes = require("@routes/admin/dashboard.routes");
 const adminBannerRoutes = require("@routes/admin/banner.routes");
 const publicBannerRoutes = require("@routes/public/banner.routes");
+const adminMaterialRoutes = require("@routes/admin/material.routes");
+const adminUseCaseRoutes = require("@routes/admin/useCase.routes");
+const publicMaterialRoutes = require("@routes/public/material.routes");
+const publicUseCaseRoutes = require("@routes/public/useCase.routes");
 
 // Sử dụng các routes cho người dùng
 router.use("/auth", authRoutes);
 router.use("/images", userImageRoutes);
 router.use("/brands", userBrandRoutes);
 router.use("/categories", userCategoryRoutes);
+router.use("/materials", publicMaterialRoutes);
+router.use("/use-cases", publicUseCaseRoutes);
 router.use("/products", userProductRoutes);
 router.use("/products", productReviewRoutes);
 router.use("/reviews", publicReviewRoutes);
@@ -57,6 +63,8 @@ router.use("/admin/auth", adminAuthRoutes);
 router.use("/admin/images", adminImageRoutes);
 router.use("/admin/brands", adminBrandRoutes);
 router.use("/admin/categories", adminCategoryRoutes);
+router.use("/admin/materials", adminMaterialRoutes);
+router.use("/admin/use-cases", adminUseCaseRoutes);
 router.use("/admin/colors", adminColorRoutes);
 router.use("/admin/sizes", adminSizeRoutes);
 router.use("/admin/products", adminProductRoutes);
