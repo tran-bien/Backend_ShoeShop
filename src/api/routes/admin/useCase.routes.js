@@ -90,6 +90,18 @@ router.delete(
 );
 
 /**
+ * @route   PATCH /api/v1/admin/use-cases/:id/status
+ * @desc    Cập nhật trạng thái kích hoạt nhu cầu sử dụng
+ * @access  Admin Only
+ */
+router.patch(
+  "/:id/status",
+  requireAdminOnly,
+  validate(useCaseValidator.validateStatusUpdate),
+  useCaseController.updateUseCaseStatus
+);
+
+/**
  * @route   PUT /api/v1/admin/use-cases/:id/restore
  * @desc    Khôi phục nhu cầu sử dụng đã xóa
  * @access  Admin Only

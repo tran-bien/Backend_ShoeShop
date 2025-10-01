@@ -90,6 +90,18 @@ router.delete(
 );
 
 /**
+ * @route   PATCH /api/v1/admin/materials/:id/status
+ * @desc    Cập nhật trạng thái kích hoạt vật liệu
+ * @access  Admin Only
+ */
+router.patch(
+  "/:id/status",
+  requireAdminOnly,
+  validate(materialValidator.validateStatusUpdate),
+  materialController.updateMaterialStatus
+);
+
+/**
  * @route   PUT /api/v1/admin/materials/:id/restore
  * @desc    Khôi phục vật liệu đã xóa
  * @access  Admin Only

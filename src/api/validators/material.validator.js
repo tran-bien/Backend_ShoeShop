@@ -91,6 +91,24 @@ const materialValidator = {
       .isBoolean()
       .withMessage("Trạng thái phải là boolean"),
   ],
+
+  validateStatusUpdate: [
+    param("id")
+      .notEmpty()
+      .withMessage("ID chất liệu không được để trống")
+      .custom((value) => {
+        if (!mongoose.Types.ObjectId.isValid(value)) {
+          throw new ApiError(400, "ID chất liệu không hợp lệ");
+        }
+        return true;
+      }),
+
+    body("isActive")
+      .exists()
+      .withMessage("Trạng thái không được để trống")
+      .isBoolean()
+      .withMessage("Trạng thái phải là boolean"),
+  ],
 };
 
 module.exports = materialValidator;

@@ -69,6 +69,19 @@ const materialController = {
   }),
 
   /**
+   * @desc    Cập nhật trạng thái kích hoạt chất liệu
+   * @route   PATCH /api/v1/admin/materials/:id/status
+   * @access  Admin Only
+   */
+  updateMaterialStatus: asyncHandler(async (req, res) => {
+    const result = await materialService.updateMaterialStatus(
+      req.params.id,
+      req.body.isActive
+    );
+    res.json(result);
+  }),
+
+  /**
    * @desc    Khôi phục chất liệu đã xóa
    * @route   PUT /api/v1/admin/materials/:id/restore
    * @access  Admin Only

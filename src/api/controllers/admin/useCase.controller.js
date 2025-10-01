@@ -66,6 +66,19 @@ const useCaseController = {
   }),
 
   /**
+   * @desc    Cập nhật trạng thái kích hoạt nhu cầu sử dụng
+   * @route   PATCH /api/v1/admin/use-cases/:id/status
+   * @access  Admin Only
+   */
+  updateUseCaseStatus: asyncHandler(async (req, res) => {
+    const result = await useCaseService.updateUseCaseStatus(
+      req.params.id,
+      req.body.isActive
+    );
+    res.json(result);
+  }),
+
+  /**
    * @desc    Khôi phục nhu cầu sử dụng đã xóa
    * @route   PUT /api/v1/admin/use-cases/:id/restore
    * @access  Admin Only

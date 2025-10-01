@@ -127,7 +127,7 @@ const useCaseService = {
     // Kiểm tra nhu cầu đã tồn tại chưa
     const existingUseCase = await UseCase.findOne({ name });
     if (existingUseCase) {
-      throw new ApiError(400, "Nhu cầu sử dụng đã tồn tại");
+      throw new ApiError(409, "Nhu cầu sử dụng đã tồn tại");
     }
 
     const useCase = await UseCase.create({
@@ -159,7 +159,7 @@ const useCaseService = {
     if (name && name !== useCase.name) {
       const existingUseCase = await UseCase.findOne({ name });
       if (existingUseCase) {
-        throw new ApiError(400, "Nhu cầu sử dụng đã tồn tại");
+        throw new ApiError(409, "Nhu cầu sử dụng đã tồn tại");
       }
     }
 
@@ -225,7 +225,7 @@ const useCaseService = {
     }
 
     if (!useCase.deletedAt) {
-      throw new ApiError(400, "Nhu cầu sử dụng chưa bị xóa");
+      throw new ApiError(409, "Nhu cầu sử dụng chưa bị xóa");
     }
 
     // Khôi phục
@@ -237,6 +237,44 @@ const useCaseService = {
     return {
       success: true,
       message: "Khôi phục nhu cầu sử dụng thành công",
+      useCase,
+    };
+  },
+
+  /**
+   * Cập nhật trạng thái kích hoạt của nhu cầu sử dụng
+   */
+  updateUseCaseStatus: async (id, isActive) => {
+    // Kiểm tra nhu cầu tồn tại không
+    const useCase = await UseCase.findById(id);
+    if (!useCase) {
+      throw new ApiError(404, "Không tìm thấy nhu cầu sử dụng");
+    }
+
+    // Nếu đang vô hiệu hóa, kiểm tra nhu cầu có đang được sử dụng không
+    if (isActive === false) {
+      const productCount = await Product.countDocuments({
+        useCase: id,
+        deletedAt: null,
+      });
+
+      if (productCount > 0) {
+        throw new ApiError(
+          400,
+          `Không thể vô hiệu hóa vì có ${productCount} sản phẩm đang sử dụng nhu cầu này`
+        );
+      }
+    }
+
+    // Cập nhật trạng thái
+    useCase.isActive = isActive;
+    await useCase.save();
+
+    return {
+      success: true,
+      message: `${
+        isActive ? "Kích hoạt" : "Vô hiệu hóa"
+      } nhu cầu sử dụng thành công`,
       useCase,
     };
   },

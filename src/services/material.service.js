@@ -127,7 +127,7 @@ const materialService = {
     // Kiểm tra chất liệu đã tồn tại chưa
     const existingMaterial = await Material.findOne({ name });
     if (existingMaterial) {
-      throw new ApiError(400, "Chất liệu đã tồn tại");
+      throw new ApiError(409, "Chất liệu đã tồn tại");
     }
 
     const material = await Material.create({
@@ -159,7 +159,7 @@ const materialService = {
     if (name && name !== material.name) {
       const existingMaterial = await Material.findOne({ name });
       if (existingMaterial) {
-        throw new ApiError(400, "Chất liệu đã tồn tại");
+        throw new ApiError(409, "Chất liệu đã tồn tại");
       }
     }
 
@@ -237,6 +237,42 @@ const materialService = {
     return {
       success: true,
       message: "Khôi phục chất liệu thành công",
+      material,
+    };
+  },
+
+  /**
+   * Cập nhật trạng thái kích hoạt của chất liệu
+   */
+  updateMaterialStatus: async (id, isActive) => {
+    // Kiểm tra chất liệu tồn tại không
+    const material = await Material.findById(id);
+    if (!material) {
+      throw new ApiError(404, "Không tìm thấy chất liệu");
+    }
+
+    // Nếu đang vô hiệu hóa, kiểm tra chất liệu có đang được sử dụng không
+    if (isActive === false) {
+      const productCount = await Product.countDocuments({
+        material: id,
+        deletedAt: null,
+      });
+
+      if (productCount > 0) {
+        throw new ApiError(
+          400,
+          `Không thể vô hiệu hóa vì có ${productCount} sản phẩm đang sử dụng chất liệu này`
+        );
+      }
+    }
+
+    // Cập nhật trạng thái
+    material.isActive = isActive;
+    await material.save();
+
+    return {
+      success: true,
+      message: `${isActive ? "Kích hoạt" : "Vô hiệu hóa"} chất liệu thành công`,
       material,
     };
   },
