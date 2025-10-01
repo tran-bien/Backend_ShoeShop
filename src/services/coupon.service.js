@@ -134,18 +134,18 @@ const couponService = {
 
     // Kiểm tra trạng thái
     if (coupon.status !== "active") {
-      throw new ApiError(400, "Mã giảm giá không còn hoạt động");
+      throw new ApiError(422, "Mã giảm giá không còn hoạt động");
     }
 
     // Kiểm tra thời gian
     const now = new Date();
     if (now < coupon.startDate || now > coupon.endDate) {
-      throw new ApiError(400, "Mã giảm giá không trong thời gian sử dụng");
+      throw new ApiError(422, "Mã giảm giá không trong thời gian sử dụng");
     }
 
     // Kiểm tra người dùng đã thu thập coupon này chưa
     if (coupon.users.includes(userId)) {
-      throw new ApiError(400, "Bạn đã thu thập mã giảm giá này rồi");
+      throw new ApiError(422, "Bạn đã thu thập mã giảm giá này rồi");
     }
 
     // Thêm người dùng vào danh sách đã thu thập

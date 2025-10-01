@@ -304,7 +304,7 @@ const orderService = {
 
       // Kiểm tra số lần sử dụng
       if (coupon.maxUses && coupon.currentUses >= coupon.maxUses) {
-        throw new ApiError(400, "Mã giảm giá đã hết lượt sử dụng");
+        throw new ApiError(422, "Mã giảm giá đã hết lượt sử dụng");
       }
 
       // Kiểm tra giá trị đơn hàng tối thiểu

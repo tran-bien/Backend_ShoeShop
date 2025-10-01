@@ -109,7 +109,7 @@ const cartService = {
       }
 
       if (variant.isActive === false) {
-        throw new ApiError(400, "Biến thể sản phẩm đang không được kích hoạt");
+        throw new ApiError(422, "Biến thể sản phẩm đang không được kích hoạt");
       }
 
       // Lấy thông tin sản phẩm trực tiếp từ database
@@ -139,11 +139,11 @@ const cartService = {
       );
 
       if (!sizeInfo) {
-        throw new ApiError(400, "Sản phẩm không có kích thước này");
+        throw new ApiError(422, "Sản phẩm không có kích thước này");
       }
 
       if (!sizeInfo.isSizeAvailable) {
-        throw new ApiError(400, "Kích thước này hiện không có sẵn");
+        throw new ApiError(422, "Kích thước này hiện không có sẵn");
       }
 
       if (sizeInfo.quantity < quantity) {
@@ -274,7 +274,7 @@ const cartService = {
     );
 
     if (!sizeInfo || !sizeInfo.isSizeAvailable) {
-      throw new ApiError(400, "Sản phẩm đã hết hàng");
+      throw new ApiError(422, "Sản phẩm đã hết hàng");
     }
 
     // Cập nhật số lượng và kiểm tra tồn kho

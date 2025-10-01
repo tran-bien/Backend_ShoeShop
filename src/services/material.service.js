@@ -225,7 +225,7 @@ const materialService = {
     }
 
     if (!material.deletedAt) {
-      throw new ApiError(400, "Chất liệu chưa bị xóa");
+      throw new ApiError(409, "Chất liệu chưa bị xóa");
     }
 
     // Khôi phục
