@@ -2,7 +2,7 @@
  * Hàm phân trang cho Mongoose
  * @param {Object} model - Mongoose model cần truy vấn
  * @param {Object} query - Đối tượng lọc dữ liệu
- * @param {Object} options - Các tùy chọn phân trang: page, limit, sort, select, populate
+ * @param {Object} options - Các tùy chọn phân trang: page, limit, sort, select, populate, collation
  * @returns {Promise<Object>} - Kết quả phân trang
  */
 const paginate = async (model, query, options = {}) => {
@@ -52,6 +52,11 @@ const paginate = async (model, query, options = {}) => {
 
   // Thêm sắp xếp
   queryBuilder = queryBuilder.sort(options.sort || { createdAt: -1 });
+
+  // Thêm collation nếu có (hỗ trợ sắp xếp tiếng Việt)
+  if (options.collation) {
+    queryBuilder = queryBuilder.collation(options.collation);
+  }
 
   // Đếm tổng số bản ghi
   const countPromise = model.countDocuments(query);

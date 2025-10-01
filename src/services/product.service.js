@@ -11,6 +11,10 @@ const mongoose = require("mongoose");
 const { createSlug } = require("@utils/slugify");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
+const {
+  getVietnameseCollation,
+  needsVietnameseCollation,
+} = require("@utils/collation");
 const { updateProductStockInfo } = require("@models/product/middlewares");
 const ApiError = require("@utils/ApiError");
 const variantService = require("@services/variant.service");
@@ -18,6 +22,8 @@ const variantService = require("@services/variant.service");
 // Hàm hỗ trợ xử lý các case sắp xếp
 const getSortOption = (sortParam) => {
   let sortOption = { createdAt: -1 };
+  let collation = null;
+
   if (sortParam) {
     switch (sortParam) {
       case "created_at_asc":
@@ -28,20 +34,27 @@ const getSortOption = (sortParam) => {
         break;
       case "name_asc":
         sortOption = { name: 1 };
+        collation = getVietnameseCollation();
         break;
       case "name_desc":
         sortOption = { name: -1 };
+        collation = getVietnameseCollation();
         break;
       default:
         try {
           sortOption = JSON.parse(sortParam);
+          // Kiểm tra nếu sort theo name thì thêm collation
+          if (needsVietnameseCollation(JSON.stringify(sortOption))) {
+            collation = getVietnameseCollation();
+          }
         } catch (err) {
           sortOption = { createdAt: -1 };
         }
         break;
     }
   }
-  return sortOption;
+
+  return { sortOption, collation };
 };
 
 /**
@@ -667,10 +680,15 @@ const productService = {
       filter.isActive = isActive === "true" || isActive === true;
     }
 
+    const { sortOption, collation } = sort
+      ? getSortOption(sort)
+      : { sortOption: { createdAt: -1 }, collation: null };
+
     const options = {
       page,
       limit,
-      sort: sort ? getSortOption(sort) : { createdAt: -1 },
+      sort: sortOption,
+      collation: collation,
       populate: [
         { path: "category", select: "name" },
         { path: "brand", select: "name logo" },
@@ -801,10 +819,15 @@ const productService = {
         : null;
     }
 
+    const { sortOption, collation } = sort
+      ? getSortOption(sort)
+      : { sortOption: { deletedAt: -1 }, collation: null };
+
     const options = {
       page,
       limit,
-      sort: sort ? getSortOption(sort) : { deletedAt: -1 },
+      sort: sortOption,
+      collation: collation,
       populate: [
         { path: "category", select: "name" },
         { path: "brand", select: "name" },

@@ -1,12 +1,18 @@
 const { Category, Product, Variant } = require("@models");
 const paginate = require("@utils/pagination");
 const paginateDeleted = require("@utils/paginationDeleted");
+const {
+  getVietnameseCollation,
+  needsVietnameseCollation,
+} = require("@utils/collation");
 const ApiError = require("@utils/ApiError");
 const { createSlug } = require("@utils/slugify");
 
 // Hàm hỗ trợ xử lý các case sắp xếp
 const getSortOption = (sortParam) => {
   let sortOption = { createdAt: -1 };
+  let collation = null;
+
   if (sortParam) {
     switch (sortParam) {
       case "created_at_asc":
@@ -17,20 +23,27 @@ const getSortOption = (sortParam) => {
         break;
       case "name_asc":
         sortOption = { name: 1 };
+        collation = getVietnameseCollation();
         break;
       case "name_desc":
         sortOption = { name: -1 };
+        collation = getVietnameseCollation();
         break;
       default:
         try {
           sortOption = JSON.parse(sortParam);
+          // Kiểm tra nếu sort theo name thì thêm collation
+          if (needsVietnameseCollation(JSON.stringify(sortOption))) {
+            collation = getVietnameseCollation();
+          }
         } catch (err) {
           sortOption = { createdAt: -1 };
         }
         break;
     }
   }
-  return sortOption;
+
+  return { sortOption, collation };
 };
 
 const categoryService = {
@@ -54,10 +67,15 @@ const categoryService = {
       filter.isActive = false;
     }
 
+    const { sortOption, collation } = sort
+      ? getSortOption(sort)
+      : { sortOption: { createdAt: -1 }, collation: null };
+
     const options = {
       page,
       limit,
-      sort: sort ? getSortOption(sort) : { createdAt: -1 },
+      sort: sortOption,
+      collation: collation,
     };
 
     return await paginate(Category, filter, options);
@@ -97,10 +115,15 @@ const categoryService = {
       filter.name = { $regex: name, $options: "i" };
     }
 
+    const { sortOption, collation } = sort
+      ? getSortOption(sort)
+      : { sortOption: { deletedAt: -1 }, collation: null };
+
     const options = {
       page,
       limit,
-      sort: sort ? getSortOption(sort) : { deletedAt: -1 },
+      sort: sortOption,
+      collation: collation,
       populate: [{ path: "deletedBy", select: "name email" }],
     };
 
@@ -113,9 +136,10 @@ const categoryService = {
    * [PUBLIC] Lấy tất cả category (chỉ active và chưa xóa)
    */
   getPublicAllCategories: async () => {
-    return await Category.find({ isActive: true, deletedAt: null }).select(
-      "-deletedBy -deletedAt"
-    );
+    return await Category.find({ isActive: true, deletedAt: null })
+      .select("-deletedBy -deletedAt")
+      .sort("name")
+      .collation(getVietnameseCollation());
   },
 
   /**

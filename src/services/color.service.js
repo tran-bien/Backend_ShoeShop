@@ -1,9 +1,15 @@
 const { Color, Variant } = require("@models");
+const {
+  getVietnameseCollation,
+  needsVietnameseCollation,
+} = require("@utils/collation");
 const ApiError = require("@utils/ApiError");
 
 // Hàm hỗ trợ xử lý các case sắp xếp
 const getSortOption = (sortParam) => {
   let sortOption = { createdAt: -1 };
+  let collation = null;
+
   if (sortParam) {
     switch (sortParam) {
       case "created_at_asc":
@@ -14,20 +20,27 @@ const getSortOption = (sortParam) => {
         break;
       case "name_asc":
         sortOption = { name: 1 };
+        collation = getVietnameseCollation();
         break;
       case "name_desc":
         sortOption = { name: -1 };
+        collation = getVietnameseCollation();
         break;
       default:
         try {
           sortOption = JSON.parse(sortParam);
+          // Kiểm tra nếu sort theo name thì thêm collation
+          if (needsVietnameseCollation(JSON.stringify(sortOption))) {
+            collation = getVietnameseCollation();
+          }
         } catch (err) {
           sortOption = { createdAt: -1 };
         }
         break;
     }
   }
-  return sortOption;
+
+  return { sortOption, collation };
 };
 
 const colorService = {
@@ -35,55 +48,61 @@ const colorService = {
 
   /**
    * [ADMIN] Lấy tất cả màu sắc (bao gồm cả đã xóa)
-   * @param {Object} query - Các tham số truy vấn
+   * @param {Object} queryParams - Các tham số truy vấn
    */
-getAdminColors: async (query) => {
-  const { page = 1, limit = 50, name, type, sort } = query;
-  
-  // Chuyển đổi page và limit sang number
-  const pageNum = Number(page) || 1;
-  const limitNum = Number(limit) || 15;
-  
-  const filter = { deletedAt: null }; // Mặc định chỉ lấy các màu chưa xóa
+  getAdminColors: async (queryParams) => {
+    const { page = 1, limit = 50, name, type, sort } = queryParams;
 
-  // Tìm theo tên
-  if (name) {
-    filter.name = { $regex: name, $options: "i" };
-  }
+    // Chuyển đổi page và limit sang number
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 15;
 
-  // Tìm theo loại
-  if (type) {
-    filter.type = type;
-  }
+    const filter = { deletedAt: null }; // Mặc định chỉ lấy các màu chưa xóa
 
-  // Đếm tổng số màu thỏa mãn điều kiện
-  const total = await Color.countDocuments(filter);
-  const totalPages = Math.ceil(total / limitNum);
+    // Tìm theo tên
+    if (name) {
+      filter.name = { $regex: name, $options: "i" };
+    }
 
-  // Tính toán skip để phân trang
-  const skip = (pageNum - 1) * limitNum;
-  
-  // Sắp xếp
-  const sortOption = sort ? getSortOption(sort) : { createdAt: -1 };
+    // Tìm theo loại
+    if (type) {
+      filter.type = type;
+    }
 
-  // Lấy dữ liệu với phân trang
-  const colors = await Color.find(filter)
-    .sort(sortOption)
-    .skip(skip)
-    .limit(limitNum);
+    // Đếm tổng số màu thỏa mãn điều kiện
+    const total = await Color.countDocuments(filter);
+    const totalPages = Math.ceil(total / limitNum);
 
-  // Trả về kết quả với thông tin phân trang chính xác
-  return {
-    success: true,
-    count: colors.length,
-    total,
-    totalPages,
-    currentPage: pageNum,
-    hasNextPage: pageNum < totalPages,
-    hasPrevPage: pageNum > 1,
-    data: colors,
-  };
-},
+    // Tính toán skip để phân trang
+    const skip = (pageNum - 1) * limitNum;
+
+    // Sắp xếp
+    const { sortOption, collation } = sort
+      ? getSortOption(sort)
+      : { sortOption: { createdAt: -1 }, collation: null };
+
+    // Lấy dữ liệu với phân trang
+    let query = Color.find(filter).sort(sortOption).skip(skip).limit(limitNum);
+
+    // Thêm collation nếu có
+    if (collation) {
+      query = query.collation(collation);
+    }
+
+    const colors = await query;
+
+    // Trả về kết quả với thông tin phân trang chính xác
+    return {
+      success: true,
+      count: colors.length,
+      total,
+      totalPages,
+      currentPage: pageNum,
+      hasNextPage: pageNum < totalPages,
+      hasPrevPage: pageNum > 1,
+      data: colors,
+    };
+  },
 
   /**
    * [ADMIN] Lấy màu sắc theo ID (bao gồm cả đã xóa mềm)
@@ -105,59 +124,70 @@ getAdminColors: async (query) => {
   },
 
   /**
- * [ADMIN] Lấy danh sách màu sắc đã xóa
- * @param {Object} query - Các tham số truy vấn
- */
-getDeletedColors: async (query) => {
-  const { page = 1, limit = 15, name, type, sort } = query;
-  
-  // Chuyển đổi page và limit sang number
-  const pageNum = Number(page) || 1;
-  const limitNum = Number(limit) || 15;
-  
-  // Xây dựng query cho các màu đã xóa
-  const filter = { deletedAt: { $ne: null } };
+   * [ADMIN] Lấy danh sách màu sắc đã xóa
+   * @param {Object} queryParams - Các tham số truy vấn
+   */
+  getDeletedColors: async (queryParams) => {
+    const { page = 1, limit = 15, name, type, sort } = queryParams;
 
-  // Tìm theo tên
-  if (name) {
-    filter.name = { $regex: name, $options: "i" };
-  }
+    // Chuyển đổi page và limit sang number
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 15;
 
-  // Tìm theo loại
-  if (type) {
-    filter.type = type;
-  }
+    // Xây dựng query cho các màu đã xóa
+    const filter = { deletedAt: { $ne: null } };
 
-  // Đếm tổng số màu đã xóa thỏa mãn điều kiện
-  const total = await Color.countDocuments(filter).setOptions({ includeDeleted: true });
-  const totalPages = Math.ceil(total / limitNum);
+    // Tìm theo tên
+    if (name) {
+      filter.name = { $regex: name, $options: "i" };
+    }
 
-  // Tính toán skip để phân trang
-  const skip = (pageNum - 1) * limitNum;
-  
-  // Sắp xếp
-  const sortOption = sort ? getSortOption(sort) : { deletedAt: -1 };
+    // Tìm theo loại
+    if (type) {
+      filter.type = type;
+    }
 
-  // Lấy dữ liệu với phân trang
-  const colors = await Color.find(filter)
-    .sort(sortOption)
-    .skip(skip)
-    .limit(limitNum)
-    .populate("deletedBy", "name email")
-    .setOptions({ includeDeleted: true });
+    // Đếm tổng số màu đã xóa thỏa mãn điều kiện
+    const total = await Color.countDocuments(filter).setOptions({
+      includeDeleted: true,
+    });
+    const totalPages = Math.ceil(total / limitNum);
 
-  // Trả về kết quả với thông tin phân trang chính xác
-  return {
-    success: true,
-    count: colors.length,
-    total,
-    totalPages,
-    currentPage: pageNum,
-    hasNextPage: pageNum < totalPages,
-    hasPrevPage: pageNum > 1,
-    data: colors,
-  };
-},
+    // Tính toán skip để phân trang
+    const skip = (pageNum - 1) * limitNum;
+
+    // Sắp xếp
+    const { sortOption, collation } = sort
+      ? getSortOption(sort)
+      : { sortOption: { deletedAt: -1 }, collation: null };
+
+    // Lấy dữ liệu với phân trang
+    let deletedQuery = Color.find(filter)
+      .sort(sortOption)
+      .skip(skip)
+      .limit(limitNum)
+      .populate("deletedBy", "name email")
+      .setOptions({ includeDeleted: true });
+
+    // Thêm collation nếu có
+    if (collation) {
+      deletedQuery = deletedQuery.collation(collation);
+    }
+
+    const colors = await deletedQuery;
+
+    // Trả về kết quả với thông tin phân trang chính xác
+    return {
+      success: true,
+      count: colors.length,
+      total,
+      totalPages,
+      currentPage: pageNum,
+      hasNextPage: pageNum < totalPages,
+      hasPrevPage: pageNum > 1,
+      data: colors,
+    };
+  },
 
   // === ADMIN OPERATIONS ===
 

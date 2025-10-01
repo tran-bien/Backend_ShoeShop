@@ -2,7 +2,7 @@
  * Hàm phân trang cho dữ liệu đã xóa mềm
  * @param {Object} model - Mongoose model cần truy vấn
  * @param {Object} query - Đối tượng lọc dữ liệu
- * @param {Object} options - Các tùy chọn phân trang: page, limit, sort, select, populate
+ * @param {Object} options - Các tùy chọn phân trang: page, limit, sort, select, populate, collation
  * @returns {Promise<Object>} - Kết quả phân trang chứa tổng số bản ghi, số trang, trang hiện tại và dữ liệu đã xóa mềm
  */
 const paginateDeleted = async (model, query, options = {}) => {
@@ -44,6 +44,11 @@ const paginateDeleted = async (model, query, options = {}) => {
     } else {
       queryBuilder = queryBuilder.populate(populateOption);
     }
+  }
+
+  // Thêm collation nếu có (hỗ trợ sắp xếp tiếng Việt)
+  if (options.collation) {
+    queryBuilder = queryBuilder.collation(options.collation);
   }
 
   // Thực hiện các truy vấn đồng thời để tối ưu hiệu suất

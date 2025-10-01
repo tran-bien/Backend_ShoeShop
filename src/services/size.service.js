@@ -1,9 +1,15 @@
 const { Size, Variant } = require("@models");
+const {
+  getVietnameseCollation,
+  needsVietnameseCollation,
+} = require("@utils/collation");
 const ApiError = require("@utils/ApiError");
 
 // Hàm hỗ trợ xử lý các case sắp xếp
 const getSortOption = (sortParam) => {
   let sortOption = { createdAt: -1 };
+  let collation = null;
+
   if (sortParam) {
     switch (sortParam) {
       case "created_at_asc":
@@ -14,20 +20,32 @@ const getSortOption = (sortParam) => {
         break;
       case "value_asc":
         sortOption = { value: 1 };
+        // Value có thể có text, thêm collation
+        collation = getVietnameseCollation();
         break;
       case "value_desc":
         sortOption = { value: -1 };
+        // Value có thể có text, thêm collation
+        collation = getVietnameseCollation();
         break;
       default:
         try {
           sortOption = JSON.parse(sortParam);
+          // Kiểm tra nếu sort theo value hoặc field có text thì thêm collation
+          if (
+            needsVietnameseCollation(JSON.stringify(sortOption)) ||
+            JSON.stringify(sortOption).includes("value")
+          ) {
+            collation = getVietnameseCollation();
+          }
         } catch (err) {
           sortOption = { createdAt: -1 };
         }
         break;
     }
   }
-  return sortOption;
+
+  return { sortOption, collation };
 };
 
 const sizeService = {
@@ -35,15 +53,15 @@ const sizeService = {
 
   /**
    * [ADMIN] Lấy tất cả kích thước (bao gồm cả đã xóa nếu chỉ định)
-   * @param {Object} query - Các tham số truy vấn
+   * @param {Object} queryParams - Các tham số truy vấn
    */
-  getAdminSizes: async (query) => {
-    const { page = 1, limit = 50, value, description, sort } = query;
-    
+  getAdminSizes: async (queryParams) => {
+    const { page = 1, limit = 50, value, description, sort } = queryParams;
+
     // Chuyển đổi page và limit sang number
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 50;
-    
+
     const filter = { deletedAt: null }; // Mặc định chỉ lấy các kích thước chưa xóa
 
     // Tìm theo giá trị
@@ -62,15 +80,21 @@ const sizeService = {
 
     // Tính toán skip để phân trang
     const skip = (pageNum - 1) * limitNum;
-    
+
     // Sắp xếp
-    const sortOption = sort ? getSortOption(sort) : { createdAt: -1 };
+    const { sortOption, collation } = sort
+      ? getSortOption(sort)
+      : { sortOption: { createdAt: -1 }, collation: null };
 
     // Lấy dữ liệu với phân trang
-    const sizes = await Size.find(filter)
-      .sort(sortOption)
-      .skip(skip)
-      .limit(limitNum);
+    let query = Size.find(filter).sort(sortOption).skip(skip).limit(limitNum);
+
+    // Thêm collation nếu có
+    if (collation) {
+      query = query.collation(collation);
+    }
+
+    const sizes = await query;
 
     // Trả về kết quả với thông tin phân trang chính xác
     return {
@@ -106,15 +130,15 @@ const sizeService = {
 
   /**
    * [ADMIN] Lấy danh sách kích thước đã xóa
-   * @param {Object} query - Các tham số truy vấn
+   * @param {Object} queryParams - Các tham số truy vấn
    */
-  getDeletedSizes: async (query) => {
-    const { page = 1, limit = 15, value, description, sort } = query;
-    
+  getDeletedSizes: async (queryParams) => {
+    const { page = 1, limit = 15, value, description, sort } = queryParams;
+
     // Chuyển đổi page và limit sang number
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 15;
-    
+
     // Xây dựng query cho các kích thước đã xóa
     const filter = { deletedAt: { $ne: null } };
 
@@ -127,22 +151,33 @@ const sizeService = {
     }
 
     // Đếm tổng số kích thước đã xóa thỏa mãn điều kiện
-    const total = await Size.countDocuments(filter).setOptions({ includeDeleted: true });
+    const total = await Size.countDocuments(filter).setOptions({
+      includeDeleted: true,
+    });
     const totalPages = Math.ceil(total / limitNum);
 
     // Tính toán skip để phân trang
     const skip = (pageNum - 1) * limitNum;
-    
+
     // Sắp xếp
-    const sortOption = sort ? getSortOption(sort) : { deletedAt: -1 };
+    const { sortOption, collation } = sort
+      ? getSortOption(sort)
+      : { sortOption: { deletedAt: -1 }, collation: null };
 
     // Lấy dữ liệu với phân trang
-    const sizes = await Size.find(filter)
+    let deletedQuery = Size.find(filter)
       .sort(sortOption)
       .skip(skip)
       .limit(limitNum)
       .populate("deletedBy", "name email")
       .setOptions({ includeDeleted: true });
+
+    // Thêm collation nếu có
+    if (collation) {
+      deletedQuery = deletedQuery.collation(collation);
+    }
+
+    const sizes = await deletedQuery;
 
     // Trả về kết quả với thông tin phân trang chính xác
     return {
@@ -272,7 +307,7 @@ const sizeService = {
 
     // Kiểm tra xem kích thước có được sử dụng trong biến thể nào không
     const variantCount = await Variant.countDocuments({
-      "sizes.size": id
+      "sizes.size": id,
     });
 
     // Nếu có biến thể liên kết, thông báo lỗi và không cho xóa
