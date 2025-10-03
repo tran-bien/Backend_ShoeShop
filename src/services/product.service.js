@@ -747,7 +747,7 @@ const productService = {
     // Tìm tất cả variants của sản phẩm này, bao gồm cả đã xóa
     const variants = await Variant.find({ product: id })
       .populate("color", "name type code colors")
-      .populate("sizes.size", "value description")
+      .populate("sizes.size", "value type description")
       .populate("deletedBy", "firstName lastName email")
       .setOptions({ includeDeleted: true });
 

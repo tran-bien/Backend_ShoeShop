@@ -33,7 +33,7 @@ const filterService = {
 
     // Lấy các kích thước (chưa bị xóa mềm)
     const sizes = await Size.find({ deletedAt: null })
-      .select("value description _id")
+      .select("value type description _id")
       .sort({ value: 1 });
 
     // Lấy các vật liệu đang active
@@ -97,6 +97,7 @@ const filterService = {
       _id: size._id,
       id: size._id,
       value: size.value,
+      type: size.type,
       description: size.description,
     }));
 

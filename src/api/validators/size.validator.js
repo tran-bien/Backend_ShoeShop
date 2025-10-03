@@ -19,6 +19,15 @@ const sizeValidator = {
         return true;
       }),
 
+    body("type")
+      .notEmpty()
+      .withMessage("Loại kích thước là bắt buộc")
+      .isString()
+      .withMessage("Loại kích thước phải là chuỗi")
+      .toUpperCase()
+      .isIn(["EU", "US", "UK", "VN", "CM", "INCHES"])
+      .withMessage("Loại kích thước phải là: EU, US, UK, VN, CM hoặc INCHES"),
+
     body("description")
       .notEmpty()
       .withMessage("Mô tả kích thước là bắt buộc")
@@ -42,6 +51,14 @@ const sizeValidator = {
         }
         return true;
       }),
+
+    body("type")
+      .optional()
+      .isString()
+      .withMessage("Loại kích thước phải là chuỗi")
+      .toUpperCase()
+      .isIn(["EU", "US", "UK", "VN", "CM", "INCHES"])
+      .withMessage("Loại kích thước phải là: EU, US, UK, VN, CM hoặc INCHES"),
 
     body("description")
       .optional()
@@ -70,9 +87,24 @@ const sizeValidator = {
       .isNumeric()
       .withMessage("Giá trị kích thước tìm kiếm phải là số"),
 
+    query("type")
+      .optional()
+      .isString()
+      .withMessage("Loại kích thước phải là chuỗi")
+      .toUpperCase()
+      .isIn(["EU", "US", "UK", "VN", "CM", "INCHES"])
+      .withMessage("Loại kích thước phải là: EU, US, UK, VN, CM hoặc INCHES"),
+
     query("sort")
       .optional()
-      .isIn(["created_at_asc", "created_at_desc", "value_asc", "value_desc"])
+      .isIn([
+        "created_at_asc",
+        "created_at_desc",
+        "value_asc",
+        "value_desc",
+        "type_asc",
+        "type_desc",
+      ])
       .withMessage("Tham số sắp xếp không hợp lệ"),
   ],
 };

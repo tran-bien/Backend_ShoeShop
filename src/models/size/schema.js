@@ -6,6 +6,13 @@ const SizeSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    type: {
+      type: String,
+      required: true,
+      enum: ["EU", "US", "UK", "VN", "CM", "INCHES"],
+      default: "EU",
+      uppercase: true, // Tự động chuyển thành chữ hoa
+    },
     description: {
       type: String,
       required: true,
@@ -24,5 +31,9 @@ const SizeSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Index để tối ưu query
+SizeSchema.index({ type: 1, value: 1 });
+SizeSchema.index({ type: 1, deletedAt: 1 });
 
 module.exports = SizeSchema;

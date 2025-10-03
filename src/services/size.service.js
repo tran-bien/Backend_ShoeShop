@@ -28,6 +28,12 @@ const getSortOption = (sortParam) => {
         // Value có thể có text, thêm collation
         collation = getVietnameseCollation();
         break;
+      case "type_asc":
+        sortOption = { type: 1 };
+        break;
+      case "type_desc":
+        sortOption = { type: -1 };
+        break;
       default:
         try {
           sortOption = JSON.parse(sortParam);
@@ -56,7 +62,14 @@ const sizeService = {
    * @param {Object} queryParams - Các tham số truy vấn
    */
   getAdminSizes: async (queryParams) => {
-    const { page = 1, limit = 50, value, description, sort } = queryParams;
+    const {
+      page = 1,
+      limit = 50,
+      value,
+      type,
+      description,
+      sort,
+    } = queryParams;
 
     // Chuyển đổi page và limit sang number
     const pageNum = Number(page) || 1;
@@ -67,6 +80,11 @@ const sizeService = {
     // Tìm theo giá trị
     if (value !== undefined) {
       filter.value = Number(value);
+    }
+
+    // Tìm theo loại size
+    if (type) {
+      filter.type = type.toUpperCase();
     }
 
     // Tìm theo mô tả
@@ -133,7 +151,14 @@ const sizeService = {
    * @param {Object} queryParams - Các tham số truy vấn
    */
   getDeletedSizes: async (queryParams) => {
-    const { page = 1, limit = 15, value, description, sort } = queryParams;
+    const {
+      page = 1,
+      limit = 15,
+      value,
+      type,
+      description,
+      sort,
+    } = queryParams;
 
     // Chuyển đổi page và limit sang number
     const pageNum = Number(page) || 1;
@@ -144,6 +169,10 @@ const sizeService = {
 
     if (value !== undefined) {
       filter.value = Number(value);
+    }
+
+    if (type) {
+      filter.type = type.toUpperCase();
     }
 
     if (description) {
@@ -202,6 +231,7 @@ const sizeService = {
     // Kiểm tra xem kích thước có tồn tại chưa (bao gồm cả đã xóa mềm)
     const existingSize = await Size.findOne({
       value: sizeData.value,
+      type: sizeData.type ? sizeData.type.toUpperCase() : "EU",
       description: sizeData.description,
     }).setOptions({ includeDeleted: true });
 
@@ -210,14 +240,25 @@ const sizeService = {
       if (existingSize.deletedAt) {
         throw new ApiError(
           409,
-          `Kích thước value: ${sizeData.value} và description: ${sizeData.description} đã tồn tại trong một kích thước đã xóa. Vui lòng khôi phục hoặc chọn giá trị khác.`
+          `Kích thước value: ${sizeData.value} (${
+            sizeData.type || "EU"
+          }) và description: ${
+            sizeData.description
+          } đã tồn tại trong một kích thước đã xóa. Vui lòng khôi phục hoặc chọn giá trị khác.`
         );
       } else {
         throw new ApiError(
           409,
-          `Kích thước value: ${sizeData.value} và description: ${sizeData.description} đã tồn tại`
+          `Kích thước value: ${sizeData.value} (${
+            sizeData.type || "EU"
+          }) và description: ${sizeData.description} đã tồn tại`
         );
       }
+    }
+
+    // Đảm bảo type được uppercase
+    if (sizeData.type) {
+      sizeData.type = sizeData.type.toUpperCase();
     }
 
     // Tạo kích thước mới
@@ -225,7 +266,7 @@ const sizeService = {
 
     return {
       success: true,
-      message: `Tạo kích thước value: ${size.value} thành công`,
+      message: `Tạo kích thước value: ${size.value} (${size.type}) thành công`,
       size,
     };
   },
@@ -246,10 +287,14 @@ const sizeService = {
     // Kiểm tra xem kích thước sau khi cập nhật có trùng với kích thước khác không
     if (
       updateData.value !== undefined ||
+      updateData.type !== undefined ||
       updateData.description !== undefined
     ) {
       const valueToCheck =
         updateData.value !== undefined ? updateData.value : size.value;
+      const typeToCheck = updateData.type
+        ? updateData.type.toUpperCase()
+        : size.type;
       const descriptionToCheck =
         updateData.description !== undefined
           ? updateData.description
@@ -258,6 +303,7 @@ const sizeService = {
       // Kiểm tra bao gồm cả các kích thước đã xóa mềm
       const existingSize = await Size.findOne({
         value: valueToCheck,
+        type: typeToCheck,
         description: descriptionToCheck,
         _id: { $ne: id },
       }).setOptions({ includeDeleted: true });
@@ -267,15 +313,20 @@ const sizeService = {
         if (existingSize.deletedAt) {
           throw new ApiError(
             409,
-            `Kích thước value: ${valueToCheck} và description: ${descriptionToCheck} đã tồn tại trong một kích thước đã xóa. Vui lòng khôi phục hoặc chọn giá trị khác.`
+            `Kích thước value: ${valueToCheck} (${typeToCheck}) và description: ${descriptionToCheck} đã tồn tại trong một kích thước đã xóa. Vui lòng khôi phục hoặc chọn giá trị khác.`
           );
         } else {
           throw new ApiError(
             409,
-            `Kích thước value: ${valueToCheck} và description: ${descriptionToCheck} đã tồn tại`
+            `Kích thước value: ${valueToCheck} (${typeToCheck}) và description: ${descriptionToCheck} đã tồn tại`
           );
         }
       }
+    }
+
+    // Đảm bảo type được uppercase nếu có update
+    if (updateData.type) {
+      updateData.type = updateData.type.toUpperCase();
     }
 
     // Cập nhật kích thước
@@ -287,7 +338,7 @@ const sizeService = {
 
     return {
       success: true,
-      message: `Cập nhật kích thước value: ${updatedSize.value} thành công`,
+      message: `Cập nhật kích thước value: ${updatedSize.value} (${updatedSize.type}) thành công`,
       size: updatedSize,
     };
   },
@@ -323,7 +374,7 @@ const sizeService = {
 
     return {
       success: true,
-      message: `Xóa kích thước value: ${size.value} thành công`,
+      message: `Xóa kích thước value: ${size.value} (${size.type}) thành công`,
       isDeleted: true,
     };
   },
@@ -338,7 +389,7 @@ const sizeService = {
 
     return {
       success: true,
-      message: `Khôi phục kích thước value: ${size.value} thành công`,
+      message: `Khôi phục kích thước value: ${size.value} (${size.type}) thành công`,
       size,
     };
   },
