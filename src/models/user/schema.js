@@ -28,7 +28,7 @@ const UserSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["user", "staff", "admin"],
+      enum: ["user", "staff", "admin", "shipper"],
       default: "user",
     },
     avatar: {
@@ -94,6 +94,40 @@ const UserSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    // Thông tin shipper
+    shipper: {
+      isAvailable: {
+        type: Boolean,
+        default: false,
+      },
+      activeOrders: {
+        type: Number,
+        default: 0,
+      },
+      maxOrders: {
+        type: Number,
+        default: 5,
+      },
+      currentLocation: {
+        lat: Number,
+        lng: Number,
+        updatedAt: Date,
+      },
+      deliveryStats: {
+        total: {
+          type: Number,
+          default: 0,
+        },
+        successful: {
+          type: Number,
+          default: 0,
+        },
+        failed: {
+          type: Number,
+          default: 0,
+        },
+      },
     },
   },
   {

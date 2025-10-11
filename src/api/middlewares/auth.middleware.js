@@ -179,3 +179,16 @@ exports.isAuthenticated = (req, res, next) => {
   }
   next();
 };
+
+// Middleware cho Shipper
+exports.requireShipper = (req, res, next) => {
+  if (!req.user) {
+    throw new ApiError(401, "Bạn cần đăng nhập để truy cập");
+  }
+
+  if (req.user.role !== "shipper") {
+    throw new ApiError(403, "Tính năng này chỉ dành cho shipper");
+  }
+
+  next();
+};

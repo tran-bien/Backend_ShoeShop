@@ -97,7 +97,16 @@ const OrderSchema = new mongoose.Schema(
       type: String,
       default: "pending",
       enum: {
-        values: ["pending", "confirmed", "shipping", "delivered", "cancelled"],
+        values: [
+          "pending",
+          "confirmed",
+          "assigned_to_shipper",
+          "out_for_delivery",
+          "delivered",
+          "delivery_failed",
+          "cancelled",
+          "returned",
+        ],
         message: "Trạng thái đơn hàng không hợp lệ",
       },
     },
@@ -105,7 +114,7 @@ const OrderSchema = new mongoose.Schema(
     // Đánh dấu nếu là COD thì trừ hàng, VNPAY thì không trừ đợi thanh toán
     inventoryDeducted: {
       type: Boolean,
-      default: false
+      default: false,
     },
 
     // Lịch sử trạng thái
@@ -113,7 +122,16 @@ const OrderSchema = new mongoose.Schema(
       {
         status: {
           type: String,
-          enum: ["pending", "confirmed", "shipping", "delivered", "cancelled"],
+          enum: [
+            "pending",
+            "confirmed",
+            "assigned_to_shipper",
+            "out_for_delivery",
+            "delivered",
+            "delivery_failed",
+            "cancelled",
+            "returned",
+          ],
         },
         updatedAt: {
           type: Date,
@@ -235,7 +253,7 @@ const OrderSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    
+
     // Các mốc thời gian sự kiện
     confirmedAt: {
       type: Date,
@@ -245,6 +263,39 @@ const OrderSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    // Thông tin shipper
+    assignedShipper: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    assignmentTime: {
+      type: Date,
+    },
+
+    // Lịch sử giao hàng
+    deliveryAttempts: [
+      {
+        time: {
+          type: Date,
+          default: Date.now,
+        },
+        status: {
+          type: String,
+          enum: ["success", "failed", "partial"],
+        },
+        location: {
+          lat: Number,
+          lng: Number,
+        },
+        note: String,
+        shipper: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        images: [String],
+      },
+    ],
   },
   {
     timestamps: true,

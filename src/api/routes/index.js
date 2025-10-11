@@ -35,6 +35,9 @@ const adminBannerRoutes = require("@routes/admin/banner.routes");
 const publicBannerRoutes = require("@routes/public/banner.routes");
 const adminTagRoutes = require("@routes/admin/tag.routes");
 const publicTagRoutes = require("@routes/public/tag.routes");
+const inventoryRoutes = require("@routes/inventory.route");
+const shipperRoutes = require("@routes/shipper.route");
+const returnRoutes = require("@routes/return.route");
 
 // Sử dụng các routes cho người dùng
 router.use("/auth", authRoutes);
@@ -72,5 +75,8 @@ router.use("/admin/users", adminUserRoutes);
 router.use("/admin/coupons", adminCouponRoutes);
 router.use("/admin/reviews", adminReviewRoutes);
 router.use("/admin/dashboard", adminDashboardRoutes);
+router.use("/admin/inventory", inventoryRoutes);
+router.use("/shipper", shipperRoutes);
+router.use("/returns", returnRoutes);
 
 module.exports = router;
