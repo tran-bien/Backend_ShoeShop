@@ -45,16 +45,12 @@ const ProductSchema = new mongoose.Schema(
       ref: "Brand",
       required: true,
     },
-    material: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Material",
-      required: false,
-    },
-    useCase: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "UseCase",
-      required: false,
-    },
+    tags: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Tag",
+      },
+    ],
     variants: [
       {
         type: mongoose.Schema.Types.ObjectId,

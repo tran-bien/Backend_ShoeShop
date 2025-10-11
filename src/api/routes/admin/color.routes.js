@@ -6,7 +6,7 @@ const validate = require("@utils/validatehelper");
 const {
   protect,
   requireStaff,
-  requireAdminOnly,
+  requireStaffOrAdmin,
   requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 
@@ -56,7 +56,7 @@ router.get(
  */
 router.post(
   "/",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(colorValidator.validateCreateColor),
   colorController.createColor
 );
@@ -68,7 +68,7 @@ router.post(
  */
 router.put(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(colorValidator.validateUpdateColor),
   colorController.updateColor
 );
@@ -80,7 +80,7 @@ router.put(
  */
 router.delete(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(colorValidator.validateColorId),
   colorController.deleteColor
 );
@@ -92,9 +92,11 @@ router.delete(
  */
 router.put(
   "/:id/restore",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(colorValidator.validateColorId),
   colorController.restoreColor
 );
 
 module.exports = router;
+
+

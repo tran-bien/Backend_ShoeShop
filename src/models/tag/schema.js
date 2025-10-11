@@ -1,13 +1,18 @@
 const mongoose = require("mongoose");
 
-const UseCaseSchema = new mongoose.Schema(
+const TagSchema = new mongoose.Schema(
   {
     name: {
       type: String,
       required: true,
       trim: true,
-      unique: true,
-      maxlength: 50,
+      maxlength: 100,
+    },
+    type: {
+      type: String,
+      enum: ["MATERIAL", "USECASE", "CUSTOM"],
+      default: "CUSTOM",
+      uppercase: true,
     },
     description: {
       type: String,
@@ -33,4 +38,9 @@ const UseCaseSchema = new mongoose.Schema(
   }
 );
 
-module.exports = UseCaseSchema;
+// Index để tìm kiếm nhanh
+TagSchema.index({ name: 1, type: 1 });
+TagSchema.index({ type: 1, isActive: 1 });
+TagSchema.index({ deletedAt: 1 });
+
+module.exports = TagSchema;

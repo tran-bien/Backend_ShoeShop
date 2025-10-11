@@ -1,15 +1,15 @@
 const mongoose = require("mongoose");
-const UseCaseSchema = require("./schema");
+const TagSchema = require("./schema");
 const { applyMiddlewares } = require("./middlewares");
 const softDeletePlugin = require("@plugins/softDelete");
 
 // Áp dụng plugin xóa mềm
-UseCaseSchema.plugin(softDeletePlugin);
+TagSchema.plugin(softDeletePlugin);
 
 // Áp dụng middlewares
-applyMiddlewares(UseCaseSchema);
+applyMiddlewares(TagSchema);
 
 // Tạo model
-const UseCase = mongoose.model("UseCase", UseCaseSchema);
+const Tag = mongoose.model("Tag", TagSchema);
 
-module.exports = UseCase;
+module.exports = Tag;

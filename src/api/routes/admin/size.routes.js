@@ -6,7 +6,7 @@ const validate = require("@utils/validatehelper");
 const {
   protect,
   requireStaff,
-  requireAdminOnly,
+  requireStaffOrAdmin,
   requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 
@@ -56,7 +56,7 @@ router.get(
  */
 router.post(
   "/",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(sizeValidator.validateCreateSize),
   sizeController.createSize
 );
@@ -68,7 +68,7 @@ router.post(
  */
 router.put(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(sizeValidator.validateUpdateSize),
   sizeController.updateSize
 );
@@ -80,7 +80,7 @@ router.put(
  */
 router.delete(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(sizeValidator.validateSizeId),
   sizeController.deleteSize
 );
@@ -92,9 +92,11 @@ router.delete(
  */
 router.put(
   "/:id/restore",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(sizeValidator.validateSizeId),
   sizeController.restoreSize
 );
 
 module.exports = router;
+
+

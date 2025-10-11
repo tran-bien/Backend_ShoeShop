@@ -2,7 +2,7 @@ const express = require("express");
 const {
   protect,
   requireStaff,
-  requireAdminOnly,
+  requireStaffOrAdmin,
   requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 const brandController = require("@controllers/admin/brand.controller");
@@ -56,7 +56,7 @@ router.get(
  */
 router.post(
   "/",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(brandValidator.validateBrandData),
   brandController.createBrand
 );
@@ -68,7 +68,7 @@ router.post(
  */
 router.put(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate([
     ...brandValidator.validateBrandId,
     ...brandValidator.validateBrandData,
@@ -83,7 +83,7 @@ router.put(
  */
 router.delete(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(brandValidator.validateBrandId),
   brandController.deleteBrand
 );
@@ -95,7 +95,7 @@ router.delete(
  */
 router.put(
   "/:id/restore",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(brandValidator.validateBrandId),
   brandController.restoreBrand
 );
@@ -107,7 +107,7 @@ router.put(
  */
 router.patch(
   "/:id/status",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(brandValidator.validateStatusUpdate),
   brandController.updateBrandStatus
 );

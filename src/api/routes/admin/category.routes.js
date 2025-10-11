@@ -2,7 +2,7 @@ const express = require("express");
 const {
   protect,
   requireStaff,
-  requireAdminOnly,
+  requireStaffOrAdmin,
   requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 const categoryController = require("@controllers/admin/category.controller");
@@ -53,11 +53,11 @@ router.get(
 /**
  * @route   POST /api/v1/admin/categories
  * @desc    Tạo mới danh mục
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.post(
   "/",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(categoryValidator.validateCategoryData),
   categoryController.createCategory
 );
@@ -65,11 +65,11 @@ router.post(
 /**
  * @route   PUT /api/v1/admin/categories/:id
  * @desc    Cập nhật danh mục
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.put(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate([
     ...categoryValidator.validateCategoryId,
     ...categoryValidator.validateCategoryData,
@@ -80,11 +80,11 @@ router.put(
 /**
  * @route   DELETE /api/v1/admin/categories/:id
  * @desc    Xóa mềm danh mục
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.delete(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(categoryValidator.validateCategoryId),
   categoryController.deleteCategory
 );
@@ -92,11 +92,11 @@ router.delete(
 /**
  * @route   PUT /api/v1/admin/categories/:id/restore
  * @desc    Khôi phục danh mục đã xóa
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.put(
   "/:id/restore",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(categoryValidator.validateCategoryId),
   categoryController.restoreCategory
 );
@@ -104,11 +104,11 @@ router.put(
 /**
  * @route   PATCH /api/v1/admin/categories/:id/status
  * @desc    Cập nhật trạng thái active của danh mục
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.patch(
   "/:id/status",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(categoryValidator.validateStatusUpdate),
   categoryController.updateCategoryStatus
 );

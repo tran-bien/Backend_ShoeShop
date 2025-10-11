@@ -5,8 +5,7 @@ const {
   Color,
   Size,
   Variant,
-  Material,
-  UseCase,
+  Tag,
 } = require("@models");
 const ApiError = require("@utils/ApiError");
 
@@ -36,15 +35,10 @@ const filterService = {
       .select("value type description _id")
       .sort({ value: 1 });
 
-    // Lấy các vật liệu đang active
-    const materials = await Material.find({ isActive: true, deletedAt: null })
-      .select("name description _id")
-      .sort({ name: 1 });
-
-    // Lấy các nhu cầu sử dụng đang active
-    const useCases = await UseCase.find({ isActive: true, deletedAt: null })
-      .select("name description _id")
-      .sort({ name: 1 });
+    // Lấy các tags đang active
+    const tags = await Tag.find({ isActive: true, deletedAt: null })
+      .select("name type description _id")
+      .sort({ type: 1, name: 1 });
 
     // Tính khoảng giá từ variants có sẵn (chỉ lấy các variant đang active)
     const priceRange = await Variant.aggregate([
@@ -108,8 +102,7 @@ const filterService = {
         brands,
         colors: formattedColors,
         sizes: formattedSizes,
-        materials,
-        useCases,
+        tags,
         priceRange: { min: minPrice, max: maxPrice },
         genders,
       },
@@ -169,24 +162,14 @@ const filterService = {
       .select("name logo slug")
       .lean();
 
-    // Tìm kiếm vật liệu theo tên
-    const materialSuggestions = await Material.find({
+    // Tìm kiếm tags theo tên
+    const tagSuggestions = await Tag.find({
       name: { $regex: sanitizedKeyword, $options: "i" },
       isActive: true,
       deletedAt: null,
     })
-      .limit(3)
-      .select("name description")
-      .lean();
-
-    // Tìm kiếm nhu cầu sử dụng theo tên
-    const useCaseSuggestions = await UseCase.find({
-      name: { $regex: sanitizedKeyword, $options: "i" },
-      isActive: true,
-      deletedAt: null,
-    })
-      .limit(3)
-      .select("name description")
+      .limit(5)
+      .select("name type description")
       .lean();
 
     // Định dạng kết quả gợi ý
@@ -217,18 +200,12 @@ const filterService = {
       logo: brand.logo,
     }));
 
-    const formatMaterials = materialSuggestions.map((material) => ({
-      type: "material",
-      id: material._id,
-      name: material.name,
-      description: material.description,
-    }));
-
-    const formatUseCases = useCaseSuggestions.map((useCase) => ({
-      type: "useCase",
-      id: useCase._id,
-      name: useCase.name,
-      description: useCase.description,
+    const formatTags = tagSuggestions.map((tag) => ({
+      type: "tag",
+      tagType: tag.type, // MATERIAL, USECASE, or CUSTOM
+      id: tag._id,
+      name: tag.name,
+      description: tag.description,
     }));
 
     // Gộp và sắp xếp kết quả
@@ -236,8 +213,7 @@ const filterService = {
       ...formatProducts,
       ...formatCategories,
       ...formatBrands,
-      ...formatMaterials,
-      ...formatUseCases,
+      ...formatTags,
     ].slice(0, limitNum);
 
     return {

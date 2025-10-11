@@ -2,7 +2,7 @@ const express = require("express");
 const {
   protect,
   requireStaff,
-  requireAdminOnly,
+  requireStaffOrAdmin,
   requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 const reviewController = require("@controllers/admin/review.controller");
@@ -57,7 +57,7 @@ router.get(
  */
 router.patch(
   "/:id/visibility",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(reviewValidator.validateToggleReviewVisibility),
   reviewController.toggleReviewVisibility
 );
@@ -75,3 +75,5 @@ router.get(
 );
 
 module.exports = router;
+
+

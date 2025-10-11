@@ -7,7 +7,7 @@ const validate = require("@utils/validatehelper");
 const {
   protect,
   requireStaff,
-  requireAdminOnly,
+  requireStaffOrAdmin,
   requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 
@@ -76,3 +76,5 @@ router.patch(
 );
 
 module.exports = router;
+
+

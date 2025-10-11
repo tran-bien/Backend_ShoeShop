@@ -6,14 +6,14 @@ const validate = require("@utils/validatehelper");
 const {
   protect,
   requireStaff,
-  requireAdminOnly,
+  requireStaffOrAdmin,
   requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
 router.use(protect);
 // Variant thuộc quản lý sản phẩm, staff có thể truy cập
-// Riêng DELETE sẽ dùng requireAdminOnly cho từng route
+// Riêng DELETE sẽ dùng requireStaffOrAdmin cho từng route
 
 /**
  * @route   GET /api/v1/admin/variants
@@ -58,7 +58,7 @@ router.get(
  */
 router.post(
   "/",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(variantValidator.validateVariantData),
   variantController.createVariant
 );
@@ -70,7 +70,7 @@ router.post(
  */
 router.put(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(variantValidator.validateUpdateVariant),
   variantController.updateVariant
 );
@@ -82,7 +82,7 @@ router.put(
  */
 router.delete(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(variantValidator.validateVariantId),
   variantController.deleteVariant
 );
@@ -94,7 +94,7 @@ router.delete(
  */
 router.post(
   "/:id/restore",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(variantValidator.validateVariantId),
   variantController.restoreVariant
 );
@@ -106,7 +106,7 @@ router.post(
  */
 router.patch(
   "/:id/inventory",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(variantValidator.validateInventoryUpdate),
   variantController.updateInventory
 );
@@ -118,9 +118,11 @@ router.patch(
  */
 router.patch(
   "/:id/status",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(variantValidator.validateStatusUpdate),
   variantController.updateVariantStatus
 );
 
 module.exports = router;
+
+

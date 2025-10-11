@@ -3,7 +3,7 @@ const {
   protect,
   admin,
   requireStaffReadOnly,
-  requireAdminOnly,
+  requireStaffOrAdmin,
 } = require("@middlewares/auth.middleware");
 const couponController = require("@controllers/admin/coupon.controller");
 const couponValidator = require("@validators/coupon.validator");
@@ -41,7 +41,7 @@ router.get("/:id", requireStaffReadOnly, couponController.getCouponById);
  */
 router.post(
   "/",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(couponValidator.validateCreateCoupon),
   couponController.createCoupon
 );
@@ -53,7 +53,7 @@ router.post(
  */
 router.put(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(couponValidator.validateUpdateCoupon),
   couponController.updateCoupon
 );
@@ -63,7 +63,7 @@ router.put(
  * @desc    Xóa mã giảm giá
  * @access  Admin Only
  */
-router.delete("/:id", requireAdminOnly, couponController.deleteCoupon);
+router.delete("/:id", requireStaffOrAdmin, couponController.deleteCoupon);
 
 /**
  * @route   PATCH /api/v1/admin/coupons/:id/status
@@ -72,9 +72,11 @@ router.delete("/:id", requireAdminOnly, couponController.deleteCoupon);
  */
 router.patch(
   "/:id/status",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(couponValidator.validateUpdateCouponStatus),
   couponController.updateCouponStatus
 );
 
 module.exports = router;
+
+

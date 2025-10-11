@@ -1,12 +1,4 @@
-const {
-  Product,
-  Variant,
-  Category,
-  Brand,
-  Order,
-  Material,
-  UseCase,
-} = require("@models");
+const { Product, Variant, Category, Brand, Order, Tag } = require("@models");
 const mongoose = require("mongoose");
 const { createSlug } = require("@utils/slugify");
 const paginate = require("@utils/pagination");
@@ -190,20 +182,14 @@ const transformProductForPublic = (product) => {
           logo: productObj.brand.logo,
         }
       : { _id: "", name: "Chưa có thương hiệu" },
-    material: productObj.material
-      ? {
-          _id: productObj.material._id,
-          name: productObj.material.name,
-          description: productObj.material.description,
-        }
-      : null,
-    useCase: productObj.useCase
-      ? {
-          _id: productObj.useCase._id,
-          name: productObj.useCase.name,
-          description: productObj.useCase.description,
-        }
-      : null,
+    tags: Array.isArray(productObj.tags)
+      ? productObj.tags.map((tag) => ({
+          _id: tag._id,
+          name: tag.name,
+          type: tag.type,
+          description: tag.description,
+        }))
+      : [],
     images: Array.isArray(productObj.images) ? productObj.images : [],
     rating: productObj.rating || 0,
     numReviews: productObj.numReviews || 0,
@@ -692,8 +678,7 @@ const productService = {
       populate: [
         { path: "category", select: "name" },
         { path: "brand", select: "name logo" },
-        { path: "material", select: "name description" },
-        { path: "useCase", select: "name description" },
+        { path: "tags", select: "name type description" },
         // Populate variants với các trường cần thiết cho thông tin tóm tắt
         {
           path: "variants",
@@ -735,8 +720,7 @@ const productService = {
     const product = await Product.findById(id)
       .populate("category", "name")
       .populate("brand", "name logo")
-      .populate("material", "name description")
-      .populate("useCase", "name description")
+      .populate("tags", "name type description")
       .populate("deletedBy", "name email")
       .setOptions({ includeDeleted: true });
 
@@ -871,25 +855,13 @@ const productService = {
       throw new ApiError(404, `Thương hiệu ${productData.brand} không tồn tại`);
     }
 
-    // Kiểm tra material tồn tại (nếu có)
-    if (productData.material) {
-      const materialExists = await Material.findById(productData.material);
-      if (!materialExists) {
-        throw new ApiError(
-          404,
-          `Vật liệu ${productData.material} không tồn tại`
-        );
-      }
-    }
-
-    // Kiểm tra useCase tồn tại (nếu có)
-    if (productData.useCase) {
-      const useCaseExists = await UseCase.findById(productData.useCase);
-      if (!useCaseExists) {
-        throw new ApiError(
-          404,
-          `Nhu cầu sử dụng ${productData.useCase} không tồn tại`
-        );
+    // Kiểm tra tags tồn tại (nếu có)
+    if (productData.tags && Array.isArray(productData.tags)) {
+      for (const tagId of productData.tags) {
+        const tagExists = await Tag.findById(tagId);
+        if (!tagExists) {
+          throw new ApiError(404, `Tag ${tagId} không tồn tại`);
+        }
       }
     }
 
@@ -930,8 +902,7 @@ const productService = {
       description: productData.description,
       category: productData.category,
       brand: productData.brand,
-      material: productData.material,
-      useCase: productData.useCase,
+      tags: productData.tags || [],
       isActive:
         productData.isActive !== undefined ? productData.isActive : true,
     });
@@ -979,25 +950,13 @@ const productService = {
       }
     }
 
-    // Kiểm tra nếu cập nhật material
-    if (updateData.material) {
-      const materialExists = await Material.findById(updateData.material);
-      if (!materialExists) {
-        throw new ApiError(
-          404,
-          `Vật liệu ${updateData.material} không tồn tại`
-        );
-      }
-    }
-
-    // Kiểm tra nếu cập nhật useCase
-    if (updateData.useCase) {
-      const useCaseExists = await UseCase.findById(updateData.useCase);
-      if (!useCaseExists) {
-        throw new ApiError(
-          404,
-          `Nhu cầu sử dụng ${updateData.useCase} không tồn tại`
-        );
+    // Kiểm tra nếu cập nhật tags
+    if (updateData.tags && Array.isArray(updateData.tags)) {
+      for (const tagId of updateData.tags) {
+        const tagExists = await Tag.findById(tagId);
+        if (!tagExists) {
+          throw new ApiError(404, `Tag ${tagId} không tồn tại`);
+        }
       }
     }
 
@@ -1025,8 +984,7 @@ const productService = {
       "description",
       "category",
       "brand",
-      "material",
-      "useCase",
+      "tags",
       "isActive",
     ];
 
@@ -1930,8 +1888,7 @@ const productService = {
       .limit(Number(limit))
       .populate("category", "name")
       .populate("brand", "name logo")
-      .populate("material", "name description")
-      .populate("useCase", "name description")
+      .populate("tags", "name type description")
       .populate({
         path: "variants",
         match: { isActive: true, deletedAt: null },
@@ -1973,8 +1930,7 @@ const productService = {
       .limit(Number(limit)) // Lấy nhiều hơn để lọc nếu không đủ sau khi filter
       .populate("category", "name")
       .populate("brand", "name logo")
-      .populate("material", "name description")
-      .populate("useCase", "name description")
+      .populate("tags", "name type description")
       .populate({
         path: "variants",
         match: { isActive: true, deletedAt: null },
@@ -2102,8 +2058,7 @@ const productService = {
       })
         .populate("category", "name")
         .populate("brand", "name logo")
-        .populate("material", "name description")
-        .populate("useCase", "name description")
+        .populate("tags", "name type description")
         .populate({
           path: "variants",
           match: { isActive: true, deletedAt: null },
@@ -2174,8 +2129,7 @@ const productService = {
       .sort({ rating: -1 })
       .populate("category", "name")
       .populate("brand", "name logo")
-      .populate("material", "name description")
-      .populate("useCase", "name description")
+      .populate("tags", "name type description")
       .populate({
         path: "variants",
         match: { isActive: true, deletedAt: null },

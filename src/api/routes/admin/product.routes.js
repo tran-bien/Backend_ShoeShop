@@ -6,7 +6,7 @@ const validate = require("@utils/validatehelper");
 const {
   protect,
   requireStaff,
-  requireAdminOnly,
+  requireStaffOrAdmin,
   requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 
@@ -56,7 +56,7 @@ router.get(
  */
 router.post(
   "/",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(productValidator.validateCreateProduct),
   productController.createProduct
 );
@@ -68,7 +68,7 @@ router.post(
  */
 router.put(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(productValidator.validateUpdateProduct),
   productController.updateProduct
 );
@@ -80,7 +80,7 @@ router.put(
  */
 router.delete(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(productValidator.validateProductId),
   productController.deleteProduct
 );
@@ -92,7 +92,7 @@ router.delete(
  */
 router.put(
   "/:id/restore",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(productValidator.validateProductId),
   productController.restoreProduct
 );
@@ -104,7 +104,7 @@ router.put(
  */
 router.patch(
   "/:id/status",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(productValidator.validateStatusUpdate),
   productController.updateProductStatus
 );
@@ -116,9 +116,11 @@ router.patch(
  */
 router.post(
   "/:id/update-stock-status",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validate(productValidator.validateProductId),
   productController.updateProductStockStatus
 );
 
 module.exports = router;
+
+
