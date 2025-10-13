@@ -41,6 +41,5 @@ const TagSchema = new mongoose.Schema(
 // Index để tìm kiếm nhanh
 TagSchema.index({ name: 1, type: 1 });
 TagSchema.index({ type: 1, isActive: 1 });
-TagSchema.index({ deletedAt: 1 });
 
 module.exports = TagSchema;

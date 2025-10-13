@@ -1,5 +1,8 @@
 const express = require("express");
-const { protect, requireAdminOnly } = require("@middlewares/auth.middleware");
+const {
+  protect,
+  requireStaffOrAdmin,
+} = require("@middlewares/auth.middleware");
 const imageController = require("@controllers/admin/image.controller");
 const uploadMiddleware = require("@middlewares/upload.middleware");
 const uploadValidator = require("@validators/upload.validator");
@@ -7,14 +10,14 @@ const validate = require("@utils/validatehelper");
 
 const router = express.Router();
 
-// Áp dụng middleware auth cho tất cả routes
+// Áp dụng middleware auth cho tất cả routes - Staff và Admin đều có quyền quản lý ảnh
 router.use(protect);
-router.use(requireAdminOnly);
+router.use(requireStaffOrAdmin);
 
 /**
  * @route   POST /api/v1/admin/images/brand/:brandId/logo
  * @desc    Upload logo cho brand
- * @access  Admin
+ * @access  Staff/Admin
  */
 router.post(
   "/brand/:brandId/logo",
@@ -31,7 +34,7 @@ router.post(
 /**
  * @route   DELETE /api/v1/admin/images/brand/:brandId/logo
  * @desc    Xóa logo của brand
- * @access  Admin
+ * @access  Staff/Admin
  */
 router.delete(
   "/brand/:brandId/logo",
@@ -42,7 +45,7 @@ router.delete(
 /**
  * @route   POST /api/v1/admin/images/product/:productId
  * @desc    Upload ảnh cho product
- * @access  Admin
+ * @access  Staff/Admin
  */
 router.post(
   "/product/:productId",
@@ -60,7 +63,7 @@ router.post(
 /**
  * @route   DELETE /api/v1/admin/images/product/:productId
  * @desc    Xóa ảnh của product
- * @access  Admin
+ * @access  Staff/Admin
  */
 router.delete(
   "/product/:productId",
@@ -74,7 +77,7 @@ router.delete(
 /**
  * @route   POST /api/v1/admin/images/variant/:variantId
  * @desc    Upload ảnh cho variant
- * @access  Admin
+ * @access  Staff/Admin
  */
 router.post(
   "/variant/:variantId",
@@ -92,7 +95,7 @@ router.post(
 /**
  * @route   DELETE /api/v1/admin/images/variant/:variantId
  * @desc    Xóa ảnh của variant
- * @access  Admin
+ * @access  Staff/Admin
  */
 router.delete(
   "/variant/:variantId",
@@ -106,7 +109,7 @@ router.delete(
 /**
  * @route   PUT /api/v1/admin/images/product/:productId/reorder
  * @desc    Thay đổi thứ tự ảnh product
- * @access  Admin
+ * @access  Staff/Admin
  */
 router.put(
   "/product/:productId/reorder",
@@ -120,7 +123,7 @@ router.put(
 /**
  * @route   PUT /api/v1/admin/images/variant/:variantId/reorder
  * @desc    Thay đổi thứ tự ảnh variant
- * @access  Admin
+ * @access  Staff/Admin
  */
 router.put(
   "/variant/:variantId/reorder",
@@ -134,7 +137,7 @@ router.put(
 /**
  * @route   PUT /api/v1/admin/images/product/:productId/set-main
  * @desc    Đặt ảnh chính cho product
- * @access  Admin
+ * @access  Staff/Admin
  */
 router.put(
   "/product/:productId/set-main",
@@ -148,7 +151,7 @@ router.put(
 /**
  * @route   PUT /api/v1/admin/images/variant/:variantId/set-main
  * @desc    Đặt ảnh chính cho variant
- * @access  Admin
+ * @access  Staff/Admin
  */
 router.put(
   "/variant/:variantId/set-main",
@@ -162,7 +165,7 @@ router.put(
 /**
  * @route   DELETE /api/v1/admin/images/cloudinary
  * @desc    Xóa ảnh trực tiếp từ Cloudinary
- * @access  Admin
+ * @access  Staff/Admin
  */
 router.delete(
   "/cloudinary",
