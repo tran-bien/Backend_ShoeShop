@@ -1,5 +1,13 @@
-const { InventoryItem, InventoryTransaction, Variant } = require("../models");
+const {
+  InventoryItem,
+  InventoryTransaction,
+  Variant,
+  Product,
+  Color,
+  Size,
+} = require("../models");
 const ApiError = require("../utils/ApiError");
+const { generateSKU } = require("../utils/skuGenerator");
 
 /**
  * Đồng bộ số lượng từ InventoryItem sang Variant.sizes[].quantity
@@ -77,17 +85,76 @@ const getOrCreateInventoryItem = async (product, variant, size) => {
   });
 
   if (!inventoryItem) {
+    // Lấy thông tin để generate SKU
+    const [productDoc, variantDoc, sizeDoc] = await Promise.all([
+      Product.findById(product).select("name"),
+      Variant.findById(variant)
+        .populate("color", "name")
+        .select("gender color"),
+      Size.findById(size).select("value"),
+    ]);
+
+    if (!productDoc || !variantDoc || !sizeDoc) {
+      throw new ApiError(404, "Không tìm thấy thông tin product/variant/size");
+    }
+
+    // Generate SKU
+    const sku = generateSKU({
+      productName: productDoc.name,
+      colorName: variantDoc.color?.name || "Unknown",
+      gender: variantDoc.gender,
+      sizeValue: sizeDoc.value,
+      productId: product.toString(),
+    });
+
     inventoryItem = await InventoryItem.create({
       product,
       variant,
       size,
+      sku, // Thêm SKU
       quantity: 0,
       costPrice: 0,
       averageCostPrice: 0,
     });
+
+    // Đồng bộ SKU sang Variant.sizes[]
+    await syncSKUToVariant(variant, size, sku);
   }
 
   return inventoryItem;
+};
+
+/**
+ * Đồng bộ SKU từ InventoryItem sang Variant.sizes[]
+ */
+const syncSKUToVariant = async (variantId, sizeId, sku) => {
+  try {
+    const variant = await Variant.findById(variantId);
+    if (!variant) {
+      console.error(`Variant not found: ${variantId}`);
+      return;
+    }
+
+    // Tìm size trong variant.sizes
+    const sizeIndex = variant.sizes.findIndex(
+      (s) => s.size.toString() === sizeId.toString()
+    );
+
+    if (sizeIndex === -1) {
+      console.error(`Size not found in variant: ${sizeId}`);
+      return;
+    }
+
+    // Cập nhật SKU
+    variant.sizes[sizeIndex].sku = sku;
+    await variant.save();
+
+    console.log(
+      `Synced SKU: Variant ${variantId}, Size ${sizeId}, SKU: ${sku}`
+    );
+  } catch (error) {
+    console.error("Error syncing SKU to variant:", error);
+  }
 };
 
 /**
@@ -154,6 +221,9 @@ const stockIn = async (data, performedBy) => {
     performedBy,
     notes,
   });
+
+  // Cập nhật Product stock status
+  await updateProductStockFromInventory(product);
 
   return {
     inventoryItem: await inventoryItem.populate("product variant size"),
@@ -223,6 +293,9 @@ const stockOut = async (data, performedBy) => {
     notes,
   });
 
+  // Cập nhật Product stock status
+  await updateProductStockFromInventory(product);
+
   return {
     inventoryItem: await inventoryItem.populate("product variant size"),
     transaction,
@@ -265,6 +338,9 @@ const adjustStock = async (data, performedBy) => {
     performedBy,
     notes,
   });
+
+  // Cập nhật Product stock status
+  await updateProductStockFromInventory(product);
 
   return {
     inventoryItem: await inventoryItem.populate("product variant size"),
@@ -443,6 +519,145 @@ const getInventoryStats = async () => {
   };
 };
 
+/**
+ * MỚI: Lấy pricing cho một variant + size cụ thể
+ * @param {String} variantId - ID variant
+ * @param {String} sizeId - ID size
+ * @returns {Object} - Pricing info hoặc null
+ */
+const getVariantSizePricing = async (variantId, sizeId) => {
+  const inventoryItem = await InventoryItem.findOne({
+    variant: variantId,
+    size: sizeId,
+  });
+
+  if (!inventoryItem) {
+    return null;
+  }
+
+  // Lấy transaction gần nhất để có pricing info
+  const latestTransaction = await InventoryTransaction.findOne({
+    inventoryItem: inventoryItem._id,
+    type: "IN",
+  }).sort({ createdAt: -1 });
+
+  if (!latestTransaction) {
+    return {
+      quantity: inventoryItem.quantity,
+      costPrice: inventoryItem.costPrice,
+      averageCostPrice: inventoryItem.averageCostPrice,
+      price: null,
+      priceFinal: null,
+      percentDiscount: 0,
+    };
+  }
+
+  return {
+    quantity: inventoryItem.quantity,
+    costPrice: inventoryItem.costPrice,
+    averageCostPrice: inventoryItem.averageCostPrice,
+    price: latestTransaction.calculatedPrice,
+    priceFinal: latestTransaction.calculatedPriceFinal,
+    percentDiscount: latestTransaction.percentDiscount,
+    profitPerItem: latestTransaction.profitPerItem,
+    margin: latestTransaction.margin,
+    markup: latestTransaction.markup,
+  };
+};
+
+/**
+ * MỚI: Lấy pricing info cho tất cả sizes của một variant
+ * @param {String} variantId - ID variant
+ * @returns {Array} - Array of size pricing info
+ */
+const getVariantPricing = async (variantId) => {
+  const inventoryItems = await InventoryItem.find({
+    variant: variantId,
+  }).populate("size", "value description");
+
+  const pricingPromises = inventoryItems.map(async (item) => {
+    const latestTransaction = await InventoryTransaction.findOne({
+      inventoryItem: item._id,
+      type: "IN",
+    }).sort({ createdAt: -1 });
+
+    return {
+      size: item.size,
+      sku: item.sku,
+      quantity: item.quantity,
+      costPrice: item.costPrice,
+      averageCostPrice: item.averageCostPrice,
+      price: latestTransaction?.calculatedPrice || null,
+      priceFinal: latestTransaction?.calculatedPriceFinal || null,
+      percentDiscount: latestTransaction?.percentDiscount || 0,
+      profitPerItem: latestTransaction?.profitPerItem || 0,
+      isLowStock: item.isLowStock,
+      isOutOfStock: item.isOutOfStock,
+    };
+  });
+
+  return await Promise.all(pricingPromises);
+};
+
+/**
+ * MỚI: Lấy price range cho một product
+ * @param {String} productId - ID product
+ * @returns {Object} - Min/max pricing info
+ */
+const getProductPricing = async (productId) => {
+  const inventoryItems = await InventoryItem.find({
+    product: productId,
+    quantity: { $gt: 0 }, // Chỉ tính items còn hàng
+  });
+
+  if (inventoryItems.length === 0) {
+    return {
+      min: 0,
+      max: 0,
+      hasStock: false,
+    };
+  }
+
+  // Lấy pricing từ transactions
+  const pricePromises = inventoryItems.map(async (item) => {
+    const latestTransaction = await InventoryTransaction.findOne({
+      inventoryItem: item._id,
+      type: "IN",
+    }).sort({ createdAt: -1 });
+
+    return latestTransaction?.calculatedPriceFinal || 0;
+  });
+
+  const prices = (await Promise.all(pricePromises)).filter((p) => p > 0);
+
+  if (prices.length === 0) {
+    return {
+      min: 0,
+      max: 0,
+      hasStock: true,
+      itemsCount: inventoryItems.length,
+    };
+  }
+
+  return {
+    min: Math.min(...prices),
+    max: Math.max(...prices),
+    hasStock: true,
+    itemsCount: inventoryItems.length,
+  };
+};
+
+/**
+ * MỚI: Cập nhật Product stock info từ InventoryItems
+ * Gọi sau mỗi lần stock in/out
+ */
+const updateProductStockFromInventory = async (productId) => {
+  const Product = require("../models").Product;
+  const { updateProductStockInfo } = require("../models/product/middlewares");
+  
+  await updateProductStockInfo(productId);
+};
+
 module.exports = {
   calculatePrice,
   stockIn,
@@ -455,4 +670,9 @@ module.exports = {
   getInventoryStats,
   syncInventoryToVariant,
   getOrCreateInventoryItem,
+  //  NEW: Pricing helpers
+  getVariantSizePricing,
+  getVariantPricing,
+  getProductPricing,
+  updateProductStockFromInventory,
 };

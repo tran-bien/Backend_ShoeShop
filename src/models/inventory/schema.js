@@ -17,6 +17,11 @@ const inventoryItemSchema = new mongoose.Schema(
       ref: "Size",
       required: true,
     },
+    sku: {
+      type: String,
+      unique: true,
+      sparse: true, // Cho phép nhiều document không có SKU
+    },
     quantity: {
       type: Number,
       required: true,

@@ -17,10 +17,10 @@ const getSortOption = (sortParam) => {
         sortOption = { createdAt: -1 };
         break;
       case "price_asc":
-        sortOption = { priceFinal: 1 };
+        sortOption = { createdAt: 1 }; //  Giá không còn ở variant, sort by createdAt
         break;
       case "price_desc":
-        sortOption = { priceFinal: -1 };
+        sortOption = { createdAt: -1 }; // Giá không còn ở variant, sort by createdAt
         break;
       default:
         try {
@@ -46,15 +46,6 @@ const variantService = {
       productId,
       color,
       gender,
-      // Các tham số lọc giá nhập
-      costPriceMin,
-      costPriceMax,
-      // Các tham số lọc giá bán gốc
-      priceMin,
-      priceMax,
-      // Các tham số lọc giá cuối
-      finalPriceMin,
-      finalPriceMax,
       isActive,
       sort,
     } = query;
@@ -80,38 +71,8 @@ const variantService = {
       filter.gender = gender;
     }
 
-    // === LỌC THEO GIÁ NHẬP (COST PRICE) ===
-    if (costPriceMin !== undefined || costPriceMax !== undefined) {
-      filter.costPrice = {};
-      if (costPriceMin !== undefined) {
-        filter.costPrice.$gte = Number(costPriceMin);
-      }
-      if (costPriceMax !== undefined) {
-        filter.costPrice.$lte = Number(costPriceMax);
-      }
-    }
-
-    // === LỌC THEO GIÁ BÁN GỐC (PRICE) ===
-    if (priceMin !== undefined || priceMax !== undefined) {
-      filter.price = {};
-      if (priceMin !== undefined) {
-        filter.price.$gte = Number(priceMin);
-      }
-      if (priceMax !== undefined) {
-        filter.price.$lte = Number(priceMax);
-      }
-    }
-
-    // === LỌC THEO GIÁ BÁN CUỐI (PRICE FINAL) ===
-    if (finalPriceMin !== undefined || finalPriceMax !== undefined) {
-      filter.priceFinal = {};
-      if (finalPriceMin !== undefined) {
-        filter.priceFinal.$gte = Number(finalPriceMin);
-      }
-      if (finalPriceMax !== undefined) {
-        filter.priceFinal.$lte = Number(finalPriceMax);
-      }
-    }
+    // ❌ REMOVED: Lọc theo giá - Giá không còn ở Variant
+    // ✅ Giá được quản lý bởi InventoryItem và InventoryTransaction
 
     // Lọc theo trạng thái active
     if (isActive !== undefined) {
@@ -142,18 +103,23 @@ const variantService = {
     const results = await paginate(Variant, filter, options);
 
     // Bổ sung thông tin tổng hợp tồn kho cho mỗi biến thể
-    results.data = results.data.map((variant) => {
-      const variantObj = variant.toObject ? variant.toObject() : { ...variant };
+    results.data = await Promise.all(
+      results.data.map(async (variant) => {
+        const variantObj = variant.toObject
+          ? variant.toObject()
+          : { ...variant };
 
-      // Tính tổng hợp tồn kho
-      const inventorySummary =
-        variantService.calculateInventorySummary(variant);
+        // Tính tổng hợp tồn kho từ InventoryItem
+        const inventorySummary = await variantService.calculateInventorySummary(
+          variant
+        );
 
-      return {
-        ...variantObj,
-        inventorySummary,
-      };
-    });
+        return {
+          ...variantObj,
+          inventorySummary,
+        };
+      })
+    );
 
     return results;
   },
@@ -180,14 +146,39 @@ const variantService = {
       throw new ApiError(404, `Không tìm thấy biến thể với ID: ${id}`);
     }
 
-    // Bổ sung thông tin tổng hợp tồn kho
+    // GET PRICING FROM INVENTORY
+    const inventoryService = require("@services/inventory.service");
+    const pricingData = await inventoryService.getVariantPricing(variant._id);
+
+    // Bổ sung thông tin tổng hợp tồn kho từ InventoryItem
     const variantObj = variant.toObject ? variant.toObject() : { ...variant };
-    const inventorySummary = variantService.calculateInventorySummary(variant);
+    const inventorySummary = await variantService.calculateInventorySummary(
+      variant
+    );
+
+    // Map pricing and quantities to sizes
+    const sizesWithPricing = variantObj.sizes.map((size) => {
+      const sizeInventory = pricingData.quantities.find(
+        (q) => q.sizeId.toString() === size.size._id.toString()
+      );
+      return {
+        ...size,
+        quantity: sizeInventory?.quantity || 0,
+        sku: sizeInventory?.sku || null,
+        isAvailable: sizeInventory?.isAvailable || false,
+      };
+    });
 
     return {
       success: true,
       variant: {
         ...variantObj,
+        sizes: sizesWithPricing,
+        // Add pricing info for admin view
+        price: pricingData.pricing.calculatedPrice || 0,
+        priceFinal: pricingData.pricing.calculatedPriceFinal || 0,
+        percentDiscount: pricingData.pricing.percentDiscount || 0,
+        costPrice: pricingData.pricing.costPrice || 0, // Admin can see cost
         inventorySummary,
       },
     };
@@ -204,15 +195,6 @@ const variantService = {
       productId,
       color,
       gender,
-      // Các tham số lọc giá nhập
-      costPriceMin,
-      costPriceMax,
-      // Các tham số lọc giá bán gốc
-      priceMin,
-      priceMax,
-      // Các tham số lọc giá cuối
-      finalPriceMin,
-      finalPriceMax,
       isActive,
       sort,
     } = query;
@@ -238,38 +220,7 @@ const variantService = {
       filter.gender = gender;
     }
 
-    // === LỌC THEO GIÁ NHẬP (COST PRICE) ===
-    if (costPriceMin !== undefined || costPriceMax !== undefined) {
-      filter.costPrice = {};
-      if (costPriceMin !== undefined) {
-        filter.costPrice.$gte = Number(costPriceMin);
-      }
-      if (costPriceMax !== undefined) {
-        filter.costPrice.$lte = Number(costPriceMax);
-      }
-    }
-
-    // === LỌC THEO GIÁ BÁN GỐC (PRICE) ===
-    if (priceMin !== undefined || priceMax !== undefined) {
-      filter.price = {};
-      if (priceMin !== undefined) {
-        filter.price.$gte = Number(priceMin);
-      }
-      if (priceMax !== undefined) {
-        filter.price.$lte = Number(priceMax);
-      }
-    }
-
-    // === LỌC THEO GIÁ BÁN CUỐI (PRICE FINAL) ===
-    if (finalPriceMin !== undefined || finalPriceMax !== undefined) {
-      filter.priceFinal = {};
-      if (finalPriceMin !== undefined) {
-        filter.priceFinal.$gte = Number(finalPriceMin);
-      }
-      if (finalPriceMax !== undefined) {
-        filter.priceFinal.$lte = Number(finalPriceMax);
-      }
-    }
+    // REMOVED: Lọc theo giá - Giá không còn ở Variant
 
     // Lọc theo trạng thái active
     if (isActive !== undefined) {
@@ -380,12 +331,10 @@ const variantService = {
         }
       }
 
-      // Cập nhật các thông tin khác nếu cần
-      ["price", "costPrice", "percentDiscount", "gender"].forEach((field) => {
-        if (variantData[field] !== undefined) {
-          existingVariant[field] = variantData[field];
-        }
-      });
+      // ✅ Chỉ cập nhật gender (price/costPrice được quản lý bởi InventoryItem)
+      if (variantData.gender !== undefined) {
+        existingVariant.gender = variantData.gender;
+      }
 
       // Lưu thay đổi
       await existingVariant.save();
@@ -406,24 +355,22 @@ const variantService = {
     }
     // TH2: Chưa có biến thể với màu và giới tính này, tạo mới hoàn toàn
     else {
-      // Chuẩn bị dữ liệu size
+      // ✅ Chuẩn bị dữ liệu size (CHỈ reference, KHÔNG có quantity)
       const sizesData = variantData.sizes.map((sizeData) => ({
         size: sizeData.size,
-        quantity: sizeData.quantity || 0,
-        isSizeAvailable: (sizeData.quantity || 0) > 0,
+        // ❌ REMOVED: quantity, isSizeAvailable
+        // ✅ Quantity được quản lý bởi InventoryItem
       }));
 
-      // Tạo biến thể mới
+      // ✅ Tạo biến thể mới (CHỈ reference data)
       newVariant = new Variant({
         product: productId,
         color: colorId,
-        price: variantData.price,
-        costPrice: variantData.costPrice || variantData.price,
         gender: variantData.gender || "male",
-        percentDiscount: variantData.percentDiscount || 0,
         isActive:
           variantData.isActive !== undefined ? variantData.isActive : true,
         sizes: sizesData,
+        // ❌ REMOVED: price, costPrice, percentDiscount
       });
 
       // Lưu biến thể mới
@@ -434,7 +381,7 @@ const variantService = {
         $addToSet: { variants: newVariant._id },
       });
 
-      message = `Đã tạo biến thể màu ${color.name} và giới tính ${variantData.gender} mới với ${sizesData.length} kích thước`;
+      message = `Đã tạo biến thể màu ${color.name} và giới tính ${variantData.gender} mới với ${sizesData.length} kích thước. Hãy stock in để thêm giá và số lượng.`;
       existingVariant = newVariant;
     }
 
@@ -451,9 +398,10 @@ const variantService = {
         ],
       });
 
-    // Tính toán thông tin tồn kho
-    const inventorySummary =
-      variantService.calculateInventorySummary(populatedVariant);
+    // ✅ Tính toán thông tin tồn kho từ InventoryItem
+    const inventorySummary = await variantService.calculateInventorySummary(
+      populatedVariant
+    );
 
     return {
       success: true,
@@ -519,16 +467,14 @@ const variantService = {
       updateData.sizes = sizesData;
     }
 
-    // Cập nhật các trường
+    // ✅ Cập nhật các trường (CHỈ reference data, KHÔNG có price/cost)
     const allowedFields = [
       "color",
-      "price",
-      "costPrice",
-      "percentDiscount",
       "gender",
-      "sizes",
+      "sizes", // Chỉ update reference, không update quantity
       "isActive",
     ];
+    // ❌ REMOVED: price, costPrice, percentDiscount
 
     const updateFields = {};
     for (const [key, value] of Object.entries(updateData)) {
@@ -792,33 +738,38 @@ const variantService = {
   },
 
   /**
-   * Tính tổng số lượng tồn kho của biến thể
+   * ✅ Tính tổng số lượng tồn kho của biến thể từ INVENTORYITEM
    * @param {Object} variant Biến thể cần tính tổng số lượng
-   * @returns {Object} Thông tin tồn kho tổng hợp
+   * @returns {Promise<Object>} Thông tin tồn kho tổng hợp
    */
-  calculateInventorySummary: (variant) => {
-    // Tổng số lượng có sẵn
-    const totalQuantity = variant.sizes.reduce(
-      (sum, size) => sum + (size.quantity || 0),
-      0
-    );
+  calculateInventorySummary: async (variant) => {
+    const InventoryItem = require("@models").InventoryItem;
+
+    // ✅ ĐỌC TỪ INVENTORYITEM thay vì variant.sizes[].quantity
+    const inventoryItems = await InventoryItem.find({
+      variant: variant._id,
+    }).populate("size", "value description");
+
+    let totalQuantity = 0;
+    const sizeInventory = [];
+
+    for (const item of inventoryItems) {
+      totalQuantity += item.quantity || 0;
+
+      sizeInventory.push({
+        sizeId: item.size._id,
+        sizeValue: item.size.value || "",
+        sizeDescription: item.size.description || "",
+        quantity: item.quantity || 0,
+        isAvailable: item.quantity > 0,
+        sku: item.sku || "",
+        isLowStock: item.isLowStock,
+        isOutOfStock: item.isOutOfStock,
+      });
+    }
 
     // Số lượng kích thước có sẵn
-    const availableSizes = variant.sizes.filter(
-      (size) => size.quantity > 0 && size.isSizeAvailable
-    ).length;
-
-    // Số lượng tồn kho theo kích thước
-    const sizeInventory = variant.sizes.map((size) => {
-      return {
-        sizeId: size.size._id || size.size,
-        sizeValue: size.size.value || "",
-        sizeDescription: size.size.description || "",
-        quantity: size.quantity || 0,
-        isAvailable: size.isSizeAvailable,
-        sku: size.sku || "",
-      };
-    });
+    const availableSizes = sizeInventory.filter((s) => s.quantity > 0).length;
 
     // Xác định trạng thái tồn kho
     let stockStatus = "out_of_stock";
@@ -829,7 +780,7 @@ const variantService = {
     return {
       totalQuantity,
       availableSizes,
-      totalSizes: variant.sizes.length,
+      totalSizes: inventoryItems.length,
       stockStatus,
       sizeInventory,
     };

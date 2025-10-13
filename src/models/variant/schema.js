@@ -25,62 +25,17 @@ const VariantSchema = new mongoose.Schema(
         },
       },
     ],
-    price: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    costPrice: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    percentDiscount: {
-      type: Number,
-      default: 0,
-      min: 0,
-      max: 100,
-    },
-    priceFinal: {
-      type: Number,
-      default: function () {
-        return this.percentDiscount > 0
-          ? this.price - (this.price * this.percentDiscount) / 100
-          : this.price;
-      },
-      min: 0,
-    },
-    profit: {
-      type: Number,
-      default: function () {
-        const finalPrice =
-          this.percentDiscount > 0
-            ? this.price - (this.price * this.percentDiscount) / 100
-            : this.price;
-        return finalPrice - this.costPrice;
-      },
-    },
-    profitPercentage: {
-      type: Number,
-      default: function () {
-        const finalPrice =
-          this.percentDiscount > 0
-            ? this.price - (this.price * this.percentDiscount) / 100
-            : this.price;
-        return this.costPrice
-          ? ((finalPrice - this.costPrice) / this.costPrice) * 100
-          : 0;
-      },
-    },
+    // XÓA: price, costPrice, percentDiscount, priceFinal, profit, profitPercentage
+    // Các thông tin giá và lợi nhuận giờ được quản lý qua InventoryItem và InventoryTransaction
     gender: {
       type: String,
-      enum: ["male", "female"],
-      default: "male",
+      enum: ["male", "female", "unisex"],
+      default: "unisex",
     },
     color: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Color",
-      required: true,
+      required: [true, "Màu sắc là bắt buộc"],
     },
     sizes: [
       {
@@ -89,22 +44,14 @@ const VariantSchema = new mongoose.Schema(
           ref: "Size",
           required: true,
         },
-        quantity: {
-          type: Number,
-          required: true,
-          min: 0,
-          default: 0,
-        },
         sku: {
           type: String,
           unique: true,
+          sparse: true, // Cho phép nhiều document không có SKU
         },
-        isSizeAvailable: {
-          type: Boolean,
-          default: function () {
-            return this.quantity > 0;
-          },
-        },
+        // sku để tracking và quản lý kho
+        // ĐÃ XÓA: quantity, isSizeAvailable
+        // Số lượng giờ được quản lý qua InventoryItem
       },
     ],
     isActive: {

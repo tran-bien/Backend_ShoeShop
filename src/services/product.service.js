@@ -478,11 +478,13 @@ const getProductAttributesHelper = async (product) => {
   const sizes = Object.values(availableSizes);
   const genders = Array.from(availableGenders);
 
-  // Lấy khoảng giá của sản phẩm hiện tại
-  const prices = product.variants.map((variant) => variant.priceFinal);
+  // Lấy khoảng giá từ InventoryItem
+  const inventoryService = require("@services/inventory.service");
+  const productPricing = await inventoryService.getProductPricing(product._id);
+
   const priceRange = {
-    min: prices.length > 0 ? Math.min(...prices) : 0,
-    max: prices.length > 0 ? Math.max(...prices) : 0,
+    min: productPricing.min || 0,
+    max: productPricing.max || 0,
   };
 
   // Chuyển đổi sizeInventoryByColor từ object sang array
@@ -1582,8 +1584,7 @@ const productService = {
       {
         path: "variants",
         match: { isActive: true, deletedAt: null },
-        select:
-          "color price priceFinal percentDiscount gender imagesvariant sizes",
+        select: "color gender imagesvariant sizes",
         populate: [
           { path: "color", select: "name code type colors" },
           { path: "sizes.size", select: "value description" },
@@ -1594,6 +1595,49 @@ const productService = {
     if (!product) {
       throw new ApiError(404, `Không tìm thấy sản phẩm`);
     }
+
+    // GET INVENTORY DATA FOR ALL VARIANTS
+    const inventoryService = require("@services/inventory.service");
+    const inventoryDataPromises = product.variants.map(async (variant) => {
+      const pricing = await inventoryService.getVariantPricing(variant._id);
+      return {
+        variantId: variant._id.toString(),
+        pricing: pricing.pricing,
+        quantities: pricing.quantities,
+        hasInventory: pricing.hasInventory,
+      };
+    });
+    const inventoryData = await Promise.all(inventoryDataPromises);
+
+    // MAP INVENTORY DATA TO VARIANTS
+    product.variants = product.variants.map((v) => {
+      const variantObj = v.toObject ? v.toObject() : { ...v };
+      const inventory = inventoryData.find(
+        (i) => i.variantId === variantObj._id.toString()
+      );
+
+      // Map sizes with inventory quantities
+      const sizesWithInventory = variantObj.sizes.map((size) => {
+        const sizeInventory = inventory?.quantities?.find(
+          (q) => q.sizeId.toString() === size.size._id.toString()
+        );
+        return {
+          size: size.size,
+          quantity: sizeInventory?.quantity || 0,
+          isAvailable: sizeInventory?.isAvailable || false,
+          sku: sizeInventory?.sku || null,
+        };
+      });
+
+      // Add pricing from inventory
+      return {
+        ...variantObj,
+        sizes: sizesWithInventory,
+        price: inventory?.pricing?.calculatedPrice || 0,
+        priceFinal: inventory?.pricing?.calculatedPriceFinal || 0,
+        percentDiscount: inventory?.pricing?.percentDiscount || 0,
+      };
+    });
 
     // Tính toán ma trận tồn kho và thông tin cơ bản
     const productAttributes = await getProductAttributesHelper(product);
@@ -1739,8 +1783,7 @@ const productService = {
       {
         path: "variants",
         match: { isActive: true, deletedAt: null },
-        select:
-          "color price priceFinal percentDiscount gender imagesvariant sizes",
+        select: "color gender imagesvariant sizes",
         populate: [
           { path: "color", select: "name code type colors" },
           { path: "sizes.size", select: "value description" },
@@ -1751,6 +1794,49 @@ const productService = {
     if (!product) {
       throw new ApiError(404, `Không tìm thấy sản phẩm`);
     }
+
+    // GET INVENTORY DATA FOR ALL VARIANTS
+    const inventoryService = require("@services/inventory.service");
+    const inventoryDataPromises = product.variants.map(async (variant) => {
+      const pricing = await inventoryService.getVariantPricing(variant._id);
+      return {
+        variantId: variant._id.toString(),
+        pricing: pricing.pricing,
+        quantities: pricing.quantities,
+        hasInventory: pricing.hasInventory,
+      };
+    });
+    const inventoryData = await Promise.all(inventoryDataPromises);
+
+    // MAP INVENTORY DATA TO VARIANTS
+    product.variants = product.variants.map((v) => {
+      const variantObj = v.toObject ? v.toObject() : { ...v };
+      const inventory = inventoryData.find(
+        (i) => i.variantId === variantObj._id.toString()
+      );
+
+      // Map sizes with inventory quantities
+      const sizesWithInventory = variantObj.sizes.map((size) => {
+        const sizeInventory = inventory?.quantities?.find(
+          (q) => q.sizeId.toString() === size.size._id.toString()
+        );
+        return {
+          size: size.size,
+          quantity: sizeInventory?.quantity || 0,
+          isAvailable: sizeInventory?.isAvailable || false,
+          sku: sizeInventory?.sku || null,
+        };
+      });
+
+      // Add pricing from inventory
+      return {
+        ...variantObj,
+        sizes: sizesWithInventory,
+        price: inventory?.pricing?.calculatedPrice || 0,
+        priceFinal: inventory?.pricing?.calculatedPriceFinal || 0,
+        percentDiscount: inventory?.pricing?.percentDiscount || 0,
+      };
+    });
 
     // Tính toán ma trận tồn kho và thông tin cơ bản
     const productAttributes = await getProductAttributesHelper(product);

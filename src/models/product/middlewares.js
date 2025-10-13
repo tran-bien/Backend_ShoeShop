@@ -3,12 +3,13 @@ const { createSlug } = require("@utils/slugify");
 
 /**
  * Cập nhật thông tin tồn kho của sản phẩm
+ * ĐỌC TỪ INVENTORYITEM THAY VÌ VARIANT
  * @param {Object|String} product Đối tượng sản phẩm hoặc ID sản phẩm
  */
 const updateProductStockInfo = async (product) => {
   try {
     const Product = mongoose.model("Product");
-    const Variant = mongoose.model("Variant");
+    const InventoryItem = mongoose.model("InventoryItem");
 
     // Kiểm tra nếu là ID thì lấy sản phẩm
     const productId =
@@ -16,26 +17,16 @@ const updateProductStockInfo = async (product) => {
         ? product
         : product._id;
 
-    // Lấy tất cả các biến thể active của sản phẩm
-    const variants = await Variant.find({
+    // ĐỌC TỪ INVENTORYITEM - SOURCE OF TRUTH
+    const inventoryItems = await InventoryItem.find({
       product: productId,
-      isActive: true,
-      deletedAt: null,
-    }).select("sizes");
+    }).select("quantity");
 
-    // Tính tổng số lượng từ tất cả các biến thể
+    // Tính tổng số lượng từ tất cả InventoryItems
     let totalQuantity = 0;
-    let hasAvailableSize = false;
 
-    variants.forEach((variant) => {
-      if (variant.sizes && Array.isArray(variant.sizes)) {
-        variant.sizes.forEach((size) => {
-          totalQuantity += size.quantity || 0;
-          if (size.quantity > 0) {
-            hasAvailableSize = true;
-          }
-        });
-      }
+    inventoryItems.forEach((item) => {
+      totalQuantity += item.quantity || 0;
     });
 
     // Xác định trạng thái tồn kho
@@ -68,39 +59,9 @@ const updateProductStockInfo = async (product) => {
  * @param {mongoose.Schema} schema - Schema để áp dụng middleware
  */
 const applyMiddlewares = (schema) => {
-  // Middleware để cập nhật totalQuantity trước khi lưu
-  schema.pre("save", async function (next) {
-    try {
-      // Nếu là document mới hoặc có sự thay đổi về variants, cập nhật thông tin tồn kho
-      if (this.isNew || this.isModified("variants")) {
-        await updateProductStockInfo(this);
-      }
-      next();
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  // Middleware để cập nhật totalQuantity khi biến thể được thêm hoặc sửa
-  schema.pre("findOneAndUpdate", async function (next) {
-    try {
-      const update = this.getUpdate();
-      const variants = update.variants || (update.$set && update.$set.variants);
-
-      // Nếu có cập nhật variants, cập nhật thông tin tồn kho
-      if (variants && Array.isArray(variants)) {
-        const doc = await this.model.findOne(this.getQuery());
-        if (doc) {
-          // Tạm thời cập nhật variants để tính toán
-          doc.variants = variants;
-          await updateProductStockInfo(doc);
-        }
-      }
-      next();
-    } catch (error) {
-      next(error);
-    }
-  });
+  // REMOVED: Middleware cũ update stock từ variants
+  // Stock giờ được update từ inventory.service.js khi stock in/out
+  // Product middleware không còn tự động update stock nữa
 
   // Tạo slug trước khi lưu, đồng thời đảm bảo tính duy nhất
   schema.pre("save", async function (next) {
