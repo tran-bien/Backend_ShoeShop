@@ -1,49 +1,57 @@
 const mongoose = require("mongoose");
 
 /**
- * Cập nhật số lượng tồn kho từ đơn hàng
+ * Cập nhật số lượng tồn kho từ đơn hàng (sử dụng InventoryItem)
  * @param {Object} orderItem Mặt hàng trong đơn hàng
  * @param {String} action 'decrement' hoặc 'increment'
+ * @param {String} reason Lý do (return, cancelled, etc.)
+ * @param {ObjectId} orderId ID đơn hàng
+ * @param {ObjectId} performedBy Người thực hiện
  */
-const updateInventory = async (orderItem, action) => {
+const updateInventory = async (
+  orderItem,
+  action,
+  reason = "other",
+  orderId = null,
+  performedBy = null
+) => {
   try {
-    const Variant = mongoose.model("Variant");
+    const inventoryService = require("@services/inventory.service");
 
     if (!orderItem.variant || !orderItem.size || !orderItem.quantity) return;
 
-    // Tìm biến thể
-    const variant = await Variant.findById(orderItem.variant);
-    if (!variant) return;
-
-    // Tìm size trong biến thể
-    const sizeIndex = variant.sizes.findIndex(
-      (s) => s.size.toString() === orderItem.size.toString()
-    );
-
-    if (sizeIndex === -1) return;
-
-    // Cập nhật số lượng
-    if (action === "decrement") {
-      variant.sizes[sizeIndex].quantity = Math.max(
-        0,
-        variant.sizes[sizeIndex].quantity - orderItem.quantity
+    // Chỉ xử lý khi action là increment (trả hàng về kho)
+    if (action === "increment") {
+      await inventoryService.stockIn(
+        {
+          product: orderItem.product,
+          variant: orderItem.variant,
+          size: orderItem.size,
+          quantity: orderItem.quantity,
+          costPrice: 0, // Không có giá nhập khi trả hàng
+          reason: reason,
+          reference: orderId
+            ? {
+                type: "Order",
+                id: orderId,
+              }
+            : undefined,
+          notes: `Nhập kho tự động: ${
+            reason === "return"
+              ? "Trả hàng"
+              : reason === "cancelled"
+              ? "Hủy đơn"
+              : "Điều chỉnh"
+          }`,
+        },
+        performedBy
       );
-    } else {
-      variant.sizes[sizeIndex].quantity += orderItem.quantity;
+
+      console.log(
+        `[order/middlewares] Đã trả ${orderItem.quantity} sản phẩm về kho (reason: ${reason})`
+      );
     }
-
-    // Cập nhật trạng thái available
-    variant.sizes[sizeIndex].isSizeAvailable =
-      variant.sizes[sizeIndex].quantity > 0;
-
-    // Lưu biến thể (middleware sau save sẽ cập nhật stock sản phẩm)
-    await variant.save();
-
-    console.log(
-      `[order/middlewares] Đã ${action === "decrement" ? "giảm" : "tăng"} ${
-        orderItem.quantity
-      } sản phẩm cho variant ${variant._id}`
-    );
+    // Action decrement không cần xử lý vì đã xuất kho tự động khi gán shipper
   } catch (error) {
     console.error(`[order/middlewares] Lỗi cập nhật tồn kho: ${error.message}`);
   }
@@ -215,14 +223,20 @@ const applyMiddlewares = (schema) => {
 
       // Chỉ xử lý khi có sự thay đổi trạng thái thực sự
       if (previousStatus && previousStatus !== currentStatus) {
-        // Xử lý tồn kho - CHỈ KHI HỦY ĐƠN HÀNG
+        // Xử lý tồn kho - CHỈ KHI HỦY ĐƠN HÀNG HOẶC TRẢ HÀNG
         if (currentStatus === "cancelled" && this.inventoryDeducted) {
           console.log(
             `Đang hoàn trả tồn kho cho đơn hàng bị hủy: ${this.code}`
           );
           // Nếu đơn hàng bị hủy và đã trừ tồn kho, trả lại số lượng
           for (const item of this.orderItems) {
-            await updateInventory(item, "increment");
+            await updateInventory(
+              item,
+              "increment",
+              "cancelled",
+              this._id,
+              this.user
+            );
           }
 
           // Cập nhật trạng thái không qua this.save()
@@ -230,6 +244,26 @@ const applyMiddlewares = (schema) => {
             .model("Order")
             .updateOne({ _id: this._id }, { inventoryDeducted: false });
           console.log(`Đã hoàn trả tồn kho cho đơn hàng: ${this.code}`);
+        } else if (currentStatus === "returned" && this.inventoryDeducted) {
+          console.log(
+            `Đang hoàn trả tồn kho cho đơn hàng bị trả: ${this.code}`
+          );
+          // Nếu đơn hàng bị trả và đã trừ tồn kho, trả lại số lượng
+          for (const item of this.orderItems) {
+            await updateInventory(
+              item,
+              "increment",
+              "return",
+              this._id,
+              this.user
+            );
+          }
+
+          // Cập nhật trạng thái
+          await mongoose
+            .model("Order")
+            .updateOne({ _id: this._id }, { inventoryDeducted: false });
+          console.log(`Đã hoàn trả tồn kho cho đơn hàng trả: ${this.code}`);
         }
 
         // Thêm statusHistory - giữ nguyên logic này
@@ -276,7 +310,13 @@ const applyMiddlewares = (schema) => {
         if (doc.status === "cancelled" && doc.inventoryDeducted) {
           // Nếu đơn hàng bị hủy và đã trừ tồn kho, trả lại số lượng
           for (const item of doc.orderItems) {
-            await updateInventory(item, "increment");
+            await updateInventory(
+              item,
+              "increment",
+              "cancelled",
+              doc._id,
+              doc.user
+            );
           }
 
           // Cập nhật trạng thái
@@ -287,14 +327,16 @@ const applyMiddlewares = (schema) => {
               { inventoryDeducted: false },
               { new: true }
             );
-        } else if (
-          doc._oldStatus === "cancelled" &&
-          doc.status !== "cancelled" &&
-          !doc.inventoryDeducted
-        ) {
-          // Nếu đơn hàng từ trạng thái hủy => không hủy, trừ lại tồn kho
+        } else if (doc.status === "returned" && doc.inventoryDeducted) {
+          // Nếu đơn hàng bị trả và đã trừ tồn kho, trả lại số lượng
           for (const item of doc.orderItems) {
-            await updateInventory(item, "decrement");
+            await updateInventory(
+              item,
+              "increment",
+              "return",
+              doc._id,
+              doc.user
+            );
           }
 
           // Cập nhật trạng thái
@@ -302,10 +344,11 @@ const applyMiddlewares = (schema) => {
             .model("Order")
             .findByIdAndUpdate(
               doc._id,
-              { inventoryDeducted: true },
+              { inventoryDeducted: false },
               { new: true }
             );
         }
+        // BỎ LOGIC "không hủy thì trừ lại" vì đã xuất kho tự động khi gán shipper
       }
     } catch (error) {
       console.error(

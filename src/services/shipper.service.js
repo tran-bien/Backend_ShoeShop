@@ -63,7 +63,9 @@ const updateShipperAvailability = async (shipperId, isAvailable) => {
  */
 const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
   const [order, shipper] = await Promise.all([
-    Order.findById(orderId),
+    Order.findById(orderId).populate(
+      "orderItems.product orderItems.variant orderItems.size"
+    ),
     User.findOne({ _id: shipperId, role: "shipper" }),
   ]);
 
@@ -81,6 +83,42 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
 
   if (shipper.shipper.activeOrders >= shipper.shipper.maxOrders) {
     throw new ApiError(400, "Shipper đã đạt số đơn tối đa");
+  }
+
+  // TỰ ĐỘNG XUẤT KHO KHI GÁN CHO SHIPPER
+  if (!order.inventoryDeducted) {
+    const inventoryService = require("@services/inventory.service");
+
+    for (const item of order.orderItems) {
+      try {
+        await inventoryService.stockOut(
+          {
+            product: item.product._id,
+            variant: item.variant._id,
+            size: item.size._id,
+            quantity: item.quantity,
+            reason: "sale",
+            reference: {
+              type: "Order",
+              id: order._id,
+            },
+            notes: `Xuất kho tự động cho đơn hàng ${order.code} - Giao cho shipper ${shipper.name}`,
+          },
+          assignedBy // Người gán đơn hàng
+        );
+      } catch (error) {
+        console.error(
+          `Lỗi khi xuất kho cho sản phẩm ${item.product.name}:`,
+          error.message
+        );
+        throw new ApiError(
+          400,
+          `Không thể xuất kho cho sản phẩm ${item.product.name}: ${error.message}`
+        );
+      }
+    }
+
+    order.inventoryDeducted = true;
   }
 
   // Cập nhật đơn hàng
