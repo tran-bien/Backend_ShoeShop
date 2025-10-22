@@ -1055,12 +1055,24 @@ const productService = {
     }
 
     // Kiểm tra xem sản phẩm có đang được sử dụng trong bất kỳ đơn hàng nào
-    const hasOrderItems = await Order.exists({
-      "orderItems.product": id,
-    });
+    // Cần join qua variant vì orderItems không có trực tiếp product field
+    const hasOrderItems = await Order.aggregate([
+      { $unwind: "$orderItems" },
+      {
+        $lookup: {
+          from: "variants",
+          localField: "orderItems.variant",
+          foreignField: "_id",
+          as: "variantData",
+        },
+      },
+      { $unwind: "$variantData" },
+      { $match: { "variantData.product": new mongoose.Types.ObjectId(id) } },
+      { $limit: 1 },
+    ]);
 
     // Nếu có đơn hàng liên quan, chỉ vô hiệu hóa sản phẩm và các biến thể thay vì xóa
-    if (hasOrderItems) {
+    if (hasOrderItems.length > 0) {
       // Vô hiệu hóa sản phẩm và các biến thể
       product.isActive = false;
       await product.save();
@@ -1068,7 +1080,7 @@ const productService = {
 
       return {
         success: true,
-        message: `Sản phẩm với ID: ${product._id} đang được sử dụng trong ${hasOrderItems.length} đơn hàng nên đã được vô hiệu hóa`,
+        message: `Sản phẩm với ID: ${product._id} đang được sử dụng trong đơn hàng nên đã được vô hiệu hóa`,
         isDeactivated: true,
       };
     }

@@ -63,9 +63,14 @@ const updateShipperAvailability = async (shipperId, isAvailable) => {
  */
 const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
   const [order, shipper] = await Promise.all([
-    Order.findById(orderId).populate(
-      "orderItems.product orderItems.variant orderItems.size"
-    ),
+    Order.findById(orderId).populate([
+      {
+        path: "orderItems.variant",
+        select: "product color",
+        populate: { path: "product", select: "_id name" },
+      },
+      { path: "orderItems.size", select: "_id value" },
+    ]),
     User.findOne({ _id: shipperId, role: "shipper" }),
   ]);
 
@@ -91,9 +96,19 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
 
     for (const item of order.orderItems) {
       try {
+        // Lấy productId từ variant (vì orderItem không có trực tiếp product field)
+        const productId = item.variant?.product?._id || item.variant?.product;
+
+        if (!productId) {
+          throw new ApiError(
+            400,
+            `Không tìm thấy product từ variant ${item.variant?._id}`
+          );
+        }
+
         await inventoryService.stockOut(
           {
-            product: item.product._id,
+            product: productId,
             variant: item.variant._id,
             size: item.size._id,
             quantity: item.quantity,
@@ -107,14 +122,8 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
           assignedBy // Người gán đơn hàng
         );
       } catch (error) {
-        console.error(
-          `Lỗi khi xuất kho cho sản phẩm ${item.product.name}:`,
-          error.message
-        );
-        throw new ApiError(
-          400,
-          `Không thể xuất kho cho sản phẩm ${item.product.name}: ${error.message}`
-        );
+        console.error(`Lỗi khi xuất kho cho orderItem:`, error.message);
+        throw new ApiError(400, `Không thể xuất kho: ${error.message}`);
       }
     }
 
@@ -185,15 +194,26 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
   } else if (status === "failed") {
     order.status = "delivery_failed";
 
-    // Nếu thất bại 3 lần thì tự động hủy
+    // Nếu thất bại 3 lần thì chuyển trạng thái về returning_to_warehouse
     const failedAttempts = order.deliveryAttempts.filter(
       (a) => a.status === "failed"
     ).length;
 
     if (failedAttempts >= 3) {
-      order.status = "cancelled";
-      order.cancelReason = "Giao hàng thất bại sau 3 lần thử";
-      order.cancelledAt = new Date();
+      // Set status = returning_to_warehouse thay vì cancelled ngay
+      order.status = "returning_to_warehouse";
+      order.cancelReason =
+        "Giao hàng thất bại sau 3 lần thử - Hàng đang trả về kho";
+
+      // Set returnConfirmed = false (chờ staff xác nhận nhận hàng)
+      order.returnConfirmed = false;
+
+      // KHÔNG thay đổi inventoryDeducted (vẫn = true)
+      // Chờ staff xác nhận rồi mới hoàn kho
+
+      console.log(
+        `[Shipper Service] Order ${order.code}: Giao thất bại 3 lần, hàng đang trả về kho`
+      );
 
       // Giảm số đơn active của shipper
       const shipper = await User.findById(shipperId);

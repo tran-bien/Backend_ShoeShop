@@ -331,7 +331,7 @@ const variantService = {
         }
       }
 
-      // ✅ Chỉ cập nhật gender (price/costPrice được quản lý bởi InventoryItem)
+      // Chỉ cập nhật gender (price/costPrice được quản lý bởi InventoryItem)
       if (variantData.gender !== undefined) {
         existingVariant.gender = variantData.gender;
       }
@@ -355,14 +355,14 @@ const variantService = {
     }
     // TH2: Chưa có biến thể với màu và giới tính này, tạo mới hoàn toàn
     else {
-      // ✅ Chuẩn bị dữ liệu size (CHỈ reference, KHÔNG có quantity)
+      // Chuẩn bị dữ liệu size (CHỈ reference, KHÔNG có quantity)
       const sizesData = variantData.sizes.map((sizeData) => ({
         size: sizeData.size,
-        // ❌ REMOVED: quantity, isSizeAvailable
-        // ✅ Quantity được quản lý bởi InventoryItem
+        // REMOVED: quantity, isSizeAvailable
+        // Quantity được quản lý bởi InventoryItem
       }));
 
-      // ✅ Tạo biến thể mới (CHỈ reference data)
+      // Tạo biến thể mới (CHỈ reference data)
       newVariant = new Variant({
         product: productId,
         color: colorId,
@@ -370,7 +370,7 @@ const variantService = {
         isActive:
           variantData.isActive !== undefined ? variantData.isActive : true,
         sizes: sizesData,
-        // ❌ REMOVED: price, costPrice, percentDiscount
+        // REMOVED: price, costPrice, percentDiscount
       });
 
       // Lưu biến thể mới
@@ -398,7 +398,7 @@ const variantService = {
         ],
       });
 
-    // ✅ Tính toán thông tin tồn kho từ InventoryItem
+    //   Tính toán thông tin tồn kho từ InventoryItem
     const inventorySummary = await variantService.calculateInventorySummary(
       populatedVariant
     );
@@ -467,14 +467,14 @@ const variantService = {
       updateData.sizes = sizesData;
     }
 
-    // ✅ Cập nhật các trường (CHỈ reference data, KHÔNG có price/cost)
+    // Cập nhật các trường (CHỈ reference data, KHÔNG có price/cost)
     const allowedFields = [
       "color",
       "gender",
       "sizes", // Chỉ update reference, không update quantity
       "isActive",
     ];
-    // ❌ REMOVED: price, costPrice, percentDiscount
+    // REMOVED: price, costPrice, percentDiscount
 
     const updateFields = {};
     for (const [key, value] of Object.entries(updateData)) {
@@ -745,7 +745,7 @@ const variantService = {
   calculateInventorySummary: async (variant) => {
     const InventoryItem = require("@models").InventoryItem;
 
-    // ✅ ĐỌC TỪ INVENTORYITEM thay vì variant.sizes[].quantity
+    // ĐỌC TỪ INVENTORYITEM thay vì variant.sizes[].quantity
     const inventoryItems = await InventoryItem.find({
       variant: variant._id,
     }).populate("size", "value description");

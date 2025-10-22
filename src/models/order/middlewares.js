@@ -20,11 +20,20 @@ const updateInventory = async (
 
     if (!orderItem.variant || !orderItem.size || !orderItem.quantity) return;
 
+    // Lấy productId từ variant (vì orderItem không có trực tiếp product field)
+    const Variant = mongoose.model("Variant");
+    const variant = await Variant.findById(orderItem.variant).select("product");
+    
+    if (!variant || !variant.product) {
+      console.error(`[order/middlewares] Không tìm thấy product từ variant ${orderItem.variant}`);
+      return;
+    }
+
     // Chỉ xử lý khi action là increment (trả hàng về kho)
     if (action === "increment") {
       await inventoryService.stockIn(
         {
-          product: orderItem.product,
+          product: variant.product,
           variant: orderItem.variant,
           size: orderItem.size,
           quantity: orderItem.quantity,
@@ -49,6 +58,7 @@ const updateInventory = async (
 
       console.log(
         `[order/middlewares] Đã trả ${orderItem.quantity} sản phẩm về kho (reason: ${reason})`
+      );
       );
     }
     // Action decrement không cần xử lý vì đã xuất kho tự động khi gán shipper
@@ -283,6 +293,11 @@ const applyMiddlewares = (schema) => {
               `Đã hoàn trả tồn kho cho đơn hàng trả: ${this.code}`
             );
           }
+        } else if (currentStatus === "returning_to_warehouse") {
+          // Hàng đang trả về kho - KHÔNG làm gì, chờ staff xác nhận
+          console.log(
+            `[Order ${this.code}] Hàng đang trả về kho, chờ staff xác nhận nhận hàng`
+          );
         }
 
         // Thêm statusHistory - giữ nguyên logic này
@@ -386,6 +401,11 @@ const applyMiddlewares = (schema) => {
               `Đã hoàn trả tồn kho cho đơn hàng: ${doc.code}`
             );
           }
+        } else if (doc.status === "returning_to_warehouse") {
+          // Hàng đang trả về kho - KHÔNG làm gì
+          console.log(
+            `[Order ${doc.code}] Hàng đang trả về kho, chờ staff xác nhận`
+          );
         }
         // BỎ LOGIC "không hủy thì trừ lại" vì đã xuất kho tự động khi gán shipper
       }

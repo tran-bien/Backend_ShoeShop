@@ -327,9 +327,21 @@ const getTopSellingProducts = async (req, res) => {
       {
         $unwind: "$orderItems",
       },
+      // Lookup variant để lấy product
+      {
+        $lookup: {
+          from: "variants",
+          localField: "orderItems.variant",
+          foreignField: "_id",
+          as: "variantData",
+        },
+      },
+      {
+        $unwind: "$variantData",
+      },
       {
         $group: {
-          _id: "$orderItems.product",
+          _id: "$variantData.product",
           productName: { $first: "$orderItems.productName" },
           totalSold: { $sum: "$orderItems.quantity" },
           totalRevenue: {

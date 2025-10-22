@@ -1167,16 +1167,24 @@ const orderService = {
     const { confirmedBy, notes = "" } = data;
 
     // Kiểm tra đơn hàng tồn tại
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(orderId).populate([
+      {
+        path: "orderItems.variant",
+        select: "product color",
+        populate: { path: "product", select: "_id name" },
+      },
+      { path: "orderItems.size", select: "_id value" },
+    ]);
     if (!order) {
       throw new ApiError(404, "Không tìm thấy đơn hàng");
     }
 
-    // Kiểm tra trạng thái đơn hàng (chỉ xác nhận khi cancelled hoặc returned)
-    if (order.status !== "cancelled" && order.status !== "returned") {
+    // Kiểm tra trạng thái đơn hàng (chấp nhận: cancelled, returned, returning_to_warehouse)
+    const validStatuses = ["cancelled", "returned", "returning_to_warehouse"];
+    if (!validStatuses.includes(order.status)) {
       throw new ApiError(
         400,
-        "Chỉ có thể xác nhận nhận hàng cho đơn hàng đã hủy hoặc trả về"
+        `Chỉ có thể xác nhận nhận hàng cho đơn hàng đã hủy hoặc trả về. Status hiện tại: ${order.status}`
       );
     }
 
@@ -1196,20 +1204,70 @@ const orderService = {
       );
     }
 
+    // Xác định lý do hoàn kho
+    const stockInReason =
+      order.status === "returning_to_warehouse"
+        ? "delivery_failed"
+        : order.status === "returned"
+        ? "return"
+        : "cancelled";
+
+    // Hoàn kho thủ công (vì middleware chỉ chạy khi returnConfirmed = true)
+    const inventoryService = require("@services/inventory.service");
+    for (const item of order.orderItems) {
+      // Lấy productId từ variant
+      const productId = item.variant?.product?._id || item.variant?.product;
+
+      if (!productId) {
+        console.error(
+          `[confirmReturn] Không tìm thấy productId từ variant ${item.variant?._id}`
+        );
+        continue;
+      }
+
+      await inventoryService.stockIn(
+        {
+          product: productId,
+          variant: item.variant?._id || item.variant,
+          size: item.size?._id || item.size,
+          quantity: item.quantity,
+          costPrice: 0, // Hàng trả về không tính giá nhập
+          reason: stockInReason,
+          reference: {
+            type: "Order",
+            id: order._id,
+          },
+          notes: `Staff xác nhận nhận hàng trả về - ${
+            notes || order.cancelReason || "Hoàn kho"
+          }`,
+        },
+        confirmedBy
+      );
+    }
+
+    // Nếu từ "returning_to_warehouse" → chuyển sang "cancelled"
+    if (order.status === "returning_to_warehouse") {
+      order.status = "cancelled";
+      order.cancelledAt = new Date();
+    }
+
     // Cập nhật trạng thái xác nhận
     order.returnConfirmed = true;
     order.returnConfirmedAt = new Date();
     order.returnConfirmedBy = confirmedBy;
+    order.inventoryDeducted = false; // Reset flag sau khi hoàn kho
 
     // Thêm ghi chú vào statusHistory
     order.statusHistory.push({
       status: order.status,
       updatedAt: new Date(),
       updatedBy: confirmedBy,
-      note: `[Xác nhận nhận hàng trả về] ${notes || "Đã nhận hàng về kho"}`,
+      note: `[Xác nhận nhận hàng trả về] ${
+        notes || "Đã nhận hàng về kho và hoàn tồn kho"
+      }`,
     });
 
-    // Lưu đơn hàng - middleware sẽ tự động hoàn trả tồn kho
+    // Lưu đơn hàng - Middleware KHÔNG chạy hoàn kho nữa vì đã xử lý thủ công ở trên
     await order.save();
 
     // Populate để trả về thông tin đầy đủ
