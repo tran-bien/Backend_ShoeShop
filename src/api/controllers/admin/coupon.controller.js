@@ -5,7 +5,7 @@ const couponController = {
   /**
    * @route   GET /api/admin/coupons
    * @desc    Lấy danh sách mã giảm giá
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getAllCoupons: asyncHandler(async (req, res) => {
     const result = await couponService.adminCouponService.getAllCoupons(
@@ -21,7 +21,7 @@ const couponController = {
   /**
    * @route   GET /api/admin/coupons/:id
    * @desc    Lấy chi tiết mã giảm giá
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getCouponById: asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -36,7 +36,7 @@ const couponController = {
   /**
    * @route   POST /api/admin/coupons
    * @desc    Tạo mã giảm giá mới
-   * @access  Admin
+   * @access  Staff/Admin
    */
   createCoupon: asyncHandler(async (req, res) => {
     const { user } = req;
@@ -55,7 +55,7 @@ const couponController = {
   /**
    * @route   PUT /api/admin/coupons/:id
    * @desc    Cập nhật mã giảm giá
-   * @access  Admin
+   * @access  Staff/Admin
    */
   updateCoupon: asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -76,7 +76,7 @@ const couponController = {
   /**
    * @route   DELETE /api/admin/coupons/:id
    * @desc    Xóa mã giảm giá
-   * @access  Admin
+   * @access  Staff/Admin
    */
   deleteCoupon: asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -91,7 +91,7 @@ const couponController = {
   /**
    * @route   PATCH /api/admin/coupons/:id/status
    * @desc    Cập nhật trạng thái mã giảm giá
-   * @access  Admin
+   * @access  Staff/Admin
    */
   updateCouponStatus: asyncHandler(async (req, res) => {
     const { id } = req.params;

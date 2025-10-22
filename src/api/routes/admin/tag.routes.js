@@ -14,11 +14,11 @@ router.use(protect);
 /**
  * @route   GET /api/admin/tags/deleted
  * @desc    Lấy danh sách tags đã xóa
- * @access  Staff/Admin (Read-only)
+ * @access  Staff/Admin
  */
 router.get(
   "/deleted",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   tagValidator.getDeletedTags,
   tagController.getDeletedTags
 );
@@ -26,11 +26,11 @@ router.get(
 /**
  * @route   GET /api/admin/tags
  * @desc    Lấy tất cả tags
- * @access  Staff/Admin (Read-only)
+ * @access  Staff/Admin
  */
 router.get(
   "/",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   tagValidator.getAllTags,
   tagController.getAllTags
 );
@@ -38,7 +38,7 @@ router.get(
 /**
  * @route   POST /api/admin/tags
  * @desc    Tạo tag mới
- * @access  Staff/Admin (Full)
+ * @access  Staff/Admin
  */
 router.post(
   "/",
@@ -50,11 +50,11 @@ router.post(
 /**
  * @route   GET /api/admin/tags/:id
  * @desc    Lấy chi tiết tag theo ID
- * @access  Staff/Admin (Read-only)
+ * @access  Staff/Admin
  */
 router.get(
   "/:id",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   tagValidator.getTagById,
   tagController.getTagById
 );

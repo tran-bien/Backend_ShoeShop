@@ -17,11 +17,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/categories
  * @desc    Lấy tất cả danh mục (có phân trang, filter)
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(categoryValidator.validateCategoryQuery),
   categoryController.getAllCategories
 );
@@ -29,11 +29,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/categories/deleted
  * @desc    Lấy danh sách danh mục đã xóa
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/deleted",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(categoryValidator.validateCategoryQuery),
   categoryController.getDeletedCategories
 );
@@ -41,11 +41,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/categories/:id
  * @desc    Lấy chi tiết danh mục theo ID
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/:id",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(categoryValidator.validateCategoryId),
   categoryController.getCategoryById
 );

@@ -5,7 +5,7 @@ const colorController = {
   /**
    * @desc    Lấy danh sách tất cả màu sắc (admin)
    * @route   GET /api/admin/colors
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getAllColors: asyncHandler(async (req, res) => {
     const result = await colorService.getAdminColors(req.query);
@@ -15,7 +15,7 @@ const colorController = {
   /**
    * @desc    Lấy danh sách màu sắc đã xóa
    * @route   GET /api/admin/colors/deleted
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getDeletedColors: asyncHandler(async (req, res) => {
     const result = await colorService.getDeletedColors(req.query);
@@ -25,7 +25,7 @@ const colorController = {
   /**
    * @desc    Lấy thông tin chi tiết màu sắc theo ID
    * @route   GET /api/admin/colors/:id
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getColorById: asyncHandler(async (req, res) => {
     const result = await colorService.getAdminColorById(req.params.id);
@@ -35,7 +35,7 @@ const colorController = {
   /**
    * @desc    Tạo màu sắc mới
    * @route   POST /api/admin/colors
-   * @access  Admin
+   * @access  Staff/Admin
    */
   createColor: asyncHandler(async (req, res) => {
     const result = await colorService.createColor(req.body);
@@ -45,7 +45,7 @@ const colorController = {
   /**
    * @desc    Cập nhật màu sắc
    * @route   PUT /api/admin/colors/:id
-   * @access  Admin
+   * @access  Staff/Admin
    */
   updateColor: asyncHandler(async (req, res) => {
     const result = await colorService.updateColor(req.params.id, req.body);
@@ -55,7 +55,7 @@ const colorController = {
   /**
    * @desc    Xóa màu sắc (soft delete) nếu không có biến thể liên quan
    * @route   DELETE /api/admin/colors/:id
-   * @access  Admin
+   * @access  Staff/Admin
    */
   deleteColor: asyncHandler(async (req, res) => {
     const result = await colorService.deleteColor(req.params.id, req.user._id);
@@ -65,7 +65,7 @@ const colorController = {
   /**
    * @desc    Khôi phục màu sắc đã xóa
    * @route   PUT /api/admin/colors/:id/restore
-   * @access  Admin
+   * @access  Staff/Admin
    */
   restoreColor: asyncHandler(async (req, res) => {
     const result = await colorService.restoreColor(req.params.id);

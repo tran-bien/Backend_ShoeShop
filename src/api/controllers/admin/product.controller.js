@@ -5,7 +5,7 @@ const productController = {
   /**
    * @desc    Lấy danh sách tất cả sản phẩm (có phân trang, lọc)
    * @route   GET /api/admin/products
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getAllProducts: asyncHandler(async (req, res) => {
     const result = await productService.getAdminProducts(req.query);
@@ -15,7 +15,7 @@ const productController = {
   /**
    * @desc    Lấy chi tiết sản phẩm theo ID
    * @route   GET /api/admin/products/:id
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getProductById: asyncHandler(async (req, res) => {
     const result = await productService.getAdminProductById(req.params.id);
@@ -25,7 +25,7 @@ const productController = {
   /**
    * @desc    Tạo sản phẩm mới
    * @route   POST /api/admin/products
-   * @access  Admin
+   * @access  Staff/Admin
    */
   createProduct: asyncHandler(async (req, res) => {
     const result = await productService.createProduct(req.body);
@@ -35,7 +35,7 @@ const productController = {
   /**
    * @desc    Cập nhật thông tin sản phẩm
    * @route   PUT /api/admin/products/:id
-   * @access  Admin
+   * @access  Staff/Admin
    */
   updateProduct: asyncHandler(async (req, res) => {
     const result = await productService.updateProduct(req.params.id, req.body);
@@ -45,7 +45,7 @@ const productController = {
   /**
    * @desc    Lấy danh sách sản phẩm đã xóa
    * @route   GET /api/admin/products/deleted
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getDeletedProducts: asyncHandler(async (req, res) => {
     const result = await productService.getDeletedProducts(req.query);
@@ -55,6 +55,7 @@ const productController = {
   /**
    * @route DELETE /api/admin/products/:id
    * @desc Xóa mềm sản phẩm hoặc vô hiệu hóa nếu có đơn hàng liên quan
+   * @access  Staff/Admin
    */
   deleteProduct: asyncHandler(async (req, res) => {
     const result = await productService.deleteProduct(
@@ -67,6 +68,7 @@ const productController = {
   /**
    * @route PUT /api/admin/products/:id/restore
    * @desc Khôi phục sản phẩm đã xóa kèm các biến thể liên quan
+   * @access  Staff/Admin
    */
   restoreProduct: asyncHandler(async (req, res) => {
     // Mặc định khôi phục cả biến thể (restoreVariants = true)
@@ -77,7 +79,7 @@ const productController = {
   /**
    * @desc    Cập nhật trạng thái active của sản phẩm
    * @route   PATCH /api/admin/products/:id/status
-   * @access  Admin
+   * @access  Staff/Admin
    */
   updateProductStatus: asyncHandler(async (req, res) => {
     const { isActive, cascade = true } = req.body;

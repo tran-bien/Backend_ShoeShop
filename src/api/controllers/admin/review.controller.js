@@ -4,7 +4,7 @@ const reviewService = require("@services/review.service");
 /**
  * @desc    Lấy danh sách tất cả đánh giá
  * @route   GET /api/admin/reviews
- * @access  Admin
+ * @access  Staff/Admin
  */
 const getAllReviews = asyncHandler(async (req, res) => {
   const result = await reviewService.adminReviewService.getAllReviews(req.query);
@@ -20,7 +20,7 @@ const getAllReviews = asyncHandler(async (req, res) => {
 /**
  * @desc    Lấy chi tiết đánh giá (bao gồm cả đã xóa)
  * @route   GET /api/admin/reviews/:id
- * @access  Admin
+ * @access  Staff/Admin
  */
 const getReviewById = asyncHandler(async (req, res) => {
   const result = await reviewService.adminReviewService.getReviewById(req.params.id);
@@ -31,7 +31,7 @@ const getReviewById = asyncHandler(async (req, res) => {
 /**
  * @desc    Ẩn/hiện đánh giá
  * @route   PATCH /api/admin/reviews/:id/visibility
- * @access  Admin
+ * @access  Staff/Admin
  */
 const toggleReviewVisibility = asyncHandler(async (req, res) => {
   const result = await reviewService.adminReviewService.toggleReviewVisibility(
@@ -45,7 +45,7 @@ const toggleReviewVisibility = asyncHandler(async (req, res) => {
 /**
  * @desc    Khôi phục đánh giá đã xóa
  * @route   PATCH /api/admin/reviews/:id/restore
- * @access  Admin
+ * @access  Staff/Admin
  */
 const restoreReview = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -83,7 +83,7 @@ const restoreReview = asyncHandler(async (req, res) => {
 /**
  * @desc    Lấy thống kê đánh giá của sản phẩm
  * @route   GET /api/admin/reviews/:productId/stats
- * @access  Admin
+ * @access  Staff/Admin
  */
 const getProductReviewStats = asyncHandler(async (req, res) => {
   const result = await reviewService.adminReviewService.getProductReviewStats(req.params.productId);
@@ -94,7 +94,7 @@ const getProductReviewStats = asyncHandler(async (req, res) => {
 /**
  * @desc    Lấy danh sách tất cả đánh giá đã xóa
  * @route   GET /api/admin/reviews/deleted
- * @access  Admin
+ * @access  Staff/Admin
  */
 const getAllReviewsDeleted = asyncHandler(async (req, res) => {
   const result = await reviewService.adminReviewService.getAllReviewsDeleted(req.query);

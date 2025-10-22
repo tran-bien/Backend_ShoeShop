@@ -16,11 +16,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/products
  * @desc    Lấy danh sách tất cả sản phẩm
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(productValidator.validateAdminProductQuery),
   productController.getAllProducts
 );
@@ -28,11 +28,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/products/deleted
  * @desc    Lấy danh sách sản phẩm đã xóa
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/deleted",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(productValidator.validateAdminProductQuery),
   productController.getDeletedProducts
 );
@@ -40,11 +40,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/products/:id
  * @desc    Lấy chi tiết sản phẩm theo ID
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/:id",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(productValidator.validateProductId),
   productController.getProductById
 );
@@ -122,5 +122,3 @@ router.post(
 );
 
 module.exports = router;
-
-

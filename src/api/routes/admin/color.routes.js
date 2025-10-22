@@ -16,11 +16,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/colors
  * @desc    Lấy danh sách tất cả màu sắc (admin)
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(colorValidator.validateListQuery),
   colorController.getAllColors
 );
@@ -28,11 +28,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/colors/deleted
  * @desc    Lấy danh sách màu sắc đã xóa
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/deleted",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(colorValidator.validateListQuery),
   colorController.getDeletedColors
 );
@@ -40,11 +40,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/colors/:id
  * @desc    Lấy thông tin chi tiết màu sắc theo ID
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/:id",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(colorValidator.validateColorId),
   colorController.getColorById
 );
@@ -52,7 +52,7 @@ router.get(
 /**
  * @route   POST /api/v1/admin/colors
  * @desc    Tạo màu sắc mới
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.post(
   "/",
@@ -98,5 +98,3 @@ router.put(
 );
 
 module.exports = router;
-
-

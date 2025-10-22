@@ -18,11 +18,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/coupons
  * @desc    Lấy danh sách mã giảm giá
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(couponValidator.validateGetCoupons),
   couponController.getAllCoupons
 );
@@ -30,7 +30,7 @@ router.get(
 /**
  * @route   GET /api/v1/admin/coupons/:id
  * @desc    Lấy chi tiết mã giảm giá
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get("/:id", requireStaffReadOnly, couponController.getCouponById);
 
@@ -78,5 +78,3 @@ router.patch(
 );
 
 module.exports = router;
-
-

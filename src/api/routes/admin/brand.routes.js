@@ -16,11 +16,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/brands
  * @desc    Lấy tất cả thương hiệu (có phân trang, filter)
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(brandValidator.validateBrandQuery),
   brandController.getAllBrands
 );
@@ -28,11 +28,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/brands/deleted
  * @desc    Lấy danh sách thương hiệu đã xóa
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/deleted",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(brandValidator.validateBrandQuery),
   brandController.getDeletedBrands
 );
@@ -40,11 +40,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/brands/:id
  * @desc    Lấy chi tiết thương hiệu theo ID
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/:id",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(brandValidator.validateBrandId),
   brandController.getBrandById
 );
@@ -52,7 +52,7 @@ router.get(
 /**
  * @route   POST /api/v1/admin/brands
  * @desc    Tạo mới thương hiệu
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.post(
   "/",
@@ -64,7 +64,7 @@ router.post(
 /**
  * @route   PUT /api/v1/admin/brands/:id
  * @desc    Cập nhật thương hiệu
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.put(
   "/:id",
@@ -79,7 +79,7 @@ router.put(
 /**
  * @route   DELETE /api/v1/admin/brands/:id
  * @desc    Xóa mềm thương hiệu
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.delete(
   "/:id",
@@ -91,7 +91,7 @@ router.delete(
 /**
  * @route   PUT /api/v1/admin/brands/:id/restore
  * @desc    Khôi phục thương hiệu đã xóa
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.put(
   "/:id/restore",
@@ -103,7 +103,7 @@ router.put(
 /**
  * @route   PATCH /api/v1/admin/brands/:id/status
  * @desc    Cập nhật trạng thái active của thương hiệu
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.patch(
   "/:id/status",

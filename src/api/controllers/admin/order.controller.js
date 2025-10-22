@@ -4,7 +4,7 @@ const orderService = require("@services/order.service");
 /**
  * @desc    Lấy danh sách đơn hàng (admin)
  * @route   GET /api/admin/orders
- * @access  Admin
+ * @access  Staff/Admin
  */
 const getOrders = asyncHandler(async (req, res) => {
   const result = await orderService.getAllOrders(req.query);
@@ -19,7 +19,7 @@ const getOrders = asyncHandler(async (req, res) => {
 /**
  * @desc    Lấy chi tiết đơn hàng (admin)
  * @route   GET /api/admin/orders/:id
- * @access  Admin
+ * @access  Staff/Admin
  */
 const getOrderById = asyncHandler(async (req, res) => {
   const order = await orderService.getOrderDetail(req.params.id);
@@ -34,7 +34,7 @@ const getOrderById = asyncHandler(async (req, res) => {
 /**
  * @desc    Cập nhật trạng thái đơn hàng
  * @route   PATCH /api/admin/orders/:id/status
- * @access  Admin
+ * @access  Staff/Admin
  */
 const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status, note } = req.body;
@@ -55,7 +55,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 /**
  * @desc    Lấy danh sách yêu cầu hủy đơn hàng
  * @route   GET /api/admin/orders/cancel-requests
- * @access  Admin
+ * @access  Staff/Admin
  */
 const getCancelRequests = asyncHandler(async (req, res) => {
   const result = await orderService.getCancelRequests(req.query);
@@ -70,7 +70,7 @@ const getCancelRequests = asyncHandler(async (req, res) => {
 /**
  * @desc    Xử lý yêu cầu hủy đơn hàng
  * @route   PATCH /api/admin/orders/cancel-requests/:id
- * @access  Admin
+ * @access  Staff/Admin
  */
 const processCancelRequest = asyncHandler(async (req, res) => {
   const { status, adminResponse } = req.body;

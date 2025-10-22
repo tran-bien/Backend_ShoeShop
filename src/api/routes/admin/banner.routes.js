@@ -1,7 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const bannerController = require("@controllers/admin/banner.controller");
-const { protect, requireStaff } = require("@middlewares/auth.middleware");
+const {
+  protect,
+  requireStaffOrAdmin,
+} = require("@middlewares/auth.middleware");
 const { handleBannerImageUpload } = require("@middlewares/upload.middleware");
 const {
   validateBannerId,
@@ -12,37 +15,28 @@ const {
 
 // Áp dụng middleware protect cho tất cả routes
 router.use(protect);
+router.use(requireStaffOrAdmin);
 
 /**
  * @route GET /api/admin/banners
  * @desc Lấy danh sách banner với phân trang và filter
  * @access Staff/Admin
  */
-router.get("/", requireStaff, bannerController.getAllBanners);
+router.get("/", bannerController.getAllBanners);
 
 /**
  * @route PUT /api/admin/banners/reorder
  * @desc Sắp xếp lại thứ tự banner
  * @access Staff/Admin
  */
-router.put(
-  "/reorder",
-  requireStaff,
-  validateReorderBanners,
-  bannerController.reorderBanners
-);
+router.put("/reorder", validateReorderBanners, bannerController.reorderBanners);
 
 /**
  * @route GET /api/admin/banners/:id
  * @desc Lấy chi tiết banner theo ID
  * @access Staff/Admin
  */
-router.get(
-  "/:id",
-  requireStaff,
-  validateBannerId,
-  bannerController.getBannerById
-);
+router.get("/:id", validateBannerId, bannerController.getBannerById);
 
 /**
  * @route POST /api/admin/banners
@@ -51,7 +45,6 @@ router.get(
  */
 router.post(
   "/",
-  requireStaff,
   handleBannerImageUpload,
   validateCreateBanner,
   bannerController.createBanner
@@ -64,7 +57,6 @@ router.post(
  */
 router.put(
   "/:id",
-  requireStaff,
   validateBannerId,
   validateUpdateBanner,
   bannerController.updateBanner
@@ -77,7 +69,6 @@ router.put(
  */
 router.put(
   "/:id/image",
-  requireStaff,
   validateBannerId,
   handleBannerImageUpload,
   bannerController.updateBannerImage
@@ -88,24 +79,14 @@ router.put(
  * @desc Xóa mềm banner
  * @access Staff/Admin
  */
-router.delete(
-  "/:id",
-  requireStaff,
-  validateBannerId,
-  bannerController.deleteBanner
-);
+router.delete("/:id", validateBannerId, bannerController.deleteBanner);
 
 /**
  * @route PUT /api/admin/banners/:id/restore
  * @desc Khôi phục banner đã xóa
  * @access Staff/Admin
  */
-router.put(
-  "/:id/restore",
-  requireStaff,
-  validateBannerId,
-  bannerController.restoreBanner
-);
+router.put("/:id/restore", validateBannerId, bannerController.restoreBanner);
 
 /**
  * @route PUT /api/admin/banners/:id/toggle-status
@@ -114,7 +95,6 @@ router.put(
  */
 router.put(
   "/:id/toggle-status",
-  requireStaff,
   validateBannerId,
   bannerController.toggleBannerStatus
 );

@@ -18,11 +18,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/orders
  * @desc    Lấy danh sách tất cả đơn hàng
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(orderValidator.validateGetOrders),
   orderController.getOrders
 );
@@ -30,7 +30,7 @@ router.get(
 /**
  * @route   GET /api/v1/admin/orders/cancel-requests
  * @desc    Lấy danh sách yêu cầu hủy đơn hàng
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/cancel-requests",
@@ -76,5 +76,3 @@ router.patch(
 );
 
 module.exports = router;
-
-

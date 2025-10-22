@@ -5,6 +5,7 @@ const categoryController = {
   /**
    * @route GET /api/admin/categories
    * @desc Lấy danh sách danh mục (kể cả không active)
+   * @access Staff/Admin
    */
   getAllCategories: asyncHandler(async (req, res) => {
     const result = await categoryService.getAdminAllCategories(req.query);
@@ -14,6 +15,7 @@ const categoryController = {
   /**
    * @route GET /api/admin/categories/:id
    * @desc Lấy chi tiết danh mục theo ID
+   * @access Staff/Admin
    */
   getCategoryById: asyncHandler(async (req, res) => {
     const result = await categoryService.getAdminCategoryById(req.params.id);
@@ -23,6 +25,7 @@ const categoryController = {
   /**
    * @route POST /api/admin/categories
    * @desc Tạo mới danh mục
+   * @access Staff/Admin
    */
   createCategory: asyncHandler(async (req, res) => {
     const result = await categoryService.createCategory(req.body);
@@ -32,6 +35,7 @@ const categoryController = {
   /**
    * @route PUT /api/admin/categories/:id
    * @desc Cập nhật danh mục
+   * @access Staff/Admin
    */
   updateCategory: asyncHandler(async (req, res) => {
     const result = await categoryService.updateCategory(
@@ -44,6 +48,7 @@ const categoryController = {
   /**
    * @route DELETE /api/admin/categories/:id
    * @desc Xóa mềm danh mục hoặc vô hiệu hóa nếu có sản phẩm liên quan
+   * @access Staff/Admin
    */
   deleteCategory: asyncHandler(async (req, res) => {
     const result = await categoryService.deleteCategory(
@@ -56,6 +61,7 @@ const categoryController = {
   /**
    * @route GET /api/admin/categories/deleted
    * @desc Lấy danh sách danh mục đã xóa
+   * @access Staff/Admin
    */
   getDeletedCategories: asyncHandler(async (req, res) => {
     const result = await categoryService.getDeletedCategories(req.query);
@@ -65,6 +71,7 @@ const categoryController = {
   /**
    * @route PUT /api/admin/categories/:id/restore
    * @desc Khôi phục danh mục đã xóa kèm sản phẩm liên quan
+   * @access Staff/Admin
    */
   restoreCategory: asyncHandler(async (req, res) => {
     const { cascade = true } = req.body;
@@ -78,6 +85,7 @@ const categoryController = {
   /**
    * @route PATCH /api/admin/categories/:id/status
    * @desc Cập nhật trạng thái active của danh mục
+   * @access Staff/Admin
    */
   updateCategoryStatus: asyncHandler(async (req, res) => {
     const { isActive, cascade = true } = req.body;

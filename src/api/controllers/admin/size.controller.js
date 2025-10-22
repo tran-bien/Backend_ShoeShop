@@ -5,7 +5,7 @@ const sizeController = {
   /**
    * @desc    Lấy danh sách tất cả kích thước (admin)
    * @route   GET /api/admin/sizes
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getAllSizes: asyncHandler(async (req, res) => {
     const result = await sizeService.getAdminSizes(req.query);
@@ -15,7 +15,7 @@ const sizeController = {
   /**
    * @desc    Lấy danh sách kích thước đã xóa
    * @route   GET /api/admin/sizes/deleted
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getDeletedSizes: asyncHandler(async (req, res) => {
     const result = await sizeService.getDeletedSizes(req.query);
@@ -25,7 +25,7 @@ const sizeController = {
   /**
    * @desc    Lấy thông tin chi tiết kích thước theo ID
    * @route   GET /api/admin/sizes/:id
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getSizeById: asyncHandler(async (req, res) => {
     const result = await sizeService.getAdminSizeById(req.params.id);
@@ -35,7 +35,7 @@ const sizeController = {
   /**
    * @desc    Tạo kích thước mới
    * @route   POST /api/admin/sizes
-   * @access  Admin
+   * @access  Staff/Admin
    */
   createSize: asyncHandler(async (req, res) => {
     const result = await sizeService.createSize(req.body);
@@ -45,7 +45,7 @@ const sizeController = {
   /**
    * @desc    Cập nhật kích thước
    * @route   PUT /api/admin/sizes/:id
-   * @access  Admin
+   * @access  Staff/Admin
    */
   updateSize: asyncHandler(async (req, res) => {
     const result = await sizeService.updateSize(req.params.id, req.body);
@@ -55,7 +55,7 @@ const sizeController = {
   /**
    * @desc    Xóa kích thước (soft delete) nếu không có biến thể liên quan
    * @route   DELETE /api/admin/sizes/:id
-   * @access  Admin
+   * @access  Staff/Admin
    */
   deleteSize: asyncHandler(async (req, res) => {
     const result = await sizeService.deleteSize(req.params.id, req.user._id);
@@ -65,7 +65,7 @@ const sizeController = {
   /**
    * @desc    Khôi phục kích thước đã xóa
    * @route   PUT /api/admin/sizes/:id/restore
-   * @access  Admin
+   * @access  Staff/Admin
    */
   restoreSize: asyncHandler(async (req, res) => {
     const result = await sizeService.restoreSize(req.params.id);

@@ -18,11 +18,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/variants
  * @desc    Lấy danh sách biến thể (có phân trang, filter)
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(variantValidator.validateVariantQuery),
   variantController.getAllVariants
 );
@@ -30,11 +30,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/variants/deleted
  * @desc    Lấy danh sách biến thể đã xóa
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/deleted",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(variantValidator.validateVariantQuery),
   variantController.getDeletedVariants
 );
@@ -42,11 +42,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/variants/:id
  * @desc    Lấy chi tiết biến thể theo ID
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/:id",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(variantValidator.validateVariantId),
   variantController.getVariantById
 );
@@ -54,7 +54,7 @@ router.get(
 /**
  * @route   POST /api/v1/admin/variants
  * @desc    Tạo biến thể mới
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.post(
   "/",
@@ -66,7 +66,7 @@ router.post(
 /**
  * @route   PUT /api/v1/admin/variants/:id
  * @desc    Cập nhật thông tin biến thể
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.put(
   "/:id",
@@ -78,7 +78,7 @@ router.put(
 /**
  * @route   DELETE /api/v1/admin/variants/:id
  * @desc    Xóa mềm biến thể
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.delete(
   "/:id",
@@ -90,7 +90,7 @@ router.delete(
 /**
  * @route   POST /api/v1/admin/variants/:id/restore
  * @desc    Khôi phục biến thể đã xóa
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.post(
   "/:id/restore",
@@ -124,5 +124,3 @@ router.patch(
 );
 
 module.exports = router;
-
-

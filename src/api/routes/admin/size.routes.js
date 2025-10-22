@@ -16,11 +16,11 @@ router.use(protect);
 /**
  * @route   GET /api/v1/admin/sizes
  * @desc    Lấy danh sách tất cả kích thước (admin)
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(sizeValidator.validateListQuery),
   sizeController.getAllSizes
 );
@@ -28,11 +28,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/sizes/deleted
  * @desc    Lấy danh sách kích thước đã xóa
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/deleted",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(sizeValidator.validateListQuery),
   sizeController.getDeletedSizes
 );
@@ -40,11 +40,11 @@ router.get(
 /**
  * @route   GET /api/v1/admin/sizes/:id
  * @desc    Lấy thông tin chi tiết kích thước theo ID
- * @access  Staff (read-only), Admin
+ * @access  Staff/Admin
  */
 router.get(
   "/:id",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(sizeValidator.validateSizeId),
   sizeController.getSizeById
 );
@@ -52,7 +52,7 @@ router.get(
 /**
  * @route   POST /api/v1/admin/sizes
  * @desc    Tạo kích thước mới
- * @access  Admin Only
+ * @access  Staff/Admin
  */
 router.post(
   "/",
@@ -98,5 +98,3 @@ router.put(
 );
 
 module.exports = router;
-
-

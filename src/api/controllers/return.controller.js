@@ -2,6 +2,7 @@ const returnService = require("../../services/return.service");
 
 /**
  * Tạo yêu cầu đổi trả
+ * @access User/Staff/Admin
  */
 const createReturnRequest = async (req, res, next) => {
   try {
@@ -30,6 +31,7 @@ const createReturnRequest = async (req, res, next) => {
 
 /**
  * Lấy danh sách yêu cầu đổi trả
+ * @access User/Staff/Admin
  */
 const getReturnRequests = async (req, res, next) => {
   try {

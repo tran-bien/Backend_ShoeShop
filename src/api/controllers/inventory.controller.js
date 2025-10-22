@@ -2,6 +2,7 @@ const inventoryService = require("../../services/inventory.service");
 
 /**
  * Nhập hàng vào kho
+ * @access Staff/Admin
  */
 const stockIn = async (req, res, next) => {
   try {
@@ -30,6 +31,7 @@ const stockIn = async (req, res, next) => {
 
 /**
  * Xuất hàng khỏi kho
+ * @access Staff/Admin
  */
 const stockOut = async (req, res, next) => {
   try {
@@ -57,6 +59,7 @@ const stockOut = async (req, res, next) => {
 
 /**
  * Điều chỉnh số lượng tồn kho
+ * @access Staff/Admin
  */
 const adjustStock = async (req, res, next) => {
   try {
@@ -83,6 +86,7 @@ const adjustStock = async (req, res, next) => {
 
 /**
  * Lấy danh sách tồn kho
+ * @access Staff/Admin
  */
 const getInventoryList = async (req, res, next) => {
   try {
@@ -110,6 +114,7 @@ const getInventoryList = async (req, res, next) => {
 
 /**
  * Lấy chi tiết một mục tồn kho
+ * @access Staff/Admin
  */
 const getInventoryDetail = async (req, res, next) => {
   try {
@@ -128,6 +133,7 @@ const getInventoryDetail = async (req, res, next) => {
 
 /**
  * Lấy lịch sử giao dịch kho
+ * @access Staff/Admin
  */
 const getTransactionHistory = async (req, res, next) => {
   try {
@@ -164,6 +170,7 @@ const getTransactionHistory = async (req, res, next) => {
 
 /**
  * Lấy thống kê kho hàng
+ * @access Staff/Admin
  */
 const getInventoryStats = async (req, res, next) => {
   try {
@@ -180,6 +187,7 @@ const getInventoryStats = async (req, res, next) => {
 
 /**
  * Tính toán giá bán từ giá vốn
+ * @access Staff/Admin
  */
 const calculatePrice = async (req, res, next) => {
   try {
@@ -202,6 +210,7 @@ const calculatePrice = async (req, res, next) => {
 
 /**
  * Cập nhật ngưỡng cảnh báo tồn kho thấp
+ * @access Staff/Admin
  */
 const updateLowStockThreshold = async (req, res, next) => {
   try {

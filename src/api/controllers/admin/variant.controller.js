@@ -5,7 +5,7 @@ const variantController = {
   /**
    * @desc    Lấy danh sách biến thể (có phân trang, filter)
    * @route   GET /api/admin/variants
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getAllVariants: asyncHandler(async (req, res) => {
     const result = await variantService.getAdminVariants(req.query);
@@ -15,7 +15,7 @@ const variantController = {
   /**
    * @desc    Lấy chi tiết biến thể theo ID
    * @route   GET /api/admin/variants/:id
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getVariantById: asyncHandler(async (req, res) => {
     const result = await variantService.getAdminVariantById(req.params.id);
@@ -25,7 +25,7 @@ const variantController = {
   /**
    * @desc    Tạo biến thể mới
    * @route   POST /api/admin/variants
-   * @access  Admin
+   * @access  Staff/Admin
    */
   createVariant: asyncHandler(async (req, res) => {
     const result = await variantService.createVariant(req.body);
@@ -35,7 +35,7 @@ const variantController = {
   /**
    * @desc    Cập nhật thông tin biến thể
    * @route   PUT /api/admin/variants/:id
-   * @access  Admin
+   * @access  Staff/Admin
    */
   updateVariant: asyncHandler(async (req, res) => {
     const result = await variantService.updateVariant(req.params.id, req.body);
@@ -57,7 +57,7 @@ const variantController = {
   /**
    * @desc    Khôi phục biến thể đã xóa
    * @route   POST /api/admin/variants/:id/restore
-   * @access  Admin
+   * @access  Staff/Admin
    */
   restoreVariant: asyncHandler(async (req, res) => {
     try {
@@ -72,7 +72,7 @@ const variantController = {
   /**
    * @desc    Cập nhật số lượng tồn kho của biến thể
    * @route   PATCH /api/admin/variants/:id/inventory
-   * @access  Admin
+   * @access  Staff/Admin
    */
   updateInventory: asyncHandler(async (req, res) => {
     const result = await variantService.updateVariantInventory(
@@ -85,7 +85,7 @@ const variantController = {
   /**
    * @desc    Cập nhật trạng thái active của biến thể
    * @route   PATCH /api/admin/variants/:id/status
-   * @access  Admin
+   * @access  Staff/Admin
    */
   updateVariantStatus: asyncHandler(async (req, res) => {
     const result = await variantService.updateVariantStatus(
@@ -98,7 +98,7 @@ const variantController = {
   /**
    * @desc    Lấy danh sách biến thể đã xóa
    * @route   GET /api/admin/variants/deleted
-   * @access  Admin
+   * @access  Staff/Admin
    */
   getDeletedVariants: asyncHandler(async (req, res) => {
     const result = await variantService.getAdminDeletedVariants(req.query);

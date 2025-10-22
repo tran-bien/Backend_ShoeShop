@@ -4,7 +4,7 @@ const imageService = require("@services/image.service");
 /**
  * @desc    Upload logo cho brand
  * @route   POST /api/admin/images/brand/:brandId/logo
- * @access  Admin
+ * @access  Staff/Admin
  */
 exports.uploadBrandLogo = asyncHandler(async (req, res) => {
   const { brandId } = req.params;
@@ -21,7 +21,7 @@ exports.uploadBrandLogo = asyncHandler(async (req, res) => {
 /**
  * @desc    Xóa logo của brand
  * @route   DELETE /api/admin/images/brand/:brandId/logo
- * @access  Admin
+ * @access  Staff/Admin
  */
 exports.removeBrandLogo = asyncHandler(async (req, res) => {
   const { brandId } = req.params;
@@ -32,7 +32,7 @@ exports.removeBrandLogo = asyncHandler(async (req, res) => {
 /**
  * @desc    Upload ảnh cho product
  * @route   POST /api/admin/images/product/:productId
- * @access  Admin
+ * @access  Staff/Admin
  */
 exports.uploadProductImages = asyncHandler(async (req, res) => {
   const { productId } = req.params;
@@ -51,7 +51,7 @@ exports.uploadProductImages = asyncHandler(async (req, res) => {
 /**
  * @desc    Xóa ảnh của product
  * @route   DELETE /api/admin/images/product/:productId
- * @access  Admin
+ * @access  Staff/Admin
  */
 exports.removeProductImages = asyncHandler(async (req, res) => {
   const { productId } = req.params;
@@ -64,7 +64,7 @@ exports.removeProductImages = asyncHandler(async (req, res) => {
 /**
  * @desc    Upload ảnh cho variant
  * @route   POST /api/admin/images/variant/:variantId
- * @access  Admin
+ * @access  Staff/Admin
  */
 exports.uploadVariantImages = asyncHandler(async (req, res) => {
   const { variantId } = req.params;
@@ -83,7 +83,7 @@ exports.uploadVariantImages = asyncHandler(async (req, res) => {
 /**
  * @desc    Xóa ảnh của variant
  * @route   DELETE /api/admin/images/variant/:variantId
- * @access  Admin
+ * @access  Staff/Admin
  */
 exports.removeVariantImages = asyncHandler(async (req, res) => {
   const { variantId } = req.params;
@@ -96,7 +96,7 @@ exports.removeVariantImages = asyncHandler(async (req, res) => {
 /**
  * @desc    Sắp xếp ảnh của product
  * @route   PUT /api/admin/images/product/:productId/reorder
- * @access  Admin
+ * @access  Staff/Admin
  */
 exports.reorderProductImages = asyncHandler(async (req, res) => {
   const { productId } = req.params;
@@ -112,7 +112,7 @@ exports.reorderProductImages = asyncHandler(async (req, res) => {
 /**
  * @desc    Sắp xếp ảnh của variant
  * @route   PUT /api/admin/images/variant/:variantId/reorder
- * @access  Admin
+ * @access  Staff/Admin
  */
 exports.reorderVariantImages = asyncHandler(async (req, res) => {
   const { variantId } = req.params;
@@ -128,7 +128,7 @@ exports.reorderVariantImages = asyncHandler(async (req, res) => {
 /**
  * @desc    Đặt ảnh chính cho product
  * @route   PUT /api/admin/images/product/:productId/set-main
- * @access  Admin
+ * @access  Staff/Admin
  */
 exports.setProductMainImage = asyncHandler(async (req, res) => {
   const { productId } = req.params;
@@ -141,7 +141,7 @@ exports.setProductMainImage = asyncHandler(async (req, res) => {
 /**
  * @desc    Đặt ảnh chính cho variant
  * @route   PUT /api/admin/images/variant/:variantId/set-main
- * @access  Admin
+ * @access  Staff/Admin
  */
 exports.setVariantMainImage = asyncHandler(async (req, res) => {
   const { variantId } = req.params;
@@ -154,7 +154,7 @@ exports.setVariantMainImage = asyncHandler(async (req, res) => {
 /**
  * @desc    Xóa ảnh trực tiếp từ Cloudinary
  * @route   DELETE /api/admin/images/cloudinary
- * @access  Admin
+ * @access  Staff/Admin
  */
 exports.deleteFromCloudinary = asyncHandler(async (req, res) => {
   let publicIds = req.body.publicIds || [req.body.publicId];
