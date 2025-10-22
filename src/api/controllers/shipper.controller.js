@@ -2,6 +2,9 @@ const shipperService = require("../../services/shipper.service");
 
 /**
  * Lấy danh sách shipper
+ * @access  Staff/Admin
+ * @route   GET /api/shipper/list
+ * @flow    shipper.route.js → shipper.controller.js → shipper.service.js → getShippers()
  */
 const getShippers = async (req, res, next) => {
   try {
@@ -22,6 +25,10 @@ const getShippers = async (req, res, next) => {
 
 /**
  * Gán đơn hàng cho shipper
+ * - AUTO XUẤT KHO khi gán shipper thành công
+ * @access  Staff/Admin
+ * @route   POST /api/shipper/assign/:orderId
+ * @flow    shipper.route.js → shipper.controller.js → shipper.service.js → assignOrderToShipper()
  */
 const assignOrderToShipper = async (req, res, next) => {
   try {
@@ -45,6 +52,9 @@ const assignOrderToShipper = async (req, res, next) => {
 
 /**
  * Cập nhật trạng thái giao hàng
+ * @access  Shipper
+ * @route   PATCH /api/shipper/delivery-status/:orderId
+ * @flow    shipper.route.js → shipper.controller.js → shipper.service.js → updateDeliveryStatus()
  */
 const updateDeliveryStatus = async (req, res, next) => {
   try {
@@ -73,6 +83,9 @@ const updateDeliveryStatus = async (req, res, next) => {
 
 /**
  * Lấy danh sách đơn hàng của shipper
+ * @access  Shipper
+ * @route   GET /api/shipper/my-orders
+ * @flow    shipper.route.js → shipper.controller.js → shipper.service.js → getShipperOrders()
  */
 const getShipperOrders = async (req, res, next) => {
   try {
@@ -92,6 +105,9 @@ const getShipperOrders = async (req, res, next) => {
 
 /**
  * Cập nhật vị trí của shipper
+ * @access  Shipper
+ * @route   PATCH /api/shipper/location
+ * @flow    shipper.route.js → shipper.controller.js → shipper.service.js → updateShipperLocation()
  */
 const updateShipperLocation = async (req, res, next) => {
   try {
@@ -115,6 +131,9 @@ const updateShipperLocation = async (req, res, next) => {
 
 /**
  * Lấy thống kê của shipper
+ * @access  Staff/Admin
+ * @route   GET /api/shipper/stats/:shipperId
+ * @flow    shipper.route.js → shipper.controller.js → shipper.service.js → getShipperStats()
  */
 const getShipperStats = async (req, res, next) => {
   try {
@@ -133,6 +152,9 @@ const getShipperStats = async (req, res, next) => {
 
 /**
  * Cập nhật trạng thái sẵn sàng của shipper
+ * @access  Shipper
+ * @route   PATCH /api/shipper/availability
+ * @flow    shipper.route.js → shipper.controller.js → shipper.service.js → updateShipperAvailability()
  */
 const updateAvailability = async (req, res, next) => {
   try {
@@ -156,6 +178,9 @@ const updateAvailability = async (req, res, next) => {
 
 /**
  * Lấy thông tin chi tiết shipper
+ * @access  Staff/Admin
+ * @route   GET /api/shipper/detail/:shipperId
+ * @flow    shipper.route.js → shipper.controller.js → shipper.service.js → getShipperById()
  */
 const getShipperDetail = async (req, res, next) => {
   try {
