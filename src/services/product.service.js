@@ -239,7 +239,9 @@ const transformProductForPublic = (product) => {
               : null,
             quantity: size.quantity,
             sku: size.sku,
-            isAvailable: size.isSizeAvailable,
+            isAvailable: size.isAvailable, // Fix: was size.isSizeAvailable
+            isLowStock: size.isLowStock,
+            isOutOfStock: size.isOutOfStock,
           })),
         };
       });
@@ -466,7 +468,8 @@ const getProductAttributesHelper = async (product) => {
         }
 
         // Tăng số lượng kích thước có sẵn theo màu và cập nhật số lượng
-        if (sizeItem.quantity > 0 && sizeItem.isSizeAvailable) {
+        if (sizeItem.quantity > 0 && sizeItem.isAvailable) {
+          // Fix: was sizeItem.isSizeAvailable
           sizesCountByColor[colorId]++;
           sizeInventoryByColor[colorId][sizeId].quantity += sizeItem.quantity;
           sizeInventoryByColor[colorId][sizeId].isAvailable = true;
@@ -551,7 +554,7 @@ const getProductAttributesHelper = async (product) => {
 
       const sizeId = sizeItem.size._id.toString();
       const quantity = sizeItem.quantity || 0;
-      const isAvailable = quantity > 0 && sizeItem.isSizeAvailable;
+      const isAvailable = quantity > 0 && sizeItem.isAvailable; // Fix: was sizeItem.isSizeAvailable
 
       if (
         inventoryMatrix.stock[gender] &&
@@ -1552,7 +1555,8 @@ const productService = {
                     },
                     quantity: "$$sizeItem.quantity",
                     sku: "$$sizeItem.sku",
-                    isSizeAvailable: "$$sizeItem.isSizeAvailable",
+                    // REMOVED: isSizeAvailable - field không còn tồn tại trong Variant schema
+                    // Availability sẽ được tính từ InventoryItem sau aggregation
                   },
                 },
               },
@@ -1679,6 +1683,8 @@ const productService = {
           size: size.size,
           quantity: sizeInventory?.quantity || 0,
           isAvailable: sizeInventory?.isAvailable || false,
+          isLowStock: sizeInventory?.isLowStock || false,
+          isOutOfStock: sizeInventory?.isOutOfStock || true,
           sku: sizeInventory?.sku || null,
         };
       });
@@ -1717,7 +1723,7 @@ const productService = {
         // Tạo khóa cho màu và giới tính
         const key = `${gender}-${colorId}`;
 
-        // Chuẩn bị thông tin sizes với số lượng
+        // Chuẩn bị thông tin sizes với số lượng (Fix CRITICAL Bug)
         const sizesWithQuantity = variant.sizes.map((size) => {
           return {
             sizeId: size.size?._id?.toString(),
@@ -1725,7 +1731,9 @@ const productService = {
             sizeDescription: size.size?.description,
             quantity: size.quantity,
             sku: size.sku,
-            isAvailable: size.isSizeAvailable,
+            isAvailable: size.isAvailable, //  FIXED: was size.isSizeAvailable
+            isLowStock: size.isLowStock, // ADDED: expose low stock status
+            isOutOfStock: size.isOutOfStock, //  ADDED: expose out of stock status
           };
         });
 
@@ -1892,6 +1900,8 @@ const productService = {
           size: size.size,
           quantity: sizeInventory?.quantity || 0,
           isAvailable: sizeInventory?.isAvailable || false,
+          isLowStock: sizeInventory?.isLowStock || false, // Added
+          isOutOfStock: sizeInventory?.isOutOfStock || true, // Added
           sku: sizeInventory?.sku || null,
         };
       });
@@ -1930,7 +1940,7 @@ const productService = {
         // Tạo khóa cho màu và giới tính
         const key = `${gender}-${colorId}`;
 
-        // Chuẩn bị thông tin sizes với số lượng
+        // Chuẩn bị thông tin sizes với số lượng (Fix CRITICAL Bug)
         const sizesWithQuantity = variant.sizes.map((size) => {
           return {
             sizeId: size.size?._id?.toString(),
@@ -1938,7 +1948,9 @@ const productService = {
             sizeDescription: size.size?.description,
             quantity: size.quantity,
             sku: size.sku,
-            isAvailable: size.isSizeAvailable,
+            isAvailable: size.isAvailable, // ✅ FIXED: was size.isSizeAvailable
+            isLowStock: size.isLowStock, // ✅ ADDED
+            isOutOfStock: size.isOutOfStock, // ✅ ADDED
           };
         });
 

@@ -248,6 +248,21 @@ const OrderSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Xác nhận hàng trả về (Manual confirmation for return/cancel)
+    returnConfirmed: {
+      type: Boolean,
+      default: false,
+    },
+    returnConfirmedAt: {
+      type: Date,
+      default: null,
+    },
+    returnConfirmedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
     // Thời gian giao hàng
     deliveredAt: {
       type: Date,

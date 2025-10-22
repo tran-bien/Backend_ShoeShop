@@ -11,8 +11,21 @@ const { generateSKU } = require("../utils/skuGenerator");
 
 /**
  * Đồng bộ số lượng từ InventoryItem sang Variant.sizes[].quantity
+ * DEPRECATED: Field variant.sizes[].quantity đã bị xóa khỏi schema
+ * InventoryItem là single source of truth cho quantity
+ * Function này giữ lại để tránh break code nhưng không làm gì
  */
 const syncInventoryToVariant = async (inventoryItem) => {
+  // DEPRECATED: Không còn sync quantity sang Variant schema
+  // InventoryItem.quantity là single source of truth
+  // Variant.sizes chỉ lưu reference đến Size, không lưu quantity
+
+  console.log(
+    `[DEPRECATED] syncInventoryToVariant called but skipped - InventoryItem is single source of truth`
+  );
+  return;
+
+  /* ORIGINAL LOGIC - COMMENTED OUT
   try {
     const variant = await Variant.findById(inventoryItem.variant);
     if (!variant) {
@@ -40,6 +53,7 @@ const syncInventoryToVariant = async (inventoryItem) => {
   } catch (error) {
     console.error("Error syncing inventory to variant:", error);
   }
+  */
 };
 
 /**
@@ -189,21 +203,22 @@ const stockIn = async (data, performedBy) => {
   const newAverageCostPrice =
     quantityAfter > 0 ? (previousTotalCost + totalCost) / quantityAfter : 0;
 
-  // Cập nhật inventory item
-  inventoryItem.quantity = quantityAfter;
-  inventoryItem.costPrice = costPrice;
-  inventoryItem.averageCostPrice = newAverageCostPrice;
-  await inventoryItem.save();
-
-  // Đồng bộ sang Variant.sizes[].quantity
-  await syncInventoryToVariant(inventoryItem);
-
   // Tính giá bán
   const priceCalculation = calculatePrice(
     costPrice,
     targetProfitPercent,
     percentDiscount
   );
+
+  // Cập nhật inventory item với giá bán (Fix CRITICAL Issue #1)
+  inventoryItem.quantity = quantityAfter;
+  inventoryItem.costPrice = costPrice;
+  inventoryItem.averageCostPrice = newAverageCostPrice;
+  inventoryItem.sellingPrice = priceCalculation.calculatedPrice;
+  inventoryItem.discountPercent = percentDiscount;
+  inventoryItem.finalPrice = priceCalculation.calculatedPriceFinal;
+  inventoryItem.lastPriceUpdate = new Date();
+  await inventoryItem.save();
 
   // Tạo transaction
   const transaction = await InventoryTransaction.create({
@@ -566,40 +581,6 @@ const getVariantSizePricing = async (variantId, sizeId) => {
 };
 
 /**
- * MỚI: Lấy pricing info cho tất cả sizes của một variant
- * @param {String} variantId - ID variant
- * @returns {Array} - Array of size pricing info
- */
-const getVariantPricing = async (variantId) => {
-  const inventoryItems = await InventoryItem.find({
-    variant: variantId,
-  }).populate("size", "value description");
-
-  const pricingPromises = inventoryItems.map(async (item) => {
-    const latestTransaction = await InventoryTransaction.findOne({
-      inventoryItem: item._id,
-      type: "IN",
-    }).sort({ createdAt: -1 });
-
-    return {
-      size: item.size,
-      sku: item.sku,
-      quantity: item.quantity,
-      costPrice: item.costPrice,
-      averageCostPrice: item.averageCostPrice,
-      price: latestTransaction?.calculatedPrice || null,
-      priceFinal: latestTransaction?.calculatedPriceFinal || null,
-      percentDiscount: latestTransaction?.percentDiscount || 0,
-      profitPerItem: latestTransaction?.profitPerItem || 0,
-      isLowStock: item.isLowStock,
-      isOutOfStock: item.isOutOfStock,
-    };
-  });
-
-  return await Promise.all(pricingPromises);
-};
-
-/**
  * MỚI: Lấy price range cho một product
  * @param {String} productId - ID product
  * @returns {Object} - Min/max pricing info
@@ -699,6 +680,61 @@ const getProductStockInfo = async (productId) => {
   return { totalQuantity, stockStatus };
 };
 
+/**
+ * Lấy thông tin giá bán và tồn kho của một variant
+ * @param {String} variantId - ID của variant
+ * @returns {Object} - { pricing, quantities, hasInventory }
+ */
+const getVariantPricing = async (variantId) => {
+  const inventoryItems = await InventoryItem.find({
+    variant: variantId,
+  }).populate("size", "value description");
+
+  if (!inventoryItems || inventoryItems.length === 0) {
+    return {
+      pricing: {
+        sellingPrice: 0,
+        discountPercent: 0,
+        finalPrice: 0,
+        calculatedPrice: 0,
+        calculatedPriceFinal: 0,
+        percentDiscount: 0,
+      },
+      quantities: [],
+      hasInventory: false,
+    };
+  }
+
+  // Lấy giá từ item đầu tiên (giả sử tất cả sizes cùng giá)
+  const firstItem = inventoryItems[0];
+  const pricing = {
+    sellingPrice: firstItem.sellingPrice || 0,
+    discountPercent: firstItem.discountPercent || 0,
+    finalPrice: firstItem.finalPrice || 0,
+    calculatedPrice: firstItem.sellingPrice || 0,
+    calculatedPriceFinal: firstItem.finalPrice || 0,
+    percentDiscount: firstItem.discountPercent || 0,
+  };
+
+  // Tạo danh sách số lượng theo size
+  const quantities = inventoryItems.map((item) => ({
+    sizeId: item.size._id,
+    sizeValue: item.size.value || "",
+    sizeDescription: item.size.description || "",
+    quantity: item.quantity || 0,
+    isAvailable: item.quantity > 0,
+    isLowStock: item.isLowStock,
+    isOutOfStock: item.isOutOfStock,
+    sku: item.sku || "",
+  }));
+
+  return {
+    pricing,
+    quantities,
+    hasInventory: true,
+  };
+};
+
 module.exports = {
   calculatePrice,
   stockIn,
@@ -713,7 +749,7 @@ module.exports = {
   getOrCreateInventoryItem,
   //  NEW: Pricing helpers
   getVariantSizePricing,
-  getVariantPricing,
+  getVariantPricing, // NEW: Get pricing and quantities for a variant
   getProductPricing,
   updateProductStockFromInventory,
   getProductStockInfo, // NEW: Tính toán stock info động

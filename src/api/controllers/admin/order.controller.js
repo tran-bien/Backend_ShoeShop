@@ -8,11 +8,11 @@ const orderService = require("@services/order.service");
  */
 const getOrders = asyncHandler(async (req, res) => {
   const result = await orderService.getAllOrders(req.query);
-  
+
   res.status(200).json({
     success: true,
     message: "Lấy danh sách đơn hàng thành công",
-    ...result
+    ...result,
   });
 });
 
@@ -23,11 +23,11 @@ const getOrders = asyncHandler(async (req, res) => {
  */
 const getOrderById = asyncHandler(async (req, res) => {
   const order = await orderService.getOrderDetail(req.params.id);
-  
+
   res.status(200).json({
     success: true,
     message: "Lấy chi tiết đơn hàng thành công",
-    data: order
+    data: order,
   });
 });
 
@@ -38,17 +38,17 @@ const getOrderById = asyncHandler(async (req, res) => {
  */
 const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status, note } = req.body;
-  
+
   const result = await orderService.updateOrderStatus(req.params.id, {
     status,
     note,
-    updatedBy: req.user.id
+    updatedBy: req.user.id,
   });
-  
+
   res.status(200).json({
     success: true,
     message: "Cập nhật trạng thái đơn hàng thành công",
-    data: result.order
+    data: result.order,
   });
 });
 
@@ -59,11 +59,11 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
  */
 const getCancelRequests = asyncHandler(async (req, res) => {
   const result = await orderService.getCancelRequests(req.query);
-  
+
   res.status(200).json({
     success: true,
     message: "Lấy danh sách yêu cầu hủy đơn hàng thành công",
-    ...result
+    ...result,
   });
 });
 
@@ -74,17 +74,37 @@ const getCancelRequests = asyncHandler(async (req, res) => {
  */
 const processCancelRequest = asyncHandler(async (req, res) => {
   const { status, adminResponse } = req.body;
-  
+
   const result = await orderService.processCancelRequest(req.params.id, {
     status,
     adminResponse,
-    processedBy: req.user.id
+    processedBy: req.user.id,
   });
-  
+
   res.status(200).json({
     success: true,
     message: result.message,
-    data: result.cancelRequest
+    data: result.cancelRequest,
+  });
+});
+
+/**
+ * @desc    Xác nhận nhận hàng trả về
+ * @route   POST /api/admin/orders/:id/confirm-return
+ * @access  Staff/Admin
+ */
+const confirmReturn = asyncHandler(async (req, res) => {
+  const { notes } = req.body;
+
+  const result = await orderService.confirmReturn(req.params.id, {
+    confirmedBy: req.user.id,
+    notes,
+  });
+
+  res.status(200).json({
+    success: result.success,
+    message: result.message,
+    data: result.data,
   });
 });
 
@@ -93,5 +113,6 @@ module.exports = {
   getOrderById,
   updateOrderStatus,
   getCancelRequests,
-  processCancelRequest
+  processCancelRequest,
+  confirmReturn,
 };

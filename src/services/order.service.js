@@ -1154,6 +1154,85 @@ const orderService = {
       },
     };
   },
+
+  /**
+   * Xác nhận nhận hàng trả về (Option 2)
+   * @param {String} orderId - ID của đơn hàng
+   * @param {Object} data - Dữ liệu xác nhận
+   * @param {String} data.confirmedBy - ID của người xác nhận (Staff/Admin)
+   * @param {String} data.notes - Ghi chú xác nhận
+   * @returns {Object} - Đơn hàng đã được cập nhật
+   */
+  confirmReturn: async (orderId, data) => {
+    const { confirmedBy, notes = "" } = data;
+
+    // Kiểm tra đơn hàng tồn tại
+    const order = await Order.findById(orderId);
+    if (!order) {
+      throw new ApiError(404, "Không tìm thấy đơn hàng");
+    }
+
+    // Kiểm tra trạng thái đơn hàng (chỉ xác nhận khi cancelled hoặc returned)
+    if (order.status !== "cancelled" && order.status !== "returned") {
+      throw new ApiError(
+        400,
+        "Chỉ có thể xác nhận nhận hàng cho đơn hàng đã hủy hoặc trả về"
+      );
+    }
+
+    // Kiểm tra đã xác nhận chưa
+    if (order.returnConfirmed) {
+      throw new ApiError(
+        400,
+        "Đơn hàng này đã được xác nhận nhận hàng trước đó"
+      );
+    }
+
+    // Kiểm tra có trừ tồn kho chưa
+    if (!order.inventoryDeducted) {
+      throw new ApiError(
+        400,
+        "Đơn hàng này chưa trừ tồn kho nên không cần xác nhận nhận hàng"
+      );
+    }
+
+    // Cập nhật trạng thái xác nhận
+    order.returnConfirmed = true;
+    order.returnConfirmedAt = new Date();
+    order.returnConfirmedBy = confirmedBy;
+
+    // Thêm ghi chú vào statusHistory
+    order.statusHistory.push({
+      status: order.status,
+      updatedAt: new Date(),
+      updatedBy: confirmedBy,
+      note: `[Xác nhận nhận hàng trả về] ${notes || "Đã nhận hàng về kho"}`,
+    });
+
+    // Lưu đơn hàng - middleware sẽ tự động hoàn trả tồn kho
+    await order.save();
+
+    // Populate để trả về thông tin đầy đủ
+    await order.populate([
+      { path: "user", select: "name email" },
+      { path: "returnConfirmedBy", select: "name email role" },
+      {
+        path: "orderItems.variant",
+        select: "color product",
+        populate: [
+          { path: "color", select: "name code" },
+          { path: "product", select: "name slug" },
+        ],
+      },
+      { path: "orderItems.size", select: "value" },
+    ]);
+
+    return {
+      success: true,
+      message: "Đã xác nhận nhận hàng trả về và hoàn tồn kho thành công",
+      data: order,
+    };
+  },
 };
 
 module.exports = orderService;

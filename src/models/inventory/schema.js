@@ -38,6 +38,31 @@ const inventoryItemSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    // Thông tin giá bán của sản phẩm
+    sellingPrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: "Giá bán gốc (trước giảm giá)",
+    },
+    discountPercent: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+      comment: "Phần trăm giảm giá (0-100)",
+    },
+    finalPrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: "Giá sau khi áp dụng giảm giá",
+    },
+    lastPriceUpdate: {
+      type: Date,
+      default: Date.now,
+      comment: "Thời điểm cập nhật giá lần cuối",
+    },
     lowStockThreshold: {
       type: Number,
       default: 10,

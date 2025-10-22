@@ -75,4 +75,15 @@ router.patch(
   orderController.updateOrderStatus
 );
 
+/**
+ * @route   POST /api/v1/admin/orders/:id/confirm-return
+ * @desc    Xác nhận nhận hàng trả về
+ * @access  Staff/Admin
+ */
+router.post(
+  "/:id/confirm-return",
+  requireStaffOrAdmin,
+  orderController.confirmReturn
+);
+
 module.exports = router;
