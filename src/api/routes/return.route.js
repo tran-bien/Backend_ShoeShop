@@ -21,7 +21,7 @@ const {
  */
 
 /**
- * @route   POST /api/returns
+ * @route   POST /api/v1/returns
  * @desc    Tạo yêu cầu đổi trả
  * @access  Authenticated
  */
@@ -34,7 +34,7 @@ router.post(
 );
 
 /**
- * @route   GET /api/returns
+ * @route   GET /api/v1/returns
  * @desc    Lấy danh sách yêu cầu đổi trả (của chính mình hoặc tất cả nếu là admin)
  * @access  Authenticated
  */
@@ -47,7 +47,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/returns/:id
+ * @route   GET /api/v1/returns/:id
  * @desc    Lấy chi tiết yêu cầu đổi trả
  * @access  Authenticated
  */
@@ -60,7 +60,7 @@ router.get(
 );
 
 /**
- * @route   DELETE /api/returns/:id
+ * @route   DELETE /api/v1/returns/:id
  * @desc    Hủy yêu cầu đổi trả (chỉ khi còn pending)
  * @access  Authenticated
  */
@@ -77,7 +77,7 @@ router.delete(
  */
 
 /**
- * @route   PATCH /api/returns/:id/approve
+ * @route   PATCH /api/v1/returns/:id/approve
  * @desc    Phê duyệt yêu cầu đổi trả
  * @access  Staff/Admin
  */
@@ -90,7 +90,7 @@ router.patch(
 );
 
 /**
- * @route   PATCH /api/returns/:id/reject
+ * @route   PATCH /api/v1/returns/:id/reject
  * @desc    Từ chối yêu cầu đổi trả
  * @access  Staff/Admin
  */
@@ -103,7 +103,7 @@ router.patch(
 );
 
 /**
- * @route   POST /api/returns/:id/process-return
+ * @route   POST /api/v1/returns/:id/process-return
  * @desc    Xử lý hoàn trả
  * @access  Staff/Admin
  */
@@ -116,7 +116,7 @@ router.post(
 );
 
 /**
- * @route   POST /api/returns/:id/process-exchange
+ * @route   POST /api/v1/returns/:id/process-exchange
  * @desc    Xử lý đổi hàng
  * @access  Staff/Admin
  */
@@ -129,7 +129,7 @@ router.post(
 );
 
 /**
- * @route   GET /api/returns/stats/summary
+ * @route   GET /api/v1/returns/stats/summary
  * @desc    Lấy thống kê đổi trả
  * @access  Staff/Admin
  */

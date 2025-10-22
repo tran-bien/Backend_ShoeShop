@@ -58,7 +58,7 @@ router.use("/users", userWishlistRoutes);
 router.use("/users", userCouponRoutes);
 router.use("/users", userReviewRoutes);
 
-// Sử dụng các routes cho admin
+// Sử dụng các routes cho admin và staff và shipper
 router.use("/admin/auth", adminAuthRoutes);
 router.use("/admin/images", adminImageRoutes);
 router.use("/admin/brands", adminBrandRoutes);

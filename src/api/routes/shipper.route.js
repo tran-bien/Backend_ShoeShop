@@ -22,7 +22,7 @@ const {
  */
 
 /**
- * @route   GET /api/shipper/list
+ * @route   GET /api/v1/shipper/list
  * @desc    Lấy danh sách shipper (Admin)
  * @access  Staff/Admin
  */
@@ -35,7 +35,7 @@ router.get(
 );
 
 /**
- * @route   POST /api/shipper/assign/:orderId
+ * @route   POST /api/v1/shipper/assign/:orderId
  * @desc    Gán đơn hàng cho shipper (Admin)
  * @access  Staff/Admin
  */
@@ -48,7 +48,7 @@ router.post(
 );
 
 /**
- * @route   GET /api/shipper/stats/:shipperId
+ * @route   GET /api/v1/shipper/stats/:shipperId
  * @desc    Lấy thống kê của shipper (Admin)
  * @access  Staff/Admin
  */
@@ -61,7 +61,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/shipper/detail/:shipperId
+ * @route   GET /api/v1/shipper/detail/:shipperId
  * @desc    Lấy thông tin chi tiết shipper (Admin)
  * @access  Staff/Admin
  */
@@ -78,7 +78,7 @@ router.get(
  */
 
 /**
- * @route   GET /api/shipper/my-orders
+ * @route   GET /api/v1/shipper/my-orders
  * @desc    Lấy danh sách đơn hàng của shipper
  * @access  Shipper
  */
@@ -91,7 +91,7 @@ router.get(
 );
 
 /**
- * @route   PATCH /api/shipper/delivery-status/:orderId
+ * @route   PATCH /api/v1/shipper/delivery-status/:orderId
  * @desc    Cập nhật trạng thái giao hàng
  * @access  Shipper
  */
@@ -104,7 +104,7 @@ router.patch(
 );
 
 /**
- * @route   PATCH /api/shipper/location
+ * @route   PATCH /api/v1/shipper/location
  * @desc    Cập nhật vị trí của shipper
  * @access  Shipper
  */
@@ -117,7 +117,7 @@ router.patch(
 );
 
 /**
- * @route   PATCH /api/shipper/availability
+ * @route   PATCH /api/v1/shipper/availability
  * @desc    Cập nhật trạng thái sẵn sàng
  * @access  Shipper
  */
