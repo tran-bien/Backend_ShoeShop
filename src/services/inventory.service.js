@@ -10,73 +10,36 @@ const ApiError = require("../utils/ApiError");
 const { generateSKU } = require("../utils/skuGenerator");
 
 /**
- * Đồng bộ số lượng từ InventoryItem sang Variant.sizes[].quantity
- * DEPRECATED: Field variant.sizes[].quantity đã bị xóa khỏi schema
- * InventoryItem là single source of truth cho quantity
- * Function này giữ lại để tránh break code nhưng không làm gì
+ * DEPRECATED - Variant không còn lưu quantity
+ * InventoryItem là single source of truth
  */
 const syncInventoryToVariant = async (inventoryItem) => {
-  // DEPRECATED: Không còn sync quantity sang Variant schema
-  // InventoryItem.quantity là single source of truth
-  // Variant.sizes chỉ lưu reference đến Size, không lưu quantity
-
-  console.log(
-    `[DEPRECATED] syncInventoryToVariant called but skipped - InventoryItem is single source of truth`
-  );
   return;
-
-  /* ORIGINAL LOGIC - COMMENTED OUT
-  try {
-    const variant = await Variant.findById(inventoryItem.variant);
-    if (!variant) {
-      console.error(`Variant not found: ${inventoryItem.variant}`);
-      return;
-    }
-
-    // Tìm size trong variant.sizes
-    const sizeIndex = variant.sizes.findIndex(
-      (s) => s.size.toString() === inventoryItem.size.toString()
-    );
-
-    if (sizeIndex === -1) {
-      console.error(`Size not found in variant: ${inventoryItem.size}`);
-      return;
-    }
-
-    // Cập nhật quantity
-    variant.sizes[sizeIndex].quantity = inventoryItem.quantity;
-    await variant.save();
-
-    console.log(
-      `Synced inventory: Variant ${variant._id}, Size ${inventoryItem.size}, Quantity: ${inventoryItem.quantity}`
-    );
-  } catch (error) {
-    console.error("Error syncing inventory to variant:", error);
-  }
-  */
 };
 
 /**
- * Tính toán giá bán dựa trên giá nhập và % lợi nhuận
+ * Tính giá bán từ giá vốn
+ * @param {Number} costPrice - Giá nhập
+ * @param {Number} targetProfitPercent - % Lợi nhuận mong muốn (0-1000)
+ * @param {Number} percentDiscount - % Giảm giá (0-100)
+ * @returns {Object} { calculatedPrice, calculatedPriceFinal, profitPerItem, margin, markup }
+ *
+ * Formula:
+ * - basePrice = costPrice × (1 + targetProfitPercent/100)
+ * - finalPrice = basePrice × (1 - percentDiscount/100)
+ * - profit = finalPrice - costPrice
+ * - margin = (profit / finalPrice) × 100
+ * - markup = (profit / costPrice) × 100
  */
 const calculatePrice = (
   costPrice,
   targetProfitPercent,
   percentDiscount = 0
 ) => {
-  // 1. Giá bán gốc = giá nhập + % lợi nhuận
   const basePrice = costPrice * (1 + targetProfitPercent / 100);
-
-  // 2. Giá sau giảm = giá gốc - % giảm giá
   const finalPrice = basePrice * (1 - percentDiscount / 100);
-
-  // 3. Lợi nhuận thực tế
   const profitPerItem = finalPrice - costPrice;
-
-  // 4. Tỷ lệ margin (% lợi nhuận trên giá bán)
   const margin = (profitPerItem / finalPrice) * 100;
-
-  // 5. Tỷ lệ markup (% lợi nhuận trên giá vốn)
   const markup = (profitPerItem / costPrice) * 100;
 
   return {
@@ -90,6 +53,12 @@ const calculatePrice = (
 
 /**
  * Lấy hoặc tạo InventoryItem
+ * Unique constraint: product + variant + size
+ * Auto generate SKU nếu chưa có
+ * @param {ObjectId} product - Product ID
+ * @param {ObjectId} variant - Variant ID
+ * @param {ObjectId} size - Size ID
+ * @returns {InventoryItem}
  */
 const getOrCreateInventoryItem = async (product, variant, size) => {
   let inventoryItem = await InventoryItem.findOne({
@@ -99,7 +68,6 @@ const getOrCreateInventoryItem = async (product, variant, size) => {
   });
 
   if (!inventoryItem) {
-    // Lấy thông tin để generate SKU
     const [productDoc, variantDoc, sizeDoc] = await Promise.all([
       Product.findById(product).select("name"),
       Variant.findById(variant)
@@ -112,7 +80,6 @@ const getOrCreateInventoryItem = async (product, variant, size) => {
       throw new ApiError(404, "Không tìm thấy thông tin product/variant/size");
     }
 
-    // Generate SKU
     const sku = generateSKU({
       productName: productDoc.name,
       colorName: variantDoc.color?.name || "Unknown",
@@ -125,13 +92,12 @@ const getOrCreateInventoryItem = async (product, variant, size) => {
       product,
       variant,
       size,
-      sku, // Thêm SKU
+      sku,
       quantity: 0,
       costPrice: 0,
       averageCostPrice: 0,
     });
 
-    // Đồng bộ SKU sang Variant.sizes[]
     await syncSKUToVariant(variant, size, sku);
   }
 
@@ -139,40 +105,40 @@ const getOrCreateInventoryItem = async (product, variant, size) => {
 };
 
 /**
- * Đồng bộ SKU từ InventoryItem sang Variant.sizes[]
+ * Đồng bộ SKU lên Variant.sizes[].sku
+ * @param {ObjectId} variantId
+ * @param {ObjectId} sizeId
+ * @param {String} sku
  */
 const syncSKUToVariant = async (variantId, sizeId, sku) => {
   try {
     const variant = await Variant.findById(variantId);
-    if (!variant) {
-      console.error(`Variant not found: ${variantId}`);
-      return;
-    }
+    if (!variant) return;
 
-    // Tìm size trong variant.sizes
     const sizeIndex = variant.sizes.findIndex(
       (s) => s.size.toString() === sizeId.toString()
     );
 
-    if (sizeIndex === -1) {
-      console.error(`Size not found in variant: ${sizeId}`);
-      return;
-    }
+    if (sizeIndex === -1) return;
 
-    // Cập nhật SKU
     variant.sizes[sizeIndex].sku = sku;
     await variant.save();
-
-    console.log(
-      `Synced SKU: Variant ${variantId}, Size ${sizeId}, SKU: ${sku}`
-    );
   } catch (error) {
-    console.error("Error syncing SKU to variant:", error);
+    console.error("Error syncing SKU:", error.message);
   }
 };
 
 /**
- * Nhập kho
+ * NHẬP KHO (Stock In)
+ * - Tăng số lượng tồn kho
+ * - Tính weighted average cost
+ * - Tính giá bán (basePrice, finalPrice, profit, margin, markup)
+ * - Tạo InventoryTransaction (type: IN)
+ * - Cập nhật Product.totalQuantity và stockStatus
+ *
+ * @param {Object} data - { product, variant, size, quantity, costPrice, targetProfitPercent, percentDiscount, reason, notes }
+ * @param {ObjectId} performedBy - User ID thực hiện
+ * @returns {Object} { inventoryItem, transaction, priceCalculation }
  */
 const stockIn = async (data, performedBy) => {
   const {
@@ -191,26 +157,22 @@ const stockIn = async (data, performedBy) => {
     throw new ApiError(400, "Số lượng nhập phải lớn hơn 0");
   }
 
-  // Lấy hoặc tạo inventory item
   const inventoryItem = await getOrCreateInventoryItem(product, variant, size);
 
   const quantityBefore = inventoryItem.quantity;
   const quantityAfter = quantityBefore + quantity;
 
-  // Cập nhật giá nhập trung bình
   const totalCost = costPrice * quantity;
   const previousTotalCost = inventoryItem.averageCostPrice * quantityBefore;
   const newAverageCostPrice =
     quantityAfter > 0 ? (previousTotalCost + totalCost) / quantityAfter : 0;
 
-  // Tính giá bán
   const priceCalculation = calculatePrice(
     costPrice,
     targetProfitPercent,
     percentDiscount
   );
 
-  // Cập nhật inventory item với giá bán (Fix CRITICAL Issue #1)
   inventoryItem.quantity = quantityAfter;
   inventoryItem.costPrice = costPrice;
   inventoryItem.averageCostPrice = newAverageCostPrice;
@@ -220,7 +182,6 @@ const stockIn = async (data, performedBy) => {
   inventoryItem.lastPriceUpdate = new Date();
   await inventoryItem.save();
 
-  // Tạo transaction
   const transaction = await InventoryTransaction.create({
     type: "IN",
     inventoryItem: inventoryItem._id,
@@ -237,7 +198,6 @@ const stockIn = async (data, performedBy) => {
     notes,
   });
 
-  // Cập nhật Product stock status
   await updateProductStockFromInventory(product);
 
   return {
@@ -248,7 +208,19 @@ const stockIn = async (data, performedBy) => {
 };
 
 /**
- * Xuất kho
+ * XUẤT KHO (Stock Out)
+ * - Kiểm tra số lượng tồn kho đủ không
+ * - Trừ số lượng
+ * - Tạo InventoryTransaction (type: OUT)
+ * - Cập nhật Product.totalQuantity và stockStatus
+ *
+ * Use cases:
+ * - Auto: Gán shipper cho order (reason: "sale")
+ * - Manual: Xuất hàng hư hỏng, mất mát (reason: "damage")
+ *
+ * @param {Object} data - { product, variant, size, quantity, reason, reference, notes }
+ * @param {ObjectId} performedBy - User ID thực hiện
+ * @returns {Object} { inventoryItem, transaction }
  */
 const stockOut = async (data, performedBy) => {
   const {
@@ -265,7 +237,6 @@ const stockOut = async (data, performedBy) => {
     throw new ApiError(400, "Số lượng xuất phải lớn hơn 0");
   }
 
-  // Lấy inventory item
   const inventoryItem = await InventoryItem.findOne({
     product,
     variant,
@@ -286,14 +257,11 @@ const stockOut = async (data, performedBy) => {
   const quantityBefore = inventoryItem.quantity;
   const quantityAfter = quantityBefore - quantity;
 
-  // Cập nhật inventory item
   inventoryItem.quantity = quantityAfter;
   await inventoryItem.save();
 
-  // Đồng bộ sang Variant.sizes[].quantity
   await syncInventoryToVariant(inventoryItem);
 
-  // Tạo transaction
   const transaction = await InventoryTransaction.create({
     type: "OUT",
     inventoryItem: inventoryItem._id,
@@ -308,7 +276,6 @@ const stockOut = async (data, performedBy) => {
     notes,
   });
 
-  // Cập nhật Product stock status
   await updateProductStockFromInventory(product);
 
   return {
@@ -318,7 +285,19 @@ const stockOut = async (data, performedBy) => {
 };
 
 /**
- * Điều chỉnh kho (thủ công)
+ * ĐIỀU CHỈNH KHO (Adjust Stock)
+ * - Đặt số lượng mới trực tiếp (không cộng/trừ)
+ * - Tạo InventoryTransaction (type: ADJUST)
+ * - quantityChange có thể dương (tăng) hoặc âm (giảm)
+ *
+ * Use cases:
+ * - Kiểm kê định kỳ
+ * - Sửa sai số liệu
+ * - Hàng hư hỏng/mất mát
+ *
+ * @param {Object} data - { product, variant, size, newQuantity, reason, notes }
+ * @param {ObjectId} performedBy - User ID thực hiện
+ * @returns {Object} { inventoryItem, transaction }
  */
 const adjustStock = async (data, performedBy) => {
   const {
@@ -338,7 +317,6 @@ const adjustStock = async (data, performedBy) => {
   inventoryItem.quantity = newQuantity;
   await inventoryItem.save();
 
-  // Đồng bộ sang Variant.sizes[].quantity
   await syncInventoryToVariant(inventoryItem);
 
   const transaction = await InventoryTransaction.create({
@@ -354,7 +332,6 @@ const adjustStock = async (data, performedBy) => {
     notes,
   });
 
-  // Cập nhật Product stock status
   await updateProductStockFromInventory(product);
 
   return {
@@ -364,7 +341,10 @@ const adjustStock = async (data, performedBy) => {
 };
 
 /**
- * Lấy danh sách tồn kho
+ * Lấy danh sách tồn kho với filter và phân trang
+ * @param {Object} filter - (deprecated, không dùng)
+ * @param {Object} options - { page, limit, sortBy, sortOrder, product, lowStock, outOfStock }
+ * @returns {Object} { items, pagination: { total, page, limit, totalPages } }
  */
 const getInventoryList = async (filter = {}, options = {}) => {
   const {
@@ -415,7 +395,10 @@ const getInventoryList = async (filter = {}, options = {}) => {
 };
 
 /**
- * Lấy thông tin chi tiết một mục tồn kho
+ * Lấy thông tin chi tiết một InventoryItem
+ * @param {ObjectId} id - InventoryItem ID
+ * @returns {Object} InventoryItem (populated với product, variant, size)
+ * @throws {ApiError} 404 nếu không tìm thấy
  */
 const getInventoryById = async (id) => {
   const inventory = await InventoryItem.findById(id).populate(
@@ -430,7 +413,14 @@ const getInventoryById = async (id) => {
 };
 
 /**
- * Cập nhật ngưỡng cảnh báo tồn kho thấp
+ * CẬP NHẬT NGƯỠNG CẢNH BÁO HẾT HÀNG
+ * - Sửa lowStockThreshold cho một InventoryItem
+ * - Mặc định: 10
+ *
+ * @param {ObjectId} id - InventoryItem ID
+ * @param {Number} lowStockThreshold - Ngưỡng cảnh báo mới
+ * @returns {Object} InventoryItem đã cập nhật
+ * @throws {ApiError} 404 nếu không tìm thấy
  */
 const updateLowStockThreshold = async (id, lowStockThreshold) => {
   const inventory = await InventoryItem.findById(id);
@@ -446,15 +436,27 @@ const updateLowStockThreshold = async (id, lowStockThreshold) => {
 };
 
 /**
- * Lấy lịch sử giao dịch
+ * LỊCH SỬ GIAO DỊCH KHO HÀNG
+ * - Lấy danh sách InventoryTransaction
+ * - Filter theo: type (IN/OUT/ADJUST), productId, variantId, sizeId, inventoryItem, startDate, endDate
+ *
+ * Logic filter productId/variantId/sizeId:
+ * 1. Tìm các InventoryItem phù hợp
+ * 2. Lấy transactions có inventoryItem.$in
+ *
+ * @param {Object} options - { page, limit, sortBy, sortOrder, type, productId, variantId, sizeId, inventoryItem, startDate, endDate }
+ * @returns {Object} { transactions, pagination: { total, page, limit, totalPages } }
  */
-const getTransactionHistory = async (filter = {}, options = {}) => {
+const getTransactionHistory = async (options = {}) => {
   const {
     page = 1,
     limit = 50,
     sortBy = "createdAt",
     sortOrder = "desc",
     type,
+    productId,
+    variantId,
+    sizeId,
     inventoryItem,
     startDate,
     endDate,
@@ -468,6 +470,30 @@ const getTransactionHistory = async (filter = {}, options = {}) => {
 
   if (inventoryItem) {
     query.inventoryItem = inventoryItem;
+  } else if (productId || variantId || sizeId) {
+    const inventoryQuery = {};
+    if (productId) inventoryQuery.product = productId;
+    if (variantId) inventoryQuery.variant = variantId;
+    if (sizeId) inventoryQuery.size = sizeId;
+
+    const inventoryItems = await InventoryItem.find(inventoryQuery).select(
+      "_id"
+    );
+    const inventoryItemIds = inventoryItems.map((item) => item._id);
+
+    if (inventoryItemIds.length > 0) {
+      query.inventoryItem = { $in: inventoryItemIds };
+    } else {
+      return {
+        transactions: [],
+        pagination: {
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        },
+      };
+    }
   }
 
   if (startDate || endDate) {
@@ -504,7 +530,13 @@ const getTransactionHistory = async (filter = {}, options = {}) => {
 };
 
 /**
- * Thống kê kho hàng
+ * THỐNG KÊ TỒN KHO - DASHBOARD ADMIN
+ * - Tổng số InventoryItem
+ * - Số lượng sắp hết hàng (quantity ≤ lowStockThreshold)
+ * - Số lượng hết hàng (quantity = 0)
+ * - Tổng giá trị kho (quantity * averageCostPrice)
+ *
+ * @returns {Object} { totalItems, lowStockItems, outOfStockItems, totalValue }
  */
 const getInventoryStats = async () => {
   const [totalItems, lowStockItems, outOfStockItems, totalValue] =
@@ -535,10 +567,13 @@ const getInventoryStats = async () => {
 };
 
 /**
- * MỚI: Lấy pricing cho một variant + size cụ thể
- * @param {String} variantId - ID variant
- * @param {String} sizeId - ID size
- * @returns {Object} - Pricing info hoặc null
+ * LẤY PRICING CHO MỘT SIZE CỦA VARIANT
+ * - Tìm InventoryItem theo variantId + sizeId
+ * - Trả về: quantity, cost, pricing từ transaction mới nhất (type: IN)
+ *
+ * @param {ObjectId} variantId - Variant ID
+ * @param {ObjectId} sizeId - Size ID
+ * @returns {Object|null} { quantity, costPrice, averageCostPrice, price, pricing }
  */
 const getVariantSizePricing = async (variantId, sizeId) => {
   const inventoryItem = await InventoryItem.findOne({
@@ -550,7 +585,6 @@ const getVariantSizePricing = async (variantId, sizeId) => {
     return null;
   }
 
-  // Lấy transaction gần nhất để có pricing info
   const latestTransaction = await InventoryTransaction.findOne({
     inventoryItem: inventoryItem._id,
     type: "IN",
@@ -581,14 +615,18 @@ const getVariantSizePricing = async (variantId, sizeId) => {
 };
 
 /**
- * MỚI: Lấy price range cho một product
- * @param {String} productId - ID product
- * @returns {Object} - Min/max pricing info
+ * LẤY PRICING CHO TOÀN BỘ PRODUCT
+ * - Tìm tất cả InventoryItem có quantity > 0 thuộc product
+ * - Lấy giá từ transaction mới nhất (type: IN) của mỗi item
+ * - Trả về: min, max, hasStock, itemsCount
+ *
+ * @param {ObjectId} productId - Product ID
+ * @returns {Object} { min, max, hasStock, itemsCount }
  */
 const getProductPricing = async (productId) => {
   const inventoryItems = await InventoryItem.find({
     product: productId,
-    quantity: { $gt: 0 }, // Chỉ tính items còn hàng
+    quantity: { $gt: 0 },
   });
 
   if (inventoryItems.length === 0) {
@@ -599,7 +637,6 @@ const getProductPricing = async (productId) => {
     };
   }
 
-  // Lấy pricing từ transactions
   const pricePromises = inventoryItems.map(async (item) => {
     const latestTransaction = await InventoryTransaction.findOne({
       inventoryItem: item._id,
@@ -629,8 +666,11 @@ const getProductPricing = async (productId) => {
 };
 
 /**
- * MỚI: Cập nhật Product stock info từ InventoryItems
- * Gọi sau mỗi lần stock in/out
+ * CẬP NHẬT Product.totalQuantity VÀ Product.stockStatus
+ * - Gọi middleware updateProductStockInfo()
+ * - Tự động chạy sau mỗi stockIn/stockOut/adjustStock
+ *
+ * @param {ObjectId} productId - Product ID
  */
 const updateProductStockFromInventory = async (productId) => {
   const Product = require("../models").Product;
@@ -640,14 +680,21 @@ const updateProductStockFromInventory = async (productId) => {
 };
 
 /**
- * MỚI: Tính toán động totalQuantity và stockStatus cho Product từ InventoryItem
- * @param {String} productId - ID của product
- * @returns {Object} - { totalQuantity, stockStatus }
+ * TÍNH TOÁN THÔNG TIN TỒN KHO CỦA PRODUCT
+ * - Aggregate tổng quantity từ tất cả InventoryItem của product
+ * - Xác định stockStatus: out_of_stock / low_stock / in_stock
+ *
+ * Thresholds:
+ * - out_of_stock: totalQuantity = 0
+ * - low_stock: totalQuantity > 0 && totalQuantity <= 10
+ * - in_stock: totalQuantity > 10
+ *
+ * @param {ObjectId} productId - Product ID
+ * @returns {Object} { totalQuantity, stockStatus }
  */
 const getProductStockInfo = async (productId) => {
   const mongoose = require("mongoose");
 
-  // Aggregate từ InventoryItem để tính tổng
   const result = await InventoryItem.aggregate([
     {
       $match: {
@@ -664,10 +711,8 @@ const getProductStockInfo = async (productId) => {
 
   const totalQuantity = result.length > 0 ? result[0].totalQuantity : 0;
 
-  // Xác định stock status
   let stockStatus = "out_of_stock";
   if (totalQuantity > 0) {
-    // Kiểm tra xem có item nào low stock không
     const hasLowStock = await InventoryItem.exists({
       product: productId,
       $expr: { $lte: ["$quantity", "$lowStockThreshold"] },
@@ -681,9 +726,15 @@ const getProductStockInfo = async (productId) => {
 };
 
 /**
- * Lấy thông tin giá bán và tồn kho của một variant
- * @param {String} variantId - ID của variant
- * @returns {Object} - { pricing, quantities, hasInventory }
+ * LẤY PRICING VÀ QUANTITIES CHO TOÀN BỘ VARIANT
+ * - Tìm tất cả InventoryItem thuộc variant
+ * - Pricing: Lấy từ item đầu tiên (sellingPrice, discountPercent, finalPrice)
+ * - Quantities: Array { sizeId, sizeValue, quantity, isAvailable, isLowStock, isOutOfStock }
+ *
+ * Use case: ProductDetail page - hiển thị giá và size picker
+ *
+ * @param {ObjectId} variantId - Variant ID
+ * @returns {Object} { pricing, quantities, hasInventory }
  */
 const getVariantPricing = async (variantId) => {
   const inventoryItems = await InventoryItem.find({
@@ -705,7 +756,6 @@ const getVariantPricing = async (variantId) => {
     };
   }
 
-  // Lấy giá từ item đầu tiên (giả sử tất cả sizes cùng giá)
   const firstItem = inventoryItems[0];
   const pricing = {
     sellingPrice: firstItem.sellingPrice || 0,
@@ -716,7 +766,6 @@ const getVariantPricing = async (variantId) => {
     percentDiscount: firstItem.discountPercent || 0,
   };
 
-  // Tạo danh sách số lượng theo size
   const quantities = inventoryItems.map((item) => ({
     sizeId: item.size._id,
     sizeValue: item.size.value || "",
@@ -747,10 +796,9 @@ module.exports = {
   getInventoryStats,
   syncInventoryToVariant,
   getOrCreateInventoryItem,
-  //  NEW: Pricing helpers
   getVariantSizePricing,
-  getVariantPricing, // NEW: Get pricing and quantities for a variant
+  getVariantPricing,
   getProductPricing,
   updateProductStockFromInventory,
-  getProductStockInfo, // NEW: Tính toán stock info động
+  getProductStockInfo,
 };

@@ -1,8 +1,10 @@
 const inventoryService = require("../../services/inventory.service");
 
 /**
- * Nhập hàng vào kho
+ * Nhập hàng vào kho (manual)
+ * Tính weighted average cost, generate SKU, update pricing
  * @access Staff/Admin
+ * @route POST /api/v1/admin/inventory/stock-in
  */
 const stockIn = async (req, res, next) => {
   try {
@@ -30,8 +32,10 @@ const stockIn = async (req, res, next) => {
 };
 
 /**
- * Xuất hàng khỏi kho
+ * Xuất hàng khỏi kho (manual)
+ * Kiểm tra tồn kho, trừ số lượng
  * @access Staff/Admin
+ * @route POST /api/v1/admin/inventory/stock-out
  */
 const stockOut = async (req, res, next) => {
   try {
@@ -58,8 +62,10 @@ const stockOut = async (req, res, next) => {
 };
 
 /**
- * Điều chỉnh số lượng tồn kho
+ * Điều chỉnh số lượng tồn kho (kiểm kê)
+ * Đặt số lượng mới trực tiếp
  * @access Staff/Admin
+ * @route POST /api/v1/admin/inventory/adjust
  */
 const adjustStock = async (req, res, next) => {
   try {
@@ -85,8 +91,9 @@ const adjustStock = async (req, res, next) => {
 };
 
 /**
- * Lấy danh sách tồn kho
+ * Lấy danh sách tồn kho với filter
  * @access Staff/Admin
+ * @route GET /api/v1/admin/inventory?page=1&limit=20&productId=...&lowStock=true
  */
 const getInventoryList = async (req, res, next) => {
   try {
@@ -113,8 +120,9 @@ const getInventoryList = async (req, res, next) => {
 };
 
 /**
- * Lấy chi tiết một mục tồn kho
+ * Lấy chi tiết một InventoryItem
  * @access Staff/Admin
+ * @route GET /api/v1/admin/inventory/:id
  */
 const getInventoryDetail = async (req, res, next) => {
   try {
@@ -132,8 +140,10 @@ const getInventoryDetail = async (req, res, next) => {
 };
 
 /**
- * Lấy lịch sử giao dịch kho
+ * Lấy lịch sử giao dịch kho với filter chi tiết
+ * Filter: type (IN/OUT/ADJUST), productId, variantId, sizeId, startDate, endDate
  * @access Staff/Admin
+ * @route GET /api/v1/admin/inventory/transactions?type=IN&productId=...
  */
 const getTransactionHistory = async (req, res, next) => {
   try {
@@ -169,8 +179,10 @@ const getTransactionHistory = async (req, res, next) => {
 };
 
 /**
- * Lấy thống kê kho hàng
+ * Lấy thống kê kho hàng cho dashboard
+ * Returns: totalItems, lowStockItems, outOfStockItems, totalValue
  * @access Staff/Admin
+ * @route GET /api/v1/admin/inventory/stats
  */
 const getInventoryStats = async (req, res, next) => {
   try {
@@ -186,8 +198,10 @@ const getInventoryStats = async (req, res, next) => {
 };
 
 /**
- * Tính toán giá bán từ giá vốn
+ * Helper API - Tính giá bán từ giá vốn (không lưu DB)
+ * Returns: calculatedPrice, calculatedPriceFinal, profitPerItem, margin, markup
  * @access Staff/Admin
+ * @route POST /api/v1/admin/inventory/calculate-price
  */
 const calculatePrice = async (req, res, next) => {
   try {
@@ -211,6 +225,7 @@ const calculatePrice = async (req, res, next) => {
 /**
  * Cập nhật ngưỡng cảnh báo tồn kho thấp
  * @access Staff/Admin
+ * @route PATCH /api/v1/admin/inventory/:id/low-stock-threshold
  */
 const updateLowStockThreshold = async (req, res, next) => {
   try {

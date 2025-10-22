@@ -23,9 +23,11 @@ const updateInventory = async (
     // Lấy productId từ variant (vì orderItem không có trực tiếp product field)
     const Variant = mongoose.model("Variant");
     const variant = await Variant.findById(orderItem.variant).select("product");
-    
+
     if (!variant || !variant.product) {
-      console.error(`[order/middlewares] Không tìm thấy product từ variant ${orderItem.variant}`);
+      console.error(
+        `[order/middlewares] Không tìm thấy product từ variant ${orderItem.variant}`
+      );
       return;
     }
 
@@ -58,7 +60,6 @@ const updateInventory = async (
 
       console.log(
         `[order/middlewares] Đã trả ${orderItem.quantity} sản phẩm về kho (reason: ${reason})`
-      );
       );
     }
     // Action decrement không cần xử lý vì đã xuất kho tự động khi gán shipper
@@ -260,9 +261,7 @@ const applyMiddlewares = (schema) => {
             await mongoose
               .model("Order")
               .updateOne({ _id: this._id }, { inventoryDeducted: false });
-            console.log(
-              `Đã hoàn trả tồn kho cho đơn hàng: ${this.code}`
-            );
+            console.log(`Đã hoàn trả tồn kho cho đơn hàng: ${this.code}`);
           }
         } else if (currentStatus === "returned" && this.inventoryDeducted) {
           // Kiểm tra xem có cần chờ xác nhận không
@@ -289,9 +288,7 @@ const applyMiddlewares = (schema) => {
             await mongoose
               .model("Order")
               .updateOne({ _id: this._id }, { inventoryDeducted: false });
-            console.log(
-              `Đã hoàn trả tồn kho cho đơn hàng trả: ${this.code}`
-            );
+            console.log(`Đã hoàn trả tồn kho cho đơn hàng trả: ${this.code}`);
           }
         } else if (currentStatus === "returning_to_warehouse") {
           // Hàng đang trả về kho - KHÔNG làm gì, chờ staff xác nhận
@@ -367,9 +364,7 @@ const applyMiddlewares = (schema) => {
                 { inventoryDeducted: false },
                 { new: true }
               );
-            console.log(
-              `Đã hoàn trả tồn kho cho đơn hàng: ${doc.code}`
-            );
+            console.log(`Đã hoàn trả tồn kho cho đơn hàng: ${doc.code}`);
           }
         } else if (doc.status === "returned" && doc.inventoryDeducted) {
           // CHỈ hoàn trả kho KHI returnConfirmed = true
@@ -397,9 +392,7 @@ const applyMiddlewares = (schema) => {
                 { inventoryDeducted: false },
                 { new: true }
               );
-            console.log(
-              `Đã hoàn trả tồn kho cho đơn hàng: ${doc.code}`
-            );
+            console.log(`Đã hoàn trả tồn kho cho đơn hàng: ${doc.code}`);
           }
         } else if (doc.status === "returning_to_warehouse") {
           // Hàng đang trả về kho - KHÔNG làm gì
