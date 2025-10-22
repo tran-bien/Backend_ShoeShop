@@ -69,23 +69,6 @@ exports.validateUpdateDeliveryStatus = [
 ];
 
 /**
- * Validator cho cập nhật vị trí
- */
-exports.validateUpdateLocation = [
-  body("latitude")
-    .notEmpty()
-    .withMessage("Vĩ độ không được để trống")
-    .isFloat({ min: -90, max: 90 })
-    .withMessage("Vĩ độ phải từ -90 đến 90"),
-
-  body("longitude")
-    .notEmpty()
-    .withMessage("Kinh độ không được để trống")
-    .isFloat({ min: -180, max: 180 })
-    .withMessage("Kinh độ phải từ -180 đến 180"),
-];
-
-/**
  * Validator cho cập nhật trạng thái sẵn sàng
  */
 exports.validateUpdateAvailability = [
@@ -114,6 +97,16 @@ exports.validateGetShippers = [
     .optional()
     .isInt({ min: 1, max: 100 })
     .withMessage("Số lượng mỗi trang phải từ 1-100"),
+
+  query("sortBy")
+    .optional()
+    .isIn(["createdAt", "name", "email"])
+    .withMessage("sortBy phải là: createdAt, name, hoặc email"),
+
+  query("sortOrder")
+    .optional()
+    .isIn(["asc", "desc"])
+    .withMessage("sortOrder phải là: asc hoặc desc"),
 ];
 
 /**
@@ -127,6 +120,7 @@ exports.validateGetShipperOrders = [
       "out_for_delivery",
       "delivery_failed",
       "delivered",
+      "returning_to_warehouse",
     ])
     .withMessage("Trạng thái không hợp lệ"),
 
@@ -139,6 +133,16 @@ exports.validateGetShipperOrders = [
     .optional()
     .isInt({ min: 1, max: 100 })
     .withMessage("Số lượng mỗi trang phải từ 1-100"),
+
+  query("sortBy")
+    .optional()
+    .isIn(["createdAt", "assignmentTime", "deliveredAt"])
+    .withMessage("sortBy phải là: createdAt, assignmentTime, hoặc deliveredAt"),
+
+  query("sortOrder")
+    .optional()
+    .isIn(["asc", "desc"])
+    .withMessage("sortOrder phải là: asc hoặc desc"),
 ];
 
 /**

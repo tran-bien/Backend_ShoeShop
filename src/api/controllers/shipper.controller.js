@@ -8,15 +8,11 @@ const shipperService = require("../../services/shipper.service");
  * @flow    shipper.route.js → shipper.controller.js → shipper.service.js → getShippers()
  */
 const getShippers = asyncHandler(async (req, res) => {
-  const { available } = req.query;
-
-  const shippers = await shipperService.getShippers({
-    available: available === "true",
-  });
+  const result = await shipperService.getShippers(req.query);
 
   res.status(200).json({
     success: true,
-    data: shippers,
+    data: result,
   });
 });
 
@@ -30,8 +26,13 @@ const getShippers = asyncHandler(async (req, res) => {
 const assignOrderToShipper = asyncHandler(async (req, res) => {
   const { orderId } = req.params;
   const { shipperId } = req.body;
+  const assignedBy = req.user._id;
 
-  const result = await shipperService.assignOrderToShipper(orderId, shipperId);
+  const result = await shipperService.assignOrderToShipper(
+    orderId,
+    shipperId,
+    assignedBy
+  );
 
   res.status(200).json({
     success: true,
@@ -51,9 +52,7 @@ const updateDeliveryStatus = asyncHandler(async (req, res) => {
   const { status, note, images, location } = req.body;
   const shipperId = req.user._id;
 
-  const result = await shipperService.updateDeliveryStatus({
-    orderId,
-    shipperId,
+  const result = await shipperService.updateDeliveryStatus(orderId, shipperId, {
     status,
     note,
     images,
@@ -75,34 +74,11 @@ const updateDeliveryStatus = asyncHandler(async (req, res) => {
  */
 const getShipperOrders = asyncHandler(async (req, res) => {
   const shipperId = req.user._id;
-  const { status } = req.query;
 
-  const orders = await shipperService.getShipperOrders(shipperId, status);
-
-  res.status(200).json({
-    success: true,
-    data: orders,
-  });
-});
-
-/**
- * Cập nhật vị trí của shipper
- * @access  Shipper (requireShipper middleware)
- * @route   PATCH /api/shipper/location
- * @flow    shipper.route.js → shipper.controller.js → shipper.service.js → updateShipperLocation()
- */
-const updateShipperLocation = asyncHandler(async (req, res) => {
-  const shipperId = req.user._id;
-  const { latitude, longitude } = req.body;
-
-  const result = await shipperService.updateShipperLocation(shipperId, {
-    latitude,
-    longitude,
-  });
+  const result = await shipperService.getShipperOrders(shipperId, req.query);
 
   res.status(200).json({
     success: true,
-    message: "Cập nhật vị trí thành công",
     data: result,
   });
 });
@@ -168,7 +144,6 @@ module.exports = {
   assignOrderToShipper,
   updateDeliveryStatus,
   getShipperOrders,
-  updateShipperLocation,
   getShipperStats,
   updateAvailability,
   getShipperDetail,

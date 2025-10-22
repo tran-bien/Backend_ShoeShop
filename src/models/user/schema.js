@@ -109,11 +109,8 @@ const UserSchema = new mongoose.Schema(
         type: Number,
         default: 5,
       },
-      currentLocation: {
-        lat: Number,
-        lng: Number,
-        updatedAt: Date,
-      },
+      // Loại bỏ currentLocation - không cần theo dõi vị trí realtime
+      // Shipper chỉ cần upload ảnh khi giao hàng
       deliveryStats: {
         total: {
           type: Number,

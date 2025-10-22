@@ -34,6 +34,26 @@ router.post(
 );
 
 /**
+ * ADMIN ROUTES - Đặt các route cụ thể lên trước để tránh conflict với /:id
+ */
+
+/**
+ * @route   GET /api/v1/returns/stats/summary
+ * @desc    Lấy thống kê đổi trả
+ * @access  Staff/Admin
+ */
+router.get(
+  "/stats/summary",
+  protect,
+  requireStaffOrAdmin,
+  returnController.getReturnStats
+);
+
+/**
+ * CUSTOMER ROUTES - Routes chung cho cả User và Admin
+ */
+
+/**
  * @route   GET /api/v1/returns
  * @desc    Lấy danh sách yêu cầu đổi trả (của chính mình hoặc tất cả nếu là admin)
  * @access  Authenticated
@@ -73,7 +93,7 @@ router.delete(
 );
 
 /**
- * ADMIN ROUTES
+ * ADMIN ROUTES - Routes chỉ dành cho Admin/Staff
  */
 
 /**
@@ -126,18 +146,6 @@ router.post(
   requireStaffOrAdmin,
   validate(validateProcessReturn),
   returnController.processExchange
-);
-
-/**
- * @route   GET /api/v1/returns/stats/summary
- * @desc    Lấy thống kê đổi trả
- * @access  Staff/Admin
- */
-router.get(
-  "/stats/summary",
-  protect,
-  requireStaffOrAdmin,
-  returnController.getReturnStats
 );
 
 module.exports = router;

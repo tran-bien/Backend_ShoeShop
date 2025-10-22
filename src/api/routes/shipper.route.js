@@ -10,7 +10,6 @@ const validate = require("@utils/validatehelper");
 const {
   validateAssignOrder,
   validateUpdateDeliveryStatus,
-  validateUpdateLocation,
   validateUpdateAvailability,
   validateGetShippers,
   validateGetShipperOrders,
@@ -101,19 +100,6 @@ router.patch(
   requireShipper,
   validate(validateUpdateDeliveryStatus),
   shipperController.updateDeliveryStatus
-);
-
-/**
- * @route   PATCH /api/v1/shipper/location
- * @desc    Cập nhật vị trí của shipper
- * @access  Shipper
- */
-router.patch(
-  "/location",
-  protect,
-  requireShipper,
-  validate(validateUpdateLocation),
-  shipperController.updateShipperLocation
 );
 
 /**

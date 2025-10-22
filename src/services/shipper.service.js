@@ -4,40 +4,43 @@ const ApiError = require("../utils/ApiError");
 /**
  * Lấy danh sách shippers
  */
-const getShippers = async (filter = {}, options = {}) => {
+const getShippers = async (query = {}) => {
   const {
+    available,
     page = 1,
     limit = 20,
-    isAvailable,
     sortBy = "createdAt",
     sortOrder = "desc",
-  } = options;
+  } = query;
 
-  const query = { role: "shipper" };
+  const filter = { role: "shipper" };
 
-  if (isAvailable !== undefined) {
-    query["shipper.isAvailable"] = isAvailable;
+  // Filter theo availability
+  if (available === "true") {
+    filter["shipper.isAvailable"] = true;
+  } else if (available === "false") {
+    filter["shipper.isAvailable"] = false;
   }
 
-  const skip = (page - 1) * limit;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
   const sort = { [sortBy]: sortOrder === "desc" ? -1 : 1 };
 
   const [shippers, total] = await Promise.all([
-    User.find(query)
-      .select("name email phone shipper avatar")
+    User.find(filter)
+      .select("name email phone shipper avatar createdAt")
       .sort(sort)
       .skip(skip)
-      .limit(limit),
-    User.countDocuments(query),
+      .limit(parseInt(limit)),
+    User.countDocuments(filter),
   ]);
 
   return {
     shippers,
     pagination: {
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit)),
     },
   };
 };
@@ -165,10 +168,21 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
     throw new ApiError(404, "Không tìm thấy đơn hàng hoặc không có quyền");
   }
 
+  // Validate status transitions
+  const validStatuses = ["out_for_delivery", "delivered", "delivery_failed"];
+  if (!validStatuses.includes(status)) {
+    throw new ApiError(400, "Trạng thái không hợp lệ");
+  }
+
   // Thêm vào lịch sử giao hàng
   order.deliveryAttempts.push({
     time: new Date(),
-    status,
+    status:
+      status === "delivered"
+        ? "success"
+        : status === "delivery_failed"
+        ? "failed"
+        : status,
     location,
     note,
     shipper: shipperId,
@@ -176,7 +190,7 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
   });
 
   // Cập nhật trạng thái đơn hàng
-  if (status === "success") {
+  if (status === "delivered") {
     order.status = "delivered";
     order.deliveredAt = new Date();
     order.payment.paymentStatus = "paid";
@@ -191,12 +205,12 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
     shipper.shipper.deliveryStats.total += 1;
     shipper.shipper.deliveryStats.successful += 1;
     await shipper.save();
-  } else if (status === "failed") {
+  } else if (status === "delivery_failed") {
     order.status = "delivery_failed";
 
     // Nếu thất bại 3 lần thì chuyển trạng thái về returning_to_warehouse
     const failedAttempts = order.deliveryAttempts.filter(
-      (a) => a.status === "failed"
+      (a) => a.status === "failed" || a.status === "delivery_failed"
     ).length;
 
     if (failedAttempts >= 3) {
@@ -225,13 +239,16 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
       shipper.shipper.deliveryStats.failed += 1;
       await shipper.save();
     }
+  } else if (status === "out_for_delivery") {
+    order.status = "out_for_delivery";
   }
 
+  // Thêm vào status history
   order.statusHistory.push({
     status: order.status,
     updatedAt: new Date(),
     updatedBy: shipperId,
-    note,
+    note: note || `Shipper cập nhật trạng thái: ${status}`,
   });
 
   await order.save();
@@ -242,65 +259,52 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
 /**
  * Lấy đơn hàng của shipper
  */
-const getShipperOrders = async (shipperId, filter = {}, options = {}) => {
+const getShipperOrders = async (shipperId, query = {}) => {
   const {
+    status,
     page = 1,
     limit = 20,
-    status,
     sortBy = "createdAt",
     sortOrder = "desc",
-  } = options;
+  } = query;
 
-  const query = { assignedShipper: shipperId };
+  const filter = { assignedShipper: shipperId };
 
+  // Filter theo status
   if (status) {
-    query.status = status;
+    filter.status = status;
   }
 
-  const skip = (page - 1) * limit;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
   const sort = { [sortBy]: sortOrder === "desc" ? -1 : 1 };
 
   const [orders, total] = await Promise.all([
-    Order.find(query)
+    Order.find(filter)
       .populate("user", "name phone email")
+      .populate({
+        path: "orderItems.variant",
+        select: "sku color images",
+        populate: {
+          path: "product",
+          select: "name slug",
+        },
+      })
+      .populate("orderItems.size", "value")
       .sort(sort)
       .skip(skip)
-      .limit(limit),
-    Order.countDocuments(query),
+      .limit(parseInt(limit)),
+    Order.countDocuments(filter),
   ]);
 
   return {
     orders,
     pagination: {
       total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit)),
     },
   };
-};
-
-/**
- * Shipper cập nhật vị trí
- */
-const updateShipperLocation = async (shipperId, location) => {
-  const { lat, lng } = location;
-
-  const shipper = await User.findOne({ _id: shipperId, role: "shipper" });
-
-  if (!shipper) {
-    throw new ApiError(404, "Không tìm thấy shipper");
-  }
-
-  shipper.shipper.currentLocation = {
-    lat,
-    lng,
-    updatedAt: new Date(),
-  };
-
-  await shipper.save();
-
-  return shipper;
 };
 
 /**
@@ -373,7 +377,6 @@ module.exports = {
   assignOrderToShipper,
   updateDeliveryStatus,
   getShipperOrders,
-  updateShipperLocation,
   getShipperStats,
   getShipperById,
 };
