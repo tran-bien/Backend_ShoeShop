@@ -57,28 +57,13 @@ const ProductSchema = new mongoose.Schema(
         ref: "Variant",
       },
     ],
-    totalQuantity: {
-      type: Number,
-      default: 0,
-    },
-    stockStatus: {
-      type: String,
-      enum: ["in_stock", "low_stock", "out_of_stock"],
-      default: "out_of_stock",
-    },
+    // XÓA totalQuantity và stockStatus - sẽ tính toán động từ InventoryItem
+    // totalQuantity và stockStatus được tính on-demand từ InventoryItem
+    // XÓA rating và numReviews - sẽ tính toán động từ Review
+    // rating và numReviews được tính on-demand từ Review model
     isActive: {
       type: Boolean,
       default: true,
-    },
-    rating: {
-      type: Number,
-      default: 0,
-      min: 0,
-      max: 5,
-    },
-    numReviews: {
-      type: Number,
-      default: 0,
     },
     deletedAt: {
       type: Date,

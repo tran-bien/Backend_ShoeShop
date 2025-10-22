@@ -191,10 +191,12 @@ const transformProductForPublic = (product) => {
         }))
       : [],
     images: Array.isArray(productObj.images) ? productObj.images : [],
+    // rating và numReviews sẽ được tính toán hoặc gán từ bên ngoài
     rating: productObj.rating || 0,
     numReviews: productObj.numReviews || 0,
     averageRating: productObj.rating || 0, // Alias for compatibility
     reviewCount: productObj.numReviews || 0, // Alias for compatibility
+    // stockStatus và totalQuantity sẽ được tính toán hoặc gán từ bên ngoài
     stockStatus: productObj.stockStatus || "out_of_stock",
     totalQuantity: productObj.totalQuantity || 0,
     isActive: productObj.isActive,
@@ -658,10 +660,9 @@ const productService = {
         ? new mongoose.Types.ObjectId(String(brand))
         : null;
     }
-    // Lọc theo trạng thái tồn kho
-    if (stockStatus) {
-      filter.stockStatus = stockStatus;
-    }
+
+    // Không lọc theo stockStatus tại query level nữa vì field không còn
+    // Sẽ lọc sau khi tính toán
 
     // Lọc theo trạng thái active
     if (isActive !== undefined) {
@@ -697,20 +698,53 @@ const productService = {
     // Lấy kết quả từ database với variants được populate
     const results = await paginate(Product, filter, options);
 
-    // Xử lý kết quả để thêm thông tin tóm tắt về variants
-    results.data = results.data.map((product) => {
-      const productObj = product.toObject ? product.toObject() : { ...product };
+    // Lấy thông tin tồn kho cho từng sản phẩm
+    const inventoryService = require("@services/inventory.service");
 
-      // Thêm thông tin tóm tắt về variants
-      productObj.variantSummary = createVariantSummary(productObj.variants);
+    const productsWithStock = await Promise.all(
+      results.data.map(async (product) => {
+        const productObj = product.toObject
+          ? product.toObject()
+          : { ...product };
 
-      // Xóa chi tiết variants để giảm dung lượng dữ liệu
-      delete productObj.variants;
+        // Tính toán stock info động
+        const stockInfo = await inventoryService.getProductStockInfo(
+          product._id
+        );
+        productObj.totalQuantity = stockInfo.totalQuantity;
+        productObj.stockStatus = stockInfo.stockStatus;
 
-      return productObj;
-    });
+        // Tính toán rating info động
+        const reviewService = require("@services/review.service");
+        const ratingInfo = await reviewService.getProductRatingInfo(
+          product._id
+        );
+        productObj.rating = ratingInfo.rating;
+        productObj.numReviews = ratingInfo.numReviews;
 
-    return results;
+        // Thêm thông tin tóm tắt về variants
+        productObj.variantSummary = createVariantSummary(productObj.variants);
+
+        // Xóa chi tiết variants để giảm dung lượng dữ liệu
+        delete productObj.variants;
+
+        return productObj;
+      })
+    );
+
+    // Lọc theo stockStatus nếu có (sau khi tính toán)
+    let filteredData = productsWithStock;
+    if (stockStatus) {
+      filteredData = productsWithStock.filter(
+        (p) => p.stockStatus === stockStatus
+      );
+    }
+
+    return {
+      ...results,
+      data: filteredData,
+      count: filteredData.length,
+    };
   },
 
   /**
@@ -1537,17 +1571,37 @@ const productService = {
     ]);
 
     const totalCount = countResult.length > 0 ? countResult[0].total : 0;
-    const totalPages = Math.max(1, Math.ceil(totalCount / limitNum)); // Chuyển đổi kết quả - cần xử lý đặc biệt vì là kết quả từ aggregation
-    const transformedData = products.map((product) => {
-      // Bỏ trường trung gian
-      delete product.filteredVariantsCount;
-      delete product.filteredVariants;
-      delete product.minPrice;
-      delete product.maxPrice;
+    const totalPages = Math.max(1, Math.ceil(totalCount / limitNum));
 
-      // Sử dụng hàm chuyển đổi hiện có
-      return transformProductForPublicList(product);
-    });
+    // Chuyển đổi kết quả và tính stock info động
+    const inventoryService = require("@services/inventory.service");
+    const reviewService = require("@services/review.service");
+    const transformedData = await Promise.all(
+      products.map(async (product) => {
+        // Bỏ trường trung gian
+        delete product.filteredVariantsCount;
+        delete product.filteredVariants;
+        delete product.minPrice;
+        delete product.maxPrice;
+
+        // Tính stock info động từ InventoryItem
+        const stockInfo = await inventoryService.getProductStockInfo(
+          product._id
+        );
+        product.totalQuantity = stockInfo.totalQuantity;
+        product.stockStatus = stockInfo.stockStatus;
+
+        // Tính rating info động từ Review
+        const ratingInfo = await reviewService.getProductRatingInfo(
+          product._id
+        );
+        product.rating = ratingInfo.rating;
+        product.numReviews = ratingInfo.numReviews;
+
+        // Sử dụng hàm chuyển đổi hiện có
+        return transformProductForPublicList(product);
+      })
+    );
 
     return {
       success: true,
@@ -1750,6 +1804,20 @@ const productService = {
       stockStatus: publicProduct.stockStatus,
     };
 
+    // Tính toán stock info động từ InventoryItem
+    const stockInfo = await inventoryService.getProductStockInfo(product._id);
+    publicProduct.totalQuantity = stockInfo.totalQuantity;
+    publicProduct.stockStatus = stockInfo.stockStatus;
+    summary.stockStatus = stockInfo.stockStatus;
+
+    // Tính toán rating info động từ Review
+    const reviewService = require("@services/review.service");
+    const ratingInfo = await reviewService.getProductRatingInfo(product._id);
+    publicProduct.rating = ratingInfo.rating;
+    publicProduct.numReviews = ratingInfo.numReviews;
+    publicProduct.averageRating = ratingInfo.rating;
+    publicProduct.reviewCount = ratingInfo.numReviews;
+
     return {
       success: true,
       product: publicProduct,
@@ -1949,6 +2017,20 @@ const productService = {
       stockStatus: publicProduct.stockStatus,
     };
 
+    // Tính toán stock info động từ InventoryItem
+    const stockInfo = await inventoryService.getProductStockInfo(product._id);
+    publicProduct.totalQuantity = stockInfo.totalQuantity;
+    publicProduct.stockStatus = stockInfo.stockStatus;
+    summary.stockStatus = stockInfo.stockStatus;
+
+    // Tính toán rating info động từ Review
+    const reviewService = require("@services/review.service");
+    const ratingInfo = await reviewService.getProductRatingInfo(product._id);
+    publicProduct.rating = ratingInfo.rating;
+    publicProduct.numReviews = ratingInfo.numReviews;
+    publicProduct.averageRating = ratingInfo.rating;
+    publicProduct.reviewCount = ratingInfo.numReviews;
+
     return {
       success: true,
       product: publicProduct,
@@ -1994,9 +2076,38 @@ const productService = {
     // Giới hạn số lượng sản phẩm trả về theo limit
     const limitedProducts = filteredProducts.slice(0, Number(limit));
 
+    // Tính stock info và rating info cho từng sản phẩm
+    const inventoryService = require("@services/inventory.service");
+    const reviewService = require("@services/review.service");
+    const productsWithStockAndRating = await Promise.all(
+      limitedProducts.map(async (product) => {
+        const productObj = product.toObject
+          ? product.toObject()
+          : { ...product };
+
+        // Tính stock info
+        const stockInfo = await inventoryService.getProductStockInfo(
+          product._id
+        );
+        productObj.totalQuantity = stockInfo.totalQuantity;
+        productObj.stockStatus = stockInfo.stockStatus;
+
+        // Tính rating info
+        const ratingInfo = await reviewService.getProductRatingInfo(
+          product._id
+        );
+        productObj.rating = ratingInfo.rating;
+        productObj.numReviews = ratingInfo.numReviews;
+        productObj.averageRating = ratingInfo.rating;
+        productObj.reviewCount = ratingInfo.numReviews;
+
+        return transformProductForPublicList(productObj);
+      })
+    );
+
     const result = {
       success: true,
-      products: limitedProducts.map(transformProductForPublicList),
+      products: productsWithStockAndRating,
     };
 
     return result;
@@ -2036,9 +2147,38 @@ const productService = {
     // Giới hạn số lượng sản phẩm trả về theo limit
     const limitedProducts = filteredProducts.slice(0, Number(limit));
 
+    // Tính stock info và rating info cho từng sản phẩm
+    const inventoryService = require("@services/inventory.service");
+    const reviewService = require("@services/review.service");
+    const productsWithStockAndRating = await Promise.all(
+      limitedProducts.map(async (product) => {
+        const productObj = product.toObject
+          ? product.toObject()
+          : { ...product };
+
+        // Tính stock info
+        const stockInfo = await inventoryService.getProductStockInfo(
+          product._id
+        );
+        productObj.totalQuantity = stockInfo.totalQuantity;
+        productObj.stockStatus = stockInfo.stockStatus;
+
+        // Tính rating info
+        const ratingInfo = await reviewService.getProductRatingInfo(
+          product._id
+        );
+        productObj.rating = ratingInfo.rating;
+        productObj.numReviews = ratingInfo.numReviews;
+        productObj.averageRating = ratingInfo.rating;
+        productObj.reviewCount = ratingInfo.numReviews;
+
+        return transformProductForPublicList(productObj);
+      })
+    );
+
     const result = {
       success: true,
-      products: limitedProducts.map(transformProductForPublicList),
+      products: productsWithStockAndRating,
     };
 
     return result;

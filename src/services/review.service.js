@@ -20,17 +20,23 @@ const reviewService = {
     }
 
     // Tìm tất cả variants của sản phẩm này
-    const variants = await Variant.find({ product: productId }).select('_id');
-    const variantIds = variants.map(v => v._id);
+    const variants = await Variant.find({ product: productId }).select("_id");
+    const variantIds = variants.map((v) => v._id);
 
     // Tìm tất cả orderItems từ Order model có chứa các variant của sản phẩm
     const orderItemsInfo = await Order.aggregate([
       { $unwind: "$orderItems" },
-      { $match: { "orderItems.variant": { $in: variantIds.map(id => new mongoose.Types.ObjectId(id)) } } },
-      { $project: { orderItemId: "$orderItems._id" } }
+      {
+        $match: {
+          "orderItems.variant": {
+            $in: variantIds.map((id) => new mongoose.Types.ObjectId(id)),
+          },
+        },
+      },
+      { $project: { orderItemId: "$orderItems._id" } },
     ]);
 
-    const orderItemIds = orderItemsInfo.map(item => item.orderItemId);
+    const orderItemIds = orderItemsInfo.map((item) => item.orderItemId);
 
     // Xây dựng điều kiện lọc
     const filter = {
@@ -58,14 +64,14 @@ const reviewService = {
       sort: sortOptions,
       populate: [
         { path: "user", select: "name avatar" },
-        { 
-          path: "orderItem", 
+        {
+          path: "orderItem",
           populate: [
             { path: "product", select: "name" },
             { path: "variant", populate: { path: "color", select: "name" } },
-            { path: "size", select: "value" }
-          ]
-        }
+            { path: "size", select: "value" },
+          ],
+        },
       ],
     };
 
@@ -81,7 +87,7 @@ const reviewService = {
 
     const stats = await Review.aggregate([
       {
-        $match: statsFilter
+        $match: statsFilter,
       },
       {
         $group: {
@@ -90,10 +96,10 @@ const reviewService = {
           avgRating: { $avg: "$rating" },
           sumRating: { $sum: "$rating" },
           distribution: {
-            $push: "$rating"
-          }
-        }
-      }
+            $push: "$rating",
+          },
+        },
+      },
     ]);
 
     // Xây dựng đối tượng thống kê
@@ -105,8 +111,8 @@ const reviewService = {
         2: { count: 0, percentage: 0 },
         3: { count: 0, percentage: 0 },
         4: { count: 0, percentage: 0 },
-        5: { count: 0, percentage: 0 }
-      }
+        5: { count: 0, percentage: 0 },
+      },
     };
 
     // Nếu có dữ liệu thống kê
@@ -114,21 +120,24 @@ const reviewService = {
       // Làm tròn điểm đánh giá đến 1 số thập phân
       reviewStats.totalReviews = stats[0].totalReviews;
       reviewStats.avgRating = Math.round(stats[0].avgRating * 10) / 10;
-      
+
       // Tính phân phối đánh giá
       if (stats[0].distribution && stats[0].distribution.length > 0) {
-        stats[0].distribution.forEach(rating => {
+        stats[0].distribution.forEach((rating) => {
           if (rating >= 1 && rating <= 5) {
             reviewStats.ratingDistribution[rating].count += 1;
           }
         });
       }
-      
+
       // Tính phần trăm cho mỗi mức đánh giá
       if (reviewStats.totalReviews > 0) {
         for (let i = 1; i <= 5; i++) {
-          reviewStats.ratingDistribution[i].percentage = 
-            Math.round((reviewStats.ratingDistribution[i].count / reviewStats.totalReviews) * 100);
+          reviewStats.ratingDistribution[i].percentage = Math.round(
+            (reviewStats.ratingDistribution[i].count /
+              reviewStats.totalReviews) *
+              100
+          );
         }
       }
     }
@@ -141,14 +150,20 @@ const reviewService = {
       price: product.price,
       rating: product.rating || reviewStats.avgRating, // Đảm bảo luôn có giá trị rating
       numReviews: product.numReviews || reviewStats.totalReviews, // Đảm bảo luôn có số lượng đánh giá
-      image: product.images && product.images.length > 0 ? product.images[0].url : null
+      image:
+        product.images && product.images.length > 0
+          ? product.images[0].url
+          : null,
     };
 
     // Cập nhật rating và số lượng đánh giá cho sản phẩm nếu có thay đổi
-    if (product.rating !== reviewStats.avgRating || product.numReviews !== reviewStats.totalReviews) {
+    if (
+      product.rating !== reviewStats.avgRating ||
+      product.numReviews !== reviewStats.totalReviews
+    ) {
       await Product.findByIdAndUpdate(productId, {
         rating: reviewStats.avgRating,
-        numReviews: reviewStats.totalReviews
+        numReviews: reviewStats.totalReviews,
       });
     }
 
@@ -164,7 +179,7 @@ const reviewService = {
         hasPrev: result.hasPrevPage,
       },
       product: productInfo,
-      reviewStats: reviewStats
+      reviewStats: reviewStats,
     };
   },
 
@@ -180,14 +195,14 @@ const reviewService = {
       deletedAt: null,
     }).populate([
       { path: "user", select: "name avatar" },
-      { 
-        path: "orderItem", 
+      {
+        path: "orderItem",
         populate: [
           { path: "product", select: "name" },
           { path: "variant", populate: { path: "color", select: "name" } },
-          { path: "size", select: "value" }
-        ]
-      }
+          { path: "size", select: "value" },
+        ],
+      },
     ]);
 
     if (!review) {
@@ -213,10 +228,7 @@ const reviewService = {
     });
 
     if (!order) {
-      throw new ApiError(
-        404,
-        "Không tìm thấy đơn hàng với ID đã cung cấp"
-      );
+      throw new ApiError(404, "Không tìm thấy đơn hàng với ID đã cung cấp");
     }
 
     // Kiểm tra xem người dùng có phải là chủ đơn hàng không
@@ -238,13 +250,19 @@ const reviewService = {
     // Tìm orderItem trong đơn hàng
     const orderItem = order.orderItems.id(reviewData.orderItemId);
     if (!orderItem) {
-      throw new ApiError(400, "Không tìm thấy sản phẩm trong đơn hàng. Người dùng không thể đánh giá");
+      throw new ApiError(
+        400,
+        "Không tìm thấy sản phẩm trong đơn hàng. Người dùng không thể đánh giá"
+      );
     }
 
     // Lấy variantId từ orderItem
     const variantId = orderItem.variant;
     if (!variantId) {
-      throw new ApiError(400, "Không tìm thấy thông tin biến thể sản phẩm trong đơn hàng");
+      throw new ApiError(
+        400,
+        "Không tìm thấy thông tin biến thể sản phẩm trong đơn hàng"
+      );
     }
 
     // Lấy thông tin variant để tìm product
@@ -270,7 +288,7 @@ const reviewService = {
     //Kiểm tra người dùng đã đánh giá orderItem này chưa (bao gồm cả đánh giá đã xóa mềm)
     const existingReview = await Review.findOne({
       user: userId,
-      orderItem: reviewData.orderItemId
+      orderItem: reviewData.orderItemId,
     }).setOptions({ includeDeleted: true }); // Bao gồm cả đánh giá đã xóa mềm
 
     if (existingReview) {
@@ -295,7 +313,7 @@ const reviewService = {
       product: productId, // Thêm trường product lấy từ variant
       rating: reviewData.rating,
       content: reviewData.content,
-      isActive: true
+      isActive: true,
     });
 
     try {
@@ -318,15 +336,15 @@ const reviewService = {
             product: productId,
             isActive: true,
             deletedAt: null,
-          }
+          },
         },
         {
           $group: {
             _id: null,
             avgRating: { $avg: "$rating" },
-            numReviews: { $sum: 1 }
-          }
-        }
+            numReviews: { $sum: 1 },
+          },
+        },
       ]);
 
       if (reviewStats.length > 0) {
@@ -334,7 +352,9 @@ const reviewService = {
           rating: Math.round(reviewStats[0].avgRating * 10) / 10,
           numReviews: reviewStats[0].numReviews,
         });
-        console.log(`Đã cập nhật trực tiếp rating sản phẩm ${productId}: ${reviewStats[0].avgRating}, số lượng: ${reviewStats[0].numReviews}`);
+        console.log(
+          `Đã cập nhật trực tiếp rating sản phẩm ${productId}: ${reviewStats[0].avgRating}, số lượng: ${reviewStats[0].numReviews}`
+        );
       }
 
       return {
@@ -344,26 +364,32 @@ const reviewService = {
       };
     } catch (error) {
       console.error("Lỗi khi tạo đánh giá:", error);
-      
+
       // Bắt lỗi duplicate key và cung cấp thông báo cụ thể
       if (error.code === 11000) {
         console.log("Lỗi trùng lặp dữ liệu:", error.keyPattern);
-        
+
         // Nếu lỗi trùng lặp liên quan đến cặp user_orderItem
-        if (error.keyPattern && error.keyPattern.user && error.keyPattern.orderItem) {
+        if (
+          error.keyPattern &&
+          error.keyPattern.user &&
+          error.keyPattern.orderItem
+        ) {
           throw new ApiError(
             400,
             "Bạn đã đánh giá sản phẩm trong đơn hàng này rồi. Mỗi sản phẩm trong đơn hàng chỉ được đánh giá một lần."
           );
         }
-        
+
         // Trường hợp khác
         throw new ApiError(
           400,
-          `Không thể tạo đánh giá do trùng lặp dữ liệu ${JSON.stringify(error.keyPattern || {})}.`
+          `Không thể tạo đánh giá do trùng lặp dữ liệu ${JSON.stringify(
+            error.keyPattern || {}
+          )}.`
         );
       }
-      
+
       // Các lỗi khác
       throw error;
     }
@@ -409,14 +435,14 @@ const reviewService = {
     ).populate([
       { path: "user", select: "name avatar" },
       { path: "product", select: "name images slug" },
-      { 
-        path: "orderItem", 
+      {
+        path: "orderItem",
         populate: [
           { path: "product", select: "name" },
           { path: "variant", populate: { path: "color", select: "name" } },
-          { path: "size", select: "value" }
-        ]
-      }
+          { path: "size", select: "value" },
+        ],
+      },
     ]);
 
     return {
@@ -482,19 +508,19 @@ const reviewService = {
     const updatedReview = await Review.findByIdAndUpdate(
       reviewId,
       {
-        $inc: { numberOfLikes: 1 }
+        $inc: { numberOfLikes: 1 },
       },
       { new: true }
     );
-    
+
     return {
       success: true,
       message: "Đã thích đánh giá",
-      numberOfLikes: updatedReview.numberOfLikes
+      numberOfLikes: updatedReview.numberOfLikes,
     };
   },
 
-      /**
+  /**
    * Lấy danh sách sản phẩm có thể đánh giá từ các đơn hàng đã giao
    * @param {String} userId - ID của người dùng
    * @param {Object} query - Các tham số truy vấn
@@ -506,8 +532,8 @@ const reviewService = {
 
       // Tìm tất cả đơn hàng đã giao của người dùng
       const orders = await Order.find({
-        user: userId, 
-        status: "delivered"
+        user: userId,
+        status: "delivered",
       }).sort({ deliveredAt: -1 });
 
       if (!orders || orders.length === 0) {
@@ -520,25 +546,25 @@ const reviewService = {
             limit: parseInt(limit),
             total: 0,
             totalPages: 0,
-          }
+          },
         };
       }
 
       // Tạo mảng chứa tất cả các orderItems từ các đơn hàng đã giao
       let allOrderItems = [];
-      
+
       for (const order of orders) {
         // Thêm thông tin đơn hàng vào mỗi orderItem
-        const orderItemsWithOrderInfo = order.orderItems.map(item => ({
+        const orderItemsWithOrderInfo = order.orderItems.map((item) => ({
           ...item.toObject(),
           orderId: order._id,
           orderCode: order.code,
-          deliveredAt: order.deliveredAt
+          deliveredAt: order.deliveredAt,
         }));
-        
+
         allOrderItems = [...allOrderItems, ...orderItemsWithOrderInfo];
       }
-      
+
       if (allOrderItems.length === 0) {
         return {
           success: true,
@@ -549,27 +575,27 @@ const reviewService = {
             limit: parseInt(limit),
             total: 0,
             totalPages: 0,
-          }
+          },
         };
       }
-      
+
       // Lấy danh sách OrderItem IDs
-      const orderItemIds = allOrderItems.map(item => item._id);
-      
+      const orderItemIds = allOrderItems.map((item) => item._id);
+
       // Tìm các đánh giá đã tồn tại cho các orderItems này
       const existingReviews = await Review.find({
         orderItem: { $in: orderItemIds },
         user: userId,
       }).setOptions({ includeDeleted: true });
-      
+
       // Tạo Set các orderItem IDs đã được đánh giá
-      const reviewedOrderItemIds = new Set(existingReviews.map(review => 
-        review.orderItem.toString()
-      ));
-      
+      const reviewedOrderItemIds = new Set(
+        existingReviews.map((review) => review.orderItem.toString())
+      );
+
       // Lọc ra các orderItems chưa được đánh giá
-      let reviewableItems = allOrderItems.filter(item => 
-        !reviewedOrderItemIds.has(item._id.toString())
+      let reviewableItems = allOrderItems.filter(
+        (item) => !reviewedOrderItemIds.has(item._id.toString())
       );
 
       // Sắp xếp theo yêu cầu
@@ -591,47 +617,57 @@ const reviewService = {
       const paginatedItems = reviewableItems.slice(startIndex, endIndex);
 
       // Populate thông tin chi tiết cho các sản phẩm
-      const populatedItems = await Promise.all(paginatedItems.map(async (item) => {
-        // Lấy thông tin variant
-        const variant = await Variant.findById(item.variant)
-          .populate("product", "name slug images price")
-          .populate("color", "name code");
+      const populatedItems = await Promise.all(
+        paginatedItems.map(async (item) => {
+          // Lấy thông tin variant
+          const variant = await Variant.findById(item.variant)
+            .populate("product", "name slug images price")
+            .populate("color", "name code");
 
-        // Lấy thông tin size
-        const size = await mongoose.model("Size").findById(item.size, "value description");
+          // Lấy thông tin size
+          const size = await mongoose
+            .model("Size")
+            .findById(item.size, "value description");
 
-        // Kiểm tra thời hạn có thể đánh giá (ví dụ: 30 ngày sau khi giao hàng)
-        const deliveryDate = new Date(item.deliveredAt);
-        const currentDate = new Date();
-        const daysSinceDelivery = Math.floor(
-          (currentDate - deliveryDate) / (1000 * 60 * 60 * 24)
-        );
-        const REVIEW_WINDOW_DAYS = 30; // Có thể cấu hình theo yêu cầu
-        const canReview = daysSinceDelivery <= REVIEW_WINDOW_DAYS;
-        const reviewExpiresAt = new Date(deliveryDate);
-        reviewExpiresAt.setDate(reviewExpiresAt.getDate() + REVIEW_WINDOW_DAYS);
+          // Kiểm tra thời hạn có thể đánh giá (ví dụ: 30 ngày sau khi giao hàng)
+          const deliveryDate = new Date(item.deliveredAt);
+          const currentDate = new Date();
+          const daysSinceDelivery = Math.floor(
+            (currentDate - deliveryDate) / (1000 * 60 * 60 * 24)
+          );
+          const REVIEW_WINDOW_DAYS = 30; // Có thể cấu hình theo yêu cầu
+          const canReview = daysSinceDelivery <= REVIEW_WINDOW_DAYS;
+          const reviewExpiresAt = new Date(deliveryDate);
+          reviewExpiresAt.setDate(
+            reviewExpiresAt.getDate() + REVIEW_WINDOW_DAYS
+          );
 
-        return {
-          orderItemId: item._id,
-          orderId: item.orderId,
-          orderCode: item.orderCode,
-          product: variant?.product || null,
-          variant: {
-            _id: variant?._id || null,
-            color: variant?.color || null
-          },
-          size: size || null,
-          quantity: item.quantity,
-          price: item.price,
-          image: item.image || (variant?.product?.images && variant.product.images.length > 0 
-            ? variant.product.images[0].url 
-            : null),
-          deliveredAt: item.deliveredAt,
-          canReview,
-          reviewExpiresAt: canReview ? reviewExpiresAt : null,
-          daysLeftToReview: canReview ? REVIEW_WINDOW_DAYS - daysSinceDelivery : 0
-        };
-      }));
+          return {
+            orderItemId: item._id,
+            orderId: item.orderId,
+            orderCode: item.orderCode,
+            product: variant?.product || null,
+            variant: {
+              _id: variant?._id || null,
+              color: variant?.color || null,
+            },
+            size: size || null,
+            quantity: item.quantity,
+            price: item.price,
+            image:
+              item.image ||
+              (variant?.product?.images && variant.product.images.length > 0
+                ? variant.product.images[0].url
+                : null),
+            deliveredAt: item.deliveredAt,
+            canReview,
+            reviewExpiresAt: canReview ? reviewExpiresAt : null,
+            daysLeftToReview: canReview
+              ? REVIEW_WINDOW_DAYS - daysSinceDelivery
+              : 0,
+          };
+        })
+      );
 
       return {
         success: true,
@@ -642,11 +678,14 @@ const reviewService = {
           limit: parseInt(limit),
           total: reviewableItems.length,
           totalPages: Math.ceil(reviewableItems.length / parseInt(limit)),
-        }
+        },
       };
     } catch (error) {
       console.error("Lỗi khi lấy sản phẩm có thể đánh giá:", error);
-      throw new ApiError(500, "Lỗi khi lấy sản phẩm có thể đánh giá: " + error.message);
+      throw new ApiError(
+        500,
+        "Lỗi khi lấy sản phẩm có thể đánh giá: " + error.message
+      );
     }
   },
 
@@ -680,14 +719,14 @@ const reviewService = {
       populate: [
         { path: "user", select: "name avatar" },
         { path: "product", select: "name images slug" },
-        { 
-          path: "orderItem", 
+        {
+          path: "orderItem",
           populate: [
             { path: "product", select: "name" },
             { path: "variant", populate: { path: "color", select: "name" } },
-            { path: "size", select: "value" }
-          ]
-        }
+            { path: "size", select: "value" },
+          ],
+        },
       ],
     };
 
@@ -733,17 +772,23 @@ const adminReviewService = {
 
     if (productId) {
       // Tìm variantIds cho sản phẩm
-      const variants = await Variant.find({ product: productId }).select('_id');
-      const variantIds = variants.map(v => v._id);
-      
+      const variants = await Variant.find({ product: productId }).select("_id");
+      const variantIds = variants.map((v) => v._id);
+
       // Tìm orderItems liên quan đến variants của sản phẩm
       const orderItemsInfo = await Order.aggregate([
         { $unwind: "$orderItems" },
-        { $match: { "orderItems.variant": { $in: variantIds.map(id => new mongoose.Types.ObjectId(id)) } } },
-        { $project: { orderItemId: "$orderItems._id" } }
+        {
+          $match: {
+            "orderItems.variant": {
+              $in: variantIds.map((id) => new mongoose.Types.ObjectId(id)),
+            },
+          },
+        },
+        { $project: { orderItemId: "$orderItems._id" } },
       ]);
-      
-      const orderItemIds = orderItemsInfo.map(item => item.orderItemId);
+
+      const orderItemIds = orderItemsInfo.map((item) => item.orderItemId);
       filter.orderItem = { $in: orderItemIds };
     }
 
@@ -774,14 +819,14 @@ const adminReviewService = {
       populate: [
         { path: "user", select: "name email avatar" },
         { path: "deletedBy", select: "name email" },
-        { 
-          path: "orderItem", 
+        {
+          path: "orderItem",
           populate: [
             { path: "product", select: "name" },
             { path: "variant", populate: { path: "color", select: "name" } },
-            { path: "size", select: "value" }
-          ]
-        }
+            { path: "size", select: "value" },
+          ],
+        },
       ],
     };
 
@@ -807,15 +852,20 @@ const adminReviewService = {
    * @returns {Object} - Danh sách đánh giá phân trang
    */
   getAllReviewsDeleted: async (query = {}) => {
-    const { page = 1, limit = 10, productId,
+    const {
+      page = 1,
+      limit = 10,
+      productId,
       userId,
       rating,
-      isActive, sort = "createdAt_desc" } = query;
+      isActive,
+      sort = "createdAt_desc",
+    } = query;
 
     // Xây dựng điều kiện lọc
     const filter = {
-      deletedAt: { $ne: null }
-    }
+      deletedAt: { $ne: null },
+    };
 
     if (productId) {
       filter.product = productId;
@@ -838,7 +888,7 @@ const adminReviewService = {
     if (sort) {
       const [field, order] = sort.split("_");
       sortOptions[field] = order === "desc" ? -1 : 1;
-    } 
+    }
 
     // Thực hiện truy vấn với phân trang
     const options = {
@@ -848,14 +898,14 @@ const adminReviewService = {
       populate: [
         { path: "user", select: "name email avatar" },
         { path: "deletedBy", select: "name email" },
-        { 
-          path: "orderItem", 
+        {
+          path: "orderItem",
           populate: [
             { path: "product", select: "name" },
             { path: "variant", populate: { path: "color", select: "name" } },
-            { path: "size", select: "value" }
-          ]
-        }
+            { path: "size", select: "value" },
+          ],
+        },
       ],
     };
 
@@ -885,14 +935,14 @@ const adminReviewService = {
       .populate([
         { path: "user", select: "name email avatar" },
         { path: "deletedBy", select: "name email" },
-        { 
-          path: "orderItem", 
+        {
+          path: "orderItem",
           populate: [
             { path: "product", select: "name" },
             { path: "variant", populate: { path: "color", select: "name" } },
-            { path: "size", select: "value" }
-          ]
-        }
+            { path: "size", select: "value" },
+          ],
+        },
       ]);
 
     if (!review) {
@@ -902,7 +952,7 @@ const adminReviewService = {
     return {
       success: true,
       review,
-      isDeleted: review.deletedAt !== null
+      isDeleted: review.deletedAt !== null,
     };
   },
 
@@ -975,17 +1025,23 @@ const adminReviewService = {
     }
 
     // Tìm tất cả variants của sản phẩm này
-    const variants = await Variant.find({ product: productId }).select('_id');
-    const variantIds = variants.map(v => v._id);
+    const variants = await Variant.find({ product: productId }).select("_id");
+    const variantIds = variants.map((v) => v._id);
 
     // Tìm tất cả orderItems từ Order model có chứa các variant của sản phẩm
     const orderItemsInfo = await Order.aggregate([
       { $unwind: "$orderItems" },
-      { $match: { "orderItems.variant": { $in: variantIds.map(id => new mongoose.Types.ObjectId(id)) } } },
-      { $project: { orderItemId: "$orderItems._id" } }
+      {
+        $match: {
+          "orderItems.variant": {
+            $in: variantIds.map((id) => new mongoose.Types.ObjectId(id)),
+          },
+        },
+      },
+      { $project: { orderItemId: "$orderItems._id" } },
     ]);
 
-    const orderItemIds = orderItemsInfo.map(item => item.orderItemId);
+    const orderItemIds = orderItemsInfo.map((item) => item.orderItemId);
 
     // Tính thống kê đánh giá - chỉ từ đánh giá active và không bị xóa mềm
     const stats = await Review.aggregate([
@@ -1025,7 +1081,7 @@ const adminReviewService = {
       // Làm tròn điểm đánh giá đến 1 số thập phân
       result.totalReviews = stats[0].totalReviews;
       result.avgRating = Math.round(stats[0].avgRating * 10) / 10;
-      
+
       // Tính phân phối đánh giá
       if (stats[0].ratingCounts) {
         stats[0].ratingCounts.forEach((rating) => {
@@ -1034,12 +1090,13 @@ const adminReviewService = {
           }
         });
       }
-      
+
       // Tính phần trăm cho mỗi mức đánh giá
       if (result.totalReviews > 0) {
         for (let i = 1; i <= 5; i++) {
-          result.ratingDistribution[i].percentage = 
-            Math.round((result.ratingDistribution[i].count / result.totalReviews) * 100);
+          result.ratingDistribution[i].percentage = Math.round(
+            (result.ratingDistribution[i].count / result.totalReviews) * 100
+          );
         }
       }
     }
@@ -1074,8 +1131,69 @@ const adminReviewService = {
         _id: product._id,
         name: product.name,
         slug: product.slug,
-        image: product.images && product.images.length > 0 ? product.images[0].url : null
-      }
+        image:
+          product.images && product.images.length > 0
+            ? product.images[0].url
+            : null,
+      },
+    };
+  },
+
+  /**
+   * MỚI: Tính toán động rating và numReviews cho Product từ Review
+   * @param {String} productId - ID của product
+   * @returns {Object} - { rating, numReviews }
+   */
+  getProductRatingInfo: async (productId) => {
+    const mongoose = require("mongoose");
+
+    // Tìm tất cả variants của sản phẩm
+    const variants = await Variant.find({ product: productId }).select("_id");
+    const variantIds = variants.map((v) => v._id);
+
+    // Tìm tất cả orderItems từ Order model có chứa các variant của sản phẩm
+    const orderItemsInfo = await Order.aggregate([
+      { $unwind: "$orderItems" },
+      {
+        $match: {
+          "orderItems.variant": {
+            $in: variantIds.map((id) => new mongoose.Types.ObjectId(id)),
+          },
+        },
+      },
+      { $project: { orderItemId: "$orderItems._id" } },
+    ]);
+
+    const orderItemIds = orderItemsInfo.map((item) => item.orderItemId);
+
+    // Tính toán rating và số lượng reviews
+    const stats = await Review.aggregate([
+      {
+        $match: {
+          orderItem: { $in: orderItemIds },
+          isActive: true,
+          deletedAt: null,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalReviews: { $sum: 1 },
+          avgRating: { $avg: "$rating" },
+        },
+      },
+    ]);
+
+    if (stats.length === 0) {
+      return {
+        rating: 0,
+        numReviews: 0,
+      };
+    }
+
+    return {
+      rating: Math.round(stats[0].avgRating * 10) / 10, // Làm tròn 1 chữ số thập phân
+      numReviews: stats[0].totalReviews,
     };
   },
 };

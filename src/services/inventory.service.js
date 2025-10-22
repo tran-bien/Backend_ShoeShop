@@ -654,8 +654,49 @@ const getProductPricing = async (productId) => {
 const updateProductStockFromInventory = async (productId) => {
   const Product = require("../models").Product;
   const { updateProductStockInfo } = require("../models/product/middlewares");
-  
+
   await updateProductStockInfo(productId);
+};
+
+/**
+ * MỚI: Tính toán động totalQuantity và stockStatus cho Product từ InventoryItem
+ * @param {String} productId - ID của product
+ * @returns {Object} - { totalQuantity, stockStatus }
+ */
+const getProductStockInfo = async (productId) => {
+  const mongoose = require("mongoose");
+
+  // Aggregate từ InventoryItem để tính tổng
+  const result = await InventoryItem.aggregate([
+    {
+      $match: {
+        product: new mongoose.Types.ObjectId(productId),
+      },
+    },
+    {
+      $group: {
+        _id: "$product",
+        totalQuantity: { $sum: "$quantity" },
+      },
+    },
+  ]);
+
+  const totalQuantity = result.length > 0 ? result[0].totalQuantity : 0;
+
+  // Xác định stock status
+  let stockStatus = "out_of_stock";
+  if (totalQuantity > 0) {
+    // Kiểm tra xem có item nào low stock không
+    const hasLowStock = await InventoryItem.exists({
+      product: productId,
+      $expr: { $lte: ["$quantity", "$lowStockThreshold"] },
+      quantity: { $gt: 0 },
+    });
+
+    stockStatus = hasLowStock ? "low_stock" : "in_stock";
+  }
+
+  return { totalQuantity, stockStatus };
 };
 
 module.exports = {
@@ -675,4 +716,5 @@ module.exports = {
   getVariantPricing,
   getProductPricing,
   updateProductStockFromInventory,
+  getProductStockInfo, // NEW: Tính toán stock info động
 };
