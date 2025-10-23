@@ -183,16 +183,6 @@ const paymentService = {
       } else {
         console.log("CHỮ KÝ KHÔNG KHỚP!");
 
-        // CHỈ DÙNG CHO TESTING - BỎ KHI LÊN PRODUCTION
-        if (vnpayParams.vnp_ResponseCode === "00") {
-          console.log("BỎ QUA KIỂM TRA CHỮ KÝ CHO MỤC ĐÍCH TESTING");
-          return {
-            success: true,
-            message: "Thanh toán thành công (TESTING MODE)",
-            data: vnpayParams,
-          };
-        }
-
         return {
           success: false,
           message: "Chữ ký không hợp lệ",

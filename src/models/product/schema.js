@@ -108,9 +108,6 @@ ProductSchema.index(
   }
 );
 
-// Index cho slug - REMOVED: slug already has unique: true in field definition
-// ProductSchema.index({ slug: 1 }, { unique: true });
-
 // Compound index cho filter thường dùng: category + isActive + deletedAt
 ProductSchema.index(
   {
