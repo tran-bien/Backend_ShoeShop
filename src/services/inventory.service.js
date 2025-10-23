@@ -210,6 +210,7 @@ const stockIn = async (data, performedBy) => {
 /**
  * XUẤT KHO (Stock Out)
  * - Kiểm tra số lượng tồn kho đủ không
+ * - Kiểm tra duplicate transaction (nếu có reference là orderId)
  * - Trừ số lượng
  * - Tạo InventoryTransaction (type: OUT)
  * - Cập nhật Product.totalQuantity và stockStatus
@@ -252,6 +253,25 @@ const stockOut = async (data, performedBy) => {
       400,
       `Không đủ hàng trong kho. Hiện có: ${inventoryItem.quantity}, yêu cầu: ${quantity}`
     );
+  }
+
+  // ============================================================
+  // KIỂM TRA DUPLICATE TRANSACTION (nếu có reference là orderId)
+  // ============================================================
+  if (reference) {
+    const existingTransaction = await InventoryTransaction.findOne({
+      inventoryItem: inventoryItem._id,
+      type: "OUT",
+      reason,
+      reference,
+    });
+
+    if (existingTransaction) {
+      throw new ApiError(
+        409,
+        `Giao dịch xuất kho cho đơn hàng này đã tồn tại (Transaction ID: ${existingTransaction._id})`
+      );
+    }
   }
 
   const quantityBefore = inventoryItem.quantity;

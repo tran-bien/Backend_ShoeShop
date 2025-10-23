@@ -7,48 +7,16 @@ const mongoose = require("mongoose");
 
 // Định nghĩa hàm updateInventory trong payment.service.js
 
-const updateInventory = async (orderItem, action) => {
-  try {
-    const Variant = mongoose.model("Variant");
-
-    if (!orderItem.variant || !orderItem.size || !orderItem.quantity) return;
-
-    // Tìm biến thể
-    const variant = await Variant.findById(orderItem.variant);
-    if (!variant) return;
-
-    // Tìm size trong biến thể
-    const sizeIndex = variant.sizes.findIndex(
-      (s) => s.size.toString() === orderItem.size.toString()
-    );
-
-    if (sizeIndex === -1) return;
-
-    // Cập nhật số lượng
-    if (action === "decrement") {
-      variant.sizes[sizeIndex].quantity = Math.max(
-        0,
-        variant.sizes[sizeIndex].quantity - orderItem.quantity
-      );
-      console.log(
-        `Trừ ${orderItem.quantity} sản phẩm cho variant ${variant._id}`
-      );
-    } else {
-      variant.sizes[sizeIndex].quantity += orderItem.quantity;
-      console.log(
-        `Cộng ${orderItem.quantity} sản phẩm cho variant ${variant._id}`
-      );
-    }
-
-    // Cập nhật trạng thái available
-    variant.sizes[sizeIndex].isSizeAvailable =
-      variant.sizes[sizeIndex].quantity > 0;
-
-    // Lưu biến thể
-    await variant.save();
-  } catch (error) {
-    console.error(`Lỗi cập nhật tồn kho: ${error.message}`);
-  }
+/**
+ * DEPRECATED - KHÔNG DÙNG NỮA
+ * Inventory giờ được quản lý qua InventoryService.stockOut/stockIn
+ * Trừ kho KHI GÁN SHIPPER (assignOrderToShipper), không phải khi payment
+ */
+const updateInventory_DEPRECATED = async (orderItem, action) => {
+  // Không sử dụng nữa - giữ lại cho reference
+  console.warn(
+    "updateInventory() is deprecated. Use inventoryService instead."
+  );
 };
 
 /**
@@ -342,24 +310,10 @@ const paymentService = {
           })
         );
 
-        // Trừ tồn kho khi thanh toán VNPAY thành công và chưa trừ trước đó
-        if (!order.inventoryDeducted) {
-          console.log(
-            `Thanh toán VNPAY thành công cho đơn hàng ${order.code}, tiến hành trừ tồn kho`
-          );
-
-          // Song song hóa việc trừ tồn kho
-          const inventoryPromises = order.orderItems.map((item) =>
-            updateInventory(item, "decrement")
-          );
-
-          updatePromises.push(
-            ...inventoryPromises,
-            Order.findByIdAndUpdate(order._id, {
-              inventoryDeducted: true,
-            })
-          );
-        }
+        // ============================================================
+        // VNPAY: KHÔNG TỰ ĐỘNG TRỪ KHO Ở ĐÂY
+        // Inventory sẽ được trừ KHI GÁN SHIPPER (assignOrderToShipper)
+        // ============================================================
 
         // Nếu thanh toán thành công và đơn hàng đang ở trạng thái pending
         if (order.status === "pending") {
@@ -389,21 +343,9 @@ const paymentService = {
           })
         );
 
-        // Nếu đã trừ tồn kho từ trước, cần hoàn lại tồn kho
-        if (order.inventoryDeducted) {
-          console.log(`Hoàn lại tồn kho cho đơn hàng ${order.code}`);
-
-          const inventoryPromises = order.orderItems.map((item) =>
-            updateInventory(item, "increment")
-          );
-
-          updatePromises.push(
-            ...inventoryPromises,
-            Order.findByIdAndUpdate(order._id, {
-              inventoryDeducted: false,
-            })
-          );
-        }
+        // ============================================================
+        // VNPAY FAILED: Inventory chưa bao giờ được trừ nên không cần hoàn
+        // ============================================================
       }
 
       // Thêm vào lịch sử thanh toán

@@ -75,19 +75,16 @@ const inventoryTransactionSchema = new mongoose.Schema(
         "exchange",
         "damage",
         "adjustment",
+        "cancelled",
+        "refunded",
         "other",
       ],
       required: true,
     },
+    // Reference đơn giản - ObjectId tham chiếu đến Order/ReturnRequest
     reference: {
-      type: {
-        type: String,
-        enum: ["Order", "ReturnRequest", "Manual"],
-      },
-      id: {
-        type: mongoose.Schema.Types.ObjectId,
-        refPath: "reference.type",
-      },
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
     },
     // Người thực hiện
     performedBy: {
@@ -108,6 +105,6 @@ const inventoryTransactionSchema = new mongoose.Schema(
 // Index
 inventoryTransactionSchema.index({ inventoryItem: 1, createdAt: -1 });
 inventoryTransactionSchema.index({ type: 1, createdAt: -1 });
-inventoryTransactionSchema.index({ "reference.type": 1, "reference.id": 1 });
+inventoryTransactionSchema.index({ reference: 1 }); // Đơn giản hơn
 
 module.exports = inventoryTransactionSchema;

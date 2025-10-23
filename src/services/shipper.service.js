@@ -116,10 +116,7 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
             size: item.size._id,
             quantity: item.quantity,
             reason: "sale",
-            reference: {
-              type: "Order",
-              id: order._id,
-            },
+            reference: order._id, // ObjectId của Order
             notes: `Xuất kho tự động cho đơn hàng ${order.code} - Giao cho shipper ${shipper.name}`,
           },
           assignedBy // Người gán đơn hàng

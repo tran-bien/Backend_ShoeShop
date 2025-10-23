@@ -234,46 +234,59 @@ const applyMiddlewares = (schema) => {
 
       // Chỉ xử lý khi có sự thay đổi trạng thái thực sự
       if (previousStatus && previousStatus !== currentStatus) {
-        // Xử lý tồn kho - CHỈ KHI HỦY ĐƠN HÀNG HOẶC TRẢ HÀNG
-        // CHỈ hoàn trả kho KHI returnConfirmed = true
-        if (currentStatus === "cancelled" && this.inventoryDeducted) {
-          // Kiểm tra xem có cần chờ xác nhận không
-          if (!this.returnConfirmed) {
-            console.log(
-              `Đơn hàng ${this.code} bị hủy nhưng chưa xác nhận nhận hàng về. Không hoàn trả tồn kho.`
-            );
-          } else {
-            console.log(
-              `Đang hoàn trả tồn kho cho đơn hàng bị hủy: ${this.code} (đã xác nhận)`
-            );
-            // Nếu đơn hàng bị hủy và đã trừ tồn kho VÀ đã xác nhận nhận hàng, trả lại số lượng
-            for (const item of this.orderItems) {
-              await updateInventory(
-                item,
-                "increment",
-                "cancelled",
-                this._id,
-                this.user
-              );
-            }
+        // ============================================================
+        // XỬ LÝ TỒN KHO KHI ĐƠN HÀNG THAY ĐỔI TRẠNG THÁI
+        // ============================================================
 
-            // Cập nhật trạng thái không qua this.save()
-            await mongoose
-              .model("Order")
-              .updateOne({ _id: this._id }, { inventoryDeducted: false });
-            console.log(`Đã hoàn trả tồn kho cho đơn hàng: ${this.code}`);
+        // CASE 1: ĐƠN HÀNG BỊ HỦY (cancelled, refunded)
+        // → NHẬP KHO NGAY, không cần returnConfirmed
+        if (
+          (currentStatus === "cancelled" || currentStatus === "refunded") &&
+          this.inventoryDeducted &&
+          !this.inventoryRestored
+        ) {
+          console.log(
+            `[Order ${this.code}] Đơn hàng bị ${currentStatus}, hoàn trả tồn kho NGAY`
+          );
+
+          for (const item of this.orderItems) {
+            await updateInventory(
+              item,
+              "increment",
+              currentStatus === "cancelled" ? "cancelled" : "refunded",
+              this._id,
+              this.user
+            );
           }
-        } else if (currentStatus === "returned" && this.inventoryDeducted) {
-          // Kiểm tra xem có cần chờ xác nhận không
+
+          // Đánh dấu đã hoàn kho
+          await mongoose.model("Order").updateOne(
+            { _id: this._id },
+            {
+              inventoryRestored: true,
+              inventoryDeducted: false,
+            }
+          );
+
+          console.log(`[Order ${this.code}] Đã hoàn trả tồn kho`);
+        }
+
+        // CASE 2: ĐƠN HÀNG TRẢ HÀNG (returned)
+        // → CHỈ nhập kho KHI returnConfirmed = true (Staff đã xác nhận nhận hàng)
+        else if (
+          currentStatus === "returned" &&
+          this.inventoryDeducted &&
+          !this.inventoryRestored
+        ) {
           if (!this.returnConfirmed) {
             console.log(
-              `Đơn hàng ${this.code} được trả nhưng chưa xác nhận nhận hàng về. Không hoàn trả tồn kho.`
+              `[Order ${this.code}] Trả hàng nhưng CHƯA xác nhận nhận hàng. Chờ staff xác nhận.`
             );
           } else {
             console.log(
-              `Đang hoàn trả tồn kho cho đơn hàng bị trả: ${this.code} (đã xác nhận)`
+              `[Order ${this.code}] Trả hàng và ĐÃ xác nhận nhận hàng. Hoàn trả tồn kho.`
             );
-            // Nếu đơn hàng bị trả và đã trừ tồn kho VÀ đã xác nhận nhận hàng, trả lại số lượng
+
             for (const item of this.orderItems) {
               await updateInventory(
                 item,
@@ -284,16 +297,24 @@ const applyMiddlewares = (schema) => {
               );
             }
 
-            // Cập nhật trạng thái
-            await mongoose
-              .model("Order")
-              .updateOne({ _id: this._id }, { inventoryDeducted: false });
-            console.log(`Đã hoàn trả tồn kho cho đơn hàng trả: ${this.code}`);
+            // Đánh dấu đã hoàn kho
+            await mongoose.model("Order").updateOne(
+              { _id: this._id },
+              {
+                inventoryRestored: true,
+                inventoryDeducted: false,
+              }
+            );
+
+            console.log(`[Order ${this.code}] Đã hoàn trả tồn kho`);
           }
-        } else if (currentStatus === "returning_to_warehouse") {
-          // Hàng đang trả về kho - KHÔNG làm gì, chờ staff xác nhận
+        }
+
+        // CASE 3: HÀNG ĐANG TRẢ VỀ KHO (returning_to_warehouse)
+        // → Không làm gì, chờ Staff xác nhận
+        else if (currentStatus === "returning_to_warehouse") {
           console.log(
-            `[Order ${this.code}] Hàng đang trả về kho, chờ staff xác nhận nhận hàng`
+            `[Order ${this.code}] Hàng đang trả về kho, chờ Staff xác nhận nhận hàng`
           );
         }
 
@@ -338,42 +359,66 @@ const applyMiddlewares = (schema) => {
 
       // Xử lý cập nhật trạng thái
       if (doc._oldStatus && doc._oldStatus !== doc.status) {
-        if (doc.status === "cancelled" && doc.inventoryDeducted) {
-          // CHỈ hoàn trả kho KHI returnConfirmed = true
-          if (!doc.returnConfirmed) {
-            console.log(
-              `Đơn hàng ${doc.code} bị hủy nhưng chưa xác nhận. Không hoàn trả tồn kho.`
-            );
-          } else {
-            // Nếu đơn hàng bị hủy và đã trừ tồn kho VÀ đã xác nhận, trả lại số lượng
-            for (const item of doc.orderItems) {
-              await updateInventory(
-                item,
-                "increment",
-                "cancelled",
-                doc._id,
-                doc.user
-              );
-            }
+        console.log(
+          `[post findOneAndUpdate] Đơn hàng ${doc.code}: ${doc._oldStatus} → ${doc.status}`
+        );
 
-            // Cập nhật trạng thái
-            await mongoose
-              .model("Order")
-              .findByIdAndUpdate(
-                doc._id,
-                { inventoryDeducted: false },
-                { new: true }
-              );
-            console.log(`Đã hoàn trả tồn kho cho đơn hàng: ${doc.code}`);
+        // ============================================================
+        // XỬ LÝ TỒN KHO KHI ĐƠN HÀNG THAY ĐỔI TRẠNG THÁI
+        // ============================================================
+
+        // CASE 1: ĐƠN HÀNG BỊ HỦY (cancelled, refunded)
+        // → NHẬP KHO NGAY, không cần returnConfirmed
+        if (
+          (doc.status === "cancelled" || doc.status === "refunded") &&
+          doc.inventoryDeducted &&
+          !doc.inventoryRestored
+        ) {
+          console.log(
+            `[post findOneAndUpdate] [Order ${doc.code}] Đơn hàng bị ${doc.status}, hoàn trả tồn kho NGAY`
+          );
+
+          for (const item of doc.orderItems) {
+            await updateInventory(
+              item,
+              "increment",
+              doc.status === "cancelled" ? "cancelled" : "refunded",
+              doc._id,
+              doc.user
+            );
           }
-        } else if (doc.status === "returned" && doc.inventoryDeducted) {
-          // CHỈ hoàn trả kho KHI returnConfirmed = true
+
+          // Cập nhật trạng thái
+          await mongoose.model("Order").findByIdAndUpdate(
+            doc._id,
+            {
+              inventoryRestored: true,
+              inventoryDeducted: false,
+            },
+            { new: true }
+          );
+
+          console.log(
+            `[post findOneAndUpdate] [Order ${doc.code}] Đã hoàn trả tồn kho`
+          );
+        }
+
+        // CASE 2: ĐƠN HÀNG TRẢ HÀNG (returned)
+        // → CHỈ nhập kho KHI returnConfirmed = true (Staff đã xác nhận nhận hàng)
+        else if (
+          doc.status === "returned" &&
+          doc.inventoryDeducted &&
+          !doc.inventoryRestored
+        ) {
           if (!doc.returnConfirmed) {
             console.log(
-              `Đơn hàng ${doc.code} được trả nhưng chưa xác nhận. Không hoàn trả tồn kho.`
+              `[post findOneAndUpdate] [Order ${doc.code}] Trả hàng nhưng CHƯA xác nhận nhận hàng. Chờ staff xác nhận.`
             );
           } else {
-            // Nếu đơn hàng bị trả và đã trừ tồn kho VÀ đã xác nhận, trả lại số lượng
+            console.log(
+              `[post findOneAndUpdate] [Order ${doc.code}] Trả hàng và ĐÃ xác nhận nhận hàng. Hoàn trả tồn kho.`
+            );
+
             for (const item of doc.orderItems) {
               await updateInventory(
                 item,
@@ -385,22 +430,28 @@ const applyMiddlewares = (schema) => {
             }
 
             // Cập nhật trạng thái
-            await mongoose
-              .model("Order")
-              .findByIdAndUpdate(
-                doc._id,
-                { inventoryDeducted: false },
-                { new: true }
-              );
-            console.log(`Đã hoàn trả tồn kho cho đơn hàng: ${doc.code}`);
+            await mongoose.model("Order").findByIdAndUpdate(
+              doc._id,
+              {
+                inventoryRestored: true,
+                inventoryDeducted: false,
+              },
+              { new: true }
+            );
+
+            console.log(
+              `[post findOneAndUpdate] [Order ${doc.code}] Đã hoàn trả tồn kho`
+            );
           }
-        } else if (doc.status === "returning_to_warehouse") {
-          // Hàng đang trả về kho - KHÔNG làm gì
+        }
+
+        // CASE 3: HÀNG ĐANG TRẢ VỀ KHO (returning_to_warehouse)
+        // → Không làm gì, chờ Staff xác nhận
+        else if (doc.status === "returning_to_warehouse") {
           console.log(
-            `[Order ${doc.code}] Hàng đang trả về kho, chờ staff xác nhận`
+            `[post findOneAndUpdate] [Order ${doc.code}] Hàng đang trả về kho, chờ Staff xác nhận nhận hàng`
           );
         }
-        // BỎ LOGIC "không hủy thì trừ lại" vì đã xuất kho tự động khi gán shipper
       }
     } catch (error) {
       console.error(

@@ -107,6 +107,7 @@ const OrderSchema = new mongoose.Schema(
           "returning_to_warehouse",
           "cancelled",
           "returned",
+          "refunded",
         ],
         message: "Trạng thái đơn hàng không hợp lệ",
       },
@@ -114,6 +115,12 @@ const OrderSchema = new mongoose.Schema(
 
     // Đánh dấu nếu là COD thì trừ hàng, VNPAY thì không trừ đợi thanh toán
     inventoryDeducted: {
+      type: Boolean,
+      default: false,
+    },
+
+    // Đánh dấu đã hoàn trả inventory khi cancelled/returned
+    inventoryRestored: {
       type: Boolean,
       default: false,
     },
@@ -133,6 +140,7 @@ const OrderSchema = new mongoose.Schema(
             "returning_to_warehouse",
             "cancelled",
             "returned",
+            "refunded",
           ],
         },
         updatedAt: {
@@ -263,6 +271,60 @@ const OrderSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
+    },
+
+    // Thông tin hoàn tiền (Manual refund for COD, Future: VNPAY online refund)
+    refund: {
+      // Số tiền hoàn lại
+      amount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      // Phương thức hoàn tiền
+      method: {
+        type: String,
+        enum: ["cash", "bank_transfer", "vnpay_online", "store_credit"],
+        default: null,
+      },
+      // Trạng thái hoàn tiền
+      status: {
+        type: String,
+        enum: ["pending", "processing", "completed", "failed"],
+        default: null,
+      },
+      // Thông tin ngân hàng (nếu refund qua bank_transfer)
+      bankInfo: {
+        bankName: String,
+        accountNumber: String,
+        accountName: String,
+      },
+      // Mã giao dịch hoàn tiền (nếu có)
+      transactionId: {
+        type: String,
+        default: null,
+      },
+      // Ghi chú hoàn tiền
+      notes: {
+        type: String,
+        default: "",
+      },
+      // Người thực hiện hoàn tiền
+      processedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      // Thời gian yêu cầu hoàn tiền
+      requestedAt: {
+        type: Date,
+        default: null,
+      },
+      // Thời gian hoàn tiền thành công
+      completedAt: {
+        type: Date,
+        default: null,
+      },
     },
 
     // Thời gian giao hàng

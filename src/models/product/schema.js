@@ -57,8 +57,17 @@ const ProductSchema = new mongoose.Schema(
         ref: "Variant",
       },
     ],
-    // XÓA totalQuantity và stockStatus - sẽ tính toán động từ InventoryItem
-    // totalQuantity và stockStatus được tính on-demand từ InventoryItem
+    // Cached values từ InventoryItem - Tự động cập nhật khi stock in/out
+    totalQuantity: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    stockStatus: {
+      type: String,
+      enum: ["in_stock", "low_stock", "out_of_stock"],
+      default: "out_of_stock",
+    },
     // XÓA rating và numReviews - sẽ tính toán động từ Review
     // rating và numReviews được tính on-demand từ Review model
     isActive: {
@@ -78,6 +87,63 @@ const ProductSchema = new mongoose.Schema(
   {
     timestamps: true,
   }
+);
+
+// ============================================================
+// INDEXES - Tối ưu hiệu suất truy vấn
+// ============================================================
+
+// Text index cho full-text search trên name và description
+ProductSchema.index(
+  {
+    name: "text",
+    description: "text",
+  },
+  {
+    weights: {
+      name: 10, // Name có trọng số cao hơn
+      description: 5, // Description có trọng số thấp hơn
+    },
+    name: "product_text_search",
+  }
+);
+
+// Index cho slug (dùng cho SEO-friendly URLs)
+ProductSchema.index({ slug: 1 }, { unique: true });
+
+// Compound index cho filter thường dùng: category + isActive + deletedAt
+ProductSchema.index(
+  {
+    category: 1,
+    isActive: 1,
+    deletedAt: 1,
+  },
+  { name: "category_active_deleted" }
+);
+
+// Compound index cho filter thường dùng: brand + isActive + deletedAt
+ProductSchema.index(
+  {
+    brand: 1,
+    isActive: 1,
+    deletedAt: 1,
+  },
+  { name: "brand_active_deleted" }
+);
+
+// Index cho soft delete queries
+ProductSchema.index({ deletedAt: 1 });
+
+// Index cho tags filter (many-to-many relationship)
+ProductSchema.index({ tags: 1 });
+
+// Compound index cho sort by createdAt + filter isActive
+ProductSchema.index(
+  {
+    isActive: 1,
+    createdAt: -1,
+  },
+  { name: "active_newest" }
 );
 
 module.exports = ProductSchema;

@@ -847,7 +847,9 @@ const orderService = {
       confirmed: ["shipping"],
       shipping: ["delivered"],
       delivered: [],
-      cancelled: [],
+      cancelled: ["refunded"], // Admin có thể hoàn tiền sau khi hủy
+      returned: ["refunded"], // Admin có thể hoàn tiền sau khi nhận hàng trả
+      refunded: [],
     };
 
     // Xử lý riêng trường hợp chuyển sang trạng thái "cancelled"
@@ -1289,6 +1291,126 @@ const orderService = {
       success: true,
       message: "Đã xác nhận nhận hàng trả về và hoàn tồn kho thành công",
       data: order,
+    };
+  },
+
+  /**
+   * Xử lý hoàn tiền cho đơn hàng (COD - Manual)
+   * Admin ghi nhận hoàn tiền thủ công (tiền mặt hoặc chuyển khoản)
+   * @param {String} orderId - ID đơn hàng
+   * @param {Object} refundData - { amount, method, bankInfo?, notes }
+   * @param {String} processedBy - ID admin xử lý
+   * @returns {Object}
+   */
+  processRefund: async (orderId, refundData, processedBy) => {
+    const { amount, method, bankInfo, notes } = refundData;
+
+    // Kiểm tra đơn hàng
+    const order = await Order.findById(orderId);
+    if (!order) {
+      throw new ApiError(404, "Không tìm thấy đơn hàng");
+    }
+
+    // Kiểm tra trạng thái - chỉ cho phép refund từ cancelled hoặc returned
+    if (!["cancelled", "returned"].includes(order.status)) {
+      throw new ApiError(
+        400,
+        `Không thể hoàn tiền cho đơn hàng ở trạng thái "${order.status}". Chỉ chấp nhận: cancelled, returned`
+      );
+    }
+
+    // Kiểm tra đơn đã hoàn tiền chưa
+    if (order.status === "refunded") {
+      throw new ApiError(400, "Đơn hàng đã được hoàn tiền trước đó");
+    }
+
+    // Validate amount
+    if (!amount || amount <= 0) {
+      throw new ApiError(400, "Số tiền hoàn phải lớn hơn 0");
+    }
+
+    if (amount > order.totalAfterDiscountAndShipping) {
+      throw new ApiError(
+        400,
+        `Số tiền hoàn (${amount}) không được lớn hơn tổng đơn hàng (${order.totalAfterDiscountAndShipping})`
+      );
+    }
+
+    // Validate method
+    const validMethods = [
+      "cash",
+      "bank_transfer",
+      "vnpay_online",
+      "store_credit",
+    ];
+    if (!validMethods.includes(method)) {
+      throw new ApiError(
+        400,
+        `Phương thức hoàn tiền không hợp lệ. Chấp nhận: ${validMethods.join(
+          ", "
+        )}`
+      );
+    }
+
+    // Nếu method là bank_transfer, bắt buộc phải có bankInfo
+    if (
+      method === "bank_transfer" &&
+      (!bankInfo ||
+        !bankInfo.bankName ||
+        !bankInfo.accountNumber ||
+        !bankInfo.accountName)
+    ) {
+      throw new ApiError(
+        400,
+        "Phương thức chuyển khoản yêu cầu thông tin ngân hàng đầy đủ (bankName, accountNumber, accountName)"
+      );
+    }
+
+    // Cập nhật refund info
+    order.refund = {
+      amount,
+      method,
+      status: "completed", // COD là manual nên mặc định completed luôn
+      bankInfo: method === "bank_transfer" ? bankInfo : undefined,
+      transactionId: `REFUND-${order.code}-${Date.now()}`,
+      notes: notes || "",
+      processedBy,
+      requestedAt: new Date(),
+      completedAt: new Date(),
+    };
+
+    // Chuyển status sang refunded
+    const previousStatus = order.status;
+    order.status = "refunded";
+
+    // Thêm vào status history
+    order.statusHistory.push({
+      status: "refunded",
+      updatedAt: new Date(),
+      updatedBy: processedBy,
+      note: `Hoàn tiền ${amount.toLocaleString("vi-VN")}đ qua ${method}. ${
+        notes || ""
+      }`,
+    });
+
+    await order.save();
+
+    // Populate để trả về
+    await order.populate([
+      { path: "user", select: "name email phone" },
+      { path: "refund.processedBy", select: "name email role" },
+    ]);
+
+    return {
+      success: true,
+      message: `Đã hoàn tiền thành công ${amount.toLocaleString(
+        "vi-VN"
+      )}đ cho đơn hàng ${order.code}`,
+      data: {
+        order,
+        refund: order.refund,
+        previousStatus,
+      },
     };
   },
 };

@@ -86,7 +86,7 @@ const validateReviewId = async (req, res, next) => {
     if (!reviewId || !mongoose.Types.ObjectId.isValid(reviewId)) {
       return res.status(400).json({
         success: false,
-        message: "ID đánh giá không hợp lệ"
+        message: "ID đánh giá không hợp lệ",
       });
     }
     next();
@@ -99,20 +99,20 @@ const validateReviewOwnership = async (req, res, next) => {
   try {
     const reviewId = req.params.reviewId || req.params.id;
     const userId = req.user.id;
-    
+
     const review = await Review.findOne({
       _id: reviewId,
       user: userId,
-      deletedAt: null
+      deletedAt: null,
     });
-    
+
     if (!review) {
       return res.status(403).json({
         success: false,
-        message: "Bạn không có quyền thao tác với đánh giá này"
+        message: "Bạn không có quyền thao tác với đánh giá này",
       });
     }
-    
+
     next();
   } catch (error) {
     next(error);
@@ -166,21 +166,6 @@ const validateRestoreReview = [
     .withMessage("ID đánh giá không hợp lệ"),
 ];
 
-const validateGetUserCancelRequests = [
-  query("page")
-    .optional()
-    .isInt({ min: 1 })
-    .withMessage("Số trang phải là số nguyên dương"),
-  query("limit")
-    .optional()
-    .isInt({ min: 1, max: 50 })
-    .withMessage("Số lượng mỗi trang phải từ 1-50"),
-  query("status")
-    .optional()
-    .isIn(["pending", "approved", "rejected"])
-    .withMessage("Trạng thái không hợp lệ"),
-];
-
 module.exports = {
   validateCreateReview,
   validateUpdateReview,
@@ -192,5 +177,4 @@ module.exports = {
   validateGetAllReviews,
   validateToggleReviewVisibility,
   validateRestoreReview,
-  validateGetUserCancelRequests
 };

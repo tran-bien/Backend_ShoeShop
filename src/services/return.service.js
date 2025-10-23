@@ -242,11 +242,25 @@ const rejectReturnRequest = async (id, approvedBy, rejectionReason) => {
 const processReturn = async (id, processedBy) => {
   const request = await ReturnRequest.findById(id).populate([
     { path: "order" },
-    { path: "items.variant" },
+    {
+      path: "items.variant",
+      populate: { path: "product", select: "_id name" },
+    },
   ]);
 
   if (!request) {
     throw new ApiError(404, "Không tìm thấy yêu cầu");
+  }
+
+  // ============================================================
+  // VALIDATION: Kiểm tra trạng thái request
+  // ============================================================
+  if (request.status === "completed") {
+    throw new ApiError(400, "Yêu cầu đã được xử lý hoàn tất trước đó");
+  }
+
+  if (request.status === "cancelled") {
+    throw new ApiError(400, "Yêu cầu đã bị hủy, không thể xử lý");
   }
 
   if (request.status !== "approved") {
@@ -255,6 +269,46 @@ const processReturn = async (id, processedBy) => {
 
   if (request.type !== "RETURN") {
     throw new ApiError(400, "Yêu cầu này không phải là trả hàng");
+  }
+
+  // ============================================================
+  // VALIDATION: Kiểm tra trạng thái đơn hàng
+  // ============================================================
+  const order = await Order.findById(request.order);
+
+  if (!order) {
+    throw new ApiError(404, "Không tìm thấy đơn hàng liên kết");
+  }
+
+  // Chỉ cho phép trả hàng từ các trạng thái hợp lệ
+  const allowedOrderStatuses = ["delivered", "returning_to_warehouse"];
+  if (!allowedOrderStatuses.includes(order.status)) {
+    throw new ApiError(
+      400,
+      `Đơn hàng đang ở trạng thái "${
+        order.status
+      }", không thể xử lý trả hàng. Chỉ chấp nhận: ${allowedOrderStatuses.join(
+        ", "
+      )}`
+    );
+  }
+
+  // ============================================================
+  // VALIDATION: Kiểm tra thời hạn trả hàng (7 ngày)
+  // ============================================================
+  if (!order.deliveredAt) {
+    throw new ApiError(400, "Đơn hàng chưa được giao, không thể trả hàng");
+  }
+
+  const daysSinceDelivery = Math.floor(
+    (new Date() - new Date(order.deliveredAt)) / (1000 * 60 * 60 * 24)
+  );
+
+  if (daysSinceDelivery > 7) {
+    throw new ApiError(
+      400,
+      `Đã quá thời hạn trả hàng (7 ngày). Đơn hàng được giao ${daysSinceDelivery} ngày trước.`
+    );
   }
 
   request.status = "processing";
@@ -277,7 +331,6 @@ const processReturn = async (id, processedBy) => {
   }
 
   // Cập nhật trạng thái đơn hàng
-  const order = await Order.findById(request.order);
   order.status = "returned";
   order.statusHistory.push({
     status: "returned",

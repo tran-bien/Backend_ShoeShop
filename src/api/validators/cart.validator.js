@@ -30,8 +30,8 @@ const validateAddToCart = [
 
   body("quantity")
     .optional()
-    .isInt({ min: 1, max: 100 })
-    .withMessage("Số lượng phải là số nguyên từ 1-100"),
+    .isInt({ min: 1, max: 99 })
+    .withMessage("Số lượng phải là số nguyên từ 1-99"),
 ];
 
 /**
@@ -47,8 +47,8 @@ const validateUpdateCartItem = [
   body("quantity")
     .notEmpty()
     .withMessage("Vui lòng cung cấp số lượng")
-    .isInt({ min: 1, max: 100 })
-    .withMessage("Số lượng phải là số nguyên từ 1-100"),
+    .isInt({ min: 1, max: 99 })
+    .withMessage("Số lượng phải là số nguyên từ 1-99"),
 ];
 
 /**
@@ -69,11 +69,11 @@ const validateToggleSelectItems = [
   body("itemIds")
     .isArray({ min: 1 })
     .withMessage("Danh sách sản phẩm phải là mảng và có ít nhất một phần tử"),
-  
+
   body("itemIds.*")
     .custom(isValidObjectId)
     .withMessage("ID sản phẩm không hợp lệ"),
-  
+
   body("selected")
     .optional()
     .isBoolean()
@@ -97,5 +97,5 @@ module.exports = {
   validateUpdateCartItem,
   validateRemoveFromCart,
   validateToggleSelectItems,
-  validatePreviewBeforeOrder
+  validatePreviewBeforeOrder,
 };

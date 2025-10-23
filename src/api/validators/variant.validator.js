@@ -94,7 +94,57 @@ const variantValidator = {
 
     body("sizes")
       .isArray({ min: 1 })
-      .withMessage("Phải có ít nhất một kích thước"),
+      .withMessage("Phải có ít nhất một kích thước")
+      .custom((sizes) => {
+        // Validate từng element trong array
+        if (!Array.isArray(sizes)) {
+          throw new ApiError(400, "Sizes phải là một mảng");
+        }
+
+        for (let i = 0; i < sizes.length; i++) {
+          const item = sizes[i];
+
+          // Check item là object
+          if (typeof item !== "object" || item === null) {
+            throw new ApiError(
+              400,
+              `Phần tử thứ ${i + 1} trong sizes phải là một object`
+            );
+          }
+
+          // Check có field size
+          if (!item.size) {
+            throw new ApiError(400, `Phần tử thứ ${i + 1} thiếu trường 'size'`);
+          }
+
+          // Check size là ObjectId hợp lệ
+          if (!mongoose.Types.ObjectId.isValid(item.size)) {
+            throw new ApiError(
+              400,
+              `ID kích thước tại vị trí ${i + 1} không hợp lệ`
+            );
+          }
+
+          // Check có field quantity
+          if (item.quantity === undefined || item.quantity === null) {
+            throw new ApiError(
+              400,
+              `Phần tử thứ ${i + 1} thiếu trường 'quantity'`
+            );
+          }
+
+          // Check quantity là số nguyên không âm
+          if (!Number.isInteger(item.quantity) || item.quantity < 0) {
+            throw new ApiError(
+              400,
+              `Số lượng tại vị trí ${i + 1} phải là số nguyên không âm`
+            );
+          }
+        }
+
+        return true;
+      })
+      .custom(checkDuplicateSizes),
 
     body("sizes.*.size")
       .notEmpty()
@@ -109,9 +159,6 @@ const variantValidator = {
     body("sizes.*.quantity")
       .isInt({ min: 0 })
       .withMessage("Số lượng phải là số nguyên không âm"),
-
-    // Kiểm tra trùng lặp size trong biến thể
-    body("sizes").custom(checkDuplicateSizes),
   ],
 
   // Kiểm tra dữ liệu cập nhật biến thể
@@ -172,7 +219,59 @@ const variantValidator = {
     body("sizes")
       .optional()
       .isArray({ min: 1 })
-      .withMessage("Phải có ít nhất một kích thước"),
+      .withMessage("Phải có ít nhất một kích thước")
+      .custom((sizes) => {
+        // Validate từng element trong array nếu có sizes
+        if (!sizes) return true; // optional
+
+        if (!Array.isArray(sizes)) {
+          throw new ApiError(400, "Sizes phải là một mảng");
+        }
+
+        for (let i = 0; i < sizes.length; i++) {
+          const item = sizes[i];
+
+          // Check item là object
+          if (typeof item !== "object" || item === null) {
+            throw new ApiError(
+              400,
+              `Phần tử thứ ${i + 1} trong sizes phải là một object`
+            );
+          }
+
+          // Check có field size
+          if (!item.size) {
+            throw new ApiError(400, `Phần tử thứ ${i + 1} thiếu trường 'size'`);
+          }
+
+          // Check size là ObjectId hợp lệ
+          if (!mongoose.Types.ObjectId.isValid(item.size)) {
+            throw new ApiError(
+              400,
+              `ID kích thước tại vị trí ${i + 1} không hợp lệ`
+            );
+          }
+
+          // Check có field quantity
+          if (item.quantity === undefined || item.quantity === null) {
+            throw new ApiError(
+              400,
+              `Phần tử thứ ${i + 1} thiếu trường 'quantity'`
+            );
+          }
+
+          // Check quantity là số nguyên không âm
+          if (!Number.isInteger(item.quantity) || item.quantity < 0) {
+            throw new ApiError(
+              400,
+              `Số lượng tại vị trí ${i + 1} phải là số nguyên không âm`
+            );
+          }
+        }
+
+        return true;
+      })
+      .custom(checkDuplicateSizes),
 
     body("sizes.*.size")
       .optional()
@@ -189,9 +288,6 @@ const variantValidator = {
       .optional()
       .isInt({ min: 0 })
       .withMessage("Số lượng phải là số nguyên không âm"),
-
-    // Kiểm tra trùng lặp size trong cập nhật biến thể
-    body("sizes").custom(checkDuplicateSizes),
   ],
 
   // Kiểm tra query lấy danh sách biến thể
