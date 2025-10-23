@@ -112,7 +112,7 @@ const applyMiddlewares = (schema) => {
               // Lấy sizes hiện tại
               const updatedSizes = JSON.parse(JSON.stringify(doc.sizes));
 
-              // ✅ XÓA SKU cũ (sẽ được tạo lại bởi inventory.service.js khi stock in)
+              //  XÓA SKU cũ (sẽ được tạo lại bởi inventory.service.js khi stock in)
               updatedSizes.forEach((size, index) => {
                 if (size.sku && duplicateSKUs.includes(size.sku)) {
                   updatedSizes[index].sku = null;

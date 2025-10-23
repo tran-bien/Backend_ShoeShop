@@ -1,4 +1,4 @@
-const { Product, User, Order, Variant } = require("@models");
+const { Product, User, Order, Variant, InventoryItem } = require("@models");
 const mongoose = require("mongoose");
 const moment = require("moment");
 const ApiError = require("@utils/ApiError");
@@ -19,16 +19,9 @@ const dashboardService = {
       // Đếm tổng đơn hàng
       const totalOrders = await Order.countDocuments({ deletedAt: null });
 
-      // ⚠️ WARNING: TÍNH COST KHÔNG CHÍNH XÁC ⚠️
-      // Variant.costPrice đã bị XÓA khỏi schema
-      // Cost giờ lưu trong InventoryItem và thay đổi theo từng lần nhập kho
-      //
-      // ĐỂ TÍNH COST CHÍNH XÁC, CẦN:
-      // 1. Lookup OrderItem -> InventoryTransaction (tìm transaction OUT tại thời điểm bán)
-      // 2. Lấy averageCostPrice từ InventoryItem tại thời điểm transaction
-      // 3. Hoặc lưu costPrice vào OrderItem khi tạo đơn hàng
-      //
-      // HIỆN TẠI: totalCost = 0, totalProfit = totalRevenue (SAI)
+      //  FIXED: Tính cost từ InventoryItem.averageCostPrice
+      // NOTE: Đây là cost TRUNG BÌNH, không phải cost tại thời điểm bán chính xác
+      // Để có cost chính xác 100%, cần lưu costPrice vào OrderItem khi tạo đơn
       const financialResults = await Order.aggregate([
         {
           $match: {
@@ -53,16 +46,49 @@ const dashboardService = {
             preserveNullAndEmptyArrays: true,
           },
         },
+        // ✅ Lookup InventoryItem để lấy averageCostPrice
+        {
+          $lookup: {
+            from: "inventoryitems",
+            let: {
+              variantId: "$orderItems.variant",
+              sizeId: "$orderItems.size",
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$variant", "$$variantId"] },
+                      { $eq: ["$size", "$$sizeId"] },
+                    ],
+                  },
+                },
+              },
+              {
+                $project: {
+                  averageCostPrice: 1,
+                },
+              },
+            ],
+            as: "inventoryInfo",
+          },
+        },
+        {
+          $unwind: {
+            path: "$inventoryInfo",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
         {
           $group: {
             _id: null,
             totalRevenue: { $sum: "$totalAfterDiscountAndShipping" },
-            // ❌ BUG: Field "costPrice" KHÔNG TỒN TẠI trong Variant schema
-            // Kết quả: totalCost = 0 (luôn luôn)
+            // Sử dụng averageCostPrice từ InventoryItem
             totalCost: {
               $sum: {
                 $multiply: [
-                  { $ifNull: ["$variantInfo.costPrice", 0] }, // ← Luôn trả về 0
+                  { $ifNull: ["$inventoryInfo.averageCostPrice", 0] },
                   "$orderItems.quantity",
                 ],
               },
@@ -82,9 +108,7 @@ const dashboardService = {
       const totalRevenue =
         financialResults.length > 0 ? financialResults[0].totalRevenue : 0;
 
-      // ⚠️ WARNING: totalCost và totalProfit KHÔNG CHÍNH XÁC
-      // Do Variant.costPrice không còn tồn tại → totalCost = 0
-      // → totalProfit = totalRevenue (SAI HOÀN TOÀN)
+      // FIXED: Sử dụng averageCostPrice từ InventoryItem
       const totalCost =
         financialResults.length > 0 ? financialResults[0].totalCost : 0;
       const totalProfit =
@@ -97,12 +121,12 @@ const dashboardService = {
           totalUsers,
           totalOrders,
           totalRevenue,
-          totalCost, // ← Luôn = 0 (BUG)
-          totalProfit, // ← = totalRevenue (SAI)
+          totalCost, //  Từ InventoryItem.averageCostPrice
+          totalProfit, //  = totalRevenue - totalCost
           profitMargin:
             totalRevenue > 0
               ? Math.round((totalProfit / totalRevenue) * 100)
-              : 0, // ← Luôn = 100% (SAI)
+              : 0,
         },
       };
     } catch (error) {
@@ -116,7 +140,7 @@ const dashboardService = {
   /**
    * Lấy dữ liệu doanh thu theo ngày
    *
-   * ⚠️ WARNING: Cost calculation KHÔNG CHÍNH XÁC ⚠️
+   * WARNING: Cost calculation KHÔNG CHÍNH XÁC
    * Variant.costPrice đã bị XÓA → cost/profit luôn = 0
    * Cần sửa: Lookup InventoryTransaction để lấy cost chính xác
    *
@@ -142,8 +166,7 @@ const dashboardService = {
         throw new ApiError(400, "Ngày bắt đầu không thể sau ngày kết thúc");
       }
 
-      // ❌ BUG: Pipeline này query variant.costPrice (không tồn tại)
-      // Kết quả: cost = 0, profit = revenue (SAI)
+      // FIXED: Lookup InventoryItem để lấy averageCostPrice
       const dailyFinancials = await Order.aggregate([
         {
           $match: {
@@ -153,65 +176,57 @@ const dashboardService = {
           },
         },
         {
+          $unwind: "$orderItems",
+        },
+        // Lookup InventoryItem để lấy cost
+        {
           $lookup: {
-            from: "variants",
-            localField: "orderItems.variant",
-            foreignField: "_id",
-            as: "variants",
+            from: "inventoryitems",
+            let: {
+              variantId: "$orderItems.variant",
+              sizeId: "$orderItems.size",
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$variant", "$$variantId"] },
+                      { $eq: ["$size", "$$sizeId"] },
+                    ],
+                  },
+                },
+              },
+              {
+                $project: {
+                  averageCostPrice: 1,
+                },
+              },
+            ],
+            as: "inventoryInfo",
+          },
+        },
+        {
+          $unwind: {
+            path: "$inventoryInfo",
+            preserveNullAndEmptyArrays: true,
           },
         },
         {
           $addFields: {
-            // ❌ BUG: Kết hợp thông tin orderItems với variants để tính toán chi phí
-            // Nhưng variant.costPrice KHÔNG TỒN TẠI → luôn trả về 0
-            enrichedItems: {
-              $map: {
-                input: "$orderItems",
-                as: "item",
-                in: {
-                  quantity: "$$item.quantity",
-                  price: "$$item.price",
-                  variantId: "$$item.variant",
-                  // ❌ Tìm variant tương ứng để lấy costPrice (FIELD KHÔNG TỒN TẠI)
-                  costPrice: {
-                    $let: {
-                      vars: {
-                        variant: {
-                          $arrayElemAt: [
-                            {
-                              $filter: {
-                                input: "$variants",
-                                as: "v",
-                                cond: { $eq: ["$$v._id", "$$item.variant"] },
-                              },
-                            },
-                            0,
-                          ],
-                        },
-                      },
-                      in: { $ifNull: ["$$variant.costPrice", 0] }, // ← Luôn = 0
-                    },
-                  },
-                },
-              },
+            itemCost: {
+              $multiply: [
+                { $ifNull: ["$inventoryInfo.averageCostPrice", 0] },
+                "$orderItems.quantity",
+              ],
             },
           },
-        },
-        {
-          $unwind: "$enrichedItems",
         },
         {
           $group: {
             _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
             revenue: { $sum: "$totalAfterDiscountAndShipping" },
-            cost: {
-              $sum: {
-                $multiply: [
-                  "$enrichedItems.costPrice", // ← Luôn = 0 (BUG)
-                  "$enrichedItems.quantity",
-                ],
-              },
-            },
+            cost: { $sum: "$itemCost" },
             orderCount: { $addToSet: "$_id" },
           },
         },
@@ -220,8 +235,8 @@ const dashboardService = {
             _id: 0,
             date: "$_id",
             revenue: 1,
-            cost: 1, // ← Luôn = 0
-            profit: { $subtract: ["$revenue", "$cost"] }, // ← = revenue (SAI)
+            cost: 1,
+            profit: { $subtract: ["$revenue", "$cost"] },
             count: { $size: "$orderCount" },
           },
         },
@@ -317,8 +332,7 @@ const dashboardService = {
       // Mặc định lấy doanh thu trong năm hiện tại
       const selectedYear = year ? parseInt(year) : new Date().getFullYear();
 
-      // ❌ BUG: Tính doanh thu theo tháng với chi phí và lợi nhuận
-      // Nhưng variant.costPrice KHÔNG TỒN TẠI → cost luôn = 0
+      // FIXED: Lookup InventoryItem để lấy averageCostPrice
       const monthlyFinancials = await Order.aggregate([
         {
           $match: {
@@ -328,63 +342,57 @@ const dashboardService = {
           },
         },
         {
+          $unwind: "$orderItems",
+        },
+        // Lookup InventoryItem để lấy cost
+        {
           $lookup: {
-            from: "variants",
-            localField: "orderItems.variant",
-            foreignField: "_id",
-            as: "variants",
+            from: "inventoryitems",
+            let: {
+              variantId: "$orderItems.variant",
+              sizeId: "$orderItems.size",
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$variant", "$$variantId"] },
+                      { $eq: ["$size", "$$sizeId"] },
+                    ],
+                  },
+                },
+              },
+              {
+                $project: {
+                  averageCostPrice: 1,
+                },
+              },
+            ],
+            as: "inventoryInfo",
+          },
+        },
+        {
+          $unwind: {
+            path: "$inventoryInfo",
+            preserveNullAndEmptyArrays: true,
           },
         },
         {
           $addFields: {
-            enrichedItems: {
-              $map: {
-                input: "$orderItems",
-                as: "item",
-                in: {
-                  quantity: "$$item.quantity",
-                  price: "$$item.price",
-                  variantId: "$$item.variant",
-                  // ❌ Field costPrice KHÔNG TỒN TẠI → luôn = 0
-                  costPrice: {
-                    $let: {
-                      vars: {
-                        variant: {
-                          $arrayElemAt: [
-                            {
-                              $filter: {
-                                input: "$variants",
-                                as: "v",
-                                cond: { $eq: ["$$v._id", "$$item.variant"] },
-                              },
-                            },
-                            0,
-                          ],
-                        },
-                      },
-                      in: { $ifNull: ["$$variant.costPrice", 0] }, // ← Luôn = 0
-                    },
-                  },
-                },
-              },
+            itemCost: {
+              $multiply: [
+                { $ifNull: ["$inventoryInfo.averageCostPrice", 0] },
+                "$orderItems.quantity",
+              ],
             },
           },
-        },
-        {
-          $unwind: "$enrichedItems",
         },
         {
           $group: {
             _id: { $month: "$createdAt" },
             revenue: { $sum: "$totalAfterDiscountAndShipping" },
-            cost: {
-              $sum: {
-                $multiply: [
-                  "$enrichedItems.costPrice",
-                  "$enrichedItems.quantity",
-                ],
-              },
-            },
+            cost: { $sum: "$itemCost" },
             orderCount: { $addToSet: "$_id" },
           },
         },
@@ -495,7 +503,7 @@ const dashboardService = {
           startDate.setMonth(startDate.getMonth() - 1); // Mặc định 1 tháng
       }
 
-      // Tính sản phẩm bán chạy
+      // FIXED: Tính sản phẩm bán chạy với cost từ InventoryItem
       const topProducts = await Order.aggregate([
         {
           $match: {
@@ -529,6 +537,40 @@ const dashboardService = {
         {
           $unwind: "$product",
         },
+        // Lookup InventoryItem để lấy cost
+        {
+          $lookup: {
+            from: "inventoryitems",
+            let: {
+              variantId: "$orderItems.variant",
+              sizeId: "$orderItems.size",
+            },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ["$variant", "$$variantId"] },
+                      { $eq: ["$size", "$$sizeId"] },
+                    ],
+                  },
+                },
+              },
+              {
+                $project: {
+                  averageCostPrice: 1,
+                },
+              },
+            ],
+            as: "inventoryInfo",
+          },
+        },
+        {
+          $unwind: {
+            path: "$inventoryInfo",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
         {
           $group: {
             _id: "$variant.product",
@@ -539,10 +581,13 @@ const dashboardService = {
                 $multiply: ["$orderItems.price", "$orderItems.quantity"],
               },
             },
-            // ❌ BUG: variant.costPrice KHÔNG TỒN TẠI → totalCost luôn = 0
+            // Sử dụng averageCostPrice từ InventoryItem
             totalCost: {
               $sum: {
-                $multiply: ["$variant.costPrice", "$orderItems.quantity"], // ← costPrice = undefined
+                $multiply: [
+                  { $ifNull: ["$inventoryInfo.averageCostPrice", 0] },
+                  "$orderItems.quantity",
+                ],
               },
             },
             image: {
