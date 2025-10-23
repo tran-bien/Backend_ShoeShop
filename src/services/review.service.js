@@ -737,6 +737,63 @@ const reviewService = {
       },
     };
   },
+
+  /**
+   * Tính toán động rating và numReviews cho Product từ Review
+   * MOVED từ adminReviewService để có thể dùng ở public context
+   * @param {String} productId - ID của product
+   * @returns {Object} - { rating, numReviews }
+   */
+  getProductRatingInfo: async (productId) => {
+    // Tìm tất cả variants của sản phẩm
+    const variants = await Variant.find({ product: productId }).select("_id");
+    const variantIds = variants.map((v) => v._id);
+
+    // Tìm tất cả orderItems từ Order model có chứa các variant của sản phẩm
+    const orderItemsInfo = await Order.aggregate([
+      { $unwind: "$orderItems" },
+      {
+        $match: {
+          "orderItems.variant": {
+            $in: variantIds.map((id) => new mongoose.Types.ObjectId(id)),
+          },
+        },
+      },
+      { $project: { orderItemId: "$orderItems._id" } },
+    ]);
+
+    const orderItemIds = orderItemsInfo.map((item) => item.orderItemId);
+
+    // Tính toán rating và số lượng reviews
+    const stats = await Review.aggregate([
+      {
+        $match: {
+          orderItem: { $in: orderItemIds },
+          isActive: true,
+          deletedAt: null,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalReviews: { $sum: 1 },
+          avgRating: { $avg: "$rating" },
+        },
+      },
+    ]);
+
+    if (stats.length === 0) {
+      return {
+        rating: 0,
+        numReviews: 0,
+      };
+    }
+
+    return {
+      rating: Math.round(stats[0].avgRating * 10) / 10, // Làm tròn 1 chữ số thập phân
+      numReviews: stats[0].totalReviews,
+    };
+  },
 };
 
 /**
@@ -1128,64 +1185,6 @@ const adminReviewService = {
             ? product.images[0].url
             : null,
       },
-    };
-  },
-
-  /**
-   * MỚI: Tính toán động rating và numReviews cho Product từ Review
-   * @param {String} productId - ID của product
-   * @returns {Object} - { rating, numReviews }
-   */
-  getProductRatingInfo: async (productId) => {
-    const mongoose = require("mongoose");
-
-    // Tìm tất cả variants của sản phẩm
-    const variants = await Variant.find({ product: productId }).select("_id");
-    const variantIds = variants.map((v) => v._id);
-
-    // Tìm tất cả orderItems từ Order model có chứa các variant của sản phẩm
-    const orderItemsInfo = await Order.aggregate([
-      { $unwind: "$orderItems" },
-      {
-        $match: {
-          "orderItems.variant": {
-            $in: variantIds.map((id) => new mongoose.Types.ObjectId(id)),
-          },
-        },
-      },
-      { $project: { orderItemId: "$orderItems._id" } },
-    ]);
-
-    const orderItemIds = orderItemsInfo.map((item) => item.orderItemId);
-
-    // Tính toán rating và số lượng reviews
-    const stats = await Review.aggregate([
-      {
-        $match: {
-          orderItem: { $in: orderItemIds },
-          isActive: true,
-          deletedAt: null,
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          totalReviews: { $sum: 1 },
-          avgRating: { $avg: "$rating" },
-        },
-      },
-    ]);
-
-    if (stats.length === 0) {
-      return {
-        rating: 0,
-        numReviews: 0,
-      };
-    }
-
-    return {
-      rating: Math.round(stats[0].avgRating * 10) / 10, // Làm tròn 1 chữ số thập phân
-      numReviews: stats[0].totalReviews,
     };
   },
 };
