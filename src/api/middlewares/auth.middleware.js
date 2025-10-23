@@ -123,21 +123,7 @@ exports.requireAdminOnly = (req, res, next) => {
   next();
 };
 
-// Middleware cho phép cả Staff và Admin có quyền CRUD (mới)
-exports.requireStaffOrAdmin = (req, res, next) => {
-  if (!req.user) {
-    throw new ApiError(401, "Bạn cần đăng nhập để truy cập");
-  }
-
-  if (req.user.role !== "staff" && req.user.role !== "admin") {
-    throw new ApiError(403, "Bạn không có quyền truy cập tính năng này");
-  }
-
-  // Cả Staff và Admin đều có quyền CRUD
-  next();
-};
-
-// Middleware cho Staff - chỉ cho phép xem (READ ONLY)
+// Middleware cho phép cả Staff và Admin có quyền CRUD
 exports.requireStaffOrAdmin = (req, res, next) => {
   if (!req.user) {
     throw new ApiError(401, "Bạn cần đăng nhập để truy cập");

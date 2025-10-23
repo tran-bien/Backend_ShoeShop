@@ -426,8 +426,8 @@ OrderSchema.index({ status: 1, createdAt: -1 });
 // Index cho assignedShipper - query orders by shipper
 OrderSchema.index({ assignedShipper: 1, status: 1 });
 
-// Index cho code - search by order code (unique)
-OrderSchema.index({ code: 1 }, { unique: true });
+// Index cho code - REMOVED: code already has unique: true in field definition
+// OrderSchema.index({ code: 1 }, { unique: true });
 
 // Index cho payment status - query unpaid orders
 OrderSchema.index({ "payment.paymentStatus": 1, createdAt: -1 });

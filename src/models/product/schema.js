@@ -108,8 +108,8 @@ ProductSchema.index(
   }
 );
 
-// Index cho slug (dùng cho SEO-friendly URLs)
-ProductSchema.index({ slug: 1 }, { unique: true });
+// Index cho slug - REMOVED: slug already has unique: true in field definition
+// ProductSchema.index({ slug: 1 }, { unique: true });
 
 // Compound index cho filter thường dùng: category + isActive + deletedAt
 ProductSchema.index(
@@ -131,8 +131,8 @@ ProductSchema.index(
   { name: "brand_active_deleted" }
 );
 
-// Index cho soft delete queries
-ProductSchema.index({ deletedAt: 1 });
+// Index cho soft delete - REMOVED: deletedAt already in compound indexes above
+// ProductSchema.index({ deletedAt: 1 });
 
 // Index cho tags filter (many-to-many relationship)
 ProductSchema.index({ tags: 1 });
