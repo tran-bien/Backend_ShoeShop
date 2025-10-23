@@ -477,10 +477,7 @@ const processExchange = async (id, processedBy) => {
         size: item.exchangeToSize,
         quantity: item.quantity,
         reason: "exchange",
-        reference: {
-          type: "ReturnRequest",
-          id: request._id,
-        },
+        reference: request._id, // ✅ FIXED: ObjectId thay vì object
         notes: `Đổi hàng mới cho đơn ${request.order.code}`,
       },
       processedBy
@@ -501,20 +498,30 @@ const processExchange = async (id, processedBy) => {
         oi.size.toString() === item.size.toString()
     );
 
-    if (orderItemIndex !== -1) {
-      // Đánh dấu đã đổi
-      order.orderItems[orderItemIndex].hasBeenExchanged = true;
-
-      // Thêm vào lịch sử đổi hàng
-      order.orderItems[orderItemIndex].exchangeHistory.push({
-        returnRequestId: request._id,
-        exchangedAt: new Date(),
-        fromVariant: item.variant._id,
-        fromSize: item.size,
-        toVariant: item.exchangeToVariant._id,
-        toSize: item.exchangeToSize,
-      });
+    if (orderItemIndex === -1) {
+      throw new ApiError(400, "Không tìm thấy sản phẩm trong đơn hàng");
     }
+
+    // ✅ FIXED: RE-VALIDATE hasBeenExchanged để tránh race condition
+    if (order.orderItems[orderItemIndex].hasBeenExchanged) {
+      throw new ApiError(
+        400,
+        `Sản phẩm đã được đổi bởi một request khác. Không thể xử lý.`
+      );
+    }
+
+    // Đánh dấu đã đổi
+    order.orderItems[orderItemIndex].hasBeenExchanged = true;
+
+    // Thêm vào lịch sử đổi hàng
+    order.orderItems[orderItemIndex].exchangeHistory.push({
+      returnRequestId: request._id,
+      exchangedAt: new Date(),
+      fromVariant: item.variant._id,
+      fromSize: item.size,
+      toVariant: item.exchangeToVariant._id,
+      toSize: item.exchangeToSize,
+    });
   }
 
   // Lưu order

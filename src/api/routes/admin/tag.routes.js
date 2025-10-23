@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const tagController = require("@controllers/admin/tag.controller");
 const tagValidator = require("@validators/tag.validator");
+const validate = require("@utils/validatehelper");
 const {
   protect,
   requireStaffOrAdmin,
@@ -12,98 +13,98 @@ const {
 router.use(protect);
 
 /**
- * @route   GET /api/admin/tags/deleted
+ * @route   GET /api/v1/admin/tags
+ * @desc    Lấy tất cả tags (có phân trang, filter)
+ * @access  Staff/Admin
+ */
+router.get(
+  "/",
+  requireStaffOrAdmin,
+  validate(tagValidator.validateTagQuery),
+  tagController.getAllTags
+);
+
+/**
+ * @route   GET /api/v1/admin/tags/deleted
  * @desc    Lấy danh sách tags đã xóa
  * @access  Staff/Admin
  */
 router.get(
   "/deleted",
   requireStaffOrAdmin,
-  tagValidator.getDeletedTags,
+  validate(tagValidator.validateTagQuery),
   tagController.getDeletedTags
 );
 
 /**
- * @route   GET /api/admin/tags
- * @desc    Lấy tất cả tags
- * @access  Staff/Admin
- */
-router.get(
-  "/",
-  requireStaffOrAdmin,
-  tagValidator.getAllTags,
-  tagController.getAllTags
-);
-
-/**
- * @route   POST /api/admin/tags
- * @desc    Tạo tag mới
- * @access  Staff/Admin
- */
-router.post(
-  "/",
-  requireStaffOrAdmin,
-  tagValidator.createTag,
-  tagController.createTag
-);
-
-/**
- * @route   GET /api/admin/tags/:id
+ * @route   GET /api/v1/admin/tags/:id
  * @desc    Lấy chi tiết tag theo ID
  * @access  Staff/Admin
  */
 router.get(
   "/:id",
   requireStaffOrAdmin,
-  tagValidator.getTagById,
+  validate(tagValidator.validateTagId),
   tagController.getTagById
 );
 
 /**
- * @route   PUT /api/admin/tags/:id
+ * @route   POST /api/v1/admin/tags
+ * @desc    Tạo tag mới
+ * @access  Staff/Admin
+ */
+router.post(
+  "/",
+  requireStaffOrAdmin,
+  validate(tagValidator.validateTagData),
+  tagController.createTag
+);
+
+/**
+ * @route   PUT /api/v1/admin/tags/:id
  * @desc    Cập nhật tag
- * @access  Staff/Admin (Full)
+ * @access  Staff/Admin
  */
 router.put(
   "/:id",
   requireStaffOrAdmin,
-  tagValidator.updateTag,
+  validate([...tagValidator.validateTagId, ...tagValidator.validateTagData]),
   tagController.updateTag
 );
 
 /**
- * @route   DELETE /api/admin/tags/:id
+ * @route   DELETE /api/v1/admin/tags/:id
  * @desc    Xóa mềm tag
- * @access  Staff/Admin (Full)
+ * @access  Staff/Admin
  */
 router.delete(
   "/:id",
   requireStaffOrAdmin,
-  tagValidator.deleteTag,
+  validate(tagValidator.validateTagId),
   tagController.deleteTag
 );
 
 /**
- * @route   PATCH /api/admin/tags/:id/restore
+ * @route   PATCH /api/v1/admin/tags/:id/restore
  * @desc    Khôi phục tag đã xóa
- * @access  Staff/Admin (Full)
+ * @access  Staff/Admin
  */
 router.patch(
   "/:id/restore",
   requireStaffOrAdmin,
-  tagValidator.restoreTag,
+  validate(tagValidator.validateTagId),
   tagController.restoreTag
 );
 
 /**
- * @route   PATCH /api/admin/tags/:id/status
+ * @route   PATCH /api/v1/admin/tags/:id/status
  * @desc    Cập nhật trạng thái active/inactive
- * @access  Staff/Admin (Full)
+ * @access  Staff/Admin
  */
 router.patch(
   "/:id/status",
   requireStaffOrAdmin,
-  tagValidator.updateTagStatus,
+  validate(tagValidator.validateStatusUpdate),
   tagController.updateTagStatus
 );
 

@@ -65,48 +65,54 @@ exports.validateCreateReturnRequest = [
   body("items.*.exchangeToVariant")
     .optional()
     .isMongoId()
-    .withMessage("Exchange Variant ID không hợp lệ")
-    .custom((value, { req }) => {
-      // Nếu type là EXCHANGE, exchangeToVariant là required
-      const itemIndex = req.body.items?.findIndex(
-        (item) => item.exchangeToVariant === value
-      );
-      if (req.body.type === "EXCHANGE") {
-        if (!value) {
-          throw new Error("Phải chọn variant để đổi sang");
-        }
-        // Kiểm tra exchangeToVariant phải GIỐNG với variant gốc (chỉ đổi size)
-        const item = req.body.items[itemIndex];
-        if (item && item.variant && value !== item.variant) {
-          throw new Error(
-            "Chỉ được đổi sang size khác, không được đổi màu sắc hoặc sản phẩm"
-          );
-        }
-      }
-      return true;
-    }),
+    .withMessage("Exchange Variant ID không hợp lệ"),
 
   body("items.*.exchangeToSize")
     .optional()
     .isMongoId()
-    .withMessage("Exchange Size ID không hợp lệ")
-    .custom((value, { req }) => {
-      // Nếu type là EXCHANGE, exchangeToSize là required
-      const itemIndex = req.body.items?.findIndex(
-        (item) => item.exchangeToSize === value
-      );
-      if (req.body.type === "EXCHANGE") {
-        if (!value) {
-          throw new Error("Phải chọn size để đổi sang");
-        }
-        // Kiểm tra exchangeToSize phải KHÁC với size gốc
-        const item = req.body.items[itemIndex];
-        if (item && item.size && value === item.size) {
-          throw new Error("Size đổi sang phải khác với size hiện tại");
-        }
+    .withMessage("Exchange Size ID không hợp lệ"),
+
+  // FIXED: Validate toàn bộ items array cùng lúc
+  body("items").custom((items, { req }) => {
+    if (req.body.type !== "EXCHANGE") {
+      return true; // Chỉ validate cho EXCHANGE
+    }
+
+    if (!Array.isArray(items)) {
+      throw new Error("Items phải là một mảng");
+    }
+
+    // Validate từng item
+    items.forEach((item, index) => {
+      // Check exchangeToVariant required
+      if (!item.exchangeToVariant) {
+        throw new Error(`Item thứ ${index + 1}: Phải chọn variant để đổi sang`);
       }
-      return true;
-    }),
+
+      // Check exchangeToSize required
+      if (!item.exchangeToSize) {
+        throw new Error(`Item thứ ${index + 1}: Phải chọn size để đổi sang`);
+      }
+
+      // Check exchangeToVariant phải GIỐNG với variant gốc (chỉ đổi size)
+      if (item.exchangeToVariant !== item.variant) {
+        throw new Error(
+          `Item thứ ${
+            index + 1
+          }: Chỉ được đổi sang size khác, không được đổi màu sắc hoặc sản phẩm`
+        );
+      }
+
+      // Check exchangeToSize phải KHÁC với size gốc
+      if (item.exchangeToSize === item.size) {
+        throw new Error(
+          `Item thứ ${index + 1}: Size đổi sang phải khác với size hiện tại`
+        );
+      }
+    });
+
+    return true;
+  }),
 
   body("reason")
     .notEmpty()

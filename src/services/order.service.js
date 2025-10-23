@@ -1120,10 +1120,7 @@ const orderService = {
           quantity: item.quantity,
           costPrice: 0, // Hàng trả về không tính giá nhập
           reason: stockInReason,
-          reference: {
-            type: "Order",
-            id: order._id,
-          },
+          reference: order._id, // ✅ FIXED: ObjectId thay vì object
           notes: `Staff xác nhận nhận hàng trả về - ${
             notes || order.cancelReason || "Hoàn kho"
           }`,

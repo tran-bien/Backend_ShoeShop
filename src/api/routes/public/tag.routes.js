@@ -1,14 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const tagController = require("@controllers/public/tag.controller");
-const tagValidator = require("@validators/public/tag.validator");
+const tagValidator = require("@validators/tag.validator");
+const validate = require("@utils/validatehelper");
 
 /**
  * @route   GET /api/v1/tags
- * @desc    Lấy tất cả tags đang active
+ * @desc    Lấy tất cả tags đang active và chưa xóa
  * @access  Public
  */
-router.get("/", tagValidator.getAllTags, tagController.getAllTags);
+router.get("/", tagController.getPublicAllTags);
 
 /**
  * @route   GET /api/v1/tags/type/:type
@@ -17,8 +18,8 @@ router.get("/", tagValidator.getAllTags, tagController.getAllTags);
  */
 router.get(
   "/type/:type",
-  tagValidator.getTagsByType,
-  tagController.getTagsByType
+  validate(tagValidator.validateTagType),
+  tagController.getPublicTagsByType
 );
 
 /**
@@ -26,6 +27,10 @@ router.get(
  * @desc    Lấy chi tiết tag theo ID
  * @access  Public
  */
-router.get("/:id", tagValidator.getTagById, tagController.getTagById);
+router.get(
+  "/:id",
+  validate(tagValidator.validateTagId),
+  tagController.getPublicTagById
+);
 
 module.exports = router;

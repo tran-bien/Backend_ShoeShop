@@ -3,64 +3,36 @@ const tagService = require("@services/tag.service");
 
 const tagController = {
   /**
-   * @desc    Lấy tất cả tags đang active (cho user)
-   * @route   GET /api/v1/tags
-   * @access  Public
+   * @route GET /api/tags
+   * @desc Lấy danh sách tags đang active (chỉ lấy active và không xóa)
    */
-  getAllTags: asyncHandler(async (req, res) => {
-    // Chỉ lấy tags đang active và chưa bị xóa
-    const query = {
-      ...req.query,
-      isActive: true, // Force active only
-    };
-    const result = await tagService.getAllTags(query);
-    res.status(200).json(result);
+  getPublicAllTags: asyncHandler(async (req, res) => {
+    const result = await tagService.getPublicAllTags();
+    return res.json({
+      success: true,
+      tags: result,
+    });
   }),
 
   /**
-   * @desc    Lấy tags theo type (MATERIAL/USECASE/CUSTOM)
-   * @route   GET /api/v1/tags/type/:type
-   * @access  Public
+   * @route GET /api/tags/type/:type
+   * @desc Lấy tags theo type (MATERIAL/USECASE/CUSTOM)
    */
-  getTagsByType: asyncHandler(async (req, res) => {
-    const { type } = req.params;
-
-    // Validate type
-    const validTypes = ["MATERIAL", "USECASE", "CUSTOM"];
-    if (!validTypes.includes(type.toUpperCase())) {
-      return res.status(400).json({
-        success: false,
-        message: "Type không hợp lệ. Chỉ chấp nhận: MATERIAL, USECASE, CUSTOM",
-      });
-    }
-
-    const query = {
-      ...req.query,
-      type: type.toUpperCase(),
-      isActive: true, // Chỉ lấy tags active
-    };
-
-    const result = await tagService.getAllTags(query);
-    res.status(200).json(result);
+  getPublicTagsByType: asyncHandler(async (req, res) => {
+    const result = await tagService.getPublicTagsByType(req.params.type);
+    return res.json({
+      success: true,
+      tags: result,
+    });
   }),
 
   /**
-   * @desc    Lấy chi tiết tag theo ID (cho user)
-   * @route   GET /api/v1/tags/:id
-   * @access  Public
+   * @route GET /api/tags/:id
+   * @desc Lấy chi tiết tag theo ID
    */
-  getTagById: asyncHandler(async (req, res) => {
-    const result = await tagService.getTagById(req.params.id);
-
-    // Kiểm tra tag có active không
-    if (!result.tag.isActive) {
-      return res.status(404).json({
-        success: false,
-        message: "Tag không tồn tại hoặc đã bị vô hiệu hóa",
-      });
-    }
-
-    res.status(200).json(result);
+  getPublicTagById: asyncHandler(async (req, res) => {
+    const result = await tagService.getPublicTagById(req.params.id);
+    return res.json(result);
   }),
 };
 

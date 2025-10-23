@@ -43,6 +43,61 @@ const getSortOption = (sortParam) => {
 };
 
 const tagService = {
+  // === PUBLIC OPERATIONS ===
+
+  /**
+   * [PUBLIC] Lấy tất cả tags đang active (cho user)
+   */
+  getPublicAllTags: async () => {
+    return await Tag.find({ isActive: true, deletedAt: null })
+      .select("-deletedBy -deletedAt")
+      .sort({ type: 1, name: 1 })
+      .collation(getVietnameseCollation());
+  },
+
+  /**
+   * [PUBLIC] Lấy tags theo type (cho user)
+   */
+  getPublicTagsByType: async (type) => {
+    const upperType = type.toUpperCase();
+    const validTypes = ["MATERIAL", "USECASE", "CUSTOM"];
+
+    if (!validTypes.includes(upperType)) {
+      throw new ApiError(
+        400,
+        "Type không hợp lệ. Chỉ chấp nhận: MATERIAL, USECASE, CUSTOM"
+      );
+    }
+
+    return await Tag.find({
+      type: upperType,
+      isActive: true,
+      deletedAt: null,
+    })
+      .select("-deletedBy -deletedAt")
+      .sort("name")
+      .collation(getVietnameseCollation());
+  },
+
+  /**
+   * [PUBLIC] Lấy tag theo ID (chỉ active và chưa xóa)
+   */
+  getPublicTagById: async (tagId) => {
+    const tag = await Tag.findOne({
+      _id: tagId,
+      isActive: true,
+      deletedAt: null,
+    }).select("-deletedBy -deletedAt");
+
+    if (!tag) {
+      throw new ApiError(404, "Tag không tồn tại hoặc đã bị vô hiệu hóa");
+    }
+
+    return { success: true, tag };
+  },
+
+  // === ADMIN OPERATIONS ===
+
   /**
    * Lấy tất cả tags (có phân trang, filter)
    */

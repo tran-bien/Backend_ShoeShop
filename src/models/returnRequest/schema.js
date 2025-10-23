@@ -126,5 +126,13 @@ const returnRequestSchema = new mongoose.Schema(
 returnRequestSchema.index({ order: 1 });
 returnRequestSchema.index({ customer: 1, createdAt: -1 });
 returnRequestSchema.index({ status: 1, createdAt: -1 });
+// ✅ ADDED: Compound index để optimize duplicate exchange request check
+returnRequestSchema.index({
+  order: 1,
+  type: 1,
+  status: 1,
+  "items.variant": 1,
+  "items.size": 1,
+});
 
 module.exports = returnRequestSchema;
