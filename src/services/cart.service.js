@@ -82,7 +82,7 @@ const cartService = {
     // Populate thông tin chi tiết với product info đầy đủ
     await cart.populate({
       path: "cartItems.variant",
-      select: "color product price priceFinal isActive",
+      select: "color product gender imagesvariant isActive", // FIXED: Removed price/priceFinal
       populate: [
         { path: "color", select: "name code" },
         { path: "product", select: "_id name slug isActive" }, // Thêm _id vào select

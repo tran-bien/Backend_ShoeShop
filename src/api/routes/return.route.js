@@ -14,6 +14,7 @@ const {
   validateProcessReturn,
   validateGetReturns,
   validateReturnId,
+  validateCheckEligibility,
 } = require("../validators/return.validator");
 
 /**
@@ -47,6 +48,20 @@ router.get(
   protect,
   requireStaffOrAdmin,
   returnController.getReturnStats
+);
+
+/**
+ * @route   GET /api/v1/returns/check-eligibility
+ * @desc    Kiểm tra sản phẩm có thể đổi hàng không
+ * @access  Authenticated
+ * @query   orderId, variantId, sizeId
+ */
+router.get(
+  "/check-eligibility",
+  protect,
+  isAuthenticated,
+  validate(validateCheckEligibility),
+  returnController.checkExchangeEligibility
 );
 
 /**

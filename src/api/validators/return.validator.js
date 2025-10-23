@@ -43,7 +43,14 @@ exports.validateCreateReturnRequest = [
     .notEmpty()
     .withMessage("Số lượng không được để trống")
     .isInt({ min: 1 })
-    .withMessage("Số lượng phải là số nguyên dương"),
+    .withMessage("Số lượng phải là số nguyên dương")
+    .custom((value, { req }) => {
+      // Nếu là EXCHANGE, chỉ cho phép quantity = 1
+      if (req.body.type === "EXCHANGE" && value !== 1) {
+        throw new Error("Đổi hàng chỉ được phép đổi 1 sản phẩm mỗi lần");
+      }
+      return true;
+    }),
 
   body("items.*.reason")
     .notEmpty()
@@ -58,12 +65,48 @@ exports.validateCreateReturnRequest = [
   body("items.*.exchangeToVariant")
     .optional()
     .isMongoId()
-    .withMessage("Exchange Variant ID không hợp lệ"),
+    .withMessage("Exchange Variant ID không hợp lệ")
+    .custom((value, { req }) => {
+      // Nếu type là EXCHANGE, exchangeToVariant là required
+      const itemIndex = req.body.items?.findIndex(
+        (item) => item.exchangeToVariant === value
+      );
+      if (req.body.type === "EXCHANGE") {
+        if (!value) {
+          throw new Error("Phải chọn variant để đổi sang");
+        }
+        // Kiểm tra exchangeToVariant phải GIỐNG với variant gốc (chỉ đổi size)
+        const item = req.body.items[itemIndex];
+        if (item && item.variant && value !== item.variant) {
+          throw new Error(
+            "Chỉ được đổi sang size khác, không được đổi màu sắc hoặc sản phẩm"
+          );
+        }
+      }
+      return true;
+    }),
 
   body("items.*.exchangeToSize")
     .optional()
     .isMongoId()
-    .withMessage("Exchange Size ID không hợp lệ"),
+    .withMessage("Exchange Size ID không hợp lệ")
+    .custom((value, { req }) => {
+      // Nếu type là EXCHANGE, exchangeToSize là required
+      const itemIndex = req.body.items?.findIndex(
+        (item) => item.exchangeToSize === value
+      );
+      if (req.body.type === "EXCHANGE") {
+        if (!value) {
+          throw new Error("Phải chọn size để đổi sang");
+        }
+        // Kiểm tra exchangeToSize phải KHÁC với size gốc
+        const item = req.body.items[itemIndex];
+        if (item && item.size && value === item.size) {
+          throw new Error("Size đổi sang phải khác với size hiện tại");
+        }
+      }
+      return true;
+    }),
 
   body("reason")
     .notEmpty()
@@ -186,4 +229,27 @@ exports.validateReturnId = [
     .withMessage("Return Request ID không được để trống")
     .isMongoId()
     .withMessage("Return Request ID không hợp lệ"),
+];
+
+/**
+ * Validator cho check exchange eligibility
+ */
+exports.validateCheckEligibility = [
+  query("orderId")
+    .notEmpty()
+    .withMessage("Order ID không được để trống")
+    .isMongoId()
+    .withMessage("Order ID không hợp lệ"),
+
+  query("variantId")
+    .notEmpty()
+    .withMessage("Variant ID không được để trống")
+    .isMongoId()
+    .withMessage("Variant ID không hợp lệ"),
+
+  query("sizeId")
+    .notEmpty()
+    .withMessage("Size ID không được để trống")
+    .isMongoId()
+    .withMessage("Size ID không hợp lệ"),
 ];

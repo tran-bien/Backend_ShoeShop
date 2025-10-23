@@ -40,6 +40,47 @@ const createReturnRequest = async (data, userId) => {
     throw new ApiError(400, "Đã quá thời hạn đổi/trả hàng (7 ngày)");
   }
 
+  // ============================================================
+  // VALIDATION: CHỈ ĐỔI 1 LẦN DUY NHẤT
+  // ============================================================
+  if (type === "EXCHANGE") {
+    for (const item of items) {
+      const orderItem = order.orderItems.find(
+        (oi) =>
+          oi.variant.toString() === item.variant &&
+          oi.size.toString() === item.size
+      );
+
+      if (!orderItem) {
+        throw new ApiError(400, "Sản phẩm không tồn tại trong đơn hàng");
+      }
+
+      // Kiểm tra sản phẩm đã được đổi chưa
+      if (orderItem.hasBeenExchanged) {
+        throw new ApiError(
+          400,
+          `Sản phẩm "${orderItem.productName}" đã được đổi trước đó. Mỗi sản phẩm chỉ được đổi 1 lần duy nhất.`
+        );
+      }
+
+      // Kiểm tra có yêu cầu đổi hàng nào đang pending/approved cho sản phẩm này không
+      const existingExchangeRequest = await ReturnRequest.findOne({
+        order: orderId,
+        type: "EXCHANGE",
+        status: { $in: ["pending", "approved", "processing"] },
+        "items.variant": item.variant,
+        "items.size": item.size,
+      });
+
+      if (existingExchangeRequest) {
+        throw new ApiError(
+          400,
+          `Đã có yêu cầu đổi hàng cho sản phẩm "${orderItem.productName}" đang được xử lý. Vui lòng đợi hoàn tất hoặc hủy yêu cầu cũ.`
+        );
+      }
+    }
+  }
+
   // Tính tổng tiền hoàn
   let refundAmount = 0;
   const validatedItems = [];
@@ -437,6 +478,39 @@ const processExchange = async (id, processedBy) => {
     );
   }
 
+  // ============================================================
+  // UPDATE ORDER: Đánh dấu orderItem đã được đổi
+  // ============================================================
+  const Order = require("../models").Order;
+  const order = await Order.findById(request.order._id);
+
+  for (const item of request.items) {
+    // Tìm orderItem tương ứng
+    const orderItemIndex = order.orderItems.findIndex(
+      (oi) =>
+        oi.variant.toString() === item.variant._id.toString() &&
+        oi.size.toString() === item.size.toString()
+    );
+
+    if (orderItemIndex !== -1) {
+      // Đánh dấu đã đổi
+      order.orderItems[orderItemIndex].hasBeenExchanged = true;
+
+      // Thêm vào lịch sử đổi hàng
+      order.orderItems[orderItemIndex].exchangeHistory.push({
+        returnRequestId: request._id,
+        exchangedAt: new Date(),
+        fromVariant: item.variant._id,
+        fromSize: item.size,
+        toVariant: item.exchangeToVariant._id,
+        toSize: item.exchangeToSize,
+      });
+    }
+  }
+
+  // Lưu order
+  await order.save();
+
   // Hoàn thành yêu cầu
   request.status = "completed";
   request.processedBy = processedBy;
@@ -506,6 +580,112 @@ const getReturnStats = async () => {
   };
 };
 
+/**
+ * Kiểm tra orderItem có thể đổi hàng không
+ * @param {String} orderId - ID đơn hàng
+ * @param {String} variantId - ID variant
+ * @param {String} sizeId - ID size
+ * @param {String} userId - ID user (để verify ownership)
+ * @returns {Object} - { canExchange: boolean, reason: string }
+ */
+const checkItemExchangeEligibility = async (
+  orderId,
+  variantId,
+  sizeId,
+  userId
+) => {
+  // Kiểm tra đơn hàng
+  const order = await Order.findOne({
+    _id: orderId,
+    user: userId,
+  });
+
+  if (!order) {
+    return {
+      canExchange: false,
+      reason: "Không tìm thấy đơn hàng hoặc bạn không có quyền truy cập",
+    };
+  }
+
+  // Kiểm tra trạng thái đơn hàng
+  if (order.status !== "delivered") {
+    return {
+      canExchange: false,
+      reason: `Đơn hàng phải ở trạng thái "delivered". Hiện tại: ${order.status}`,
+    };
+  }
+
+  // Kiểm tra thời hạn (7 ngày)
+  if (!order.deliveredAt) {
+    return {
+      canExchange: false,
+      reason: "Đơn hàng chưa có thông tin ngày giao hàng",
+    };
+  }
+
+  const daysSinceDelivery = Math.floor(
+    (new Date() - order.deliveredAt) / (1000 * 60 * 60 * 24)
+  );
+
+  if (daysSinceDelivery > 7) {
+    return {
+      canExchange: false,
+      reason: `Đã quá thời hạn đổi hàng (7 ngày). Đơn hàng được giao ${daysSinceDelivery} ngày trước.`,
+    };
+  }
+
+  // Tìm orderItem
+  const orderItem = order.orderItems.find(
+    (item) =>
+      item.variant.toString() === variantId && item.size.toString() === sizeId
+  );
+
+  if (!orderItem) {
+    return {
+      canExchange: false,
+      reason: "Sản phẩm không tồn tại trong đơn hàng",
+    };
+  }
+
+  // Kiểm tra đã đổi chưa
+  if (orderItem.hasBeenExchanged) {
+    return {
+      canExchange: false,
+      reason: `Sản phẩm "${orderItem.productName}" đã được đổi trước đó. Mỗi sản phẩm chỉ được đổi 1 lần.`,
+      exchangeHistory: orderItem.exchangeHistory,
+    };
+  }
+
+  // Kiểm tra có yêu cầu đang xử lý không
+  const pendingRequest = await ReturnRequest.findOne({
+    order: orderId,
+    type: "EXCHANGE",
+    status: { $in: ["pending", "approved", "processing"] },
+    "items.variant": variantId,
+    "items.size": sizeId,
+  });
+
+  if (pendingRequest) {
+    return {
+      canExchange: false,
+      reason: `Đã có yêu cầu đổi hàng cho sản phẩm này đang được xử lý (Status: ${pendingRequest.status})`,
+      pendingRequestId: pendingRequest._id,
+    };
+  }
+
+  // Tất cả điều kiện OK
+  return {
+    canExchange: true,
+    reason: "Sản phẩm đủ điều kiện để đổi hàng",
+    daysRemaining: 7 - daysSinceDelivery,
+    orderItem: {
+      productName: orderItem.productName,
+      quantity: orderItem.quantity,
+      price: orderItem.price,
+    },
+  };
+};
+
 module.exports = {
   createReturnRequest,
   getReturnRequests,
@@ -516,4 +696,5 @@ module.exports = {
   processExchange,
   cancelReturnRequest,
   getReturnStats,
+  checkItemExchangeEligibility,
 };

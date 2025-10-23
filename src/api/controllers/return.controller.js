@@ -299,6 +299,45 @@ const getReturnStats = asyncHandler(async (req, res) => {
     data: stats,
   });
 });
+
+/**
+ * KIỂM TRA SẢN PHẨM CÓ THỂ ĐỔI HÀNG KHÔNG
+ *
+ * Business Logic:
+ * - Kiểm tra orderItem có đủ điều kiện đổi hàng không
+ * - Validate: order status, thời hạn 7 ngày, chưa đổi, không có yêu cầu pending
+ * - Trả về: { canExchange: boolean, reason: string, daysRemaining, exchangeHistory }
+ * - Dùng để hiển thị UI enable/disable nút "Đổi hàng"
+ *
+ * @access  Authenticated User
+ * @route   GET /api/returns/check-eligibility?orderId=xxx&variantId=xxx&sizeId=xxx
+ * @query   { orderId, variantId, sizeId }
+ * @flow    return.route.js → return.controller.js → return.service.js → checkItemExchangeEligibility()
+ */
+const checkExchangeEligibility = asyncHandler(async (req, res) => {
+  const { orderId, variantId, sizeId } = req.query;
+  const userId = req.user._id;
+
+  if (!orderId || !variantId || !sizeId) {
+    throw new ApiError(
+      400,
+      "Thiếu thông tin: orderId, variantId, sizeId là bắt buộc"
+    );
+  }
+
+  const result = await returnService.checkItemExchangeEligibility(
+    orderId,
+    variantId,
+    sizeId,
+    userId
+  );
+
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
+});
+
 module.exports = {
   createReturnRequest,
   getReturnRequests,
@@ -309,4 +348,5 @@ module.exports = {
   processExchange,
   cancelReturnRequest,
   getReturnStats,
+  checkExchangeEligibility,
 };

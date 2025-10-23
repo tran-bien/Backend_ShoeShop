@@ -281,7 +281,7 @@ const userService = {
       })
       .populate({
         path: "wishlist.variant",
-        select: "color gender price percentDiscount priceFinal imagesvariant",
+        select: "color gender imagesvariant", // FIXED: Removed price/percentDiscount/priceFinal
         populate: { path: "color", select: "name code type colors" },
       });
 
