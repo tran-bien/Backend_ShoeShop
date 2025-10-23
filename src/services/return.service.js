@@ -1,4 +1,4 @@
-const { ReturnRequest, Order } = require("../models");
+const { ReturnRequest, Order, InventoryItem } = require("../models");
 const ApiError = require("../utils/ApiError");
 const inventoryService = require("./inventory.service");
 

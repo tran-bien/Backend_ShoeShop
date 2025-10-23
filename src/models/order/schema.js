@@ -381,4 +381,30 @@ const OrderSchema = new mongoose.Schema(
   }
 );
 
+// INDEXES - Tối ưu hiệu suất truy vấn
+
+// Index cho user - query orders by user
+OrderSchema.index({ user: 1, createdAt: -1 });
+
+// Index cho status - filter by status
+OrderSchema.index({ status: 1, createdAt: -1 });
+
+// Index cho assignedShipper - query orders by shipper
+OrderSchema.index({ assignedShipper: 1, status: 1 });
+
+// Index cho code - search by order code (unique)
+OrderSchema.index({ code: 1 }, { unique: true });
+
+// Index cho payment status - query unpaid orders
+OrderSchema.index({ "payment.paymentStatus": 1, createdAt: -1 });
+
+// Index cho deletedAt - soft delete queries
+OrderSchema.index({ deletedAt: 1 });
+
+// Compound index cho user + status + deletedAt
+OrderSchema.index({ user: 1, status: 1, deletedAt: 1 });
+
+// Index cho hasCancelRequest - query orders with cancel requests
+OrderSchema.index({ hasCancelRequest: 1, status: 1 });
+
 module.exports = OrderSchema;

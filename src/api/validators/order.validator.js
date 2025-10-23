@@ -141,17 +141,17 @@ const validateProcessCancelRequest = [
     .withMessage("ID yêu cầu hủy không được để trống")
     .custom(isValidObjectId)
     .withMessage("ID yêu cầu hủy không hợp lệ"),
-  body("status")
+  body("approved")
     .notEmpty()
-    .withMessage("Trạng thái không được để trống")
-    .isIn(["approved", "rejected"])
-    .withMessage("Trạng thái không hợp lệ"),
-  body("adminResponse")
+    .withMessage("Quyết định duyệt không được để trống")
+    .isBoolean()
+    .withMessage("Quyết định duyệt phải là true hoặc false"),
+  body("note")
     .optional()
     .isString()
-    .withMessage("Phản hồi phải là chuỗi")
+    .withMessage("Ghi chú phải là chuỗi")
     .isLength({ max: 500 })
-    .withMessage("Phản hồi không được vượt quá 500 ký tự"),
+    .withMessage("Ghi chú không được vượt quá 500 ký tự"),
 ];
 
 /**

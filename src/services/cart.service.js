@@ -1,4 +1,11 @@
-const { Cart, Product, Variant, Size, Coupon } = require("@models");
+const {
+  Cart,
+  Product,
+  Variant,
+  Size,
+  Coupon,
+  InventoryItem,
+} = require("@models");
 const ApiError = require("@utils/ApiError");
 const mongoose = require("mongoose");
 
@@ -29,28 +36,40 @@ const cartService = {
         typeof item.variant === "object" ? item.variant._id : item.variant;
       const sizeId = typeof item.size === "object" ? item.size._id : item.size;
 
-      // Kiểm tra tồn kho
-      const variant = await Variant.findById(variantId);
+      // Kiểm tra variant exists
+      const variant = await Variant.findById(variantId).select("product");
       if (!variant) {
         item.isAvailable = false;
         item.unavailableReason = "Không tìm thấy biến thể sản phẩm";
         continue;
       }
 
-      const sizeInfo = variant.sizes.find(
+      // Kiểm tra size exists trong variant
+      const Variant2 = await Variant.findById(variantId).select("sizes");
+      const sizeExists = Variant2.sizes.some(
         (s) => s.size && s.size.toString() === sizeId.toString()
       );
-      if (
-        !sizeInfo ||
-        !sizeInfo.isSizeAvailable ||
-        sizeInfo.quantity < item.quantity
-      ) {
+
+      if (!sizeExists) {
         item.isAvailable = false;
-        item.unavailableReason = !sizeInfo
-          ? "Kích thước không có sẵn"
-          : !sizeInfo.isSizeAvailable
-          ? "Kích thước này hiện không có sẵn"
-          : `Chỉ còn ${sizeInfo.quantity} sản phẩm trong kho`;
+        item.unavailableReason = "Kích thước không có sẵn";
+        continue;
+      }
+
+      // Kiểm tra tồn kho từ InventoryItem
+      const inventoryItem = await InventoryItem.findOne({
+        product: variant.product,
+        variant: variantId,
+        size: sizeId,
+      });
+
+      if (!inventoryItem || inventoryItem.quantity < item.quantity) {
+        item.isAvailable = false;
+        item.unavailableReason = !inventoryItem
+          ? "Sản phẩm hiện không có sẵn"
+          : inventoryItem.quantity === 0
+          ? "Sản phẩm đã hết hàng"
+          : `Chỉ còn ${inventoryItem.quantity} sản phẩm trong kho`;
       } else {
         item.isAvailable = true;
         item.unavailableReason = "";
@@ -133,23 +152,30 @@ const cartService = {
         throw new ApiError(404, "Không tìm thấy kích thước sản phẩm");
       }
 
-      // Kiểm tra tồn kho
-      const sizeInfo = variant.sizes.find(
+      // Kiểm tra size có trong variant không
+      const sizeExists = variant.sizes.some(
         (s) => s.size && s.size.toString() === sizeId.toString()
       );
 
-      if (!sizeInfo) {
+      if (!sizeExists) {
         throw new ApiError(422, "Sản phẩm không có kích thước này");
       }
 
-      if (!sizeInfo.isSizeAvailable) {
-        throw new ApiError(422, "Kích thước này hiện không có sẵn");
+      // Kiểm tra tồn kho từ InventoryItem
+      const inventoryItem = await InventoryItem.findOne({
+        product: productId,
+        variant: variantId,
+        size: sizeId,
+      });
+
+      if (!inventoryItem) {
+        throw new ApiError(422, "Sản phẩm hiện không có sẵn trong kho");
       }
 
-      if (sizeInfo.quantity < quantity) {
+      if (inventoryItem.quantity < quantity) {
         throw new ApiError(
           400,
-          `Sản phẩm đã hết hàng hoặc không đủ số lượng. Hiện chỉ còn ${sizeInfo.quantity} sản phẩm.`
+          `Sản phẩm đã hết hàng hoặc không đủ số lượng. Hiện chỉ còn ${inventoryItem.quantity} sản phẩm.`
         );
       }
 
@@ -180,20 +206,24 @@ const cartService = {
         imageUrl = mainImage ? mainImage.url : product.images[0].url;
       }
 
+      // Lấy giá từ InventoryItem (finalPrice đã tính discount)
+      const price = inventoryItem.finalPrice || inventoryItem.sellingPrice || 0;
+
       if (existingItemIndex > -1) {
         // Nếu sản phẩm đã có trong giỏ hàng, cập nhật số lượng
         cart.cartItems[existingItemIndex].quantity += quantity;
 
         // Kiểm tra số lượng không vượt quá tồn kho
-        if (cart.cartItems[existingItemIndex].quantity > sizeInfo.quantity) {
-          cart.cartItems[existingItemIndex].quantity = sizeInfo.quantity;
+        if (
+          cart.cartItems[existingItemIndex].quantity > inventoryItem.quantity
+        ) {
+          cart.cartItems[existingItemIndex].quantity = inventoryItem.quantity;
         }
 
         // Cập nhật các thông tin khác nếu cần
         cart.cartItems[existingItemIndex].isAvailable = true;
         cart.cartItems[existingItemIndex].image = imageUrl;
-        cart.cartItems[existingItemIndex].price =
-          variant.priceFinal || variant.price;
+        cart.cartItems[existingItemIndex].price = price;
         cart.cartItems[existingItemIndex].productName = product.name;
         cart.cartItems[existingItemIndex].unavailableReason = "";
       } else {
@@ -201,8 +231,8 @@ const cartService = {
         cart.cartItems.push({
           variant: variantId,
           size: sizeId,
-          quantity: Math.min(quantity, sizeInfo.quantity),
-          price: variant.priceFinal || variant.price,
+          quantity: Math.min(quantity, inventoryItem.quantity),
+          price: price,
           productName: product.name,
           image: imageUrl,
           isAvailable: true,
@@ -261,29 +291,42 @@ const cartService = {
     // Lấy variantId và sizeId từ cartItem
     const cartItem = cart.cartItems[itemIndex];
 
-    // Chỉ lấy thông tin sizes cần thiết từ variant, không lấy toàn bộ thông tin variant
-    const variant = await Variant.findById(cartItem.variant, { sizes: 1 });
+    // Lấy thông tin variant để tìm productId
+    const variant = await Variant.findById(cartItem.variant).select(
+      "product sizes"
+    );
 
     if (!variant) {
       throw new ApiError(404, "Không tìm thấy biến thể sản phẩm");
     }
 
-    // Kiểm tra tồn kho
-    const sizeInfo = variant.sizes.find(
+    // Kiểm tra size có trong variant không
+    const sizeExists = variant.sizes.some(
       (s) => s.size.toString() === cartItem.size.toString()
     );
 
-    if (!sizeInfo || !sizeInfo.isSizeAvailable) {
-      throw new ApiError(422, "Sản phẩm đã hết hàng");
+    if (!sizeExists) {
+      throw new ApiError(422, "Sản phẩm không có kích thước này");
+    }
+
+    // Kiểm tra tồn kho từ InventoryItem
+    const inventoryItem = await InventoryItem.findOne({
+      product: variant.product,
+      variant: cartItem.variant,
+      size: cartItem.size,
+    });
+
+    if (!inventoryItem) {
+      throw new ApiError(422, "Sản phẩm hiện không có sẵn trong kho");
     }
 
     // Cập nhật số lượng và kiểm tra tồn kho
     let exceededInventory = false;
     let updatedQuantity = quantity;
 
-    if (quantity > sizeInfo.quantity) {
+    if (quantity > inventoryItem.quantity) {
       exceededInventory = true;
-      updatedQuantity = sizeInfo.quantity;
+      updatedQuantity = inventoryItem.quantity;
     }
 
     // Sử dụng updateOne thay vì save() để cập nhật trực tiếp
@@ -296,11 +339,11 @@ const cartService = {
         $set: {
           "cartItems.$.quantity": updatedQuantity,
           "cartItems.$.isAvailable":
-            exceededInventory && sizeInfo.quantity === 0 ? false : true,
+            exceededInventory && inventoryItem.quantity === 0 ? false : true,
           "cartItems.$.unavailableReason": exceededInventory
-            ? sizeInfo.quantity === 0
+            ? inventoryItem.quantity === 0
               ? "Sản phẩm đã hết hàng"
-              : `Chỉ còn ${sizeInfo.quantity} sản phẩm trong kho`
+              : `Chỉ còn ${inventoryItem.quantity} sản phẩm trong kho`
             : "",
           "cartItems.$.updatedAt": new Date(),
         },
@@ -316,7 +359,7 @@ const cartService = {
     return {
       success: true,
       message: exceededInventory
-        ? `Số lượng yêu cầu (${quantity}) vượt quá tồn kho, đã điều chỉnh về tối đa ${sizeInfo.quantity} sản phẩm`
+        ? `Số lượng yêu cầu (${quantity}) vượt quá tồn kho, đã điều chỉnh về tối đa ${inventoryItem.quantity} sản phẩm`
         : "Đã cập nhật số lượng sản phẩm",
       updatedItem: updatedCart.cartItems[0],
       productInfo: {
@@ -325,7 +368,7 @@ const cartService = {
         requestedQuantity: quantity,
         adjustedQuantity: updatedQuantity,
         exceededInventory,
-        availableQuantity: sizeInfo.quantity,
+        availableQuantity: inventoryItem.quantity,
       },
     };
   },

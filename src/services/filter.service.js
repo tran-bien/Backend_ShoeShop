@@ -6,6 +6,7 @@ const {
   Size,
   Variant,
   Tag,
+  InventoryItem,
 } = require("@models");
 const ApiError = require("@utils/ApiError");
 
@@ -40,14 +41,35 @@ const filterService = {
       .select("name type description _id")
       .sort({ type: 1, name: 1 });
 
-    // Tính khoảng giá từ variants có sẵn (chỉ lấy các variant đang active)
-    const priceRange = await Variant.aggregate([
-      { $match: { isActive: true, deletedAt: null } },
+    // TÍNH KHOẢNG GIÁ TỪ INVENTORYITEM
+    const priceRange = await InventoryItem.aggregate([
+      {
+        $match: {
+          quantity: { $gt: 0 }, // Chỉ tính các sản phẩm còn hàng
+        },
+      },
+      {
+        $lookup: {
+          from: "variants",
+          localField: "variant",
+          foreignField: "_id",
+          as: "variantInfo",
+        },
+      },
+      {
+        $unwind: "$variantInfo",
+      },
+      {
+        $match: {
+          "variantInfo.isActive": true,
+          "variantInfo.deletedAt": null,
+        },
+      },
       {
         $group: {
           _id: null,
-          minPrice: { $min: "$priceFinal" },
-          maxPrice: { $max: "$priceFinal" },
+          minPrice: { $min: "$finalPrice" },
+          maxPrice: { $max: "$finalPrice" },
         },
       },
     ]);

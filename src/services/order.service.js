@@ -1,4 +1,4 @@
-const { Order, Cart, CancelRequest, User } = require("@models");
+const { Order, Cart, CancelRequest, User, InventoryItem } = require("@models");
 const mongoose = require("mongoose");
 const paginate = require("@utils/pagination");
 const ApiError = require("@utils/ApiError");
@@ -197,7 +197,7 @@ const orderService = {
       const itemId = item._id.toString();
       const variantId =
         typeof item.variant === "object" ? item.variant._id : item.variant;
-      const variant = await Variant.findById(variantId);
+      const variant = await Variant.findById(variantId).select("product sizes");
 
       if (!variant) {
         unavailableItems.push({
@@ -208,7 +208,9 @@ const orderService = {
       }
 
       const sizeId = typeof item.size === "object" ? item.size._id : item.size;
-      const sizeInfo = variant.sizes.find(
+
+      // Kiểm tra size có trong variant không
+      const sizeExists = variant.sizes.some(
         (s) => s.size.toString() === sizeId.toString()
       );
 
@@ -217,7 +219,7 @@ const orderService = {
       console.log(`- Kích thước: ${sizeId}`);
       console.log(`- Yêu cầu số lượng: ${item.quantity}`);
 
-      if (!sizeInfo) {
+      if (!sizeExists) {
         console.log(`- Kết quả: Không tìm thấy kích thước trong biến thể`);
         unavailableItems.push({
           productName: item.productName,
@@ -226,21 +228,34 @@ const orderService = {
         continue;
       }
 
-      console.log(`- Trong kho: ${sizeInfo.quantity}`);
-      console.log(`- Có sẵn: ${sizeInfo.isSizeAvailable ? "Có" : "Không"}`);
+      // Kiểm tra tồn kho từ InventoryItem
+      const inventoryItem = await InventoryItem.findOne({
+        product: variant.product,
+        variant: variantId,
+        size: sizeId,
+      });
 
-      if (!sizeInfo.isSizeAvailable) {
+      console.log(
+        `- Trong kho (InventoryItem): ${inventoryItem?.quantity || 0}`
+      );
+      console.log(
+        `- Có sẵn: ${
+          inventoryItem && inventoryItem.quantity > 0 ? "Có" : "Không"
+        }`
+      );
+
+      if (!inventoryItem || inventoryItem.quantity === 0) {
         unavailableItems.push({
           productName: item.productName,
-          reason: "Kích thước này hiện không có sẵn",
+          reason: "Sản phẩm hiện không có sẵn trong kho",
         });
         continue;
       }
 
-      if (sizeInfo.quantity < item.quantity) {
+      if (inventoryItem.quantity < item.quantity) {
         unavailableItems.push({
           productName: item.productName,
-          reason: `Không đủ tồn kho. Hiện còn ${sizeInfo.quantity} sản phẩm.`,
+          reason: `Không đủ tồn kho. Hiện còn ${inventoryItem.quantity} sản phẩm.`,
         });
         continue;
       }
@@ -382,42 +397,22 @@ const orderService = {
       const savedOrder = await newOrder.save();
       console.log("Đã lưu đơn hàng thành công, ID:", savedOrder._id);
 
-      // Trừ tồn kho ngay sau khi tạo đơn hàng COD thành công
-      if (paymentMethod === "COD") {
-        console.log("Đang trừ tồn kho cho đơn hàng COD...");
-        const Variant = mongoose.model("Variant");
+      // ============================================================
+      // INVENTORY MANAGEMENT - ĐÃ CHUYỂN SANG INVENTORYSERVICE
+      // ============================================================
+      // COD: KHÔNG TRỪ KHO Ở ĐÂY NỮA
+      // VNPAY: KHÔNG TRỪ KHO Ở ĐÂY NỮA
+      //
+      // Inventory sẽ được tự động trừ KHI GÁN SHIPPER
+      // Xem: shipper.service.js -> assignOrderToShipper() -> inventoryService.stockOut()
+      //
+      // Lý do: Đảm bảo tồn kho chỉ bị trừ khi đơn hàng thực sự được xử lý,
+      // tránh trường hợp user tạo đơn rồi không thanh toán (VNPAY) hoặc hủy (COD)
+      // ============================================================
 
-        for (const item of orderItems) {
-          const variant = await Variant.findById(item.variant);
-          if (variant) {
-            const sizeIndex = variant.sizes.findIndex(
-              (s) => s.size.toString() === item.size.toString()
-            );
-
-            if (sizeIndex !== -1) {
-              const oldQuantity = variant.sizes[sizeIndex].quantity;
-              variant.sizes[sizeIndex].quantity = Math.max(
-                0,
-                variant.sizes[sizeIndex].quantity - item.quantity
-              );
-              variant.sizes[sizeIndex].isSizeAvailable =
-                variant.sizes[sizeIndex].quantity > 0;
-
-              await variant.save();
-              console.log(
-                `Đã trừ ${item.quantity} sản phẩm cho variant ${variant._id}, size ${item.size}: ${oldQuantity} → ${variant.sizes[sizeIndex].quantity}`
-              );
-            }
-          }
-        }
-
-        // Cập nhật trạng thái đã trừ tồn kho
-        await Order.updateOne(
-          { _id: savedOrder._id },
-          { inventoryDeducted: true }
-        );
-        console.log("Đã cập nhật trạng thái inventoryDeducted = true");
-      }
+      console.log(
+        "Đơn hàng được tạo. Inventory sẽ được trừ khi assign shipper."
+      );
 
       // Start of Selection
       // Sau khi tạo đơn hàng, xóa sản phẩm đã chọn trong giỏ hàng

@@ -81,6 +81,19 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
     throw new ApiError(404, "Không tìm thấy đơn hàng");
   }
 
+  // Kiểm tra order đã có shipper chưa
+  if (order.assignedShipper) {
+    throw new ApiError(400, "Đơn hàng đã được gán cho shipper khác");
+  }
+
+  // Kiểm tra trạng thái order phải là 'confirmed'
+  if (order.status !== "confirmed") {
+    throw new ApiError(
+      400,
+      `Chỉ có thể gán shipper cho đơn hàng đã xác nhận. Trạng thái hiện tại: ${order.status}`
+    );
+  }
+
   if (!shipper) {
     throw new ApiError(404, "Không tìm thấy shipper");
   }
