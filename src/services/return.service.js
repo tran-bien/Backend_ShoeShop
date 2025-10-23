@@ -22,6 +22,9 @@ const createReturnRequest = async (data, userId) => {
     _id: orderId,
     user: userId,
     status: "delivered",
+  }).populate({
+    path: "orderItems.variant",
+    select: "product",
   });
 
   if (!order) {
@@ -103,7 +106,7 @@ const createReturnRequest = async (data, userId) => {
     refundAmount += orderItem.price * item.quantity;
 
     validatedItems.push({
-      product: orderItem.variant, // Will be populated to get product
+      product: orderItem.variant.product, // ✅ FIXED: Lấy product ID từ populated variant
       variant: item.variant,
       size: item.size,
       quantity: item.quantity,
@@ -400,8 +403,14 @@ const processReturn = async (id, processedBy) => {
 const processExchange = async (id, processedBy) => {
   const request = await ReturnRequest.findById(id).populate([
     { path: "order" },
-    { path: "items.variant" },
-    { path: "items.exchangeToVariant" },
+    {
+      path: "items.variant",
+      populate: { path: "product", select: "_id name" },
+    },
+    {
+      path: "items.exchangeToVariant",
+      populate: { path: "product", select: "_id name" },
+    },
   ]);
 
   if (!request) {
