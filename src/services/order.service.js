@@ -504,17 +504,13 @@ const orderService = {
     // Lưu yêu cầu hủy
     await cancelRequest.save();
 
-    // Nếu đơn hàng đang ở trạng thái pending, cho phép hủy ngay
+    // Nếu đơn hàng đang ở trạng thái PENDING → Cho phép hủy ngay (tự động)
     if (order.status === "pending") {
       // Cập nhật yêu cầu hủy thành đã duyệt
-      await CancelRequest.updateOne(
-        { _id: cancelRequest._id },
-        {
-          status: "approved",
-          resolvedAt: new Date(),
-          adminResponse: "Đơn hàng đã được chấp nhận. Hủy thành công",
-        }
-      );
+      cancelRequest.status = "approved";
+      cancelRequest.resolvedAt = new Date();
+      cancelRequest.adminResponse = "Tự động duyệt cho đơn hàng pending";
+      await cancelRequest.save();
 
       // Tạo bản ghi lịch sử mới
       const newHistoryEntry = {
@@ -523,7 +519,7 @@ const orderService = {
         note: `Đơn hàng bị hủy tự động. Lý do: ${reason}`,
       };
 
-      // Cập nhật trạng thái đơn hàng KHÔNG sử dụng $push để tránh trùng lặp
+      // Cập nhật trạng thái đơn hàng
       const updatedOrder = await Order.findOneAndUpdate(
         { _id: orderId },
         {
@@ -534,26 +530,117 @@ const orderService = {
             cancelRequestId: cancelRequest._id,
             hasCancelRequest: false,
           },
-          // Thêm vào statusHistory chỉ khi THỰC SỰ cần
           $addToSet: { statusHistory: newHistoryEntry },
         },
         { new: true }
       );
 
-      // Kiểm tra xem có bao nhiêu bản ghi statusHistory có cùng trạng thái "cancelled"
+      // Xóa duplicate statusHistory nếu có
       const cancelledEntries = updatedOrder.statusHistory.filter(
         (entry) => entry.status === "cancelled"
       );
 
-      // Nếu có nhiều hơn một, xóa các bản ghi trùng lặp
       if (cancelledEntries.length > 1) {
         const latestCancelledEntry =
           cancelledEntries[cancelledEntries.length - 1];
 
-        // Lọc lại mảng statusHistory, loại bỏ các bản ghi trùng lặp
+        const uniqueHistory = updatedOrder.statusHistory.filter((entry) => {
+          return (
+            entry.status !== "cancelled" ||
+            entry._id.toString() === latestCancelledEntry._id.toString()
+          );
+        });
+
+        await Order.updateOne(
+          { _id: orderId },
+          { $set: { statusHistory: uniqueHistory } }
+        );
+      }
+
+      // Middleware sẽ tự động restore inventory nếu inventoryDeducted = true
+
+      return {
+        success: true,
+        message: "Đơn hàng đã được hủy thành công",
+        cancelRequest,
+      };
+    } else {
+      // Nếu đơn hàng đã CONFIRMED → Cần admin duyệt
+      order.hasCancelRequest = true;
+      order.cancelRequestId = cancelRequest._id;
+      await order.save();
+
+      return {
+        success: true,
+        message: "Yêu cầu hủy đơn hàng đã được gửi và đang chờ xử lý",
+        cancelRequest: await cancelRequest.populate("user", "name email phone"),
+      };
+    }
+  },
+
+  /**
+   * Admin/Staff duyệt yêu cầu hủy đơn
+   */
+  processCancelRequest: async (cancelRequestId, decision, adminId) => {
+    const cancelRequest = await CancelRequest.findById(
+      cancelRequestId
+    ).populate("order");
+
+    if (!cancelRequest) {
+      throw new ApiError(404, "Không tìm thấy yêu cầu hủy đơn");
+    }
+
+    if (cancelRequest.status !== "pending") {
+      throw new ApiError(400, "Yêu cầu hủy đơn đã được xử lý");
+    }
+
+    const order = cancelRequest.order;
+    if (!order) {
+      throw new ApiError(404, "Không tìm thấy đơn hàng");
+    }
+
+    // Cập nhật cancel request
+    cancelRequest.status = decision.approved ? "approved" : "rejected";
+    cancelRequest.processedBy = adminId;
+    cancelRequest.resolvedAt = new Date();
+    cancelRequest.adminResponse = decision.note || "";
+    await cancelRequest.save();
+
+    if (decision.approved) {
+      // Nếu DUYỆT → Cancel order
+      // Tạo bản ghi lịch sử mới
+      const newHistoryEntry = {
+        status: "cancelled",
+        updatedAt: new Date(),
+        note: `Đơn hàng bị hủy. Lý do: ${cancelRequest.reason}`,
+      };
+
+      // Cập nhật trạng thái đơn hàng
+      const updatedOrder = await Order.findOneAndUpdate(
+        { _id: order._id },
+        {
+          $set: {
+            status: "cancelled",
+            cancelledAt: new Date(),
+            cancelReason: cancelRequest.reason,
+            hasCancelRequest: false,
+          },
+          $addToSet: { statusHistory: newHistoryEntry },
+        },
+        { new: true }
+      );
+
+      // Xóa duplicate statusHistory nếu có
+      const cancelledEntries = updatedOrder.statusHistory.filter(
+        (entry) => entry.status === "cancelled"
+      );
+
+      if (cancelledEntries.length > 1) {
+        const latestCancelledEntry =
+          cancelledEntries[cancelledEntries.length - 1];
+
         const uniqueHistory = updatedOrder.statusHistory.filter(
           (entry, index) => {
-            // Giữ lại bản ghi không phải "cancelled" hoặc bản ghi "cancelled" mới nhất
             return (
               entry.status !== "cancelled" ||
               entry._id.toString() === latestCancelledEntry._id.toString()
@@ -561,66 +648,37 @@ const orderService = {
           }
         );
 
-        // Cập nhật lại với mảng đã lọc
         await Order.updateOne(
-          { _id: orderId },
+          { _id: order._id },
           { $set: { statusHistory: uniqueHistory } }
         );
       }
 
-      // Hoàn trả tồn kho nếu đã trừ
-      if (order.inventoryDeducted) {
-        console.log(
-          `Đang hoàn trả tồn kho cho đơn hàng pending bị hủy: ${order.code}`
-        );
-        const Variant = mongoose.model("Variant");
+      // Hoàn trả tồn kho nếu đã trừ (logic này sẽ được middleware xử lý tự động)
+      // Middleware sẽ check inventoryDeducted và restore inventory
 
-        for (const item of order.orderItems) {
-          const variant = await Variant.findById(item.variant);
-          if (variant) {
-            const sizeIndex = variant.sizes.findIndex(
-              (s) => s.size.toString() === item.size.toString()
-            );
-
-            if (sizeIndex !== -1) {
-              const oldQuantity = variant.sizes[sizeIndex].quantity;
-              variant.sizes[sizeIndex].quantity += item.quantity;
-              variant.sizes[sizeIndex].isSizeAvailable =
-                variant.sizes[sizeIndex].quantity > 0;
-
-              await variant.save();
-              console.log(
-                `Đã hoàn ${item.quantity} sản phẩm cho variant ${variant._id}, size ${item.size}: ${oldQuantity} → ${variant.sizes[sizeIndex].quantity}`
-              );
-            }
-          }
-        }
-
-        // Đánh dấu là đã trả lại tồn kho
-        await Order.updateOne({ _id: orderId }, { inventoryDeducted: false });
-        console.log(
-          `Đã cập nhật inventoryDeducted = false cho đơn hàng: ${order.code}`
-        );
-      }
+      return {
+        success: true,
+        message: "Đã phê duyệt yêu cầu hủy đơn. Đơn hàng đã được hủy",
+        order: updatedOrder,
+      };
     } else {
-      // Nếu đơn hàng đã xác nhận, chỉ cần đánh dấu có yêu cầu hủy
-      await Order.updateOne(
-        { _id: orderId },
-        {
-          cancelRequestId: cancelRequest._id,
-          hasCancelRequest: true,
-        }
-      );
-    }
+      // Nếu TỪ CHỐI → Giữ nguyên order, chỉ update flag
+      order.hasCancelRequest = false;
+      await order.save();
 
-    return {
-      message:
-        order.status === "pending"
-          ? "Đơn hàng đã được hủy thành công"
-          : "Yêu cầu hủy đơn hàng đã được gửi và đang chờ xử lý",
-      cancelRequest,
-    };
+      return {
+        success: true,
+        message: "Đã từ chối yêu cầu hủy đơn",
+        cancelRequest,
+      };
+    }
   },
+
+  /**
+   * DEPRECATED - Phần auto cancel cho pending orders đã bị xóa
+   * Bây giờ TẤT CẢ cancel requests đều phải qua admin duyệt
+   */
 
   /**
    * Lấy danh sách yêu cầu hủy đơn hàng (cho admin)
@@ -989,174 +1047,6 @@ const orderService = {
    * @param {Object} updateData - Dữ liệu cập nhật
    * @returns {Object} - Kết quả xử lý
    */
-  processCancelRequest: async (requestId, updateData) => {
-    const { status, adminResponse, adminId } = updateData;
-
-    // Kiểm tra yêu cầu hủy có tồn tại không
-    const cancelRequest = await CancelRequest.findById(requestId);
-    if (!cancelRequest) {
-      throw new ApiError(404, "Không tìm thấy yêu cầu hủy đơn hàng");
-    }
-
-    // Kiểm tra trạng thái cập nhật hợp lệ
-    if (!["approved", "rejected"].includes(status)) {
-      throw new ApiError(400, "Trạng thái không hợp lệ");
-    }
-
-    // Kiểm tra nếu đang thay đổi sang trạng thái giống với trạng thái hiện tại
-    if (cancelRequest.status === status) {
-      throw new ApiError(400, `Yêu cầu hủy đã ở trạng thái ${status}`);
-    }
-
-    // Tìm đơn hàng liên quan
-    const order = await Order.findById(cancelRequest.order);
-    if (!order) {
-      throw new ApiError(404, "Không tìm thấy đơn hàng liên quan");
-    }
-
-    // Lưu trạng thái trước đó để xử lý logic
-    const previousStatus = cancelRequest.status;
-    const isChangingDecision = previousStatus !== "pending";
-    const wasApproved = previousStatus === "approved";
-    const wasRejected = previousStatus === "rejected";
-
-    // Xử lý logic khi thay đổi từ approved sang rejected
-    if (wasApproved && status === "rejected") {
-      // Kiểm tra nếu đơn hàng đã bị hủy do yêu cầu hủy trước đó
-      if (
-        order.status === "cancelled" &&
-        order.cancelRequestId?.toString() === requestId
-      ) {
-        // Kiểm tra nếu đơn hàng đã bị hủy quá lâu (ví dụ 24 giờ) thì không cho phép khôi phục
-        const cancelledTime = new Date(order.cancelledAt).getTime();
-        const currentTime = new Date().getTime();
-        const hoursSinceCancelled =
-          (currentTime - cancelledTime) / (1000 * 60 * 60);
-
-        if (hoursSinceCancelled > 24) {
-          throw new ApiError(
-            400,
-            "Không thể từ chối yêu cầu hủy vì đơn hàng đã bị hủy quá 24 giờ"
-          );
-        }
-
-        // Khôi phục trạng thái đơn hàng về trạng thái trước khi bị hủy
-        // Tìm trạng thái trước đó trong lịch sử
-        const statusHistoryReversed = [...order.statusHistory].reverse();
-        let previousOrderStatus = "pending"; // Mặc định
-
-        for (let i = 1; i < statusHistoryReversed.length; i++) {
-          if (statusHistoryReversed[i].status !== "cancelled") {
-            previousOrderStatus = statusHistoryReversed[i].status;
-            break;
-          }
-        }
-
-        order.status = previousOrderStatus;
-        order.cancelReason = "";
-        order.cancelledAt = null;
-        order.statusHistory.push({
-          status: previousOrderStatus,
-          note: `Đơn hàng được khôi phục sau khi từ chối yêu cầu hủy`,
-          updatedAt: new Date(),
-          updatedBy: adminId,
-        });
-      } else {
-        // Nếu đơn hàng không ở trạng thái cancelled hoặc đã bị hủy bởi lý do khác
-        throw new ApiError(
-          400,
-          "Không thể từ chối yêu cầu hủy vì đơn hàng không ở trạng thái bị hủy hoặc đã bị hủy bởi lý do khác"
-        );
-      }
-    }
-    // Xử lý logic khi thay đổi từ rejected sang approved
-    else if (wasRejected && status === "approved") {
-      // Kiểm tra xem đơn hàng có còn ở trạng thái có thể hủy không
-      if (!["pending", "confirmed"].includes(order.status)) {
-        throw new ApiError(
-          400,
-          `Không thể chấp nhận yêu cầu hủy vì đơn hàng hiện đang ở trạng thái ${order.status}`
-        );
-      }
-
-      // Tiến hành hủy đơn hàng
-      order.status = "cancelled";
-      order.cancelledAt = new Date();
-      order.cancelReason = cancelRequest.reason;
-      order.statusHistory.push({
-        status: "cancelled",
-        note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${cancelRequest.reason}`,
-        updatedAt: new Date(),
-        updatedBy: adminId,
-      });
-    }
-    // Xử lý yêu cầu hủy lần đầu (từ pending)
-    else {
-      // Xử lý khi chấp nhận yêu cầu hủy
-      if (status === "approved") {
-        // Kiểm tra nếu đơn hàng không còn ở trạng thái có thể hủy
-        if (!["pending", "confirmed"].includes(order.status)) {
-          throw new ApiError(
-            400,
-            `Đơn hàng hiện đang ở trạng thái ${order.status}, không thể hủy`
-          );
-        }
-
-        // Cập nhật đơn hàng thành "cancelled"
-        order.status = "cancelled";
-        order.cancelledAt = new Date();
-        order.cancelReason = cancelRequest.reason;
-        order.statusHistory.push({
-          status: "cancelled",
-          note: `Đơn hàng bị hủy theo yêu cầu. Lý do: ${cancelRequest.reason}`,
-          updatedAt: new Date(),
-          updatedBy: adminId,
-        });
-      }
-    }
-
-    // Cập nhật trạng thái hasCancelRequest của đơn hàng
-    order.hasCancelRequest = false;
-    await order.save();
-
-    // Cập nhật yêu cầu hủy
-    cancelRequest.status = status;
-    cancelRequest.adminResponse = adminResponse || "";
-    cancelRequest.resolvedAt = new Date();
-    cancelRequest.processedBy = adminId;
-
-    // Lưu yêu cầu hủy
-    await cancelRequest.save();
-
-    return {
-      success: true,
-      message:
-        status === "approved"
-          ? wasRejected
-            ? "Đã thay đổi quyết định và chấp nhận yêu cầu hủy đơn hàng"
-            : "Đã chấp nhận yêu cầu hủy đơn hàng"
-          : wasApproved
-          ? "Đã thay đổi quyết định và từ chối yêu cầu hủy đơn hàng"
-          : "Đã từ chối yêu cầu hủy đơn hàng",
-      data: {
-        cancelRequest: {
-          _id: cancelRequest._id,
-          status: cancelRequest.status,
-          previousStatus: previousStatus,
-          decisionChanged: isChangingDecision,
-          resolvedAt: cancelRequest.resolvedAt,
-          adminResponse: cancelRequest.adminResponse,
-        },
-        order: {
-          _id: order._id,
-          code: order.code,
-          status: order.status,
-          previouslyHadCancelRequest: isChangingDecision,
-        },
-      },
-    };
-  },
-
   /**
    * Xác nhận nhận hàng trả về (Option 2)
    * @param {String} orderId - ID của đơn hàng

@@ -153,9 +153,6 @@ const stockIn = async (data, performedBy) => {
     notes,
   } = data;
 
-  if (quantity <= 0) {
-    throw new ApiError(400, "Số lượng nhập phải lớn hơn 0");
-  }
 
   const inventoryItem = await getOrCreateInventoryItem(product, variant, size);
 

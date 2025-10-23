@@ -44,8 +44,8 @@ exports.validateStockIn = [
   body("costPrice")
     .notEmpty()
     .withMessage("Giá nhập không được để trống")
-    .isFloat({ min: 0 })
-    .withMessage("Giá nhập phải >= 0"),
+    .isFloat({ min: 0.01 })
+    .withMessage("Giá nhập phải lớn hơn 0"),
 
   body("targetProfitPercent")
     .optional()

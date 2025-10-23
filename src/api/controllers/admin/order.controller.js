@@ -113,39 +113,20 @@ const getCancelRequests = asyncHandler(async (req, res) => {
 });
 
 /**
- * XỬ LÝ YÊU CẦU HUỶ ĐƠN HÀNG (DUYỆT/TỪ CHỐI)
+ * XỬ LÝ YÊU CẦU HỦY ĐƠN HÀNG (Admin duyệt yêu cầu hủy của user)
  *
- * Business Logic:
- * - Chỉ Staff/Admin mới có quyền xử lý
- * - Status: approved (chấp nhận huỷ) hoặc rejected (từ chối huỷ)
- * - APPROVED: Chuyển order status → cancelled, hoàn tồn kho, set cancelReason
- * - REJECTED: Giữ nguyên order status, thêm adminResponse (lý do từ chối)
- * - Hỗ trợ THAY ĐỔI QUYẾT ĐỊNH:
- *   + approved → rejected: Khôi phục order về trạng thái trước (trong 24h)
- *   + rejected → approved: Huỷ đơn nếu order vẫn ở pending/confirmed
- * - Cập nhật: resolvedAt, processedBy (admin), adminResponse
- * - Set order.hasCancelRequest = false sau khi xử lý
- *
- * @access  Staff/Admin only
- * @route   PATCH /api/admin/orders/cancel-requests/:id
- * @params  { id: cancelRequestId }
- * @body    { status: approved|rejected, adminResponse }
  * @flow    order.route.js (admin) → order.controller.js → order.service.js → processCancelRequest()
  */
 const processCancelRequest = asyncHandler(async (req, res) => {
-  const { status, adminResponse } = req.body;
+  const { approved, note } = req.body;
 
-  const result = await orderService.processCancelRequest(req.params.id, {
-    status,
-    adminResponse,
-    processedBy: req.user.id,
-  });
+  const result = await orderService.processCancelRequest(
+    req.params.id,
+    { approved, note },
+    req.user.id
+  );
 
-  res.status(200).json({
-    success: true,
-    message: result.message,
-    data: result.cancelRequest,
-  });
+  res.status(200).json(result);
 });
 
 /**

@@ -380,6 +380,31 @@ const processExchange = async (id, processedBy) => {
 
   // Nhập hàng cũ về kho và xuất hàng mới
   for (const item of request.items) {
+    // Verify exchangeToVariant exists và có đủ inventory
+    if (!item.exchangeToVariant) {
+      throw new ApiError(400, "Biến thể đổi sang không hợp lệ");
+    }
+
+    if (!item.exchangeToSize) {
+      throw new ApiError(400, "Kích cỡ đổi sang không hợp lệ");
+    }
+
+    // Check inventory của sản phẩm mới trước khi xuất
+    const newInventoryItem = await InventoryItem.findOne({
+      product: item.exchangeToVariant.product,
+      variant: item.exchangeToVariant._id,
+      size: item.exchangeToSize,
+    });
+
+    if (!newInventoryItem || newInventoryItem.quantity < item.quantity) {
+      throw new ApiError(
+        400,
+        `Không đủ tồn kho cho sản phẩm đổi. Còn lại: ${
+          newInventoryItem?.quantity || 0
+        }, cần: ${item.quantity}`
+      );
+    }
+
     // Nhập hàng cũ
     await inventoryService.stockIn(
       {
