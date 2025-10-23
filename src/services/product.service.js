@@ -107,32 +107,12 @@ const createVariantSummary = (variants) => {
         });
       }
 
-      // Cập nhật thông tin giá
-      if (variant.priceFinal !== undefined) {
-        // Cập nhật giá thấp nhất
-        if (
-          variantSummary.priceRange.min === null ||
-          variant.priceFinal < variantSummary.priceRange.min
-        ) {
-          variantSummary.priceRange.min = variant.priceFinal;
-        }
+      // REMOVED: variant.priceFinal/price/percentDiscount đã bị xóa khỏi schema
+      // Giá được quản lý bởi InventoryItem, phải dùng inventoryService.getVariantPricing()
+      // để lấy thông tin giá chính xác
 
-        // Cập nhật giá cao nhất
-        if (
-          variantSummary.priceRange.max === null ||
-          variant.priceFinal > variantSummary.priceRange.max
-        ) {
-          variantSummary.priceRange.max = variant.priceFinal;
-        }
-      }
-
-      // Kiểm tra giảm giá
-      if (variant.percentDiscount > 0) {
-        variantSummary.discount.hasDiscount = true;
-        if (variant.percentDiscount > variantSummary.discount.maxPercent) {
-          variantSummary.discount.maxPercent = variant.percentDiscount;
-        }
-      }
+      // Note: buildVariantSummary() chỉ dùng để đếm colors/sizes
+      // Không dùng để tính priceRange - phải dùng InventoryService
     });
 
     // Cập nhật số lượng màu và kích thước
@@ -159,6 +139,10 @@ const transformProductForAdmin = (product) => {
 /**
  * Helper: Chuyển đổi dữ liệu sản phẩm cho Public
  * - Loại bỏ thông tin quản trị nhạy cảm
+ *
+ * WARNING: This function is SYNCHRONOUS and expects variants to already have
+ * inventorySummary populated. Do NOT use this for data from DB queries.
+ * Use it only AFTER variants have been processed with await calculateInventorySummary()
  */
 const transformProductForPublic = (product) => {
   const productObj = product.toObject ? product.toObject() : { ...product };
@@ -209,9 +193,22 @@ const transformProductForPublic = (product) => {
     publicData.variants = productObj.variants
       .filter((v) => v.isActive)
       .map((variant) => {
-        // Tính toán thông tin tồn kho cho variant
-        const inventorySummary =
-          variantService.calculateInventorySummary(variant);
+        // FIXED: inventorySummary phải được populate TRƯỚC KHI gọi transform
+        // Không thể gọi async function trong map() synchronous
+        const inventorySummary = variant.inventorySummary || {
+          totalQuantity: 0,
+          availableSizes: 0,
+          totalSizes: 0,
+          stockStatus: "out_of_stock",
+          sizeInventory: [],
+          pricing: {
+            minPrice: 0,
+            maxPrice: 0,
+            hasDiscount: false,
+            maxDiscountPercent: 0,
+            isSinglePrice: true,
+          },
+        };
 
         return {
           _id: variant._id,
@@ -222,9 +219,8 @@ const transformProductForPublic = (product) => {
             type: variant.color?.type,
             colors: variant.color?.colors || [],
           },
-          price: variant.price,
-          percentDiscount: variant.percentDiscount,
-          priceFinal: variant.priceFinal,
+          // REMOVED: variant.price, variant.percentDiscount, variant.priceFinal đã xóa
+          // Giá được lấy từ InventoryItem thông qua inventorySummary
           gender: variant.gender,
           images: variant.imagesvariant,
           inventorySummary,
@@ -246,14 +242,16 @@ const transformProductForPublic = (product) => {
         };
       });
 
-    // Tính toán thông tin giá - ensure no null values
+    // FIXED: Tính toán thông tin giá từ inventorySummary thay vì variant fields đã xóa
     const priceInfo = productObj.variants.reduce(
       (info, variant) => {
-        const finalPrice = variant.priceFinal || variant.price || 0;
-        const originalPrice = variant.price || 0;
-        const discount = variant.percentDiscount || 0;
+        // Lấy giá từ inventorySummary (được tính từ InventoryItem)
+        const pricing = variant.inventorySummary?.pricing || {};
+        const finalPrice = pricing.minPrice || 0;
+        const originalPrice = pricing.maxPrice || finalPrice;
+        const discount = 0; // Discount được tính trong InventoryItem
 
-        if (!info.minPrice || finalPrice < info.minPrice) {
+        if (!info.minPrice || (finalPrice > 0 && finalPrice < info.minPrice)) {
           info.minPrice = finalPrice;
           info.originalPrice = originalPrice;
           info.discountPercent = discount;
@@ -1360,25 +1358,10 @@ const productService = {
                     return Object.entries(condition).reduce(
                       (result, [key, value]) => {
                         if (key === "priceFinal") {
-                          let priceConditions = [];
-                          if (value.$gte) {
-                            priceConditions.push({
-                              $gte: ["$$variant.priceFinal", value.$gte],
-                            });
-                          }
-                          if (value.$lte) {
-                            priceConditions.push({
-                              $lte: ["$$variant.priceFinal", value.$lte],
-                            });
-                          }
-
-                          if (priceConditions.length === 1) {
-                            // Nếu chỉ có một điều kiện
-                            result = priceConditions[0];
-                          } else if (priceConditions.length > 1) {
-                            // Nếu có nhiều điều kiện, dùng $and
-                            result = { $and: priceConditions };
-                          }
+                          // ✅ REMOVED: variant.priceFinal không tồn tại
+                          // Price filtering được xử lý riêng thông qua InventoryItem
+                          // Skip price condition trong variant filter
+                          // (Price range filter được handle bởi filter.service.js)
                         } else if (key === "color") {
                           result = {
                             ...result,
@@ -1447,20 +1430,14 @@ const productService = {
         category: 1,
         brand: 1,
         isActive: 1,
-        rating: 1,
-        numReviews: 1,
+        // REMOVED: rating, numReviews - fields không tồn tại trong Product schema
         stockStatus: 1,
         totalQuantity: 1,
         images: 1,
         createdAt: 1,
         filteredVariantsCount: { $size: "$filteredVariants" },
-        // Tính giá nhỏ nhất và lớn nhất từ các variants được lọc
-        minPrice: {
-          $ifNull: [{ $min: "$filteredVariants.priceFinal" }, 0],
-        },
-        maxPrice: {
-          $ifNull: [{ $max: "$filteredVariants.priceFinal" }, 0],
-        },
+        // REMOVED: Không thể tính price từ variant.priceFinal (field đã xóa)
+        // Price sẽ được tính sau từ InventoryItem cho mỗi product
         filteredVariants: 1, // Giữ lại để dùng sau này
       },
     });
@@ -1469,16 +1446,19 @@ const productService = {
     let sortOption = { createdAt: -1 }; // Mặc định theo mới nhất
     switch (sort) {
       case "price-asc":
-        sortOption = { minPrice: 1 }; // Sắp xếp theo giá thấp nhất tăng dần
+        // CHANGED: Sort by createdAt vì không có minPrice trong schema
+        sortOption = { createdAt: 1 }; // Fallback: sắp xếp theo thời gian
         break;
       case "price-desc":
-        sortOption = { maxPrice: -1 }; // Sắp xếp theo giá cao nhất giảm dần
+        // CHANGED: Sort by createdAt vì không có maxPrice trong schema
+        sortOption = { createdAt: -1 }; // Fallback: sắp xếp theo thời gian mới nhất
         break;
       case "popular":
         sortOption = { totalQuantity: -1 };
         break;
       case "rating":
-        sortOption = { rating: -1 };
+        // CHANGED: rating field không tồn tại, sort by totalQuantity thay thế
+        sortOption = { totalQuantity: -1 }; // Fallback: sản phẩm bán chạy
         break;
     }
 
@@ -1592,6 +1572,7 @@ const productService = {
     // Chuyển đổi kết quả và tính stock info động
     const inventoryService = require("@services/inventory.service");
     const reviewService = require("@services/review.service");
+    const variantService = require("@services/variant.service");
     const transformedData = await Promise.all(
       products.map(async (product) => {
         // Bỏ trường trung gian
@@ -1611,11 +1592,32 @@ const productService = {
         const ratingInfo = await reviewService.getProductRatingInfo(
           product._id
         );
-        product.rating = ratingInfo.rating;
-        product.numReviews = ratingInfo.numReviews;
+        // FIXED: Gán vào temporary fields cho transform function (không lưu vào DB)
+        const productWithRating = product.toObject
+          ? product.toObject()
+          : { ...product };
+        productWithRating.rating = ratingInfo.rating;
+        productWithRating.numReviews = ratingInfo.numReviews;
+
+        // ✅ CRITICAL FIX: Tính inventorySummary cho mỗi variant trước khi transform
+        if (
+          productWithRating.variants &&
+          productWithRating.variants.length > 0
+        ) {
+          productWithRating.variants = await Promise.all(
+            productWithRating.variants.map(async (variant) => {
+              const inventorySummary =
+                await variantService.calculateInventorySummary(variant);
+              return {
+                ...variant,
+                inventorySummary,
+              };
+            })
+          );
+        }
 
         // Sử dụng hàm chuyển đổi hiện có
-        return transformProductForPublicList(product);
+        return transformProductForPublicList(productWithRating);
       })
     );
 
@@ -1711,6 +1713,20 @@ const productService = {
       };
     });
 
+    // ✅ CRITICAL FIX: Tính inventorySummary cho mỗi variant trước khi transform
+    const variantService = require("@services/variant.service");
+    product.variants = await Promise.all(
+      product.variants.map(async (variant) => {
+        const inventorySummary = await variantService.calculateInventorySummary(
+          variant
+        );
+        return {
+          ...variant,
+          inventorySummary,
+        };
+      })
+    );
+
     // Tính toán ma trận tồn kho và thông tin cơ bản
     const productAttributes = await getProductAttributesHelper(product);
 
@@ -1749,16 +1765,15 @@ const productService = {
           };
         });
 
-        // Lưu thông tin biến thể với sizes đầy đủ
+        // Lưu thông tin biến thể với sizes đầy đủ - getPublicProductById
         variantsInfo[key] = {
           id: variantId,
           colorId: colorId,
           colorName: variant.color?.name || "",
           gender: gender,
-          price: variant.price,
-          priceFinal: variant.priceFinal,
-          percentDiscount: variant.percentDiscount,
-          sizes: sizesWithQuantity, // Thêm thông tin sizes chi tiết
+          // ✅ REMOVED: variant.price, variant.priceFinal, variant.percentDiscount đã xóa
+          // Giá được lấy từ InventoryItem trong sizesWithQuantity
+          sizes: sizesWithQuantity, // Thêm thông tin sizes chi tiết (có price từ InventoryItem)
           totalQuantity: sizesWithQuantity.reduce(
             (sum, size) => sum + (size.quantity || 0),
             0
@@ -1928,6 +1943,20 @@ const productService = {
       };
     });
 
+    //  CRITICAL FIX: Tính inventorySummary cho mỗi variant trước khi transform
+    const variantService = require("@services/variant.service");
+    product.variants = await Promise.all(
+      product.variants.map(async (variant) => {
+        const inventorySummary = await variantService.calculateInventorySummary(
+          variant
+        );
+        return {
+          ...variant,
+          inventorySummary,
+        };
+      })
+    );
+
     // Tính toán ma trận tồn kho và thông tin cơ bản
     const productAttributes = await getProductAttributesHelper(product);
 
@@ -1960,22 +1989,21 @@ const productService = {
             sizeDescription: size.size?.description,
             quantity: size.quantity,
             sku: size.sku,
-            isAvailable: size.isAvailable, // ✅ FIXED: was size.isSizeAvailable
-            isLowStock: size.isLowStock, // ✅ ADDED
-            isOutOfStock: size.isOutOfStock, // ✅ ADDED
+            isAvailable: size.isAvailable, // FIXED: was size.isSizeAvailable
+            isLowStock: size.isLowStock, // ADDED
+            isOutOfStock: size.isOutOfStock, // ADDED
           };
         });
 
-        // Lưu thông tin biến thể với sizes đầy đủ
+        // Lưu thông tin biến thể với sizes đầy đủ - getPublicProductBySlug
         variantsInfo[key] = {
           id: variantId,
           colorId: colorId,
           colorName: variant.color?.name || "",
           gender: gender,
-          price: variant.price,
-          priceFinal: variant.priceFinal,
-          percentDiscount: variant.percentDiscount,
-          sizes: sizesWithQuantity, // Thêm thông tin sizes chi tiết
+          // REMOVED: variant.price, variant.priceFinal, variant.percentDiscount đã xóa
+          // Giá được lấy từ InventoryItem trong sizesWithQuantity
+          sizes: sizesWithQuantity, // Thêm thông tin sizes chi tiết (có price từ InventoryItem)
           totalQuantity: sizesWithQuantity.reduce(
             (sum, size) => sum + (size.quantity || 0),
             0
@@ -2036,7 +2064,7 @@ const productService = {
 
     // Thêm thông tin tổng hợp quan trọng, bỏ các giá trị dễ tính từ client
     const summary = {
-      totalInventity: productAttributes.inventoryMatrix.summary.total,
+      totalInventory: productAttributes.inventoryMatrix.summary.total, // FIXED TYPO: was totalInventity
       priceRange: productAttributes.priceRange,
       stockStatus: publicProduct.stockStatus,
     };
@@ -2070,22 +2098,22 @@ const productService = {
    * @param {Number} limit Số lượng sản phẩm trả về
    */
   getFeaturedProducts: async (limit = 20) => {
-    // Lấy sản phẩm có rating cao và đang active, không bị xóa mềm
+    // FIXED: Product.rating/numReviews đã bị xóa - không thể query/sort trực tiếp
+    // Lấy tất cả sản phẩm active, sau đó tính rating động và sort trong memory
     const products = await Product.find({
       isActive: true,
       deletedAt: null,
-      rating: { $gte: 4 },
     })
-      .sort({ rating: -1, numReviews: -1 })
-      .limit(Number(limit))
+      .limit(Number(limit) * 3) // Lấy nhiều hơn để filter sau
+      // EMOVED: .sort({ rating: -1, numReviews: -1 }) - fields không tồn tại
       .populate("category", "name")
       .populate("brand", "name logo")
       .populate("tags", "name type description")
       .populate({
         path: "variants",
         match: { isActive: true, deletedAt: null },
-        select:
-          "price priceFinal percentDiscount color imagesvariant sizes isActive",
+        // REMOVED: price, priceFinal, percentDiscount - fields đã xóa - getFeaturedProducts
+        select: "color imagesvariant sizes isActive gender",
         populate: [
           { path: "color", select: "name code type colors" },
           { path: "sizes.size", select: "value description" },
@@ -2155,8 +2183,8 @@ const productService = {
       .populate({
         path: "variants",
         match: { isActive: true, deletedAt: null },
-        select:
-          "price priceFinal percentDiscount color imagesvariant sizes isActive",
+        // REMOVED: price, priceFinal, percentDiscount - fields đã xóa - getNewArrivals
+        select: "color imagesvariant sizes isActive gender",
         populate: [
           { path: "color", select: "name code type colors" },
           { path: "sizes.size", select: "value description" },
@@ -2312,8 +2340,8 @@ const productService = {
         .populate({
           path: "variants",
           match: { isActive: true, deletedAt: null },
-          select:
-            "price priceFinal percentDiscount color imagesvariant sizes isActive",
+          // REMOVED: price, priceFinal, percentDiscount - fields đã xóa - getBestSellingProducts
+          select: "color imagesvariant sizes isActive gender",
           populate: [
             { path: "color", select: "name code type colors" },
             { path: "sizes.size", select: "value description" },
@@ -2383,8 +2411,8 @@ const productService = {
       .populate({
         path: "variants",
         match: { isActive: true, deletedAt: null },
-        select:
-          "price priceFinal percentDiscount color imagesvariant sizes isActive",
+        // REMOVED: price, priceFinal, percentDiscount - fields đã xóa - getRelatedProducts
+        select: "color imagesvariant sizes isActive gender",
         populate: [
           { path: "color", select: "name code type colors" },
           { path: "sizes.size", select: "value description" },

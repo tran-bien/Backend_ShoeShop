@@ -147,25 +147,17 @@ const reviewService = {
       _id: product._id,
       name: product.name,
       slug: product.slug,
-      price: product.price,
-      rating: product.rating || reviewStats.avgRating, // Đảm bảo luôn có giá trị rating
-      numReviews: product.numReviews || reviewStats.totalReviews, // Đảm bảo luôn có số lượng đánh giá
+      // FIXED: Product không có field price - giá được lấy từ InventoryItem
+      rating: reviewStats.avgRating, // FIXED: Rating tính động, không cache trong schema
+      numReviews: reviewStats.totalReviews, // FIXED: NumReviews tính động, không cache trong schema
       image:
         product.images && product.images.length > 0
           ? product.images[0].url
           : null,
     };
 
-    // Cập nhật rating và số lượng đánh giá cho sản phẩm nếu có thay đổi
-    if (
-      product.rating !== reviewStats.avgRating ||
-      product.numReviews !== reviewStats.totalReviews
-    ) {
-      await Product.findByIdAndUpdate(productId, {
-        rating: reviewStats.avgRating,
-        numReviews: reviewStats.totalReviews,
-      });
-    }
+    // REMOVED: Không cần update Product.rating/numReviews vì fields đã bị xóa khỏi schema
+    // Rating và numReviews giờ được tính động on-demand từ Review model
 
     return {
       success: true,

@@ -313,22 +313,17 @@ const variantService = {
         const sizeId = sizeData.size.toString();
         const existingSize = existingSizeMap.get(sizeId);
 
-        if (existingSize) {
-          // Size đã tồn tại, cập nhật số lượng
-          if (existingSize.quantity !== sizeData.quantity) {
-            existingSize.quantity = sizeData.quantity;
-            existingSize.isSizeAvailable = sizeData.quantity > 0;
-            updatedSizes.push(sizeId);
-          }
-        } else {
-          // Size chưa tồn tại, thêm mới vào biến thể
+        if (!existingSize) {
+          // Size chưa tồn tại, thêm reference mới vào biến thể
+          //  CHỈ LƯU REFERENCE - quantity được quản lý bởi InventoryItem
           existingVariant.sizes.push({
             size: sizeId,
-            quantity: sizeData.quantity || 0,
-            isSizeAvailable: (sizeData.quantity || 0) > 0,
+            // REMOVED: quantity, isSizeAvailable - Không lưu vào Variant schema
           });
           newSizes.push(sizeId);
         }
+        // REMOVED: Không cập nhật quantity nếu size đã tồn tại
+        // Quantity chỉ được cập nhật qua InventoryItem (stockIn/stockOut)
       }
 
       // Chỉ cập nhật gender (price/costPrice được quản lý bởi InventoryItem)
@@ -459,9 +454,10 @@ const variantService = {
 
         sizesData.push({
           size: sizeData.size,
-          quantity: sizeData.quantity || 0,
+          // REMOVED: quantity - không lưu vào Variant schema
+          // Quantity được quản lý bởi InventoryItem
           sku: existingSize ? existingSize.sku : undefined,
-          // isSizeAvailable sẽ được tính lại bởi middleware
+          // REMOVED: isSizeAvailable - không có trong schema
         });
       }
       updateData.sizes = sizesData;
@@ -627,7 +623,13 @@ const variantService = {
   },
 
   /**
-   * Cập nhật số lượng tồn kho của biến thể theo size
+   * DEPRECATED: Cập nhật số lượng tồn kho của biến thể theo size
+   *
+   * @deprecated Sử dụng inventoryService.stockIn() hoặc inventoryService.adjustStock() thay thế
+   *
+   * Variant schema không còn lưu trữ quantity - tất cả inventory data được quản lý bởi InventoryItem.
+   * Function này được giữ lại để backward compatibility với API cũ.
+   *
    * @param {String} id ID biến thể
    * @param {Array} sizesData Dữ liệu cập nhật số lượng theo kích thước
    */
@@ -641,6 +643,14 @@ const variantService = {
       throw new ApiError(400, "Dữ liệu cập nhật tồn kho không hợp lệ");
     }
 
+    // REDIRECT TO INVENTORY SERVICE
+    // Variant không lưu quantity nữa - phải cập nhật qua InventoryItem
+    const inventoryService = require("@services/inventory.service");
+
+    console.warn(
+      `updateVariantInventory() is DEPRECATED. Use inventoryService.stockIn() or adjustStock() instead.`
+    );
+
     // Kiểm tra xem size có tồn tại không
     const sizeIds = sizesData.map((item) => item.sizeId);
     const sizes = await Size.find({ _id: { $in: sizeIds } });
@@ -653,50 +663,25 @@ const variantService = {
       );
     }
 
-    // Cập nhật số lượng cho từng size
-    const updatedSizes = variant.sizes.map((size) => {
-      const sizeId = size.size.toString();
-      const updateData = sizesData.find((item) => item.sizeId === sizeId);
+    // REMOVED: Không cập nhật variant.sizes[].quantity nữa
+    // Inventory được quản lý hoàn toàn bởi InventoryItem
+    // Cần gọi inventoryService.adjustStock() để update
 
-      if (
-        updateData &&
-        typeof updateData.quantity === "number" &&
-        updateData.quantity >= 0
-      ) {
-        return {
-          ...size.toObject(),
-          quantity: updateData.quantity,
-          isSizeAvailable: updateData.quantity > 0,
-        };
-      }
-
-      return size;
-    });
-
-    // Cập nhật biến thể
-    const updatedVariant = await Variant.findByIdAndUpdate(
-      id,
-      { $set: { sizes: updatedSizes } },
-      { new: true, runValidators: true }
-    )
-      .populate("color", "name code type colors")
-      .populate("sizes.size", "value type description");
-
-    // Cập nhật thông tin tồn kho của sản phẩm
-    if (variant.product) {
-      const product = await Product.findById(variant.product);
-      if (product) {
-        const {
-          updateProductStockInfo,
-        } = require("@models/product/middlewares");
-        await updateProductStockInfo(product);
-      }
-    }
-
+    // Trả về thông báo hướng dẫn sử dụng API mới
     return {
-      success: true,
-      message: "Cập nhật tồn kho thành công",
-      variant: updatedVariant,
+      success: false,
+      deprecated: true,
+      message:
+        "Function này đã DEPRECATED. Vui lòng sử dụng POST /api/inventory/adjust-stock hoặc POST /api/inventory/stock-in để cập nhật tồn kho.",
+      recommendation: {
+        endpoint: "POST /api/inventory/adjust-stock",
+        body: {
+          variant: id,
+          size: "sizeId",
+          newQuantity: 100,
+          reason: "manual_adjustment",
+        },
+      },
     };
   },
 
@@ -738,7 +723,7 @@ const variantService = {
   },
 
   /**
-   * ✅ Tính tổng số lượng tồn kho của biến thể từ INVENTORYITEM
+   * Tính tổng số lượng tồn kho của biến thể từ INVENTORYITEM
    * @param {Object} variant Biến thể cần tính tổng số lượng
    * @returns {Promise<Object>} Thông tin tồn kho tổng hợp
    */
@@ -753,6 +738,12 @@ const variantService = {
     let totalQuantity = 0;
     const sizeInventory = [];
 
+    //  ADDED: Tính giá min/max từ InventoryItem
+    let minPrice = null;
+    let maxPrice = null;
+    let hasDiscount = false;
+    let maxDiscountPercent = 0;
+
     for (const item of inventoryItems) {
       totalQuantity += item.quantity || 0;
 
@@ -765,7 +756,31 @@ const variantService = {
         sku: item.sku || "",
         isLowStock: item.isLowStock,
         isOutOfStock: item.isOutOfStock,
+        //  ADDED: Thông tin giá từ InventoryItem
+        sellingPrice: item.sellingPrice || 0,
+        finalPrice: item.finalPrice || 0,
+        discountPercent: item.discountPercent || 0,
       });
+
+      // ADDED: Tính giá min/max
+      const finalPrice = item.finalPrice || 0;
+      if (finalPrice > 0) {
+        if (minPrice === null || finalPrice < minPrice) {
+          minPrice = finalPrice;
+        }
+        if (maxPrice === null || finalPrice > maxPrice) {
+          maxPrice = finalPrice;
+        }
+      }
+
+      // ADDED: Track discount
+      const discount = item.discountPercent || 0;
+      if (discount > 0) {
+        hasDiscount = true;
+        if (discount > maxDiscountPercent) {
+          maxDiscountPercent = discount;
+        }
+      }
     }
 
     // Số lượng kích thước có sẵn
@@ -783,6 +798,14 @@ const variantService = {
       totalSizes: inventoryItems.length,
       stockStatus,
       sizeInventory,
+      // ADDED: Thông tin giá tổng hợp
+      pricing: {
+        minPrice: minPrice || 0,
+        maxPrice: maxPrice || 0,
+        hasDiscount,
+        maxDiscountPercent,
+        isSinglePrice: minPrice === maxPrice,
+      },
     };
   },
 };
