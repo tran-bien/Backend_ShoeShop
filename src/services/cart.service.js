@@ -79,13 +79,18 @@ const cartService = {
     // Cập nhật trạng thái sản phẩm trong DB
     await cart.save();
 
-    // Populate thông tin chi tiết với product info đầy đủ
+    // FIXED: Populate và filter inactive/deleted products
     await cart.populate({
       path: "cartItems.variant",
-      select: "color product gender imagesvariant isActive", // FIXED: Removed price/priceFinal
+      select: "color product gender imagesvariant isActive deletedAt", 
+      match: { isActive: true, deletedAt: null }, // Chỉ lấy variant active và chưa xóa
       populate: [
         { path: "color", select: "name code" },
-        { path: "product", select: "_id name slug isActive" }, // Thêm _id vào select
+        { 
+          path: "product", 
+          select: "_id name slug isActive deletedAt",
+          match: { isActive: true, deletedAt: null } // Chỉ lấy product active và chưa xóa
+        },
       ],
     });
 
@@ -94,9 +99,42 @@ const cartService = {
       select: "value description",
     });
 
+    // FIXED: Loại bỏ items có variant/product bị xóa hoặc inactive
+    const validItems = [];
+    const invalidItems = [];
+
+    for (const item of cart.cartItems) {
+      // Nếu variant hoặc product null (do match condition không thỏa)
+      if (!item.variant || !item.variant.product) {
+        invalidItems.push({
+          itemId: item._id,
+          reason: "Sản phẩm không còn tồn tại hoặc đã bị vô hiệu hóa",
+        });
+        item.isAvailable = false;
+        item.unavailableReason = "Sản phẩm không còn tồn tại hoặc đã bị vô hiệu hóa";
+      } else {
+        validItems.push(item);
+      }
+    }
+
+    // Nếu có items bị xóa/inactive, log và có thể cleanup
+    if (invalidItems.length > 0) {
+      console.log(`[CART CLEANUP] Tìm thấy ${invalidItems.length} item(s) với sản phẩm inactive/deleted:`, invalidItems);
+      
+      // Auto-remove các items không hợp lệ khỏi giỏ hàng
+      cart.cartItems = cart.cartItems.filter(item => 
+        item.variant && item.variant.product
+      );
+      await cart.save();
+    }
+
     return {
       success: true,
       cart,
+      warnings: invalidItems.length > 0 ? {
+        removedItems: invalidItems,
+        message: `Đã loại bỏ ${invalidItems.length} sản phẩm không còn khả dụng khỏi giỏ hàng`
+      } : null,
     };
   },
 

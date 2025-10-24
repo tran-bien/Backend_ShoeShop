@@ -11,6 +11,7 @@ const connectDB = require("@config/db");
 const errorHandler = require("@middlewares/error.middleware");
 const sessionService = require("@services/session.service");
 const routes = require("@routes");
+const returnRequestJob = require("./jobs/returnRequest.job");
 
 // Load biến môi trường từ file .env
 dotenv.config();
@@ -33,6 +34,39 @@ const setupSessionCleanup = () => {
   }, 60 * 60 * 1000); // Mỗi giờ
 
   console.log("Đã thiết lập lịch trình dọn dẹp session định kỳ");
+};
+
+// ============================================================
+// CRONJOBS - Các tác vụ định kỳ
+// ============================================================
+const setupCronjobs = () => {
+  // 1. Auto-reject return requests quá hạn - Chạy mỗi 6 giờ
+  setInterval(() => {
+    returnRequestJob.autoRejectExpiredRequests().catch((error) => {
+      console.error("Lỗi cronjob auto-reject return requests:", error);
+    });
+  }, 6 * 60 * 60 * 1000); // Mỗi 6 giờ
+
+  // Chạy ngay lần đầu khi khởi động
+  returnRequestJob.autoRejectExpiredRequests().catch((error) => {
+    console.error("Lỗi khi chạy auto-reject lần đầu:", error);
+  });
+
+  // 2. Cleanup return requests cũ - Chạy mỗi tuần (7 ngày)
+  setInterval(() => {
+    returnRequestJob.cleanupOldCompletedRequests().catch((error) => {
+      console.error("Lỗi cronjob cleanup return requests:", error);
+    });
+  }, 7 * 24 * 60 * 60 * 1000); // Mỗi 7 ngày
+
+  // 3. Nhắc nhở admin về pending requests - Chạy mỗi ngày
+  setInterval(() => {
+    returnRequestJob.remindPendingRequests().catch((error) => {
+      console.error("Lỗi cronjob remind pending requests:", error);
+    });
+  }, 24 * 60 * 60 * 1000); // Mỗi 24 giờ
+
+  console.log("Đã thiết lập các cronjobs cho return requests");
 };
 
 const app = express();
@@ -68,4 +102,6 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   // Thiết lập dọn dẹp session
   setupSessionCleanup();
+  // Thiết lập cronjobs
+  setupCronjobs();
 });

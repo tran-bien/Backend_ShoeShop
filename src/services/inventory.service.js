@@ -153,6 +153,28 @@ const stockIn = async (data, performedBy) => {
     notes,
   } = data;
 
+  // FIXED: VALIDATE costPrice - Tránh lỗi weighted average cost
+  if (!costPrice || costPrice <= 0) {
+    throw new ApiError(
+      400,
+      "Giá nhập (costPrice) phải lớn hơn 0. Vui lòng kiểm tra lại."
+    );
+  }
+
+  if (typeof costPrice !== "number" || isNaN(costPrice)) {
+    throw new ApiError(
+      400,
+      "Giá nhập (costPrice) phải là một số hợp lệ"
+    );
+  }
+
+  // Validate quantity
+  if (!quantity || quantity <= 0) {
+    throw new ApiError(
+      400,
+      "Số lượng nhập (quantity) phải lớn hơn 0"
+    );
+  }
 
   const inventoryItem = await getOrCreateInventoryItem(product, variant, size);
 
@@ -252,9 +274,7 @@ const stockOut = async (data, performedBy) => {
     );
   }
 
-  // ============================================================
   // KIỂM TRA DUPLICATE TRANSACTION (nếu có reference là orderId)
-  // ============================================================
   if (reference) {
     const existingTransaction = await InventoryTransaction.findOne({
       inventoryItem: inventoryItem._id,

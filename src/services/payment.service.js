@@ -263,6 +263,27 @@ const paymentService = {
         };
       }
 
+      // FIXED: VNPAY IDEMPOTENCY - Kiểm tra đã xử lý callback chưa
+      const vnpayTransactionNo = vnpayParams.vnp_TransactionNo;
+      
+      // Nếu đã có vnpayTransactionNo và đã xử lý callback/IPN rồi
+      if (vnpayTransactionNo && order.payment.vnpayTransactionNo === vnpayTransactionNo) {
+        if (order.payment.vnpayCallbackProcessed || order.payment.vnpayIpnProcessed) {
+          console.log(`[IDEMPOTENCY] Callback/IPN đã được xử lý trước đó cho transaction: ${vnpayTransactionNo}`);
+          return {
+            success: true,
+            message: "Giao dịch đã được xử lý trước đó",
+            data: {
+              orderId: order._id,
+              orderCode: order.code,
+              amount: order.totalAfterDiscountAndShipping,
+              paymentStatus: order.payment.paymentStatus,
+              alreadyProcessed: true,
+            },
+          };
+        }
+      }
+
       // Kiểm tra xem đơn hàng đã được thanh toán chưa
       if (order.payment.paymentStatus === "paid") {
         return {
@@ -292,18 +313,20 @@ const paymentService = {
 
       if (responseCode === "00") {
         // Thanh toán thành công - Cập nhật trực tiếp trạng thái thanh toán và transactionId
+        // FIXED: Thêm vnpayTransactionNo và vnpayCallbackProcessed
         updatePromises.push(
           Order.findByIdAndUpdate(order._id, {
             "payment.transactionId": transactionId,
             "payment.paymentStatus": "paid",
             "payment.paidAt": new Date(),
+            "payment.vnpayTransactionNo": vnpayTransactionNo,
+            "payment.vnpayCallbackProcessed": true,
+            "payment.vnpayCallbackProcessedAt": new Date(),
           })
         );
 
-        // ============================================================
         // VNPAY: KHÔNG TỰ ĐỘNG TRỪ KHO Ở ĐÂY
         // Inventory sẽ được trừ KHI GÁN SHIPPER (assignOrderToShipper)
-        // ============================================================
 
         // Nếu thanh toán thành công và đơn hàng đang ở trạng thái pending
         if (order.status === "pending") {
@@ -333,9 +356,7 @@ const paymentService = {
           })
         );
 
-        // ============================================================
         // VNPAY FAILED: Inventory chưa bao giờ được trừ nên không cần hoàn
-        // ============================================================
       }
 
       // Thêm vào lịch sử thanh toán
@@ -431,6 +452,26 @@ const paymentService = {
         };
       }
 
+      // FIXED: VNPAY IPN IDEMPOTENCY - Kiểm tra trước khi xử lý
+      const vnpayTransactionNo = vnpParams.vnp_TransactionNo;
+      const txnRef = vnpParams.vnp_TxnRef;
+
+      if (vnpayTransactionNo) {
+        // Kiểm tra xem transaction này đã được xử lý chưa
+        const existingOrder = await Order.findOne({
+          "payment.vnpayTransactionNo": vnpayTransactionNo,
+          "payment.vnpayIpnProcessed": true,
+        });
+
+        if (existingOrder) {
+          console.log(`[IDEMPOTENCY] IPN đã được xử lý trước đó cho transaction: ${vnpayTransactionNo}`);
+          return {
+            RspCode: "00",
+            Message: "Already processed",
+          };
+        }
+      }
+
       // Xác thực chữ ký
       const verifyResult = paymentService.verifyVnpayReturn(vnpParams);
 
@@ -443,6 +484,14 @@ const paymentService = {
         const paymentResult = await paymentService.processPaymentResult(
           vnpParams
         );
+
+        // Mark IPN as processed
+        if (paymentResult.success && paymentResult.data?.orderId) {
+          await Order.findByIdAndUpdate(paymentResult.data.orderId, {
+            "payment.vnpayIpnProcessed": true,
+            "payment.vnpayIpnProcessedAt": new Date(),
+          });
+        }
 
         // Trường hợp không tìm thấy đơn hàng
         if (

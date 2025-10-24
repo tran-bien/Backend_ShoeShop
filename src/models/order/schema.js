@@ -48,9 +48,7 @@ const OrderSchema = new mongoose.Schema(
           type: String,
           default: "",
         },
-        // ============================================================
         // EXCHANGE TRACKING - Theo dõi lịch sử đổi hàng
-        // ============================================================
         hasBeenExchanged: {
           type: Boolean,
           default: false,
@@ -211,6 +209,31 @@ const OrderSchema = new mongoose.Schema(
       paidAt: {
         type: Date,
         default: null,
+      },
+      // VNPAY IDEMPOTENCY - Tránh xử lý callback/IPN nhiều lần
+      vnpayTransactionNo: {
+        type: String,
+        sparse: true,
+        index: true,
+        comment: "Mã giao dịch từ VNPAY để đảm bảo idempotency"
+      },
+      vnpayCallbackProcessed: {
+        type: Boolean,
+        default: false,
+        comment: "Đã xử lý callback từ VNPAY chưa"
+      },
+      vnpayCallbackProcessedAt: {
+        type: Date,
+        comment: "Thời điểm xử lý callback"
+      },
+      vnpayIpnProcessed: {
+        type: Boolean,
+        default: false,
+        comment: "Đã xử lý IPN từ VNPAY chưa"
+      },
+      vnpayIpnProcessedAt: {
+        type: Date,
+        comment: "Thời điểm xử lý IPN"
       },
     },
 

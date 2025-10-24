@@ -90,6 +90,48 @@ const returnRequestSchema = new mongoose.Schema(
       accountNumber: String,
       accountName: String,
     },
+    
+    // SHIPPING FEE HANDLING - Xử lý phí ship
+    shippingFee: {
+      customerPay: {
+        type: Number,
+        default: 0,
+        min: 0,
+        comment: "Phí ship khách hàng trả khi gửi hàng về"
+      },
+      refundShippingFee: {
+        type: Boolean,
+        default: false,
+        comment: "Có hoàn lại phí ship ban đầu không (nếu lỗi shop)"
+      },
+      originalShippingFee: {
+        type: Number,
+        default: 0,
+        min: 0,
+        comment: "Phí ship ban đầu của đơn hàng"
+      }
+    },
+    
+    // PRICE DIFFERENCE - Chênh lệch giá khi đổi hàng
+    priceDifference: {
+      amount: {
+        type: Number,
+        default: 0,
+        comment: "Số tiền chênh lệch (+ hoặc -)"
+      },
+      direction: {
+        type: String,
+        enum: ["customer_pay", "refund_to_customer", "equal"],
+        default: "equal",
+        comment: "Hướng thanh toán"
+      },
+      isPaid: {
+        type: Boolean,
+        default: false,
+        comment: "Đã thanh toán chênh lệch chưa"
+      }
+    },
+    
     status: {
       type: String,
       enum: [
@@ -101,6 +143,13 @@ const returnRequestSchema = new mongoose.Schema(
         "canceled",
       ],
       default: "pending",
+    },
+    
+    // AUTO-REJECT - Tự động từ chối nếu quá hạn
+    autoRejectedAt: Date,
+    expiresAt: {
+      type: Date,
+      comment: "Hết hạn xử lý sau 7 ngày kể từ khi tạo"
     },
     // Tracking
     approvedBy: {
@@ -126,13 +175,24 @@ const returnRequestSchema = new mongoose.Schema(
 returnRequestSchema.index({ order: 1 });
 returnRequestSchema.index({ customer: 1, createdAt: -1 });
 returnRequestSchema.index({ status: 1, createdAt: -1 });
-// ✅ ADDED: Compound index để optimize duplicate exchange request check
+returnRequestSchema.index({ expiresAt: 1, status: 1 }); // For auto-reject cronjob
+// ADDED: Compound index để optimize duplicate exchange request check
 returnRequestSchema.index({
   order: 1,
   type: 1,
   status: 1,
   "items.variant": 1,
   "items.size": 1,
+});
+
+// MIDDLEWARE - Auto set expiresAt khi tạo request
+returnRequestSchema.pre("save", function (next) {
+  // Nếu là document mới và chưa có expiresAt
+  if (this.isNew && !this.expiresAt) {
+    // Set expiresAt = 7 ngày từ bây giờ
+    this.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  }
+  next();
 });
 
 module.exports = returnRequestSchema;

@@ -1,6 +1,7 @@
 const { ReturnRequest, Order, InventoryItem } = require("../models");
 const ApiError = require("../utils/ApiError");
 const inventoryService = require("./inventory.service");
+const mongoose = require("mongoose");
 
 /**
  * Tạo yêu cầu đổi/trả hàng
@@ -43,48 +44,79 @@ const createReturnRequest = async (data, userId) => {
     throw new ApiError(400, "Đã quá thời hạn đổi/trả hàng (7 ngày)");
   }
 
-  // ============================================================
-  // VALIDATION: CHỈ ĐỔI 1 LẦN DUY NHẤT
-  // ============================================================
+  // VALIDATION: CHỈ ĐỔI 1 LẦN DUY NHẤT - SỬ DỤNG TRANSACTION
   if (type === "EXCHANGE") {
-    for (const item of items) {
-      const orderItem = order.orderItems.find(
-        (oi) =>
-          oi.variant.toString() === item.variant &&
-          oi.size.toString() === item.size
-      );
+    // Bắt đầu MongoDB Transaction để tránh race condition
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-      if (!orderItem) {
-        throw new ApiError(400, "Sản phẩm không tồn tại trong đơn hàng");
-      }
-
-      // Kiểm tra sản phẩm đã được đổi chưa
-      if (orderItem.hasBeenExchanged) {
-        throw new ApiError(
-          400,
-          `Sản phẩm "${orderItem.productName}" đã được đổi trước đó. Mỗi sản phẩm chỉ được đổi 1 lần duy nhất.`
+    try {
+      for (const item of items) {
+        const orderItem = order.orderItems.find(
+          (oi) =>
+            oi.variant.toString() === item.variant &&
+            oi.size.toString() === item.size
         );
-      }
 
-      // Kiểm tra có yêu cầu đổi hàng nào đang pending/approved cho sản phẩm này không
-      const existingExchangeRequest = await ReturnRequest.findOne({
-        order: orderId,
-        type: "EXCHANGE",
-        status: { $in: ["pending", "approved", "processing"] },
-        "items.variant": item.variant,
-        "items.size": item.size,
-      });
+        if (!orderItem) {
+          throw new ApiError(400, "Sản phẩm không tồn tại trong đơn hàng");
+        }
 
-      if (existingExchangeRequest) {
-        throw new ApiError(
-          400,
-          `Đã có yêu cầu đổi hàng cho sản phẩm "${orderItem.productName}" đang được xử lý. Vui lòng đợi hoàn tất hoặc hủy yêu cầu cũ.`
+        // FIXED: Sử dụng findOneAndUpdate với session để lock document
+        const lockedOrder = await Order.findOneAndUpdate(
+          {
+            _id: orderId,
+            "orderItems.variant": item.variant,
+            "orderItems.size": item.size,
+            "orderItems.hasBeenExchanged": false, // Optimistic lock
+          },
+          {
+            $set: {
+              "orderItems.$.lockVersion": Date.now(), // Temporary lock
+            },
+          },
+          { session, new: true }
         );
+
+        if (!lockedOrder) {
+          throw new ApiError(
+            400,
+            `Sản phẩm "${orderItem.productName}" đã được đổi hoặc đang được xử lý bởi yêu cầu khác.`
+          );
+        }
+
+        // Kiểm tra có yêu cầu đổi hàng nào đang pending/approved cho sản phẩm này không
+        const existingExchangeRequest = await ReturnRequest.findOne(
+          {
+            order: orderId,
+            type: "EXCHANGE",
+            status: { $in: ["pending", "approved", "processing"] },
+            "items.variant": item.variant,
+            "items.size": item.size,
+          },
+          null,
+          { session }
+        );
+
+        if (existingExchangeRequest) {
+          throw new ApiError(
+            400,
+            `Đã có yêu cầu đổi hàng cho sản phẩm "${orderItem.productName}" đang được xử lý. Vui lòng đợi hoàn tất hoặc hủy yêu cầu cũ.`
+          );
+        }
       }
+
+      // Commit transaction nếu tất cả validation pass
+      await session.commitTransaction();
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
     }
   }
 
-  // Tính tổng tiền hoàn
+  // VALIDATE & TÍNH TOÁN - Partial return + shipping fee
   let refundAmount = 0;
   const validatedItems = [];
 
@@ -99,14 +131,16 @@ const createReturnRequest = async (data, userId) => {
       throw new ApiError(400, "Sản phẩm không tồn tại trong đơn hàng");
     }
 
+    // FIXED: Hỗ trợ partial return - Kiểm tra số lượng trả
     if (item.quantity > orderItem.quantity) {
       throw new ApiError(400, "Số lượng trả vượt quá số lượng đã mua");
     }
 
+    // Tính tiền hoàn cho item này
     refundAmount += orderItem.price * item.quantity;
 
     validatedItems.push({
-      product: orderItem.variant.product, // ✅ FIXED: Lấy product ID từ populated variant
+      product: orderItem.variant.product, // FIXED: Lấy product ID từ populated variant
       variant: item.variant,
       size: item.size,
       quantity: item.quantity,
@@ -114,6 +148,59 @@ const createReturnRequest = async (data, userId) => {
       exchangeToVariant: item.exchangeToVariant,
       exchangeToSize: item.exchangeToSize,
     });
+  }
+
+  // TÍNH PHÍ SHIP - Shipping fee handling
+  const shippingFeeData = {
+    customerPay: 30000, // Mặc định khách trả 30k ship về
+    refundShippingFee: false,
+    originalShippingFee: order.shippingFee || 0,
+  };
+
+  // Nếu lỗi do shop (defective, wrong_product, not_as_described) thì shop chịu phí ship
+  if (["defective", "wrong_product", "not_as_described"].includes(reason)) {
+    shippingFeeData.customerPay = 0; // Shop chịu phí ship về
+    shippingFeeData.refundShippingFee = true; // Hoàn lại phí ship ban đầu
+    refundAmount += shippingFeeData.originalShippingFee;
+  }
+
+  // TÍNH CHÊNH LỆCH GIÁ - Price difference for EXCHANGE
+  let priceDifferenceData = {
+    amount: 0,
+    direction: "equal",
+    isPaid: false,
+  };
+
+  if (type === "EXCHANGE") {
+    // Tính chênh lệch giá giữa sản phẩm cũ và mới
+    for (const item of validatedItems) {
+      if (item.exchangeToVariant) {
+        const Variant = mongoose.model("Variant");
+        const Product = mongoose.model("Product");
+        
+        // Lấy giá sản phẩm mới
+        const newVariant = await Variant.findById(item.exchangeToVariant).populate("product");
+        const newProduct = newVariant ? newVariant.product : null;
+        
+        if (newProduct) {
+          const newPrice = newProduct.price || 0;
+          const oldPrice = item.priceAtPurchase;
+          const priceDiff = (newPrice - oldPrice) * item.quantity;
+          
+          priceDifferenceData.amount += priceDiff;
+        }
+      }
+    }
+
+    // Xác định hướng thanh toán
+    if (priceDifferenceData.amount > 0) {
+      priceDifferenceData.direction = "customer_pay"; // Khách phải trả thêm
+    } else if (priceDifferenceData.amount < 0) {
+      priceDifferenceData.direction = "refund_to_customer"; // Hoàn lại khách
+      refundAmount += Math.abs(priceDifferenceData.amount);
+    } else {
+      priceDifferenceData.direction = "equal"; // Bằng nhau
+    }
   }
 
   // Tạo yêu cầu
@@ -128,6 +215,8 @@ const createReturnRequest = async (data, userId) => {
     refundMethod: type === "RETURN" ? refundMethod : undefined,
     refundAmount: type === "RETURN" ? refundAmount : undefined,
     bankInfo: refundMethod === "bank_transfer" ? bankInfo : undefined,
+    shippingFee: shippingFeeData,
+    priceDifference: priceDifferenceData,
     status: "pending",
   });
 
@@ -296,9 +385,7 @@ const processReturn = async (id, processedBy) => {
     throw new ApiError(404, "Không tìm thấy yêu cầu");
   }
 
-  // ============================================================
   // VALIDATION: Kiểm tra trạng thái request
-  // ============================================================
   if (request.status === "completed") {
     throw new ApiError(400, "Yêu cầu đã được xử lý hoàn tất trước đó");
   }
@@ -315,9 +402,7 @@ const processReturn = async (id, processedBy) => {
     throw new ApiError(400, "Yêu cầu này không phải là trả hàng");
   }
 
-  // ============================================================
   // VALIDATION: Kiểm tra trạng thái đơn hàng
-  // ============================================================
   const order = await Order.findById(request.order);
 
   if (!order) {
@@ -337,9 +422,7 @@ const processReturn = async (id, processedBy) => {
     );
   }
 
-  // ============================================================
   // VALIDATION: Kiểm tra thời hạn trả hàng (7 ngày)
-  // ============================================================
   if (!order.deliveredAt) {
     throw new ApiError(400, "Đơn hàng chưa được giao, không thể trả hàng");
   }
