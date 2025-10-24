@@ -59,28 +59,8 @@ const variantValidator = {
         return true;
       }),
 
-    body("price")
-      .notEmpty()
-      .withMessage("Giá bán không được để trống")
-      .isFloat({ min: 0 })
-      .withMessage("Giá bán phải là số dương"),
-
-    body("costPrice")
-      .notEmpty()
-      .withMessage("Giá gốc không được để trống")
-      .isFloat({ min: 0 })
-      .withMessage("Giá gốc phải là số dương")
-      .custom((value, { req }) => {
-        if (parseFloat(value) > parseFloat(req.body.price)) {
-          throw new ApiError(400, "Giá gốc không được lớn hơn giá bán");
-        }
-        return true;
-      }),
-
-    body("percentDiscount")
-      .optional()
-      .isFloat({ min: 0, max: 100 })
-      .withMessage("Phần trăm giảm giá phải từ 0 đến 100"),
+    // REMOVED: price, costPrice, percentDiscount validators
+    // Giá giờ được quản lý trong Inventory, không còn ở Variant
 
     body("gender")
       .optional()
@@ -125,21 +105,7 @@ const variantValidator = {
             );
           }
 
-          // Check có field quantity
-          if (item.quantity === undefined || item.quantity === null) {
-            throw new ApiError(
-              400,
-              `Phần tử thứ ${i + 1} thiếu trường 'quantity'`
-            );
-          }
-
-          // Check quantity là số nguyên không âm
-          if (!Number.isInteger(item.quantity) || item.quantity < 0) {
-            throw new ApiError(
-              400,
-              `Số lượng tại vị trí ${i + 1} phải là số nguyên không âm`
-            );
-          }
+          // REMOVED: quantity validation - quantity được quản lý trong Inventory
         }
 
         return true;
@@ -156,9 +122,7 @@ const variantValidator = {
         return true;
       }),
 
-    body("sizes.*.quantity")
-      .isInt({ min: 0 })
-      .withMessage("Số lượng phải là số nguyên không âm"),
+    // REMOVED: sizes.*.quantity validator - quantity được quản lý trong Inventory
   ],
 
   // Kiểm tra dữ liệu cập nhật biến thể
@@ -181,30 +145,6 @@ const variantValidator = {
         }
         return true;
       }),
-
-    body("price")
-      .optional()
-      .isFloat({ min: 0 })
-      .withMessage("Giá bán phải là số dương"),
-
-    body("costPrice")
-      .optional()
-      .isFloat({ min: 0 })
-      .withMessage("Giá gốc phải là số dương")
-      .custom((value, { req }) => {
-        if (
-          req.body.price !== undefined &&
-          parseFloat(value) > parseFloat(req.body.price)
-        ) {
-          throw new ApiError(400, "Giá gốc không được lớn hơn giá bán");
-        }
-        return true;
-      }),
-
-    body("percentDiscount")
-      .optional()
-      .isFloat({ min: 0, max: 100 })
-      .withMessage("Phần trăm giảm giá phải từ 0 đến 100"),
 
     body("gender")
       .optional()
@@ -252,21 +192,7 @@ const variantValidator = {
             );
           }
 
-          // Check có field quantity
-          if (item.quantity === undefined || item.quantity === null) {
-            throw new ApiError(
-              400,
-              `Phần tử thứ ${i + 1} thiếu trường 'quantity'`
-            );
-          }
-
-          // Check quantity là số nguyên không âm
-          if (!Number.isInteger(item.quantity) || item.quantity < 0) {
-            throw new ApiError(
-              400,
-              `Số lượng tại vị trí ${i + 1} phải là số nguyên không âm`
-            );
-          }
+          // REMOVED: quantity validation - quantity được quản lý trong Inventory
         }
 
         return true;
@@ -284,10 +210,7 @@ const variantValidator = {
         return true;
       }),
 
-    body("sizes.*.quantity")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Số lượng phải là số nguyên không âm"),
+    // REMOVED: sizes.*.quantity validator - quantity được quản lý trong Inventory
   ],
 
   // Kiểm tra query lấy danh sách biến thể
@@ -325,71 +248,8 @@ const variantValidator = {
       .isIn(["male", "female"])
       .withMessage("Giới tính phải là 'male' hoặc 'female'"),
 
-    // === Validator cho giá nhập (costPrice) ===
-    query("costPriceMin")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Giá nhập tối thiểu phải là số nguyên không âm"),
-
-    query("costPriceMax")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Giá nhập tối đa phải là số nguyên không âm")
-      .custom((value, { req }) => {
-        if (
-          req.query.costPriceMin &&
-          Number(value) < Number(req.query.costPriceMin)
-        ) {
-          throw new ApiError(
-            400,
-            "Giá nhập tối đa phải lớn hơn hoặc bằng giá nhập tối thiểu"
-          );
-        }
-        return true;
-      }),
-
-    // === Validator cho giá bán gốc (price) ===
-    query("priceMin")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Giá bán gốc tối thiểu phải là số nguyên không âm"),
-
-    query("priceMax")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Giá bán gốc tối đa phải là số nguyên không âm")
-      .custom((value, { req }) => {
-        if (req.query.priceMin && Number(value) < Number(req.query.priceMin)) {
-          throw new ApiError(
-            400,
-            "Giá bán gốc tối đa phải lớn hơn hoặc bằng giá bán gốc tối thiểu"
-          );
-        }
-        return true;
-      }),
-
-    // === Validator cho giá bán cuối (priceFinal) ===
-    query("finalPriceMin")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Giá cuối tối thiểu phải là số nguyên không âm"),
-
-    query("finalPriceMax")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Giá cuối tối đa phải là số nguyên không âm")
-      .custom((value, { req }) => {
-        if (
-          req.query.finalPriceMin &&
-          Number(value) < Number(req.query.finalPriceMin)
-        ) {
-          throw new ApiError(
-            400,
-            "Giá cuối tối đa phải lớn hơn hoặc bằng giá cuối tối thiểu"
-          );
-        }
-        return true;
-      }),
+    // REMOVED: Validators cho giá (costPriceMin/Max, priceMin/Max, finalPriceMin/Max)
+    // Giá giờ được quản lý trong Inventory, không filter theo giá ở Variant
 
     query("isActive")
       .optional()
