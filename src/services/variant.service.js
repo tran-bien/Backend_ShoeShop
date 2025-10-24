@@ -71,8 +71,8 @@ const variantService = {
       filter.gender = gender;
     }
 
-    // ❌ REMOVED: Lọc theo giá - Giá không còn ở Variant
-    // ✅ Giá được quản lý bởi InventoryItem và InventoryTransaction
+    // REMOVED: Lọc theo giá - Giá không còn ở Variant
+    // Giá được quản lý bởi InventoryItem và InventoryTransaction
 
     // Lọc theo trạng thái active
     if (isActive !== undefined) {
