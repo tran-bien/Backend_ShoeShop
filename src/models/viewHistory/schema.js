@@ -5,12 +5,10 @@ const ViewHistorySchema = new mongoose.Schema(
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      index: true,
     },
 
     sessionId: {
       type: String,
-      index: true,
       comment: "Cho anonymous users chưa đăng nhập",
     },
 
@@ -18,7 +16,6 @@ const ViewHistorySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
       required: true,
-      index: true,
     },
 
     variant: {

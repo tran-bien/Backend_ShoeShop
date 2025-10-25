@@ -6,7 +6,6 @@ const RecommendationCacheSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
     },
 
     algorithm: {
@@ -33,7 +32,7 @@ const RecommendationCacheSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: true,
-      expires: 0, // TTL index
+      expires: 0, // TTL index tự động
     },
   },
   {
@@ -43,7 +42,6 @@ const RecommendationCacheSchema = new mongoose.Schema(
 
 // Compound index
 RecommendationCacheSchema.index({ user: 1, algorithm: 1 });
-RecommendationCacheSchema.index({ expiresAt: 1 }); // TTL
 
 module.exports = RecommendationCacheSchema;
 

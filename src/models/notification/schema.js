@@ -6,7 +6,6 @@ const NotificationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
     },
 
     type: {
@@ -58,7 +57,6 @@ const NotificationSchema = new mongoose.Schema(
     isRead: {
       type: Boolean,
       default: false,
-      index: true,
     },
 
     readAt: {
@@ -128,7 +126,6 @@ const NotificationSchema = new mongoose.Schema(
 // Index
 NotificationSchema.index({ user: 1, createdAt: -1 });
 NotificationSchema.index({ user: 1, isRead: 1 });
-NotificationSchema.index({ idempotencyKey: 1 });
 NotificationSchema.index({ type: 1, createdAt: -1 });
 
 module.exports = NotificationSchema;

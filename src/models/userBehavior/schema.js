@@ -7,7 +7,6 @@ const UserBehaviorSchema = new mongoose.Schema(
       ref: "User",
       required: true,
       unique: true,
-      index: true,
     },
 
     // Sở thích theo category
@@ -102,7 +101,6 @@ const UserBehaviorSchema = new mongoose.Schema(
 );
 
 // Index
-UserBehaviorSchema.index({ user: 1 });
 UserBehaviorSchema.index({ lastUpdated: 1 });
 
 module.exports = UserBehaviorSchema;

@@ -68,7 +68,6 @@ const SizeGuideSchema = new mongoose.Schema(
 );
 
 // Index
-SizeGuideSchema.index({ product: 1 });
 SizeGuideSchema.index({ isActive: 1 });
 
 module.exports = SizeGuideSchema;
