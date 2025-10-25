@@ -232,6 +232,34 @@ const applyMiddlewares = (schema) => {
       const previousStatus = this._previousStatus;
       const currentStatus = this.status;
 
+      // LOYALTY: Tích điểm khi đơn hàng delivered
+      if (
+        currentStatus === "delivered" &&
+        previousStatus !== "delivered" &&
+        this.payment.paymentStatus === "paid"
+      ) {
+        try {
+          const loyaltyService = require("@services/loyalty.service");
+          const pointsToEarn = loyaltyService.calculatePointsFromOrder(
+            this.totalAfterDiscountAndShipping
+          );
+
+          if (pointsToEarn > 0) {
+            await loyaltyService.addPoints(this.user, pointsToEarn, {
+              source: "ORDER",
+              order: this._id,
+              description: `Tích điểm từ đơn hàng ${this.code}`,
+            });
+
+            console.log(
+              `[LOYALTY] User ${this.user} nhận ${pointsToEarn} điểm từ đơn ${this.code}`
+            );
+          }
+        } catch (error) {
+          console.error("[LOYALTY] Lỗi khi tích điểm:", error);
+        }
+      }
+
       // Chỉ xử lý khi có sự thay đổi trạng thái thực sự
       if (previousStatus && previousStatus !== currentStatus) {
         // ============================================================

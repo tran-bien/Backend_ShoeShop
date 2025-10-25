@@ -12,6 +12,8 @@ const errorHandler = require("@middlewares/error.middleware");
 const sessionService = require("@services/session.service");
 const routes = require("@routes");
 const returnRequestJob = require("./jobs/returnRequest.job");
+const loyaltyJob = require("./jobs/loyalty.job");
+const recommendationJob = require("./jobs/recommendation.job");
 
 // Load biến môi trường từ file .env
 dotenv.config();
@@ -40,33 +42,73 @@ const setupSessionCleanup = () => {
 // CRONJOBS - Các tác vụ định kỳ
 // ============================================================
 const setupCronjobs = () => {
+  // === RETURN REQUEST CRONJOBS ===
+  
   // 1. Auto-reject return requests quá hạn - Chạy mỗi 6 giờ
   setInterval(() => {
     returnRequestJob.autoRejectExpiredRequests().catch((error) => {
       console.error("Lỗi cronjob auto-reject return requests:", error);
     });
-  }, 6 * 60 * 60 * 1000); // Mỗi 6 giờ
+  }, 6 * 60 * 60 * 1000);
 
-  // Chạy ngay lần đầu khi khởi động
   returnRequestJob.autoRejectExpiredRequests().catch((error) => {
     console.error("Lỗi khi chạy auto-reject lần đầu:", error);
   });
 
-  // 2. Cleanup return requests cũ - Chạy mỗi tuần (7 ngày)
+  // 2. Cleanup return requests cũ - Chạy mỗi tuần
   setInterval(() => {
     returnRequestJob.cleanupOldCompletedRequests().catch((error) => {
       console.error("Lỗi cronjob cleanup return requests:", error);
     });
-  }, 7 * 24 * 60 * 60 * 1000); // Mỗi 7 ngày
+  }, 7 * 24 * 60 * 60 * 1000);
 
   // 3. Nhắc nhở admin về pending requests - Chạy mỗi ngày
   setInterval(() => {
     returnRequestJob.remindPendingRequests().catch((error) => {
       console.error("Lỗi cronjob remind pending requests:", error);
     });
-  }, 24 * 60 * 60 * 1000); // Mỗi 24 giờ
+  }, 24 * 60 * 60 * 1000);
 
-  console.log("Đã thiết lập các cronjobs cho return requests");
+  // === LOYALTY CRONJOBS ===
+
+  // 4. Expire loyalty points - Chạy mỗi ngày lúc 1 AM
+  setInterval(() => {
+    loyaltyJob.expirePoints().catch((error) => {
+      console.error("Lỗi cronjob expire points:", error);
+    });
+  }, 24 * 60 * 60 * 1000);
+
+  // 5. Remind expiring points - Chạy mỗi tuần
+  setInterval(() => {
+    loyaltyJob.remindExpiringPoints().catch((error) => {
+      console.error("Lỗi cronjob remind expiring points:", error);
+    });
+  }, 7 * 24 * 60 * 60 * 1000);
+
+  // 6. Update user tiers - Chạy mỗi tuần
+  setInterval(() => {
+    loyaltyJob.updateAllUserTiers().catch((error) => {
+      console.error("Lỗi cronjob update tiers:", error);
+    });
+  }, 7 * 24 * 60 * 60 * 1000);
+
+  // === RECOMMENDATION CRONJOBS ===
+
+  // 7. Update user behaviors - Chạy mỗi ngày lúc 3 AM
+  setInterval(() => {
+    recommendationJob.updateUserBehaviors().catch((error) => {
+      console.error("Lỗi cronjob update behaviors:", error);
+    });
+  }, 24 * 60 * 60 * 1000);
+
+  // 8. Clear expired cache - Chạy mỗi ngày
+  setInterval(() => {
+    recommendationJob.clearExpiredCache().catch((error) => {
+      console.error("Lỗi cronjob clear cache:", error);
+    });
+  }, 24 * 60 * 60 * 1000);
+
+  console.log("✅ Đã thiết lập tất cả cronjobs");
 };
 
 const app = express();

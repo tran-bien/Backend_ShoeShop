@@ -109,8 +109,6 @@ const UserSchema = new mongoose.Schema(
         type: Number,
         default: 5,
       },
-      // Loại bỏ currentLocation - không cần theo dõi vị trí realtime
-      // Shipper chỉ cần upload ảnh khi giao hàng
       deliveryStats: {
         total: {
           type: Number,
@@ -124,6 +122,36 @@ const UserSchema = new mongoose.Schema(
           type: Number,
           default: 0,
         },
+      },
+    },
+
+    // Hệ thống tích điểm & phân hạng
+    loyalty: {
+      points: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      tier: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "LoyaltyTier",
+      },
+      tierName: {
+        type: String,
+        default: "Đồng",
+      },
+      totalEarned: {
+        type: Number,
+        default: 0,
+        comment: "Tổng điểm đã tích lũy từ trước đến nay",
+      },
+      totalRedeemed: {
+        type: Number,
+        default: 0,
+        comment: "Tổng điểm đã sử dụng",
+      },
+      lastTierUpdate: {
+        type: Date,
       },
     },
   },

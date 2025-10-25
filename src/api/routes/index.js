@@ -5,6 +5,7 @@ const router = express.Router();
 const authRoutes = require("@routes/public/auth.routes");
 const userBrandRoutes = require("@routes/public/brand.routes");
 const userCategoryRoutes = require("@routes/public/category.routes");
+const publicCompareRoutes = require("@routes/public/compare.routes");
 const publicTagRoutes = require("@routes/public/tag.routes");
 const userProductRoutes = require("@routes/public/product.routes");
 const productReviewRoutes = require("@routes/public/review.routes");
@@ -21,6 +22,10 @@ const userReviewRoutes = require("@routes/user/review.routes");
 const userOrderRoutes = require("@routes/user/order.routes");
 const userCartRoutes = require("@routes/user/cart.routes");
 const userImageRoutes = require("@routes/user/image.routes");
+const userLoyaltyRoutes = require("@routes/user/loyalty.routes");
+const userNotificationRoutes = require("@routes/user/notification.routes");
+const userViewHistoryRoutes = require("@routes/user/viewHistory.routes");
+const userRecommendationRoutes = require("@routes/user/recommendation.routes");
 
 // Shipper Routes
 const shipperRoutes = require("@routes/shipper.route");
@@ -44,14 +49,20 @@ const adminReviewRoutes = require("@routes/admin/review.routes");
 const adminBannerRoutes = require("@routes/admin/banner.routes");
 const adminReportRoutes = require("@routes/admin/report.routes");
 const adminImageRoutes = require("@routes/admin/image.routes");
+const adminSizeGuideRoutes = require("@routes/admin/sizeGuide.routes");
+
+// Public Routes (new features)
+const publicSizeGuideRoutes = require("@routes/public/sizeGuide.routes");
 
 // PUBLIC ROUTES (Không cần đăng nhập)
 router.use("/auth", authRoutes);
 router.use("/brands", userBrandRoutes);
 router.use("/categories", userCategoryRoutes);
+router.use("/compare", publicCompareRoutes);
 router.use("/tags", publicTagRoutes);
 router.use("/products", userProductRoutes);
 router.use("/products", productReviewRoutes);
+router.use("/products", publicSizeGuideRoutes);
 router.use("/reviews", publicReviewRoutes);
 router.use("/filters", filterRoutes);
 router.use("/coupons", publicCouponRoutes);
@@ -65,7 +76,11 @@ router.use("/users/reviews", userReviewRoutes);
 router.use("/users/orders", userOrderRoutes);
 router.use("/users/cart", userCartRoutes);
 router.use("/users/images", userImageRoutes);
-router.use("/users/returns", returnRoutes); // User tạo/xem yêu cầu đổi trả
+router.use("/users/returns", returnRoutes);
+router.use("/users/loyalty", userLoyaltyRoutes);
+router.use("/users/notifications", userNotificationRoutes);
+router.use("/users/view-history", userViewHistoryRoutes);
+router.use("/users/recommendations", userRecommendationRoutes);
 
 // SHIPPER ROUTES (role: shipper)
 router.use("/shipper", shipperRoutes);
@@ -89,5 +104,6 @@ router.use("/admin/reviews", adminReviewRoutes);
 router.use("/admin/banners", adminBannerRoutes);
 router.use("/admin/reports", adminReportRoutes);
 router.use("/admin/images", adminImageRoutes);
+router.use("/admin/size-guides", adminSizeGuideRoutes);
 
 module.exports = router;

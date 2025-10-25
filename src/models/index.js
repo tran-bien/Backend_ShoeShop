@@ -12,6 +12,15 @@ const modelFolderMap = {
   InventoryItem: "inventory",
   InventoryTransaction: "inventoryTransaction",
   ReturnRequest: "returnRequest",
+  SizeGuide: "sizeGuide",
+  LoyaltyTier: "loyaltyTier",
+  LoyaltyTransaction: "loyaltyTransaction",
+  Notification: "notification",
+  BlogPost: "blogPost",
+  BlogCategory: "blogCategory",
+  ViewHistory: "viewHistory",
+  UserBehavior: "userBehavior",
+  RecommendationCache: "recommendationCache",
   // Các models khác giữ nguyên (folder name = model name lowercase)
 };
 

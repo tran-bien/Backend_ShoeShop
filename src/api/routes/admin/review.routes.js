@@ -74,4 +74,40 @@ router.get(
   reviewController.getProductReviewStats
 );
 
+/**
+ * @route   POST /api/v1/admin/reviews/:id/reply
+ * @desc    Trả lời đánh giá
+ * @access  Staff/Admin
+ */
+router.post(
+  "/:id/reply",
+  requireStaffOrAdmin,
+  validate(reviewValidator.validateReplyToReview),
+  reviewController.replyToReview
+);
+
+/**
+ * @route   PUT /api/v1/admin/reviews/:id/reply
+ * @desc    Sửa trả lời đánh giá
+ * @access  Staff/Admin
+ */
+router.put(
+  "/:id/reply",
+  requireStaffOrAdmin,
+  validate(reviewValidator.validateReplyToReview),
+  reviewController.updateReplyToReview
+);
+
+/**
+ * @route   DELETE /api/v1/admin/reviews/:id/reply
+ * @desc    Xóa trả lời đánh giá
+ * @access  Staff/Admin
+ */
+router.delete(
+  "/:id/reply",
+  requireStaffOrAdmin,
+  validate(reviewValidator.validateReviewId),
+  reviewController.deleteReplyToReview
+);
+
 module.exports = router;

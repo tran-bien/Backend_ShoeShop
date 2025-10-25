@@ -102,6 +102,51 @@ const getAllReviewsDeleted = asyncHandler(async (req, res) => {
   res.status(200).json(result);
 });
 
+/**
+ * @desc    Trả lời đánh giá
+ * @route   POST /api/admin/reviews/:id/reply
+ * @access  Staff/Admin
+ */
+const replyToReview = asyncHandler(async (req, res) => {
+  const { content } = req.body;
+  const result = await reviewService.adminReviewService.replyToReview(
+    req.params.id,
+    content,
+    req.user._id
+  );
+  
+  res.status(200).json(result);
+});
+
+/**
+ * @desc    Sửa reply đánh giá
+ * @route   PUT /api/admin/reviews/:id/reply
+ * @access  Staff/Admin
+ */
+const updateReplyToReview = asyncHandler(async (req, res) => {
+  const { content } = req.body;
+  const result = await reviewService.adminReviewService.updateReplyToReview(
+    req.params.id,
+    content,
+    req.user._id
+  );
+  
+  res.status(200).json(result);
+});
+
+/**
+ * @desc    Xóa reply đánh giá
+ * @route   DELETE /api/admin/reviews/:id/reply
+ * @access  Staff/Admin
+ */
+const deleteReplyToReview = asyncHandler(async (req, res) => {
+  const result = await reviewService.adminReviewService.deleteReplyToReview(
+    req.params.id
+  );
+  
+  res.status(200).json(result);
+});
+
 module.exports = {
   getAllReviews,
   getReviewById,
@@ -109,4 +154,7 @@ module.exports = {
   restoreReview,
   getProductReviewStats,
   getAllReviewsDeleted,
+  replyToReview,
+  updateReplyToReview,
+  deleteReplyToReview,
 };

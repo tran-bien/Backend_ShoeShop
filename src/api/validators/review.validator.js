@@ -166,6 +166,22 @@ const validateRestoreReview = [
     .withMessage("ID đánh giá không hợp lệ"),
 ];
 
+const validateReplyToReview = [
+  param("id")
+    .notEmpty()
+    .withMessage("ID đánh giá không được để trống")
+    .custom((value) => mongoose.Types.ObjectId.isValid(value))
+    .withMessage("ID đánh giá không hợp lệ"),
+  body("content")
+    .notEmpty()
+    .withMessage("Nội dung trả lời không được để trống")
+    .isString()
+    .withMessage("Nội dung trả lời phải là chuỗi")
+    .trim()
+    .isLength({ min: 1, max: 1000 })
+    .withMessage("Nội dung trả lời phải có từ 1-1000 ký tự"),
+];
+
 module.exports = {
   validateCreateReview,
   validateUpdateReview,
@@ -177,4 +193,5 @@ module.exports = {
   validateGetAllReviews,
   validateToggleReviewVisibility,
   validateRestoreReview,
+  validateReplyToReview,
 };

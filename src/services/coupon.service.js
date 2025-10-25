@@ -1,6 +1,7 @@
-const { Coupon, User, Product, Category } = require("@models");
+const { Coupon, User, Product, Category, Order, Variant } = require("@models");
 const paginate = require("@utils/pagination");
 const ApiError = require("@utils/ApiError");
+const mongoose = require("mongoose");
 
 const couponService = {
   /**
@@ -211,6 +212,199 @@ const couponService = {
         status: coupon.status,
         isValid,
       },
+    };
+  },
+
+  /**
+   * Validate coupon với advanced conditions
+   * @param {Object} coupon - Coupon object
+   * @param {String} userId - User ID
+   * @param {Array} cartItems - Cart items array
+   * @returns {Object} - Validation result
+   */
+  validateAdvancedCoupon: async (coupon, userId, cartItems = []) => {
+    // 1. Check scope - Kiểm tra coupon áp dụng cho sản phẩm/variant/category nào
+    if (coupon.scope && coupon.scope !== "ALL") {
+      let hasApplicableItem = false;
+
+      for (const item of cartItems) {
+        // Check applicable products
+        if (coupon.scope === "PRODUCTS" && coupon.applicableProducts?.length > 0) {
+          if (coupon.applicableProducts.some(p => p.toString() === item.variant?.product?._id?.toString())) {
+            hasApplicableItem = true;
+            break;
+          }
+        }
+
+        // Check applicable variants
+        if (coupon.scope === "VARIANTS" && coupon.applicableVariants?.length > 0) {
+          if (coupon.applicableVariants.some(v => v.toString() === item.variant?._id?.toString())) {
+            hasApplicableItem = true;
+            break;
+          }
+        }
+
+        // Check applicable categories
+        if (coupon.scope === "CATEGORIES" && coupon.applicableCategories?.length > 0) {
+          if (coupon.applicableCategories.some(c => c.toString() === item.variant?.product?.category?._id?.toString())) {
+            hasApplicableItem = true;
+            break;
+          }
+        }
+      }
+
+      if (!hasApplicableItem) {
+        return {
+          isValid: false,
+          message: "Mã giảm giá không áp dụng cho sản phẩm trong giỏ hàng",
+        };
+      }
+    }
+
+    // 2. Check conditions
+    if (coupon.conditions) {
+      const conditions = coupon.conditions;
+
+      // Check minQuantity
+      if (conditions.minQuantity) {
+        const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+        if (totalQuantity < conditions.minQuantity) {
+          return {
+            isValid: false,
+            message: `Cần mua tối thiểu ${conditions.minQuantity} sản phẩm để áp dụng mã này`,
+          };
+        }
+      }
+
+      // Check maxUsagePerUser
+      if (conditions.maxUsagePerUser) {
+        const usageCount = coupon.userUsage?.find(u => u.user?.toString() === userId?.toString())?.count || 0;
+        if (usageCount >= conditions.maxUsagePerUser) {
+          return {
+            isValid: false,
+            message: `Bạn đã sử dụng mã này ${usageCount}/${conditions.maxUsagePerUser} lần`,
+          };
+        }
+      }
+
+      // Check requiredTiers (loyalty tiers)
+      if (conditions.requiredTiers && conditions.requiredTiers.length > 0) {
+        const user = await User.findById(userId).populate("loyalty.tier");
+        if (!user || !user.loyalty?.tier) {
+          return {
+            isValid: false,
+            message: "Mã giảm giá này chỉ dành cho thành viên có hạng thành viên",
+          };
+        }
+
+        const userTierId = user.loyalty.tier._id?.toString();
+        const isValidTier = conditions.requiredTiers.some(t => t.toString() === userTierId);
+        if (!isValidTier) {
+          return {
+            isValid: false,
+            message: `Mã giảm giá này chỉ dành cho hạng thành viên: ${conditions.requiredTiers.join(", ")}`,
+          };
+        }
+      }
+
+      // Check firstOrderOnly
+      if (conditions.firstOrderOnly) {
+        const orderCount = await Order.countDocuments({
+          user: userId,
+          status: { $in: ["delivered", "confirmed", "shipping"] },
+        });
+        if (orderCount > 0) {
+          return {
+            isValid: false,
+            message: "Mã giảm giá này chỉ dành cho đơn hàng đầu tiên",
+          };
+        }
+      }
+
+      // Check requiredTotalSpent
+      if (conditions.requiredTotalSpent) {
+        const totalSpent = await Order.aggregate([
+          {
+            $match: {
+              user: new mongoose.Types.ObjectId(userId),
+              status: "delivered",
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: "$totalAfterDiscountAndShipping" },
+            },
+          },
+        ]);
+
+        const userTotalSpent = totalSpent.length > 0 ? totalSpent[0].total : 0;
+        if (userTotalSpent < conditions.requiredTotalSpent) {
+          return {
+            isValid: false,
+            message: `Cần chi tiêu tối thiểu ${conditions.requiredTotalSpent.toLocaleString("vi-VN")}đ để sử dụng mã này`,
+          };
+        }
+      }
+    }
+
+    return {
+      isValid: true,
+      message: "Mã giảm giá hợp lệ",
+    };
+  },
+
+  /**
+   * Calculate applicable discount for items based on coupon scope
+   * @param {Object} coupon - Coupon object
+   * @param {Array} cartItems - Cart items array
+   * @param {Number} subtotal - Original subtotal
+   * @returns {Object} - Discount info
+   */
+  calculateApplicableDiscount: (coupon, cartItems, subtotal) => {
+    let applicableSubtotal = subtotal;
+
+    // If coupon has scope restriction, only apply to applicable items
+    if (coupon.scope && coupon.scope !== "ALL") {
+      applicableSubtotal = 0;
+
+      for (const item of cartItems) {
+        let isApplicable = false;
+
+        if (coupon.scope === "PRODUCTS" && coupon.applicableProducts?.length > 0) {
+          isApplicable = coupon.applicableProducts.some(
+            p => p.toString() === item.variant?.product?._id?.toString()
+          );
+        } else if (coupon.scope === "VARIANTS" && coupon.applicableVariants?.length > 0) {
+          isApplicable = coupon.applicableVariants.some(
+            v => v.toString() === item.variant?._id?.toString()
+          );
+        } else if (coupon.scope === "CATEGORIES" && coupon.applicableCategories?.length > 0) {
+          isApplicable = coupon.applicableCategories.some(
+            c => c.toString() === item.variant?.product?.category?._id?.toString()
+          );
+        }
+
+        if (isApplicable) {
+          applicableSubtotal += item.price * item.quantity;
+        }
+      }
+    }
+
+    // Calculate discount
+    let discountAmount = 0;
+    if (coupon.type === "percent") {
+      discountAmount = (applicableSubtotal * coupon.value) / 100;
+      if (coupon.maxDiscount && discountAmount > coupon.maxDiscount) {
+        discountAmount = coupon.maxDiscount;
+      }
+    } else if (coupon.type === "fixed") {
+      discountAmount = Math.min(coupon.value, applicableSubtotal);
+    }
+
+    return {
+      applicableSubtotal,
+      discountAmount: Math.round(discountAmount),
     };
   },
 };

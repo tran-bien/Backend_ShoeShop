@@ -1187,6 +1187,136 @@ const adminReviewService = {
       },
     };
   },
+
+  /**
+   * [ADMIN/STAFF] Trả lời đánh giá
+   * @param {String} reviewId - ID của đánh giá
+   * @param {String} replyContent - Nội dung trả lời
+   * @param {String} userId - ID của admin/staff
+   * @returns {Object} - Review đã được trả lời
+   */
+  replyToReview: async (reviewId, replyContent, userId) => {
+    // Tìm review
+    const review = await Review.findById(reviewId);
+
+    if (!review) {
+      throw new ApiError(404, "Không tìm thấy đánh giá");
+    }
+
+    // Kiểm tra đã có reply chưa
+    if (review.reply && review.reply.content) {
+      throw new ApiError(400, "Đánh giá này đã được trả lời");
+    }
+
+    // Validate content
+    if (!replyContent || replyContent.trim().length === 0) {
+      throw new ApiError(400, "Nội dung trả lời không được để trống");
+    }
+
+    if (replyContent.length > 1000) {
+      throw new ApiError(400, "Nội dung trả lời không được vượt quá 1000 ký tự");
+    }
+
+    // Cập nhật reply
+    review.reply = {
+      content: replyContent.trim(),
+      repliedBy: userId,
+      repliedAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await review.save();
+
+    // Populate để trả về đầy đủ thông tin
+    await review.populate([
+      { path: "user", select: "name avatar" },
+      { path: "reply.repliedBy", select: "name role" },
+    ]);
+
+    return {
+      success: true,
+      message: "Trả lời đánh giá thành công",
+      review,
+    };
+  },
+
+  /**
+   * [ADMIN/STAFF] Sửa reply đánh giá
+   * @param {String} reviewId - ID của đánh giá
+   * @param {String} replyContent - Nội dung trả lời mới
+   * @param {String} userId - ID của admin/staff
+   * @returns {Object} - Review đã được cập nhật
+   */
+  updateReplyToReview: async (reviewId, replyContent, userId) => {
+    // Tìm review
+    const review = await Review.findById(reviewId);
+
+    if (!review) {
+      throw new ApiError(404, "Không tìm thấy đánh giá");
+    }
+
+    // Kiểm tra đã có reply chưa
+    if (!review.reply || !review.reply.content) {
+      throw new ApiError(400, "Đánh giá này chưa được trả lời");
+    }
+
+    // Validate content
+    if (!replyContent || replyContent.trim().length === 0) {
+      throw new ApiError(400, "Nội dung trả lời không được để trống");
+    }
+
+    if (replyContent.length > 1000) {
+      throw new ApiError(400, "Nội dung trả lời không được vượt quá 1000 ký tự");
+    }
+
+    // Cập nhật reply
+    review.reply.content = replyContent.trim();
+    review.reply.updatedAt = new Date();
+
+    await review.save();
+
+    // Populate để trả về đầy đủ thông tin
+    await review.populate([
+      { path: "user", select: "name avatar" },
+      { path: "reply.repliedBy", select: "name role" },
+    ]);
+
+    return {
+      success: true,
+      message: "Cập nhật trả lời thành công",
+      review,
+    };
+  },
+
+  /**
+   * [ADMIN/STAFF] Xóa reply đánh giá
+   * @param {String} reviewId - ID của đánh giá
+   * @returns {Object} - Review đã xóa reply
+   */
+  deleteReplyToReview: async (reviewId) => {
+    // Tìm review
+    const review = await Review.findById(reviewId);
+
+    if (!review) {
+      throw new ApiError(404, "Không tìm thấy đánh giá");
+    }
+
+    // Kiểm tra đã có reply chưa
+    if (!review.reply || !review.reply.content) {
+      throw new ApiError(400, "Đánh giá này chưa được trả lời");
+    }
+
+    // Xóa reply
+    review.reply = undefined;
+
+    await review.save();
+
+    return {
+      success: true,
+      message: "Xóa trả lời thành công",
+      review,
+    };
+  },
 };
 
 // Kết hợp services để export

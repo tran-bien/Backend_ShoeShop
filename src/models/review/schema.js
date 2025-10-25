@@ -37,6 +37,24 @@ const ReviewSchema = new Schema(
       type: Number,
       default: 0,
     },
+    // Trả lời từ admin/staff (1-1 relationship)
+    reply: {
+      content: {
+        type: String,
+        trim: true,
+        maxlength: 1000,
+      },
+      repliedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      repliedAt: {
+        type: Date,
+      },
+      updatedAt: {
+        type: Date,
+      },
+    },
     deletedAt: {
       type: Date,
       default: null,

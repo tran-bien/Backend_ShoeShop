@@ -57,15 +57,93 @@ const CouponSchema = new mongoose.Schema(
     },
     isPublic: {
       type: Boolean,
-      default: true, // true: hiển thị cho tất cả, false: chỉ cho người dùng đã thu thập
+      default: true,
     },
     users: [
       {
-        // Danh sách người dùng đã thu thập mã
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
     ],
+
+    // COUPON NÂNG CAO - Áp dụng cho sản phẩm/variant/category cụ thể
+    applicableProducts: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+      },
+    ],
+
+    applicableVariants: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Variant",
+      },
+    ],
+
+    applicableCategories: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Category",
+      },
+    ],
+
+    // Scope của coupon
+    scope: {
+      type: String,
+      enum: ["ALL", "PRODUCTS", "VARIANTS", "CATEGORIES"],
+      default: "ALL",
+    },
+
+    // Điều kiện nâng cao
+    conditions: {
+      minQuantity: {
+        type: Number,
+        min: 0,
+        comment: "Số lượng sản phẩm tối thiểu",
+      },
+
+      maxUsagePerUser: {
+        type: Number,
+        min: 0,
+        comment: "Giới hạn số lần dùng/user",
+      },
+
+      requiredTiers: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "LoyaltyTier",
+        },
+      ],
+
+      firstOrderOnly: {
+        type: Boolean,
+        default: false,
+        comment: "Chỉ cho đơn hàng đầu tiên",
+      },
+
+      requiredTotalSpent: {
+        type: Number,
+        min: 0,
+        comment: "Yêu cầu đã mua tối thiểu bao nhiêu tiền",
+      },
+    },
+
+    // Usage tracking per user
+    userUsage: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        usageCount: {
+          type: Number,
+          default: 0,
+        },
+        lastUsedAt: Date,
+      },
+    ],
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
