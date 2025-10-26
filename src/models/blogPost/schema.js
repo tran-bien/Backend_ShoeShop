@@ -6,7 +6,7 @@ const BlogPostSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      maxlength: 200,
+      maxlength: 500,
     },
 
     slug: {
@@ -77,7 +77,7 @@ const BlogPostSchema = new mongoose.Schema(
     // Excerpt/mô tả ngắn
     excerpt: {
       type: String,
-      maxlength: 300,
+      maxlength: 500,
       trim: true,
     },
 
@@ -117,7 +117,7 @@ const BlogPostSchema = new mongoose.Schema(
 
     metaDescription: {
       type: String,
-      maxlength: 300,
+      maxlength: 500,
     },
 
     metaKeywords: [String],

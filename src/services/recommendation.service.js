@@ -13,7 +13,7 @@ const recommendationService = {
     const userOrders = await Order.find({
       user: userId,
       status: "delivered",
-    }).populate({
+    }).populate({ 
       path: "orderItems.variant",
       select: "product",
     });

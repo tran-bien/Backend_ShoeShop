@@ -7,7 +7,7 @@ const BlogCategorySchema = new mongoose.Schema(
       required: true,
       unique: true,
       trim: true,
-      maxlength: 100,
+      maxlength: 500,
     },
 
     slug: {
@@ -17,7 +17,7 @@ const BlogCategorySchema = new mongoose.Schema(
 
     description: {
       type: String,
-      maxlength: 500,
+      maxlength: 5000,
     },
 
     displayOrder: {

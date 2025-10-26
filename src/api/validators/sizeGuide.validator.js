@@ -30,6 +30,7 @@ const sizeGuideValidator = {
   ],
 
   // Validate create size guide
+  // NOTE: Ảnh sẽ được upload sau qua API riêng, không validate ở đây
   validateCreateSizeGuide: [
     body("productId")
       .notEmpty()
@@ -50,8 +51,8 @@ const sizeGuideValidator = {
       .optional()
       .isString()
       .withMessage("Mô tả size chart phải là chuỗi")
-      .isLength({ max: 500 })
-      .withMessage("Mô tả size chart không được vượt quá 500 ký tự"),
+      .isLength({ max: 5000 })
+      .withMessage("Mô tả size chart không được vượt quá 5000 ký tự"),
 
     body("measurementGuide")
       .optional()
@@ -62,8 +63,8 @@ const sizeGuideValidator = {
       .optional()
       .isString()
       .withMessage("Mô tả measurement guide phải là chuỗi")
-      .isLength({ max: 500 })
-      .withMessage("Mô tả measurement guide không được vượt quá 500 ký tự"),
+      .isLength({ max: 5000 })
+      .withMessage("Mô tả measurement guide không được vượt quá 5000 ký tự"),
 
     body("isActive")
       .optional()
@@ -82,8 +83,8 @@ const sizeGuideValidator = {
       .optional()
       .isString()
       .withMessage("Mô tả size chart phải là chuỗi")
-      .isLength({ max: 500 })
-      .withMessage("Mô tả size chart không được vượt quá 500 ký tự"),
+      .isLength({ max: 5000 })
+      .withMessage("Mô tả size chart không được vượt quá 5000 ký tự"),
 
     body("measurementGuide")
       .optional()
@@ -94,8 +95,8 @@ const sizeGuideValidator = {
       .optional()
       .isString()
       .withMessage("Mô tả measurement guide phải là chuỗi")
-      .isLength({ max: 500 })
-      .withMessage("Mô tả measurement guide không được vượt quá 500 ký tự"),
+      .isLength({ max: 5000 })
+      .withMessage("Mô tả measurement guide không được vượt quá 5000 ký tự"),
 
     body("isActive")
       .optional()

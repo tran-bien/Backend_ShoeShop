@@ -1,5 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const sizeGuideService = require("@services/sizeGuide.service");
+const imageService = require("@services/image.service");
 
 const sizeGuideController = {
   /**
@@ -50,10 +51,9 @@ const sizeGuideController = {
       public_id: req.file.filename,
     };
 
-    const result = await sizeGuideService.updateSizeChartImage(
+    const result = await imageService.updateSizeChartImage(
       req.params.id,
-      imageData,
-      req.user._id
+      imageData
     );
 
     return res.json(result);
@@ -77,10 +77,9 @@ const sizeGuideController = {
       public_id: req.file.filename,
     };
 
-    const result = await sizeGuideService.updateMeasurementGuideImage(
+    const result = await imageService.updateMeasurementGuideImage(
       req.params.id,
-      imageData,
-      req.user._id
+      imageData
     );
 
     return res.json(result);

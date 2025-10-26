@@ -29,7 +29,7 @@ const commonValidators = {
     .withMessage("Vui lòng nhập tiêu đề banner")
     .isString()
     .withMessage("Tiêu đề banner phải là văn bản")
-    .isLength({ min: 2, max: 200 })
+    .isLength({ min: 2, max: 1000 })
     .withMessage("Tiêu đề banner phải có từ 2-200 ký tự")
     .trim(),
 
@@ -50,8 +50,8 @@ const commonValidators = {
     .optional()
     .isString()
     .withMessage("Đường dẫn phải là văn bản")
-    .isLength({ max: 500 })
-    .withMessage("Đường dẫn không được quá 500 ký tự")
+    .isLength({ max: 1000 })
+    .withMessage("Đường dẫn không được quá 1000 ký tự")
     .trim(),
 
   /**

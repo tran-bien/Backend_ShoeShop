@@ -105,6 +105,6 @@ const inventoryTransactionSchema = new mongoose.Schema(
 // Index
 inventoryTransactionSchema.index({ inventoryItem: 1, createdAt: -1 });
 inventoryTransactionSchema.index({ type: 1, createdAt: -1 });
-inventoryTransactionSchema.index({ reference: 1 }); // Đơn giản hơn
+inventoryTransactionSchema.index({ reference: 1 });
 
 module.exports = inventoryTransactionSchema;

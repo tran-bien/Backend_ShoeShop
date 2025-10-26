@@ -28,6 +28,7 @@ const sizeGuideService = {
 
   /**
    * [ADMIN] Tạo size guide cho sản phẩm
+   * NOTE: Ảnh sẽ được upload sau qua updateSizeChartImage và updateMeasurementGuideImage
    */
   createSizeGuide: async (productId, guideData, adminId) => {
     // Kiểm tra sản phẩm tồn tại
@@ -47,15 +48,20 @@ const sizeGuideService = {
 
     const sizeGuide = await SizeGuide.create({
       product: productId,
-      sizeChart: guideData.sizeChart,
-      measurementGuide: guideData.measurementGuide,
+      sizeChart: {
+        description: guideData.sizeChart?.description || "",
+      },
+      measurementGuide: {
+        description: guideData.measurementGuide?.description || "",
+      },
+      isActive: guideData.isActive !== undefined ? guideData.isActive : true,
       createdBy: adminId,
       updatedBy: adminId,
     });
 
     return {
       success: true,
-      message: "Tạo size guide thành công",
+      message: "Tạo size guide thành công. Vui lòng upload ảnh cho size chart và measurement guide",
       sizeGuide,
     };
   },
@@ -93,69 +99,6 @@ const sizeGuideService = {
     };
   },
 
-  /**
-   * [ADMIN] Cập nhật ảnh size chart
-   */
-  updateSizeChartImage: async (guideId, imageData, adminId) => {
-    const sizeGuide = await SizeGuide.findById(guideId);
-
-    if (!sizeGuide) {
-      throw new ApiError(404, "Không tìm thấy size guide");
-    }
-
-    // Xóa ảnh cũ trên Cloudinary nếu có
-    if (sizeGuide.sizeChart?.image?.public_id) {
-      const cloudinary = require("@config/cloudinary");
-      try {
-        await cloudinary.uploader.destroy(sizeGuide.sizeChart.image.public_id);
-      } catch (err) {
-        console.error("Không thể xóa ảnh cũ:", err);
-      }
-    }
-
-    sizeGuide.sizeChart.image = imageData;
-    sizeGuide.updatedBy = adminId;
-    await sizeGuide.save();
-
-    return {
-      success: true,
-      message: "Cập nhật ảnh size chart thành công",
-      sizeGuide,
-    };
-  },
-
-  /**
-   * [ADMIN] Cập nhật ảnh measurement guide
-   */
-  updateMeasurementGuideImage: async (guideId, imageData, adminId) => {
-    const sizeGuide = await SizeGuide.findById(guideId);
-
-    if (!sizeGuide) {
-      throw new ApiError(404, "Không tìm thấy size guide");
-    }
-
-    // Xóa ảnh cũ trên Cloudinary nếu có
-    if (sizeGuide.measurementGuide?.image?.public_id) {
-      const cloudinary = require("@config/cloudinary");
-      try {
-        await cloudinary.uploader.destroy(
-          sizeGuide.measurementGuide.image.public_id
-        );
-      } catch (err) {
-        console.error("Không thể xóa ảnh cũ:", err);
-      }
-    }
-
-    sizeGuide.measurementGuide.image = imageData;
-    sizeGuide.updatedBy = adminId;
-    await sizeGuide.save();
-
-    return {
-      success: true,
-      message: "Cập nhật ảnh hướng dẫn đo chân thành công",
-      sizeGuide,
-    };
-  },
 
   /**
    * [ADMIN] Xóa size guide

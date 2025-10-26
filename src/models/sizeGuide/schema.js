@@ -14,16 +14,16 @@ const SizeGuideSchema = new mongoose.Schema(
       image: {
         url: {
           type: String,
-          required: true,
+          required: false, // Upload sau khi tạo
         },
         public_id: {
           type: String,
-          required: true,
+          required: false, // Upload sau khi tạo
         },
       },
       description: {
         type: String,
-        maxlength: 1000,
+        maxlength: 5000,
         trim: true,
       },
     },
@@ -33,16 +33,16 @@ const SizeGuideSchema = new mongoose.Schema(
       image: {
         url: {
           type: String,
-          required: true,
+          required: false, // Upload sau khi tạo
         },
         public_id: {
           type: String,
-          required: true,
+          required: false, // Upload sau khi tạo
         },
       },
       description: {
         type: String,
-        maxlength: 1000,
+        maxlength: 5000,
         trim: true,
       },
     },

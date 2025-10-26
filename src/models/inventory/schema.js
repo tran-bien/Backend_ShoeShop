@@ -20,7 +20,7 @@ const inventoryItemSchema = new mongoose.Schema(
     sku: {
       type: String,
       unique: true,
-      sparse: true, // Cho phép nhiều document không có SKU
+      required: true,
     },
     quantity: {
       type: Number,
@@ -39,7 +39,7 @@ const inventoryItemSchema = new mongoose.Schema(
       min: 0,
     },
     // Thông tin giá bán của sản phẩm
-    sellingPrice: {
+    sellingPrice: { 
       type: Number,
       default: 0,
       min: 0,

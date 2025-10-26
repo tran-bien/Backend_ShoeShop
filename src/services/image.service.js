@@ -1,5 +1,6 @@
 const cloudinary = require("cloudinary").v2;
 const { Product, Variant, Brand, User, Banner } = require("@models");
+const SizeGuide = require("../models/sizeGuide");
 const ApiError = require("@utils/ApiError");
 
 const imageService = {
@@ -680,6 +681,80 @@ const imageService = {
     return {
       success: true,
       message: "Sắp xếp banner thành công",
+    };
+  },
+
+  /**
+   * Cập nhật ảnh size chart cho size guide
+   * @param {String} sizeGuideId - ID size guide
+   * @param {Object} imageData - Dữ liệu ảnh mới { url, public_id }
+   * @returns {Promise<Object>} - Kết quả cập nhật
+   */
+  updateSizeChartImage: async (sizeGuideId, imageData) => {
+    const sizeGuide = await SizeGuide.findById(sizeGuideId);
+    if (!sizeGuide) {
+      throw new ApiError(404, "Không tìm thấy size guide");
+    }
+
+    // Xóa ảnh cũ trên Cloudinary nếu có
+    if (sizeGuide.sizeChart?.image?.public_id) {
+      try {
+        await cloudinary.uploader.destroy(sizeGuide.sizeChart.image.public_id);
+      } catch (err) {
+        console.error("Không thể xóa ảnh size chart cũ:", err);
+      }
+    }
+
+    // Cập nhật ảnh mới
+    sizeGuide.sizeChart.image = {
+      url: imageData.url,
+      public_id: imageData.public_id,
+    };
+
+    await sizeGuide.save();
+
+    return {
+      success: true,
+      message: "Cập nhật ảnh size chart thành công",
+      sizeGuide,
+    };
+  },
+
+  /**
+   * Cập nhật ảnh measurement guide cho size guide
+   * @param {String} sizeGuideId - ID size guide
+   * @param {Object} imageData - Dữ liệu ảnh mới { url, public_id }
+   * @returns {Promise<Object>} - Kết quả cập nhật
+   */
+  updateMeasurementGuideImage: async (sizeGuideId, imageData) => {
+    const sizeGuide = await SizeGuide.findById(sizeGuideId);
+    if (!sizeGuide) {
+      throw new ApiError(404, "Không tìm thấy size guide");
+    }
+
+    // Xóa ảnh cũ trên Cloudinary nếu có
+    if (sizeGuide.measurementGuide?.image?.public_id) {
+      try {
+        await cloudinary.uploader.destroy(
+          sizeGuide.measurementGuide.image.public_id
+        );
+      } catch (err) {
+        console.error("Không thể xóa ảnh measurement guide cũ:", err);
+      }
+    }
+
+    // Cập nhật ảnh mới
+    sizeGuide.measurementGuide.image = {
+      url: imageData.url,
+      public_id: imageData.public_id,
+    };
+
+    await sizeGuide.save();
+
+    return {
+      success: true,
+      message: "Cập nhật ảnh hướng dẫn đo chân thành công",
+      sizeGuide,
     };
   },
 };

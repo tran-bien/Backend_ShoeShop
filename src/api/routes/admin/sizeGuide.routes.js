@@ -3,24 +3,37 @@ const router = express.Router();
 const sizeGuideController = require("@controllers/admin/sizeGuide.controller");
 const { protect, requireStaffOrAdmin } = require("@middlewares/auth.middleware");
 const uploadMiddleware = require("@middlewares/upload.middleware");
+const sizeGuideValidator = require("@validators/sizeGuide.validator");
+const validateRequest = require("@middlewares/validateRequest");
 
 router.use(protect);
 router.use(requireStaffOrAdmin);
 
-// Tạo middleware upload cho size guide images
-const uploadSizeGuideImage = uploadMiddleware.uploadBannerImage; // Tái sử dụng middleware có sẵn
+// Định nghĩa middleware upload cho size guide images
+const uploadSizeGuideImage = uploadMiddleware.uploadSizeGuideImage;
 
 /**
  * @route POST /api/admin/size-guides
  * @desc Tạo size guide mới
  */
-router.post("/", sizeGuideController.createSizeGuide);
+router.post(
+  "/",
+  sizeGuideValidator.validateCreateSizeGuide,
+  validateRequest,
+  sizeGuideController.createSizeGuide
+);
 
 /**
  * @route PUT /api/admin/size-guides/:id
  * @desc Cập nhật size guide
  */
-router.put("/:id", sizeGuideController.updateSizeGuide);
+router.put(
+  "/:id",
+  sizeGuideValidator.validateSizeGuideId,
+  sizeGuideValidator.validateUpdateSizeGuide,
+  validateRequest,
+  sizeGuideController.updateSizeGuide
+);
 
 /**
  * @route PUT /api/admin/size-guides/:id/size-chart-image
@@ -46,7 +59,12 @@ router.put(
  * @route DELETE /api/admin/size-guides/:id
  * @desc Xóa size guide
  */
-router.delete("/:id", sizeGuideController.deleteSizeGuide);
+router.delete(
+  "/:id",
+  sizeGuideValidator.validateSizeGuideId,
+  validateRequest,
+  sizeGuideController.deleteSizeGuide
+);
 
 module.exports = router;
 

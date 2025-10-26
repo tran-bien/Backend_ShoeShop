@@ -41,7 +41,7 @@ const blogValidator = {
       .optional()
       .isString()
       .withMessage("Mô tả ngắn phải là chuỗi")
-      .isLength({ max: 300 })
+      .isLength({ max: 500 })
       .withMessage("Mô tả ngắn không được vượt quá 300 ký tự"),
 
     body("contentBlocks")
@@ -103,7 +103,7 @@ const blogValidator = {
       .optional()
       .isString()
       .withMessage("Meta description phải là chuỗi")
-      .isLength({ max: 300 })
+      .isLength({ max: 500 })
       .withMessage("Meta description không được vượt quá 300 ký tự"),
 
     body("metaKeywords")
@@ -118,15 +118,15 @@ const blogValidator = {
       .optional()
       .isString()
       .withMessage("Tiêu đề phải là chuỗi")
-      .isLength({ min: 5, max: 200 })
-      .withMessage("Tiêu đề phải có từ 5-200 ký tự"),
+      .isLength({ min: 5, max: 500 })
+      .withMessage("Tiêu đề phải có từ 5-500 ký tự"),
 
     body("excerpt")
       .optional()
       .isString()
       .withMessage("Mô tả ngắn phải là chuỗi")
-      .isLength({ max: 300 })
-      .withMessage("Mô tả ngắn không được vượt quá 300 ký tự"),
+      .isLength({ max: 500 })
+      .withMessage("Mô tả ngắn không được vượt quá 500 ký tự"),
 
     body("contentBlocks")
       .optional()
@@ -220,14 +220,14 @@ const blogValidator = {
       .withMessage("Tên danh mục không được để trống")
       .isString()
       .withMessage("Tên danh mục phải là chuỗi")
-      .isLength({ min: 2, max: 100 })
+      .isLength({ min: 2, max: 500 })
       .withMessage("Tên danh mục phải có từ 2-100 ký tự"),
 
     body("description")
       .optional()
       .isString()
       .withMessage("Mô tả phải là chuỗi")
-      .isLength({ max: 500 })
+      .isLength({ max: 5000 })
       .withMessage("Mô tả không được vượt quá 500 ký tự"),
 
     body("displayOrder")
@@ -247,14 +247,14 @@ const blogValidator = {
       .optional()
       .isString()
       .withMessage("Tên danh mục phải là chuỗi")
-      .isLength({ min: 2, max: 100 })
+      .isLength({ min: 2, max: 500 })
       .withMessage("Tên danh mục phải có từ 2-100 ký tự"),
 
     body("description")
       .optional()
       .isString()
       .withMessage("Mô tả phải là chuỗi")
-      .isLength({ max: 500 })
+      .isLength({ max: 5000 })
       .withMessage("Mô tả không được vượt quá 500 ký tự"),
 
     body("displayOrder")
