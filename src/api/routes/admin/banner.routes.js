@@ -6,6 +6,7 @@ const {
   requireStaffOrAdmin,
 } = require("@middlewares/auth.middleware");
 const { handleBannerImageUpload } = require("@middlewares/upload.middleware");
+const validateRequest = require("@middlewares/validateRequest");
 const {
   validateBannerId,
   validateCreateBanner,
@@ -29,14 +30,24 @@ router.get("/", bannerController.getAllBanners);
  * @desc Sắp xếp lại thứ tự banner
  * @access Staff/Admin
  */
-router.put("/reorder", validateReorderBanners, bannerController.reorderBanners);
+router.put(
+  "/reorder",
+  validateReorderBanners,
+  validateRequest,
+  bannerController.reorderBanners
+);
 
 /**
  * @route GET /api/admin/banners/:id
  * @desc Lấy chi tiết banner theo ID
  * @access Staff/Admin
  */
-router.get("/:id", validateBannerId, bannerController.getBannerById);
+router.get(
+  "/:id",
+  validateBannerId,
+  validateRequest,
+  bannerController.getBannerById
+);
 
 /**
  * @route POST /api/admin/banners
@@ -47,6 +58,7 @@ router.post(
   "/",
   handleBannerImageUpload,
   validateCreateBanner,
+  validateRequest,
   bannerController.createBanner
 );
 
@@ -59,6 +71,7 @@ router.put(
   "/:id",
   validateBannerId,
   validateUpdateBanner,
+  validateRequest,
   bannerController.updateBanner
 );
 
@@ -70,6 +83,7 @@ router.put(
 router.put(
   "/:id/image",
   validateBannerId,
+  validateRequest,
   handleBannerImageUpload,
   bannerController.updateBannerImage
 );
@@ -79,14 +93,24 @@ router.put(
  * @desc Xóa mềm banner
  * @access Staff/Admin
  */
-router.delete("/:id", validateBannerId, bannerController.deleteBanner);
+router.delete(
+  "/:id",
+  validateBannerId,
+  validateRequest,
+  bannerController.deleteBanner
+);
 
 /**
  * @route PUT /api/admin/banners/:id/restore
  * @desc Khôi phục banner đã xóa
  * @access Staff/Admin
  */
-router.put("/:id/restore", validateBannerId, bannerController.restoreBanner);
+router.put(
+  "/:id/restore",
+  validateBannerId,
+  validateRequest,
+  bannerController.restoreBanner
+);
 
 /**
  * @route PUT /api/admin/banners/:id/toggle-status
@@ -96,6 +120,7 @@ router.put("/:id/restore", validateBannerId, bannerController.restoreBanner);
 router.put(
   "/:id/toggle-status",
   validateBannerId,
+  validateRequest,
   bannerController.toggleBannerStatus
 );
 
