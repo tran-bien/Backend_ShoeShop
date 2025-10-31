@@ -154,6 +154,28 @@ const UserSchema = new mongoose.Schema(
         type: Date,
       },
     },
+
+    // Tùy chọn thông báo
+    preferences: {
+      emailNotifications: {
+        orderUpdates: {
+          type: Boolean,
+          default: true,
+          comment:
+            "Nhận email khi đơn hàng có thay đổi (xác nhận, đang giao, đã giao, hủy)",
+        },
+        newsletter: {
+          type: Boolean,
+          default: false,
+          comment: "Nhận bản tin, tin tức mới",
+        },
+      },
+      inAppNotifications: {
+        type: Boolean,
+        default: true,
+        comment: "Nhận thông báo trong app",
+      },
+    },
   },
   {
     timestamps: true,

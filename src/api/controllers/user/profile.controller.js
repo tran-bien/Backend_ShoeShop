@@ -124,6 +124,42 @@ const profileController = {
       message: result.message,
     });
   }),
+
+  /**
+   * @route   GET /api/users/preferences/notifications
+   * @desc    Lấy tùy chọn thông báo
+   * @access  Private
+   */
+  getNotificationPreferences: asyncHandler(async (req, res) => {
+    const { user } = req;
+    const result = await userService.getNotificationPreferences(user._id);
+
+    res.json({
+      success: true,
+      preferences: result.preferences,
+    });
+  }),
+
+  /**
+   * @route   PUT /api/users/preferences/notifications
+   * @desc    Cập nhật tùy chọn thông báo
+   * @access  Private
+   */
+  updateNotificationPreferences: asyncHandler(async (req, res) => {
+    const { user } = req;
+    const preferences = req.body;
+
+    const result = await userService.updateNotificationPreferences(
+      user._id,
+      preferences
+    );
+
+    res.json({
+      success: true,
+      message: result.message,
+      preferences: result.preferences,
+    });
+  }),
 };
 
 module.exports = profileController;

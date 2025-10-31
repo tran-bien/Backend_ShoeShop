@@ -523,6 +523,82 @@ const adminUserService = {
   },
 
   /**
+   * Cập nhật tùy chọn thông báo của người dùng
+   * @param {String} userId - ID của người dùng
+   * @param {Object} preferences - Tùy chọn thông báo
+   * @returns {Object} - Thông tin cập nhật
+   */
+  updateNotificationPreferences: async (userId, preferences) => {
+    const user = await User.findById(userId);
+
+    if (!user) {
+      throw new ApiError(404, "Không tìm thấy người dùng");
+    }
+
+    // Khởi tạo preferences nếu chưa có
+    if (!user.preferences) {
+      user.preferences = {
+        emailNotifications: {
+          orderUpdates: true,
+          newsletter: false,
+        },
+        inAppNotifications: true,
+      };
+    }
+
+    // Cập nhật từng field nếu có
+    if (preferences.emailNotifications) {
+      if (preferences.emailNotifications.orderUpdates !== undefined) {
+        user.preferences.emailNotifications.orderUpdates =
+          preferences.emailNotifications.orderUpdates;
+      }
+      if (preferences.emailNotifications.newsletter !== undefined) {
+        user.preferences.emailNotifications.newsletter =
+          preferences.emailNotifications.newsletter;
+      }
+    }
+
+    if (preferences.inAppNotifications !== undefined) {
+      user.preferences.inAppNotifications = preferences.inAppNotifications;
+    }
+
+    await user.save();
+
+    return {
+      success: true,
+      message: "Cập nhật tùy chọn thông báo thành công",
+      preferences: user.preferences,
+    };
+  },
+
+  /**
+   * Lấy tùy chọn thông báo hiện tại
+   * @param {String} userId - ID của người dùng
+   * @returns {Object} - Tùy chọn thông báo
+   */
+  getNotificationPreferences: async (userId) => {
+    const user = await User.findById(userId).select("preferences");
+
+    if (!user) {
+      throw new ApiError(404, "Không tìm thấy người dùng");
+    }
+
+    // Trả về preferences mặc định nếu chưa có
+    const defaultPreferences = {
+      emailNotifications: {
+        orderUpdates: true,
+        newsletter: false,
+      },
+      inAppNotifications: true,
+    };
+
+    return {
+      success: true,
+      preferences: user.preferences || defaultPreferences,
+    };
+  },
+
+  /**
    * Khóa/mở khóa tài khoản người dùng
    * @param {String} userId - ID của người dùng
    * @param {Boolean} isBlock - True để khóa, false để mở khóa

@@ -232,6 +232,125 @@ const applyMiddlewares = (schema) => {
       const previousStatus = this._previousStatus;
       const currentStatus = this.status;
 
+      // ============================================================
+      // EMAIL NOTIFICATIONS - Gửi email khi status thay đổi
+      // ============================================================
+      if (previousStatus && previousStatus !== currentStatus) {
+        try {
+          const emailService = require("@services/email.service");
+          const notificationService = require("@services/notification.service");
+
+          // Populate order để có đầy đủ thông tin cho email
+          const Order = mongoose.model("Order");
+          const populatedOrder = await Order.findById(this._id).populate([
+            { path: "user", select: "name email preferences" },
+            {
+              path: "orderItems.variant",
+              select: "product color images",
+              populate: { path: "product", select: "name" },
+            },
+            { path: "orderItems.size", select: "value" },
+          ]);
+
+          // Check user preferences - có muốn nhận email không
+          const userPreferences = populatedOrder.user.preferences || {};
+          const emailEnabled =
+            userPreferences.emailNotifications?.orderUpdates !== false;
+
+          // Gửi email dựa trên status mới
+          switch (currentStatus) {
+            case "confirmed":
+              // Đơn hàng được xác nhận
+              if (emailEnabled) {
+                await emailService.sendOrderConfirmationEmail(
+                  populatedOrder.user._id,
+                  populatedOrder
+                );
+                console.log(
+                  `[EMAIL] Đã gửi email xác nhận đơn hàng ${this.code}`
+                );
+              } else {
+                console.log(
+                  `[EMAIL] User tắt email notification, skip email cho đơn ${this.code}`
+                );
+              }
+
+              await notificationService.send(
+                populatedOrder.user._id,
+                "ORDER_CONFIRMED",
+                {
+                  orderCode: populatedOrder.code,
+                  orderId: populatedOrder._id.toString(),
+                },
+                { channels: { inApp: true, email: false } } // Email đã gửi riêng
+              );
+              break;
+
+            case "shipping":
+            case "out_for_delivery":
+              // Đơn hàng đang giao
+              await notificationService.send(
+                populatedOrder.user._id,
+                "ORDER_SHIPPING",
+                {
+                  orderCode: populatedOrder.code,
+                  orderId: populatedOrder._id.toString(),
+                },
+                { channels: { inApp: true, email: emailEnabled } }
+              );
+              console.log(
+                `[EMAIL] ${
+                  emailEnabled ? "Đã gửi" : "Skip"
+                } thông báo đơn hàng đang giao ${this.code}`
+              );
+              break;
+
+            case "delivered":
+              // Đơn hàng đã giao thành công
+              await notificationService.send(
+                populatedOrder.user._id,
+                "ORDER_DELIVERED",
+                {
+                  orderCode: populatedOrder.code,
+                  orderId: populatedOrder._id.toString(),
+                },
+                { channels: { inApp: true, email: emailEnabled } }
+              );
+              console.log(
+                `[EMAIL] ${
+                  emailEnabled ? "Đã gửi" : "Skip"
+                } thông báo giao hàng thành công ${this.code}`
+              );
+              break;
+
+            case "cancelled":
+              // Đơn hàng bị hủy
+              await notificationService.send(
+                populatedOrder.user._id,
+                "ORDER_CANCELLED",
+                {
+                  orderCode: populatedOrder.code,
+                  orderId: populatedOrder._id.toString(),
+                  reason: this.cancelReason || "Không rõ lý do",
+                },
+                { channels: { inApp: true, email: emailEnabled } }
+              );
+              console.log(
+                `[EMAIL] ${
+                  emailEnabled ? "Đã gửi" : "Skip"
+                } thông báo hủy đơn ${this.code}`
+              );
+              break;
+          }
+        } catch (emailError) {
+          // Không throw error để không ảnh hưởng đến flow chính
+          console.error(
+            `[EMAIL] Lỗi gửi email cho đơn ${this.code}:`,
+            emailError.message
+          );
+        }
+      }
+
       // LOYALTY: Tích điểm khi đơn hàng delivered
       if (
         currentStatus === "delivered" &&

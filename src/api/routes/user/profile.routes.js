@@ -70,4 +70,24 @@ router.delete("/addresses/:id", profileController.deleteUserAddress);
  */
 router.put("/addresses/:id/default", profileController.setDefaultAddress);
 
+/**
+ * @route   GET /api/v1/users/preferences/notifications
+ * @desc    Lấy tùy chọn thông báo
+ * @access  Private
+ */
+router.get(
+  "/preferences/notifications",
+  profileController.getNotificationPreferences
+);
+
+/**
+ * @route   PUT /api/v1/users/preferences/notifications
+ * @desc    Cập nhật tùy chọn thông báo
+ * @access  Private
+ */
+router.put(
+  "/preferences/notifications",
+  profileController.updateNotificationPreferences
+);
+
 module.exports = router;
