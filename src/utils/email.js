@@ -2,7 +2,7 @@ const nodemailer = require("nodemailer");
 const ApiError = require("@utils/ApiError");
 const { baseStyles } = require("@utils/emailTemplates");
 
-// Khởi tạo transporter
+// Khởi tạo transporter (sẽ được shared giữa utils và service)
 const transporter = nodemailer.createTransport({
   service: process.env.EMAIL_SERVICE || "gmail",
   auth: {
@@ -10,6 +10,9 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASSWORD,
   },
 });
+
+// Export transporter để tái sử dụng
+module.exports.transporter = transporter;
 
 // Helper: Tạo wrapper chung cho email
 const createEmailWrapper = (content) => `

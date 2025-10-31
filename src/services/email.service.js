@@ -1,16 +1,9 @@
-const nodemailer = require("nodemailer");
 const { User } = require("@models");
 const ApiError = require("@utils/ApiError");
 const emailTemplates = require("@utils/email");
 
-// Khởi tạo transporter
-const transporter = nodemailer.createTransport({
-  service: process.env.EMAIL_SERVICE || "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-});
+// Import transporter từ utils/email.js (shared instance)
+const { transporter } = emailTemplates;
 
 const emailService = {
   /**
