@@ -199,4 +199,8 @@ returnRequestSchema.pre("save", function (next) {
   next();
 });
 
+// Apply email notification middleware
+const applyReturnRequestMiddleware = require("./middlewares");
+applyReturnRequestMiddleware(returnRequestSchema);
+
 module.exports = returnRequestSchema;

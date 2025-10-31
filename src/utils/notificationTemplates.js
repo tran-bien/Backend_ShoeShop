@@ -13,7 +13,8 @@ const templates = {
 
   ORDER_SHIPPING: {
     title: "Đơn hàng {{orderCode}} đang được giao",
-    message: "Shipper đang trên đường giao hàng đến bạn. Vui lòng chú ý điện thoại!",
+    message:
+      "Shipper đang trên đường giao hàng đến bạn. Vui lòng chú ý điện thoại!",
     actionText: "Theo dõi đơn hàng",
     actionUrl: "/orders/{{orderId}}",
   },
@@ -34,15 +35,54 @@ const templates = {
   },
 
   RETURN_APPROVED: {
-    title: "Yêu cầu đổi/trả hàng đã được duyệt",
-    message: "Yêu cầu đổi/trả cho đơn {{orderCode}} đã được chấp nhận. Vui lòng gửi hàng về địa chỉ shop.",
+    title: "Yêu cầu {{type}} đã được chấp nhận",
+    message:
+      "Yêu cầu {{type}} cho đơn {{orderCode}} đã được duyệt. Vui lòng làm theo hướng dẫn.",
     actionText: "Xem chi tiết",
-    actionUrl: "/returns/{{returnRequestId}}",
+    actionUrl: "/account/return-requests/{{returnRequestId}}",
+  },
+
+  RETURN_REQUEST_APPROVED: {
+    title: "Yêu cầu {{type}} đã được chấp nhận",
+    message:
+      "Yêu cầu đổi/trả hàng #{{returnRequestCode}} đã được chấp nhận. Vui lòng làm theo hướng dẫn.",
+    actionText: "Xem chi tiết",
+    actionUrl: "/account/return-requests/{{returnRequestId}}",
+  },
+
+  RETURN_REQUEST_PROCESSING: {
+    title: "Đang xử lý yêu cầu {{type}}",
+    message:
+      "Chúng tôi đang xử lý yêu cầu #{{returnRequestCode}}. Vui lòng đợi thêm thông tin.",
+    actionText: "Xem chi tiết",
+    actionUrl: "/account/return-requests/{{returnRequestId}}",
+  },
+
+  RETURN_REQUEST_COMPLETED: {
+    title: "Hoàn tất {{type}}",
+    message: "Yêu cầu #{{returnRequestCode}} đã được xử lý thành công.",
+    actionText: "Xem chi tiết",
+    actionUrl: "/account/return-requests/{{returnRequestId}}",
+  },
+
+  RETURN_REQUEST_REJECTED: {
+    title: "Yêu cầu {{type}} bị từ chối",
+    message: "Rất tiếc, yêu cầu #{{returnRequestCode}} không được chấp nhận.",
+    actionText: "Xem chi tiết",
+    actionUrl: "/account/return-requests/{{returnRequestId}}",
+  },
+
+  RETURN_REQUEST_CANCELED: {
+    title: "Yêu cầu {{type}} đã bị hủy",
+    message: "Yêu cầu #{{returnRequestCode}} đã bị hủy.",
+    actionText: "Xem chi tiết",
+    actionUrl: "/account/return-requests/{{returnRequestId}}",
   },
 
   RETURN_REJECTED: {
     title: "Yêu cầu đổi/trả hàng bị từ chối",
-    message: "Yêu cầu đổi/trả cho đơn {{orderCode}} bị từ chối. Lý do: {{reason}}",
+    message:
+      "Yêu cầu đổi/trả cho đơn {{orderCode}} bị từ chối. Lý do: {{reason}}",
     actionText: "Xem chi tiết",
     actionUrl: "/returns/{{returnRequestId}}",
   },
@@ -138,4 +178,3 @@ module.exports = {
   renderTemplate,
   generateIdempotencyKey,
 };
-

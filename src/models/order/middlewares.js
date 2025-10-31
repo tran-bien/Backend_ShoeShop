@@ -355,7 +355,8 @@ const applyMiddlewares = (schema) => {
       if (
         currentStatus === "delivered" &&
         previousStatus !== "delivered" &&
-        this.payment.paymentStatus === "paid"
+        this.payment.paymentStatus === "paid" &&
+        !this.loyaltyPointsAwarded // Tránh tích 2 lần
       ) {
         try {
           const loyaltyService = require("@services/loyalty.service");
@@ -369,6 +370,15 @@ const applyMiddlewares = (schema) => {
               order: this._id,
               description: `Tích điểm từ đơn hàng ${this.code}`,
             });
+
+            // Đánh dấu đã tích điểm
+            await mongoose.model("Order").updateOne(
+              { _id: this._id },
+              {
+                loyaltyPointsEarned: pointsToEarn,
+                loyaltyPointsAwarded: true,
+              }
+            );
 
             console.log(
               `[LOYALTY] User ${this.user} nhận ${pointsToEarn} điểm từ đơn ${this.code}`

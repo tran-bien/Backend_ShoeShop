@@ -77,32 +77,47 @@ const emailService = {
   },
 
   /**
-   * Gửi email khuyến mãi
+   * Gửi email thông báo yêu cầu đổi/trả hàng
    */
-  sendPromotionEmail: async (userEmails, promotionData) => {
-    const { subject, title, message, couponCode, imageUrl, ctaUrl } =
-      promotionData;
+  sendReturnRequestEmail: async (userId, returnRequest) => {
+    const User = require("@models/user");
+    const user = await User.findById(userId).select("name email preferences");
+
+    if (!user) {
+      throw new ApiError(404, "Không tìm thấy người dùng");
+    }
+
+    // Check user preferences
+    const emailEnabled =
+      user.preferences?.emailNotifications?.orderUpdates !== false;
+
+    if (!emailEnabled) {
+      console.log(
+        `[EMAIL] User ${user.email} đã tắt email notification, skip email đổi/trả hàng`
+      );
+      return { success: false, reason: "User disabled email notifications" };
+    }
 
     const mailOptions = {
-      from: `"Shoe Shop Khuyến Mãi" <${process.env.EMAIL_USER}>`,
-      bcc: userEmails,
-      subject: subject || "Khuyến mãi đặc biệt từ Shoe Shop",
-      html: emailTemplates.promotionEmailTemplate(
-        title,
-        message,
-        couponCode,
-        imageUrl,
-        ctaUrl,
+      from: `"Shoe Shop - Đổi/Trả Hàng" <${process.env.EMAIL_USER}>`,
+      to: user.email,
+      subject: `[Shoe Shop] Cập nhật yêu cầu đổi/trả hàng #${returnRequest.code}`,
+      html: emailTemplates.returnRequestEmailTemplate(
+        user.name,
+        returnRequest,
         process.env.FRONTEND_URL
       ),
     };
 
     try {
       await transporter.sendMail(mailOptions);
-      return { success: true, sentCount: userEmails.length };
+      console.log(
+        `[EMAIL] Đã gửi email đổi/trả hàng cho ${user.email} - Mã: ${returnRequest.code}`
+      );
+      return { success: true };
     } catch (error) {
-      console.error("Lỗi gửi email khuyến mãi:", error);
-      throw new ApiError(500, "Không thể gửi email khuyến mãi");
+      console.error("Lỗi gửi email đổi/trả hàng:", error);
+      throw new ApiError(500, "Không thể gửi email đổi/trả hàng");
     }
   },
 

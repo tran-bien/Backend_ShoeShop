@@ -157,6 +157,18 @@ const OrderSchema = new mongoose.Schema(
       default: false,
     },
 
+    // Tracking loyalty points
+    loyaltyPointsEarned: {
+      type: Number,
+      default: 0,
+      comment: "Số điểm đã tích cho đơn hàng này",
+    },
+    loyaltyPointsAwarded: {
+      type: Boolean,
+      default: false,
+      comment: "Đã tích điểm chưa (tránh tích 2 lần)",
+    },
+
     // Lịch sử trạng thái
     statusHistory: [
       {

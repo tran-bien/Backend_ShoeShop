@@ -185,6 +185,31 @@ const validateToggleUserBlock = [
     .withMessage("Lý do khóa tài khoản phải có độ dài từ 5-200 ký tự"),
 ];
 
+/**
+ * Validator cho API cập nhật tùy chọn thông báo
+ */
+const validateUpdateNotificationPreferences = [
+  body("emailNotifications")
+    .optional()
+    .isObject()
+    .withMessage("emailNotifications phải là object"),
+
+  body("emailNotifications.orderUpdates")
+    .optional()
+    .isBoolean()
+    .withMessage("orderUpdates phải là boolean"),
+
+  body("emailNotifications.newsletter")
+    .optional()
+    .isBoolean()
+    .withMessage("newsletter phải là boolean"),
+
+  body("inAppNotifications")
+    .optional()
+    .isBoolean()
+    .withMessage("inAppNotifications phải là boolean"),
+];
+
 module.exports = {
   validateUpdateProfile,
   validateAddAddress,
@@ -192,4 +217,5 @@ module.exports = {
   validateAddToWishlist,
   validateCollectCoupon,
   validateToggleUserBlock,
+  validateUpdateNotificationPreferences,
 };
