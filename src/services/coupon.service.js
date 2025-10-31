@@ -229,24 +229,47 @@ const couponService = {
 
       for (const item of cartItems) {
         // Check applicable products
-        if (coupon.scope === "PRODUCTS" && coupon.applicableProducts?.length > 0) {
-          if (coupon.applicableProducts.some(p => p.toString() === item.variant?.product?._id?.toString())) {
+        if (
+          coupon.scope === "PRODUCTS" &&
+          coupon.applicableProducts?.length > 0
+        ) {
+          if (
+            coupon.applicableProducts.some(
+              (p) => p.toString() === item.variant?.product?._id?.toString()
+            )
+          ) {
             hasApplicableItem = true;
             break;
           }
         }
 
         // Check applicable variants
-        if (coupon.scope === "VARIANTS" && coupon.applicableVariants?.length > 0) {
-          if (coupon.applicableVariants.some(v => v.toString() === item.variant?._id?.toString())) {
+        if (
+          coupon.scope === "VARIANTS" &&
+          coupon.applicableVariants?.length > 0
+        ) {
+          if (
+            coupon.applicableVariants.some(
+              (v) => v.toString() === item.variant?._id?.toString()
+            )
+          ) {
             hasApplicableItem = true;
             break;
           }
         }
 
         // Check applicable categories
-        if (coupon.scope === "CATEGORIES" && coupon.applicableCategories?.length > 0) {
-          if (coupon.applicableCategories.some(c => c.toString() === item.variant?.product?.category?._id?.toString())) {
+        if (
+          coupon.scope === "CATEGORIES" &&
+          coupon.applicableCategories?.length > 0
+        ) {
+          if (
+            coupon.applicableCategories.some(
+              (c) =>
+                c.toString() ===
+                item.variant?.product?.category?._id?.toString()
+            )
+          ) {
             hasApplicableItem = true;
             break;
           }
@@ -267,7 +290,10 @@ const couponService = {
 
       // Check minQuantity
       if (conditions.minQuantity) {
-        const totalQuantity = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+        const totalQuantity = cartItems.reduce(
+          (sum, item) => sum + item.quantity,
+          0
+        );
         if (totalQuantity < conditions.minQuantity) {
           return {
             isValid: false,
@@ -278,7 +304,10 @@ const couponService = {
 
       // Check maxUsagePerUser
       if (conditions.maxUsagePerUser) {
-        const usageCount = coupon.userUsage?.find(u => u.user?.toString() === userId?.toString())?.count || 0;
+        const usageCount =
+          coupon.userUsage?.find(
+            (u) => u.user?.toString() === userId?.toString()
+          )?.usageCount || 0;
         if (usageCount >= conditions.maxUsagePerUser) {
           return {
             isValid: false,
@@ -293,16 +322,21 @@ const couponService = {
         if (!user || !user.loyalty?.tier) {
           return {
             isValid: false,
-            message: "Mã giảm giá này chỉ dành cho thành viên có hạng thành viên",
+            message:
+              "Mã giảm giá này chỉ dành cho thành viên có hạng thành viên",
           };
         }
 
         const userTierId = user.loyalty.tier._id?.toString();
-        const isValidTier = conditions.requiredTiers.some(t => t.toString() === userTierId);
+        const isValidTier = conditions.requiredTiers.some(
+          (t) => t.toString() === userTierId
+        );
         if (!isValidTier) {
           return {
             isValid: false,
-            message: `Mã giảm giá này chỉ dành cho hạng thành viên: ${conditions.requiredTiers.join(", ")}`,
+            message: `Mã giảm giá này chỉ dành cho hạng thành viên: ${conditions.requiredTiers.join(
+              ", "
+            )}`,
           };
         }
       }
@@ -342,7 +376,9 @@ const couponService = {
         if (userTotalSpent < conditions.requiredTotalSpent) {
           return {
             isValid: false,
-            message: `Cần chi tiêu tối thiểu ${conditions.requiredTotalSpent.toLocaleString("vi-VN")}đ để sử dụng mã này`,
+            message: `Cần chi tiêu tối thiểu ${conditions.requiredTotalSpent.toLocaleString(
+              "vi-VN"
+            )}đ để sử dụng mã này`,
           };
         }
       }
@@ -371,17 +407,27 @@ const couponService = {
       for (const item of cartItems) {
         let isApplicable = false;
 
-        if (coupon.scope === "PRODUCTS" && coupon.applicableProducts?.length > 0) {
+        if (
+          coupon.scope === "PRODUCTS" &&
+          coupon.applicableProducts?.length > 0
+        ) {
           isApplicable = coupon.applicableProducts.some(
-            p => p.toString() === item.variant?.product?._id?.toString()
+            (p) => p.toString() === item.variant?.product?._id?.toString()
           );
-        } else if (coupon.scope === "VARIANTS" && coupon.applicableVariants?.length > 0) {
+        } else if (
+          coupon.scope === "VARIANTS" &&
+          coupon.applicableVariants?.length > 0
+        ) {
           isApplicable = coupon.applicableVariants.some(
-            v => v.toString() === item.variant?._id?.toString()
+            (v) => v.toString() === item.variant?._id?.toString()
           );
-        } else if (coupon.scope === "CATEGORIES" && coupon.applicableCategories?.length > 0) {
+        } else if (
+          coupon.scope === "CATEGORIES" &&
+          coupon.applicableCategories?.length > 0
+        ) {
           isApplicable = coupon.applicableCategories.some(
-            c => c.toString() === item.variant?.product?.category?._id?.toString()
+            (c) =>
+              c.toString() === item.variant?.product?.category?._id?.toString()
           );
         }
 

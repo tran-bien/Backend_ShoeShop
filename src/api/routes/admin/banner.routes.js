@@ -6,7 +6,7 @@ const {
   requireStaffOrAdmin,
 } = require("@middlewares/auth.middleware");
 const { handleBannerImageUpload } = require("@middlewares/upload.middleware");
-const validateRequest = require("@middlewares/validateRequest");
+const validate = require("@utils/validatehelper");
 const {
   validateBannerId,
   validateCreateBanner,
@@ -32,8 +32,7 @@ router.get("/", bannerController.getAllBanners);
  */
 router.put(
   "/reorder",
-  validateReorderBanners,
-  validateRequest,
+  validate(validateReorderBanners),
   bannerController.reorderBanners
 );
 
@@ -42,12 +41,7 @@ router.put(
  * @desc Lấy chi tiết banner theo ID
  * @access Staff/Admin
  */
-router.get(
-  "/:id",
-  validateBannerId,
-  validateRequest,
-  bannerController.getBannerById
-);
+router.get("/:id", validate(validateBannerId), bannerController.getBannerById);
 
 /**
  * @route POST /api/admin/banners
@@ -57,8 +51,7 @@ router.get(
 router.post(
   "/",
   handleBannerImageUpload,
-  validateCreateBanner,
-  validateRequest,
+  validate(validateCreateBanner),
   bannerController.createBanner
 );
 
@@ -69,9 +62,7 @@ router.post(
  */
 router.put(
   "/:id",
-  validateBannerId,
-  validateUpdateBanner,
-  validateRequest,
+  validate([validateBannerId, validateUpdateBanner]),
   bannerController.updateBanner
 );
 
@@ -82,8 +73,7 @@ router.put(
  */
 router.put(
   "/:id/image",
-  validateBannerId,
-  validateRequest,
+  validate(validateBannerId),
   handleBannerImageUpload,
   bannerController.updateBannerImage
 );
@@ -95,8 +85,7 @@ router.put(
  */
 router.delete(
   "/:id",
-  validateBannerId,
-  validateRequest,
+  validate(validateBannerId),
   bannerController.deleteBanner
 );
 
@@ -107,8 +96,7 @@ router.delete(
  */
 router.put(
   "/:id/restore",
-  validateBannerId,
-  validateRequest,
+  validate(validateBannerId),
   bannerController.restoreBanner
 );
 
@@ -119,8 +107,7 @@ router.put(
  */
 router.put(
   "/:id/toggle-status",
-  validateBannerId,
-  validateRequest,
+  validate(validateBannerId),
   bannerController.toggleBannerStatus
 );
 

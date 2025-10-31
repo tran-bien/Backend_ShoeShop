@@ -39,13 +39,6 @@ const sizeGuideController = {
    * @access Staff/Admin
    */
   updateSizeChartImage: asyncHandler(async (req, res) => {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "Vui lòng upload ảnh",
-      });
-    }
-
     const imageData = {
       url: req.file.path,
       public_id: req.file.filename,
@@ -65,13 +58,6 @@ const sizeGuideController = {
    * @access Staff/Admin
    */
   updateMeasurementGuideImage: asyncHandler(async (req, res) => {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "Vui lòng upload ảnh",
-      });
-    }
-
     const imageData = {
       url: req.file.path,
       public_id: req.file.filename,
@@ -101,4 +87,3 @@ const sizeGuideController = {
 };
 
 module.exports = sizeGuideController;
-

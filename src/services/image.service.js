@@ -757,6 +757,168 @@ const imageService = {
       sizeGuide,
     };
   },
+
+  // ======================== BLOG IMAGE OPERATIONS ========================
+
+  /**
+   * Cập nhật thumbnail cho blog post
+   * @param {String} blogPostId - ID blog post
+   * @param {Object} imageData - Dữ liệu ảnh { url, public_id }
+   * @returns {Promise<Object>} - Kết quả cập nhật
+   */
+  updateBlogThumbnail: async (blogPostId, imageData) => {
+    const { BlogPost } = require("@models");
+
+    const blogPost = await BlogPost.findById(blogPostId);
+    if (!blogPost) {
+      throw new ApiError(404, "Không tìm thấy blog post");
+    }
+
+    // Xóa thumbnail cũ trên Cloudinary nếu có
+    if (blogPost.thumbnail?.public_id) {
+      try {
+        await cloudinary.uploader.destroy(blogPost.thumbnail.public_id);
+      } catch (err) {
+        console.error("Không thể xóa thumbnail cũ:", err);
+      }
+    }
+
+    // Cập nhật thumbnail mới
+    blogPost.thumbnail = {
+      url: imageData.url,
+      public_id: imageData.public_id,
+    };
+
+    await blogPost.save();
+
+    return {
+      success: true,
+      message: "Cập nhật thumbnail blog thành công",
+      blogPost,
+    };
+  },
+
+  /**
+   * Cập nhật featured image cho blog post
+   * @param {String} blogPostId - ID blog post
+   * @param {Object} imageData - Dữ liệu ảnh { url, public_id, caption, alt }
+   * @returns {Promise<Object>} - Kết quả cập nhật
+   */
+  updateBlogFeaturedImage: async (blogPostId, imageData) => {
+    const { BlogPost } = require("@models");
+
+    const blogPost = await BlogPost.findById(blogPostId);
+    if (!blogPost) {
+      throw new ApiError(404, "Không tìm thấy blog post");
+    }
+
+    // Xóa featured image cũ trên Cloudinary nếu có
+    if (blogPost.featuredImage?.public_id) {
+      try {
+        await cloudinary.uploader.destroy(blogPost.featuredImage.public_id);
+      } catch (err) {
+        console.error("Không thể xóa featured image cũ:", err);
+      }
+    }
+
+    // Cập nhật featured image mới
+    blogPost.featuredImage = {
+      url: imageData.url,
+      public_id: imageData.public_id,
+      caption: imageData.caption || "",
+      alt: imageData.alt || "",
+    };
+
+    await blogPost.save();
+
+    return {
+      success: true,
+      message: "Cập nhật featured image blog thành công",
+      blogPost,
+    };
+  },
+
+  /**
+   * Thêm content image vào blog post
+   * @param {String} blogPostId - ID blog post
+   * @param {Object} imageData - Dữ liệu ảnh { url, public_id, caption, alt }
+   * @param {Number} order - Thứ tự của image block
+   * @returns {Promise<Object>} - Kết quả thêm ảnh
+   */
+  addBlogContentImage: async (blogPostId, imageData, order) => {
+    const { BlogPost } = require("@models");
+
+    const blogPost = await BlogPost.findById(blogPostId);
+    if (!blogPost) {
+      throw new ApiError(404, "Không tìm thấy blog post");
+    }
+
+    // Thêm image block vào contentBlocks
+    const imageBlock = {
+      type: "IMAGE",
+      order: order || blogPost.contentBlocks.length,
+      image: {
+        url: imageData.url,
+        public_id: imageData.public_id,
+        caption: imageData.caption || "",
+        alt: imageData.alt || "",
+      },
+    };
+
+    blogPost.contentBlocks.push(imageBlock);
+
+    // Sắp xếp lại theo order
+    blogPost.contentBlocks.sort((a, b) => a.order - b.order);
+
+    await blogPost.save();
+
+    return {
+      success: true,
+      message: "Thêm content image thành công",
+      blogPost,
+    };
+  },
+
+  /**
+   * Xóa content image từ blog post
+   * @param {String} blogPostId - ID blog post
+   * @param {String} blockId - ID của content block cần xóa
+   * @returns {Promise<Object>} - Kết quả xóa
+   */
+  removeBlogContentImage: async (blogPostId, blockId) => {
+    const { BlogPost } = require("@models");
+
+    const blogPost = await BlogPost.findById(blogPostId);
+    if (!blogPost) {
+      throw new ApiError(404, "Không tìm thấy blog post");
+    }
+
+    // Tìm image block cần xóa
+    const imageBlock = blogPost.contentBlocks.id(blockId);
+    if (!imageBlock || imageBlock.type !== "IMAGE") {
+      throw new ApiError(404, "Không tìm thấy image block");
+    }
+
+    // Xóa ảnh từ Cloudinary
+    if (imageBlock.image?.public_id) {
+      try {
+        await cloudinary.uploader.destroy(imageBlock.image.public_id);
+      } catch (err) {
+        console.error("Không thể xóa content image từ Cloudinary:", err);
+      }
+    }
+
+    // Xóa block khỏi mảng
+    blogPost.contentBlocks.pull(blockId);
+
+    await blogPost.save();
+
+    return {
+      success: true,
+      message: "Xóa content image thành công",
+      blogPost,
+    };
+  },
 };
 
 module.exports = imageService;

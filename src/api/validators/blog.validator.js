@@ -27,6 +27,19 @@ const blogValidator = {
       .withMessage("Slug phải có từ 3-200 ký tự"),
   ],
 
+  // Validate blockId param
+  validateBlockId: [
+    param("blockId")
+      .notEmpty()
+      .withMessage("ID block không được để trống")
+      .custom((value) => {
+        if (!mongoose.Types.ObjectId.isValid(value)) {
+          throw new ApiError(400, "ID block không hợp lệ");
+        }
+        return true;
+      }),
+  ],
+
   // Validate create blog post
   validateCreateBlogPost: [
     body("title")
@@ -75,10 +88,7 @@ const blogValidator = {
         return true;
       }),
 
-    body("tags")
-      .optional()
-      .isArray()
-      .withMessage("Tags phải là mảng"),
+    body("tags").optional().isArray().withMessage("Tags phải là mảng"),
 
     body("tags.*")
       .optional()
@@ -142,10 +152,7 @@ const blogValidator = {
         return true;
       }),
 
-    body("tags")
-      .optional()
-      .isArray()
-      .withMessage("Tags phải là mảng"),
+    body("tags").optional().isArray().withMessage("Tags phải là mảng"),
 
     body("status")
       .optional()
@@ -189,10 +196,7 @@ const blogValidator = {
       .isIn(["DRAFT", "PUBLISHED", "ARCHIVED"])
       .withMessage("Trạng thái phải là DRAFT, PUBLISHED hoặc ARCHIVED"),
 
-    query("tag")
-      .optional()
-      .isString()
-      .withMessage("Tag phải là chuỗi"),
+    query("tag").optional().isString().withMessage("Tag phải là chuỗi"),
 
     query("sort")
       .optional()
@@ -270,4 +274,3 @@ const blogValidator = {
 };
 
 module.exports = blogValidator;
-

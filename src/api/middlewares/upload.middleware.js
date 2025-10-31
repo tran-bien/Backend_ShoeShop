@@ -149,6 +149,18 @@ const uploadMiddleware = {
   uploadAvatar: createSingleUploadMiddleware("users/avatars", "avatar"),
   uploadBannerImage: createSingleUploadMiddleware("banners", "banner"),
   uploadSizeGuideImage: createSingleUploadMiddleware("size-guides", "image"),
+  uploadBlogThumbnail: createSingleUploadMiddleware(
+    "blogs/thumbnails",
+    "thumbnail"
+  ),
+  uploadBlogFeaturedImage: createSingleUploadMiddleware(
+    "blogs/featured",
+    "featuredImage"
+  ),
+  uploadBlogContentImage: createSingleUploadMiddleware(
+    "blogs/content",
+    "image"
+  ),
 
   /**
    * Middleware xử lý lỗi upload
@@ -280,6 +292,42 @@ const uploadMiddleware = {
    */
   handleSizeGuideImageUpload: (req, res, next) => {
     uploadMiddleware.uploadSizeGuideImage(req, res, (err) => {
+      if (err) {
+        return uploadMiddleware.handleUploadError(err, req, res, next);
+      }
+      next();
+    });
+  },
+
+  /**
+   * Middleware xử lý upload blog thumbnail
+   */
+  handleBlogThumbnailUpload: (req, res, next) => {
+    uploadMiddleware.uploadBlogThumbnail(req, res, (err) => {
+      if (err) {
+        return uploadMiddleware.handleUploadError(err, req, res, next);
+      }
+      next();
+    });
+  },
+
+  /**
+   * Middleware xử lý upload blog featured image
+   */
+  handleBlogFeaturedImageUpload: (req, res, next) => {
+    uploadMiddleware.uploadBlogFeaturedImage(req, res, (err) => {
+      if (err) {
+        return uploadMiddleware.handleUploadError(err, req, res, next);
+      }
+      next();
+    });
+  },
+
+  /**
+   * Middleware xử lý upload blog content image
+   */
+  handleBlogContentImageUpload: (req, res, next) => {
+    uploadMiddleware.uploadBlogContentImage(req, res, (err) => {
       if (err) {
         return uploadMiddleware.handleUploadError(err, req, res, next);
       }

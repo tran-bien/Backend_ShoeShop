@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const sizeGuideController = require("@controllers/public/sizeGuide.controller");
 const sizeGuideValidator = require("@validators/sizeGuide.validator");
-const validateRequest = require("@middlewares/validateRequest");
+const validate = require("@utils/validatehelper");
 
 /**
  * @route GET /api/products/:productId/size-guide
@@ -11,10 +11,8 @@ const validateRequest = require("@middlewares/validateRequest");
  */
 router.get(
   "/:productId/size-guide",
-  sizeGuideValidator.validateProductId,
-  validateRequest,
+  validate(sizeGuideValidator.validateProductId),
   sizeGuideController.getProductSizeGuide
 );
 
 module.exports = router;
-

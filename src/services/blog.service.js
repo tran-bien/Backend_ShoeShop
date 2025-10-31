@@ -6,6 +6,64 @@ const ApiError = require("@utils/ApiError");
 
 const blogService = {
   /**
+   * [ADMIN] Lấy danh sách blog posts (tất cả trạng thái)
+   */
+  getAdminPosts: async (query = {}) => {
+    const { page = 1, limit = 10, category, tag, search, status } = query;
+
+    const filter = {
+      deletedAt: null,
+    };
+
+    if (category) {
+      filter.category = category;
+    }
+
+    if (tag) {
+      filter.tags = tag;
+    }
+
+    if (status) {
+      filter.status = status;
+    }
+
+    if (search) {
+      filter.$text = { $search: search };
+    }
+
+    const options = {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      sort: { createdAt: -1 },
+      populate: [
+        { path: "category", select: "name slug" },
+        { path: "author", select: "name avatar" },
+      ],
+      select: "-contentBlocks", // Không trả về content blocks trong danh sách
+    };
+
+    return await paginate(BlogPost, filter, options);
+  },
+
+  /**
+   * [ADMIN] Lấy chi tiết blog post theo ID
+   */
+  getPostById: async (postId) => {
+    const post = await BlogPost.findById(postId)
+      .populate("category", "name slug")
+      .populate("author", "name avatar");
+
+    if (!post) {
+      throw new ApiError(404, "Không tìm thấy bài viết");
+    }
+
+    return {
+      success: true,
+      post,
+    };
+  },
+
+  /**
    * [PUBLIC] Lấy danh sách blog posts đã publish
    */
   getPublicPosts: async (query = {}) => {
@@ -187,4 +245,3 @@ const blogService = {
 };
 
 module.exports = blogService;
-

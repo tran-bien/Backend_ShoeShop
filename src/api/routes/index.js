@@ -13,6 +13,7 @@ const publicReviewRoutes = require("@routes/public/reviews.routes");
 const filterRoutes = require("@routes/public/filter.routes");
 const publicCouponRoutes = require("@routes/public/coupon.routes");
 const publicBannerRoutes = require("@routes/public/banner.routes");
+const publicBlogRoutes = require("@routes/public/blog.routes");
 
 // User Routes (Authenticated Users)
 const userProfileRoutes = require("@routes/user/profile.routes");
@@ -50,6 +51,7 @@ const adminBannerRoutes = require("@routes/admin/banner.routes");
 const adminReportRoutes = require("@routes/admin/report.routes");
 const adminImageRoutes = require("@routes/admin/image.routes");
 const adminSizeGuideRoutes = require("@routes/admin/sizeGuide.routes");
+const adminBlogRoutes = require("@routes/admin/blog.routes");
 
 // Public Routes (new features)
 const publicSizeGuideRoutes = require("@routes/public/sizeGuide.routes");
@@ -67,6 +69,7 @@ router.use("/reviews", publicReviewRoutes);
 router.use("/filters", filterRoutes);
 router.use("/coupons", publicCouponRoutes);
 router.use("/banners", publicBannerRoutes);
+router.use("/blogs", publicBlogRoutes);
 
 // USER ROUTES (Cần đăng nhập - role: user)
 router.use("/users/profile", userProfileRoutes);
@@ -105,5 +108,6 @@ router.use("/admin/banners", adminBannerRoutes);
 router.use("/admin/reports", adminReportRoutes);
 router.use("/admin/images", adminImageRoutes);
 router.use("/admin/size-guides", adminSizeGuideRoutes);
+router.use("/admin/blogs", adminBlogRoutes);
 
 module.exports = router;

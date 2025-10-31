@@ -1,10 +1,14 @@
 const express = require("express");
 const router = express.Router();
 const sizeGuideController = require("@controllers/admin/sizeGuide.controller");
-const { protect, requireStaffOrAdmin } = require("@middlewares/auth.middleware");
+const {
+  protect,
+  requireStaffOrAdmin,
+} = require("@middlewares/auth.middleware");
 const uploadMiddleware = require("@middlewares/upload.middleware");
 const sizeGuideValidator = require("@validators/sizeGuide.validator");
-const validateRequest = require("@middlewares/validateRequest");
+const uploadValidator = require("@validators/upload.validator");
+const validate = require("@utils/validatehelper");
 
 router.use(protect);
 router.use(requireStaffOrAdmin);
@@ -18,8 +22,7 @@ const uploadSizeGuideImage = uploadMiddleware.uploadSizeGuideImage;
  */
 router.post(
   "/",
-  sizeGuideValidator.validateCreateSizeGuide,
-  validateRequest,
+  validate(sizeGuideValidator.validateCreateSizeGuide),
   sizeGuideController.createSizeGuide
 );
 
@@ -29,9 +32,10 @@ router.post(
  */
 router.put(
   "/:id",
-  sizeGuideValidator.validateSizeGuideId,
-  sizeGuideValidator.validateUpdateSizeGuide,
-  validateRequest,
+  validate([
+    sizeGuideValidator.validateSizeGuideId,
+    sizeGuideValidator.validateUpdateSizeGuide,
+  ]),
   sizeGuideController.updateSizeGuide
 );
 
@@ -41,7 +45,13 @@ router.put(
  */
 router.put(
   "/:id/size-chart-image",
+  validate(sizeGuideValidator.validateSizeGuideId),
   uploadSizeGuideImage,
+  validate([
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
   sizeGuideController.updateSizeChartImage
 );
 
@@ -51,7 +61,13 @@ router.put(
  */
 router.put(
   "/:id/measurement-image",
+  validate(sizeGuideValidator.validateSizeGuideId),
   uploadSizeGuideImage,
+  validate([
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
   sizeGuideController.updateMeasurementGuideImage
 );
 
@@ -61,10 +77,8 @@ router.put(
  */
 router.delete(
   "/:id",
-  sizeGuideValidator.validateSizeGuideId,
-  validateRequest,
+  validate(sizeGuideValidator.validateSizeGuideId),
   sizeGuideController.deleteSizeGuide
 );
 
 module.exports = router;
-

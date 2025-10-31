@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const loyaltyController = require("@controllers/user/loyalty.controller");
 const { protect } = require("@middlewares/auth.middleware");
+const loyaltyValidator = require("@validators/loyalty.validator");
+const validate = require("@utils/validatehelper");
 
 router.use(protect);
 
@@ -15,7 +17,10 @@ router.get("/stats", loyaltyController.getLoyaltyStats);
  * @route GET /api/users/loyalty/transactions
  * @desc Lấy lịch sử giao dịch điểm
  */
-router.get("/transactions", loyaltyController.getTransactions);
+router.get(
+  "/transactions",
+  validate(loyaltyValidator.validateTransactionsQuery),
+  loyaltyController.getTransactions
+);
 
 module.exports = router;
-
