@@ -1,81 +1,44 @@
-﻿const nodemailer = require("nodemailer");const nodemailer = require('nodemailer');
+const nodemailer = require("nodemailer");
+const ApiError = require("@utils/ApiError");
+const { baseStyles } = require("@utils/emailTemplates");
 
-const ApiError = require("@utils/ApiError");const ApiError = require('@utils/ApiError');
+// Khởi tạo transporter
+const transporter = nodemailer.createTransport({
+  service: process.env.EMAIL_SERVICE || "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD,
+  },
+});
 
-const { baseStyles } = require("@utils/emailTemplates");const { baseStyles } = require('@utils/emailTemplates');
+// Helper: Tạo wrapper chung cho email
+const createEmailWrapper = (content) => `
+  <div style="${baseStyles.container}">
+    <div style="${baseStyles.header}">
+      <h1 style="${baseStyles.headerTitle}">SHOE SHOP</h1>
+      <p style="${baseStyles.headerSubtitle}">Premium Footwear</p>
+    </div>
+    ${content}
+    <div style="${baseStyles.footer}">
+      <p style="${baseStyles.footerText}"><strong>SHOE SHOP</strong><br>Premium Footwear Collection</p>
+      <p style="${baseStyles.footerText}">© ${new Date().getFullYear()} Shoe Shop. All rights reserved.</p>
+    </div>
+  </div>
+`;
 
-
-
-// Khởi tạo transporter// Khởi tạo transporter
-
-const transporter = nodemailer.createTransport({const transporter = nodemailer.createTransport({
-
-  service: process.env.EMAIL_SERVICE || "gmail",  service: process.env.EMAIL_SERVICE || 'gmail',
-
-  auth: {  auth: {
-
-    user: process.env.EMAIL_USER,    user: process.env.EMAIL_USER,
-
-    pass: process.env.EMAIL_PASSWORD,    pass: process.env.EMAIL_PASSWORD,
-
-  },  },
-
-});});
-
-
-
-// Helper: Header + Footer chung// Template: Email xác nhận OTP
-
-const createEmailWrapper = (content) => `const verificationEmailTemplate = (name, otp) => {
-
-  <div style="${baseStyles.container}">  return `<div style="${baseStyles.container}">
-
-    <div style="${baseStyles.header}">    <div style="${baseStyles.header}">
-
-      <h1 style="${baseStyles.headerTitle}">SHOE SHOP</h1>      <h1 style="${baseStyles.headerTitle}">SHOE SHOP</h1>
-
-      <p style="${baseStyles.headerSubtitle}">Premium Footwear</p>      <p style="${baseStyles.headerSubtitle}">Premium Footwear</p>
-
-    </div>    </div>
-
-    ${content}    <div style="${baseStyles.content}">
-
-    <div style="${baseStyles.footer}">      <h2 style="${baseStyles.title}">Xác nhận tài khoản</h2>
-
-      <p style="${baseStyles.footerText}"><strong>SHOE SHOP</strong><br>Premium Footwear Collection</p>      <p style="${baseStyles.text}">Xin chào <strong>${name}</strong>,</p>
-
-      <p style="${baseStyles.footerText}">© ${new Date().getFullYear()} Shoe Shop. All rights reserved.</p>      <p style="${baseStyles.text}">Cảm ơn bạn đã đăng ký tài khoản tại Shoe Shop. Để hoàn tất quá trình đăng ký, vui lòng sử dụng mã OTP bên dưới:</p>
-
-    </div>      <div style="${baseStyles.codeBox}">
-
-  </div>        <p style="margin: 0 0 10px 0; font-size: 12px; color: #2C2C2C; letter-spacing: 2px; text-transform: uppercase;">Mã xác nhận</p>
-
-`;        <div style="${baseStyles.code}">${otp}</div>
-
-      </div>
-
-// Template 1: Verification Email (OTP)      <p style="${baseStyles.text}">Mã OTP này sẽ <strong>hết hạn sau 10 phút</strong>.</p>
-
-exports.verificationEmailTemplate = (name, otp) => {      <p style="${baseStyles.text}">Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này.</p>
-
-  const content = `    </div>
-
-    <div style="${baseStyles.content}">    <div style="${baseStyles.footer}">
-
-      <h2 style="${baseStyles.title}">Xác nhận tài khoản</h2>      <p style="${baseStyles.footerText}"><strong>SHOE SHOP</strong><br>Premium Footwear Collection</p>
-
-      <p style="${baseStyles.text}">Xin chào <strong>${name}</strong>,</p>      <p style="${baseStyles.footerText}"> ${new Date().getFullYear()} Shoe Shop. All rights reserved.</p>
-
-      <p style="${baseStyles.text}">    </div>
-
-        Cảm ơn bạn đã đăng ký tài khoản tại Shoe Shop. Để hoàn tất quá trình đăng ký,   </div>`;
-
-        vui lòng sử dụng mã OTP bên dưới:};
-
+/**
+ * Template 1: Email xác nhận OTP
+ */
+exports.verificationEmailTemplate = (name, otp) => {
+  const content = `
+    <div style="${baseStyles.content}">
+      <h2 style="${baseStyles.title}">Xác nhận tài khoản</h2>
+      <p style="${baseStyles.text}">Xin chào <strong>${name}</strong>,</p>
+      <p style="${baseStyles.text}">
+        Cảm ơn bạn đã đăng ký tài khoản tại Shoe Shop. Để hoàn tất quá trình đăng ký, 
+        vui lòng sử dụng mã OTP bên dưới:
       </p>
-
-      <div style="${baseStyles.codeBox}">module.exports = { verificationEmailTemplate };
-
+      <div style="${baseStyles.codeBox}">
         <p style="margin: 0 0 10px 0; font-size: 12px; color: #2C2C2C; letter-spacing: 2px; text-transform: uppercase;">Mã xác nhận</p>
         <div style="${baseStyles.code}">${otp}</div>
       </div>
@@ -86,7 +49,9 @@ exports.verificationEmailTemplate = (name, otp) => {      <p style="${baseStyles
   return createEmailWrapper(content);
 };
 
-// Template 2: Reset Password Email
+/**
+ * Template 2: Email đặt lại mật khẩu
+ */
 exports.resetPasswordEmailTemplate = (name, resetUrl) => {
   const content = `
     <div style="${baseStyles.content}">
@@ -109,7 +74,9 @@ exports.resetPasswordEmailTemplate = (name, resetUrl) => {
   return createEmailWrapper(content);
 };
 
-// Template 3: General Notification
+/**
+ * Template 3: Email thông báo chung
+ */
 exports.notificationEmailTemplate = (title, message, actionUrl, actionText) => {
   const content = `
     <div style="${baseStyles.content}">
@@ -129,7 +96,9 @@ exports.notificationEmailTemplate = (title, message, actionUrl, actionText) => {
   return createEmailWrapper(content);
 };
 
-// Template 4: Order Confirmation
+/**
+ * Template 4: Email xác nhận đơn hàng
+ */
 exports.orderConfirmationEmailTemplate = (userName, order, frontendUrl) => {
   const orderItemsHtml = order.orderItems
     .map(
@@ -202,7 +171,9 @@ exports.orderConfirmationEmailTemplate = (userName, order, frontendUrl) => {
   return `<div style="${baseStyles.container}"><div style="${baseStyles.header}"><h1 style="${baseStyles.headerTitle}">SHOE SHOP</h1><p style="${baseStyles.headerSubtitle}">Premium Footwear</p></div>${content}${footer}</div>`;
 };
 
-// Template 5: Promotion Email
+/**
+ * Template 5: Email khuyến mãi
+ */
 exports.promotionEmailTemplate = (title, message, couponCode, imageUrl, ctaUrl, frontendUrl) => {
   const content = `
     ${imageUrl ? `<div style="background-color: #F5F5F5; padding: 0;"><img src="${imageUrl}" alt="Promotion" style="width: 100%; display: block; max-height: 400px; object-fit: cover;"></div>` : ""}
@@ -241,7 +212,9 @@ exports.promotionEmailTemplate = (title, message, couponCode, imageUrl, ctaUrl, 
   return `<div style="${baseStyles.container}"><div style="${baseStyles.header}"><h1 style="${baseStyles.headerTitle}">SHOE SHOP</h1><p style="${baseStyles.headerSubtitle}">Premium Footwear</p></div>${content}${footer}</div>`;
 };
 
-// Template 6: Newsletter
+/**
+ * Template 6: Newsletter
+ */
 exports.newsletterEmailTemplate = (title, heroImageUrl, sections, featuredProducts, ctaText, ctaUrl, frontendUrl) => {
   const sectionsHtml = sections
     .map((section) => {
@@ -255,7 +228,7 @@ exports.newsletterEmailTemplate = (title, heroImageUrl, sections, featuredProduc
     .join("");
 
   const productsHtml = featuredProducts.length
-    ? `<div style="margin: 50px 0;"><h3 style="color: #000000; font-size: 20px; font-weight: 600; text-align: center; margin-bottom: 30px; letter-spacing: 2px; text-transform: uppercase;">Sản phẩm nổi bật</h3><table style="width: 100%;"><tr>${featuredProducts.map((p, i) => `<td style="width: 50%; padding: 10px;"><div style="border: 2px solid #F5F5F5;"><img src="${p.imageUrl}" alt="${p.name}" style="width: 100%; height: 200px; object-fit: cover;"><div style="padding: 20px; text-align: center;"><p style="font-weight: 600; color: #000000; font-size: 15px; margin: 0 0 10px 0;">${p.name}</p><p style="color: #2C2C2C; font-size: 18px; font-weight: 700; margin: 0 0 15px 0;">${p.price.toLocaleString("vi-VN")}đ</p><a href="${frontendUrl}/products/${p._id}" style="display: inline-block; background-color: #000000; color: #FFFFFF; padding: 10px 20px; text-decoration: none; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; border: 2px solid #000000;">Xem ngay</a></div></div></td>${i % 2 === 0 && i < featuredProducts.length - 1 ? "" : ""}`).join("")}</tr></table></div>`
+    ? `<div style="margin: 50px 0;"><h3 style="color: #000000; font-size: 20px; font-weight: 600; text-align: center; margin-bottom: 30px; letter-spacing: 2px; text-transform: uppercase;">Sản phẩm nổi bật</h3><table style="width: 100%;"><tr>${featuredProducts.map((p) => `<td style="width: 50%; padding: 10px;"><div style="border: 2px solid #F5F5F5;"><img src="${p.imageUrl}" alt="${p.name}" style="width: 100%; height: 200px; object-fit: cover;"><div style="padding: 20px; text-align: center;"><p style="font-weight: 600; color: #000000; font-size: 15px; margin: 0 0 10px 0;">${p.name}</p><p style="color: #2C2C2C; font-size: 18px; font-weight: 700; margin: 0 0 15px 0;">${p.price.toLocaleString("vi-VN")}đ</p><a href="${frontendUrl}/products/${p._id}" style="display: inline-block; background-color: #000000; color: #FFFFFF; padding: 10px 20px; text-decoration: none; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; border: 2px solid #000000;">Xem ngay</a></div></div></td>`).join("")}</tr></table></div>`
     : "";
 
   const content = `
@@ -291,7 +264,9 @@ exports.newsletterEmailTemplate = (title, heroImageUrl, sections, featuredProduc
   return `<div style="${baseStyles.container}"><div style="${baseStyles.header}"><h1 style="${baseStyles.headerTitle}">SHOE SHOP</h1><p style="${baseStyles.headerSubtitle}">Premium Footwear</p></div>${content}${footer}</div>`;
 };
 
-// Helper functions to send emails
+/**
+ * Helper function: Gửi email xác nhận OTP
+ */
 exports.sendVerificationEmail = async (email, name, otp) => {
   const mailOptions = {
     from: `"Shoe Shop" <${process.env.EMAIL_USER}>`,
@@ -308,6 +283,9 @@ exports.sendVerificationEmail = async (email, name, otp) => {
   }
 };
 
+/**
+ * Helper function: Gửi email đặt lại mật khẩu
+ */
 exports.sendResetPasswordEmail = async (email, name, resetToken) => {
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
