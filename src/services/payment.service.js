@@ -265,38 +265,6 @@ const paymentService = {
 
       // FIXED: VNPAY IDEMPOTENCY - Kiểm tra đã xử lý callback chưa
       const vnpayTransactionNo = vnpayParams.vnp_TransactionNo;
-      
-      // Nếu đã có vnpayTransactionNo và đã xử lý callback/IPN rồi
-      if (vnpayTransactionNo && order.payment.vnpayTransactionNo === vnpayTransactionNo) {
-        if (order.payment.vnpayCallbackProcessed || order.payment.vnpayIpnProcessed) {
-          console.log(`[IDEMPOTENCY] Callback/IPN đã được xử lý trước đó cho transaction: ${vnpayTransactionNo}`);
-          return {
-            success: true,
-            message: "Giao dịch đã được xử lý trước đó",
-            data: {
-              orderId: order._id,
-              orderCode: order.code,
-              amount: order.totalAfterDiscountAndShipping,
-              paymentStatus: order.payment.paymentStatus,
-              alreadyProcessed: true,
-            },
-          };
-        }
-      }
-
-      // Kiểm tra xem đơn hàng đã được thanh toán chưa
-      if (order.payment.paymentStatus === "paid") {
-        return {
-          success: true,
-          message: "Đơn hàng đã được thanh toán trước đó",
-          data: {
-            orderId: order._id,
-            orderCode: order.code,
-            amount: order.totalAfterDiscountAndShipping,
-            paymentStatus: order.payment.paymentStatus,
-          },
-        };
-      }
 
       // Kiểm tra xác thực - nếu thất bại trong production
       if (!verifyResult.success && process.env.NODE_ENV === "production") {
@@ -307,76 +275,87 @@ const paymentService = {
         };
       }
 
-      // Cập nhật trạng thái đơn hàng dựa trên kết quả thanh toán
-      // Sử dụng Promise.all để song song hóa các thao tác cập nhật
-      const updatePromises = [];
+      // ATOMIC UPDATE - Chỉ xử lý nếu chưa processed (tránh race condition)
+      // Kết hợp check + update trong 1 operation để đảm bảo idempotency
+      const now = new Date();
+      const updateDoc = {
+        $set: {
+          "payment.transactionId": transactionId,
+          "payment.vnpayTransactionNo": vnpayTransactionNo,
+          "payment.vnpayCallbackProcessed": true,
+          "payment.vnpayCallbackProcessedAt": now,
+        },
+        $push: {
+          paymentHistory: {
+            status: responseCode === "00" ? "paid" : "failed",
+            transactionId: transactionId,
+            amount: order.totalAfterDiscountAndShipping,
+            method: order.payment.method,
+            updatedAt: now,
+            responseData: vnpayParams,
+          },
+        },
+      };
 
       if (responseCode === "00") {
-        // Thanh toán thành công - Cập nhật trực tiếp trạng thái thanh toán và transactionId
-        // FIXED: Thêm vnpayTransactionNo và vnpayCallbackProcessed
-        updatePromises.push(
-          Order.findByIdAndUpdate(order._id, {
-            "payment.transactionId": transactionId,
-            "payment.paymentStatus": "paid",
-            "payment.paidAt": new Date(),
-            "payment.vnpayTransactionNo": vnpayTransactionNo,
-            "payment.vnpayCallbackProcessed": true,
-            "payment.vnpayCallbackProcessedAt": new Date(),
-          })
-        );
+        // Thanh toán thành công
+        updateDoc.$set["payment.paymentStatus"] = "paid";
+        updateDoc.$set["payment.paidAt"] = now;
 
-        // VNPAY: KHÔNG TỰ ĐỘNG TRỪ KHO Ở ĐÂY
-        // Inventory sẽ được trừ KHI GÁN SHIPPER (assignOrderToShipper)
-
-        // Nếu thanh toán thành công và đơn hàng đang ở trạng thái pending
+        // Auto confirm order nếu đang pending
         if (order.status === "pending") {
-          const now = new Date();
-          updatePromises.push(
-            Order.findByIdAndUpdate(order._id, {
-              status: "confirmed",
-              confirmedAt: now,
-              $push: {
-                statusHistory: {
-                  status: "confirmed",
-                  updatedAt: now,
-                  note: "Tự động xác nhận sau khi thanh toán thành công",
-                },
-              },
-            })
-          );
+          updateDoc.$set.status = "confirmed";
+          updateDoc.$set.confirmedAt = now;
+          updateDoc.$push.statusHistory = {
+            status: "confirmed",
+            updatedAt: now,
+            note: "Tự động xác nhận sau khi thanh toán thành công",
+          };
         }
       } else {
         // Thanh toán thất bại
+        updateDoc.$set["payment.paymentStatus"] = "failed";
         console.log(`Thanh toán VNPAY thất bại cho đơn hàng ${order.code}`);
-
-        updatePromises.push(
-          Order.findByIdAndUpdate(order._id, {
-            "payment.transactionId": transactionId,
-            "payment.paymentStatus": "failed",
-          })
-        );
-
-        // VNPAY FAILED: Inventory chưa bao giờ được trừ nên không cần hoàn
       }
 
-      // Thêm vào lịch sử thanh toán
-      updatePromises.push(
-        Order.findByIdAndUpdate(order._id, {
-          $push: {
-            paymentHistory: {
-              status: responseCode === "00" ? "paid" : "failed",
-              transactionId: transactionId,
-              amount: order.totalAfterDiscountAndShipping,
-              method: order.payment.method,
-              updatedAt: new Date(),
-              responseData: vnpayParams,
-            },
-          },
-        })
+      // ATOMIC OPERATION: Chỉ update nếu chưa processed
+      const updatedOrder = await Order.findOneAndUpdate(
+        {
+          _id: order._id,
+          $or: [
+            { "payment.vnpayCallbackProcessed": { $ne: true } },
+            { "payment.vnpayIpnProcessed": { $ne: true } },
+          ],
+        },
+        updateDoc,
+        { new: true }
       );
 
-      // Thực hiện tất cả cập nhật song song
-      await Promise.all(updatePromises);
+      // Nếu không update được = đã được xử lý rồi (idempotency protection)
+      if (!updatedOrder) {
+        console.log(
+          `[IDEMPOTENCY] Giao dịch đã được xử lý trước đó: ${vnpayTransactionNo}`
+        );
+        return {
+          success: true,
+          message: "Giao dịch đã được xử lý trước đó",
+          data: {
+            orderId: order._id,
+            orderCode: order.code,
+            amount: order.totalAfterDiscountAndShipping,
+            paymentStatus: order.payment.paymentStatus,
+            alreadyProcessed: true,
+          },
+        };
+      }
+
+      // VNPAY: KHÔNG TỰ ĐỘNG TRỪ KHO Ở ĐÂY
+      // Inventory sẽ được trừ KHI GÁN SHIPPER (assignOrderToShipper)
+      // VNPAY FAILED: Inventory chưa bao giờ được trừ nên không cần hoàn
+
+      // VNPAY: KHÔNG TỰ ĐỘNG TRỪ KHO Ở ĐÂY
+      // Inventory sẽ được trừ KHI GÁN SHIPPER (assignOrderToShipper)
+      // VNPAY FAILED: Inventory chưa bao giờ được trừ nên không cần hoàn
 
       return {
         success: responseCode === "00",
@@ -385,14 +364,11 @@ const paymentService = {
             ? "Thanh toán thành công"
             : "Thanh toán thất bại",
         data: {
-          orderId: order._id,
-          orderCode: order.code,
-          amount: order.totalAfterDiscountAndShipping,
-          paymentStatus: responseCode === "00" ? "paid" : "failed",
-          orderStatus:
-            responseCode === "00" && order.status === "pending"
-              ? "confirmed"
-              : order.status,
+          orderId: updatedOrder._id,
+          orderCode: updatedOrder.code,
+          amount: updatedOrder.totalAfterDiscountAndShipping,
+          paymentStatus: updatedOrder.payment.paymentStatus,
+          orderStatus: updatedOrder.status,
         },
       };
     } catch (error) {
@@ -452,25 +428,9 @@ const paymentService = {
         };
       }
 
-      // FIXED: VNPAY IPN IDEMPOTENCY - Kiểm tra trước khi xử lý
+      // ATOMIC IPN IDEMPOTENCY - Xử lý IPN với atomic update
       const vnpayTransactionNo = vnpParams.vnp_TransactionNo;
       const txnRef = vnpParams.vnp_TxnRef;
-
-      if (vnpayTransactionNo) {
-        // Kiểm tra xem transaction này đã được xử lý chưa
-        const existingOrder = await Order.findOne({
-          "payment.vnpayTransactionNo": vnpayTransactionNo,
-          "payment.vnpayIpnProcessed": true,
-        });
-
-        if (existingOrder) {
-          console.log(`[IDEMPOTENCY] IPN đã được xử lý trước đó cho transaction: ${vnpayTransactionNo}`);
-          return {
-            RspCode: "00",
-            Message: "Already processed",
-          };
-        }
-      }
 
       // Xác thực chữ ký
       const verifyResult = paymentService.verifyVnpayReturn(vnpParams);
@@ -480,17 +440,32 @@ const paymentService = {
         vnpParams.vnp_ResponseCode === "00" &&
         (verifyResult.success || process.env.NODE_ENV === "development")
       ) {
-        // Xử lý kết quả thanh toán
+        // Xử lý kết quả thanh toán (đã có atomic update bên trong processPaymentResult)
         const paymentResult = await paymentService.processPaymentResult(
           vnpParams
         );
 
-        // Mark IPN as processed
+        // ATOMIC UPDATE - Mark IPN as processed chỉ nếu chưa processed
         if (paymentResult.success && paymentResult.data?.orderId) {
-          await Order.findByIdAndUpdate(paymentResult.data.orderId, {
-            "payment.vnpayIpnProcessed": true,
-            "payment.vnpayIpnProcessedAt": new Date(),
-          });
+          const ipnUpdate = await Order.findOneAndUpdate(
+            {
+              _id: paymentResult.data.orderId,
+              "payment.vnpayIpnProcessed": { $ne: true },
+            },
+            {
+              $set: {
+                "payment.vnpayIpnProcessed": true,
+                "payment.vnpayIpnProcessedAt": new Date(),
+              },
+            },
+            { new: true }
+          );
+
+          if (!ipnUpdate) {
+            console.log(
+              `[IDEMPOTENCY] IPN đã được xử lý trước đó cho orderId: ${paymentResult.data.orderId}`
+            );
+          }
         }
 
         // Trường hợp không tìm thấy đơn hàng
