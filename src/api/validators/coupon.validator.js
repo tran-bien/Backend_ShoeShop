@@ -139,6 +139,27 @@ const validateCreateCoupon = [
     .optional()
     .isBoolean()
     .withMessage("isPublic phải là boolean"),
+
+  body("isRedeemable")
+    .optional()
+    .isBoolean()
+    .withMessage("isRedeemable phải là boolean"),
+
+  body("pointCost")
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage("Chi phí điểm phải là số nguyên không âm")
+    .custom((value, { req }) => {
+      if (req.body.isRedeemable && (!value || value === 0)) {
+        throw new ApiError(400, "Coupon có thể đổi phải có pointCost > 0");
+      }
+      return true;
+    }),
+
+  body("maxRedeemPerUser")
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage("Giới hạn đổi/user phải là số nguyên không âm"),
 ];
 
 /**
@@ -223,6 +244,21 @@ const validateUpdateCoupon = [
     .optional()
     .isBoolean()
     .withMessage("isPublic phải là boolean"),
+
+  body("isRedeemable")
+    .optional()
+    .isBoolean()
+    .withMessage("isRedeemable phải là boolean"),
+
+  body("pointCost")
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage("Chi phí điểm phải là số nguyên không âm"),
+
+  body("maxRedeemPerUser")
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage("Giới hạn đổi/user phải là số nguyên không âm"),
 ];
 
 /**

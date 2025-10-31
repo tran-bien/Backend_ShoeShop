@@ -215,25 +215,25 @@ const OrderSchema = new mongoose.Schema(
         type: String,
         sparse: true,
         index: true,
-        comment: "Mã giao dịch từ VNPAY để đảm bảo idempotency"
+        comment: "Mã giao dịch từ VNPAY để đảm bảo idempotency",
       },
       vnpayCallbackProcessed: {
         type: Boolean,
         default: false,
-        comment: "Đã xử lý callback từ VNPAY chưa"
+        comment: "Đã xử lý callback từ VNPAY chưa",
       },
       vnpayCallbackProcessedAt: {
         type: Date,
-        comment: "Thời điểm xử lý callback"
+        comment: "Thời điểm xử lý callback",
       },
       vnpayIpnProcessed: {
         type: Boolean,
         default: false,
-        comment: "Đã xử lý IPN từ VNPAY chưa"
+        comment: "Đã xử lý IPN từ VNPAY chưa",
       },
       vnpayIpnProcessedAt: {
         type: Date,
-        comment: "Thời điểm xử lý IPN"
+        comment: "Thời điểm xử lý IPN",
       },
     },
 
@@ -330,7 +330,8 @@ const OrderSchema = new mongoose.Schema(
       default: null,
     },
 
-    // Thông tin hoàn tiền (Manual refund for COD, Future: VNPAY online refund)
+    // Thông tin hoàn tiền (Manual refund ONLY - Admin xác nhận thủ công)
+    // Không hỗ trợ hoàn tiền tự động từ VNPAY
     refund: {
       // Số tiền hoàn lại
       amount: {
@@ -338,10 +339,12 @@ const OrderSchema = new mongoose.Schema(
         default: 0,
         min: 0,
       },
-      // Phương thức hoàn tiền
+      // Phương thức hoàn tiền - CHỈ 2 PHƯƠNG THỨC THỦ CÔNG
+      // cash: Tiền mặt tại cửa hàng
+      // bank_transfer: Chuyển khoản (yêu cầu nhập bankInfo)
       method: {
         type: String,
-        enum: ["cash", "bank_transfer", "vnpay_online", "store_credit"],
+        enum: ["cash", "bank_transfer"],
         default: null,
       },
       // Trạng thái hoàn tiền

@@ -52,6 +52,7 @@ const adminReportRoutes = require("@routes/admin/report.routes");
 const adminImageRoutes = require("@routes/admin/image.routes");
 const adminSizeGuideRoutes = require("@routes/admin/sizeGuide.routes");
 const adminBlogRoutes = require("@routes/admin/blog.routes");
+const adminLoyaltyTierRoutes = require("@routes/admin/loyaltyTier.routes");
 
 // Public Routes (new features)
 const publicSizeGuideRoutes = require("@routes/public/sizeGuide.routes");
@@ -109,5 +110,6 @@ router.use("/admin/reports", adminReportRoutes);
 router.use("/admin/images", adminImageRoutes);
 router.use("/admin/size-guides", adminSizeGuideRoutes);
 router.use("/admin/blogs", adminBlogRoutes);
+router.use("/admin/loyalty-tiers", adminLoyaltyTierRoutes);
 
 module.exports = router;

@@ -75,63 +75,67 @@ const returnRequestSchema = new mongoose.Schema(
         type: String,
       },
     ],
-    // Phương thức hoàn tiền (chỉ cho RETURN)
+    // Phương thức hoàn tiền (chỉ cho RETURN - TẤT CẢ ĐỀU THỦ CÔNG)
+    // Không có tự động hoàn tiền qua VNPAY - Admin xử lý thủ công
     refundMethod: {
       type: String,
-      enum: ["original_payment", "store_credit", "bank_transfer"],
+      enum: ["cash", "bank_transfer"],
+      comment:
+        "cash=Tiền mặt tại cửa hàng, bank_transfer=Chuyển khoản (cần bankInfo)",
     },
     refundAmount: {
       type: Number,
       min: 0,
     },
     // Thông tin chuyển khoản (nếu bank_transfer)
+    // Khách nhập → Admin xem → Chuyển khoản thủ công → Đánh dấu completed
     bankInfo: {
       bankName: String,
       accountNumber: String,
       accountName: String,
     },
-    
+
     // SHIPPING FEE HANDLING - Xử lý phí ship
     shippingFee: {
       customerPay: {
         type: Number,
         default: 0,
         min: 0,
-        comment: "Phí ship khách hàng trả khi gửi hàng về"
+        comment: "Phí ship khách hàng trả khi gửi hàng về",
       },
       refundShippingFee: {
         type: Boolean,
         default: false,
-        comment: "Có hoàn lại phí ship ban đầu không (nếu lỗi shop)"
+        comment: "Có hoàn lại phí ship ban đầu không (nếu lỗi shop)",
       },
       originalShippingFee: {
         type: Number,
         default: 0,
         min: 0,
-        comment: "Phí ship ban đầu của đơn hàng"
-      }
+        comment: "Phí ship ban đầu của đơn hàng",
+      },
     },
-    
+
     // PRICE DIFFERENCE - Chênh lệch giá khi đổi hàng
     priceDifference: {
       amount: {
         type: Number,
         default: 0,
-        comment: "Số tiền chênh lệch (+ hoặc -)"
+        comment: "Số tiền chênh lệch (+ hoặc -)",
       },
       direction: {
         type: String,
         enum: ["customer_pay", "refund_to_customer", "equal"],
         default: "equal",
-        comment: "Hướng thanh toán"
+        comment: "Hướng thanh toán",
       },
       isPaid: {
         type: Boolean,
         default: false,
-        comment: "Đã thanh toán chênh lệch chưa"
-      }
+        comment: "Đã thanh toán chênh lệch chưa",
+      },
     },
-    
+
     status: {
       type: String,
       enum: [
@@ -144,12 +148,12 @@ const returnRequestSchema = new mongoose.Schema(
       ],
       default: "pending",
     },
-    
+
     // AUTO-REJECT - Tự động từ chối nếu quá hạn
     autoRejectedAt: Date,
     expiresAt: {
       type: Date,
-      comment: "Hết hạn xử lý sau 7 ngày kể từ khi tạo"
+      comment: "Hết hạn xử lý sau 7 ngày kể từ khi tạo",
     },
     // Tracking
     approvedBy: {

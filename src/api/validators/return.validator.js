@@ -121,8 +121,10 @@ exports.validateCreateReturnRequest = [
 
   body("refundMethod")
     .optional()
-    .isIn(["original_payment", "store_credit", "bank_transfer"])
-    .withMessage("Phương thức hoàn tiền không hợp lệ"),
+    .isIn(["cash", "bank_transfer"])
+    .withMessage(
+      "Phương thức hoàn tiền không hợp lệ (chỉ chấp nhận: cash, bank_transfer)"
+    ),
 
   body("bankInfo")
     .optional()

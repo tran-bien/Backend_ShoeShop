@@ -66,6 +66,26 @@ const CouponSchema = new mongoose.Schema(
       },
     ],
 
+    // REDEEM với điểm tích lũy
+    isRedeemable: {
+      type: Boolean,
+      default: false,
+      comment: "Có thể đổi bằng điểm tích lũy không",
+    },
+
+    pointCost: {
+      type: Number,
+      min: 0,
+      default: 0,
+      comment: "Chi phí điểm để đổi coupon (nếu isRedeemable = true)",
+    },
+
+    maxRedeemPerUser: {
+      type: Number,
+      min: 0,
+      comment: "Giới hạn số lần đổi/user (optional)",
+    },
+
     // COUPON NÂNG CAO - Áp dụng cho sản phẩm/variant/category cụ thể
     applicableProducts: [
       {

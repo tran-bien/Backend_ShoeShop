@@ -209,9 +209,9 @@ const validateProcessRefund = [
   body("method")
     .notEmpty()
     .withMessage("Phương thức hoàn tiền không được để trống")
-    .isIn(["cash", "bank_transfer", "vnpay_online", "store_credit"])
+    .isIn(["cash", "bank_transfer"])
     .withMessage(
-      "Phương thức không hợp lệ (chỉ chấp nhận: cash, bank_transfer, vnpay_online, store_credit)"
+      "Phương thức không hợp lệ (chỉ chấp nhận: cash, bank_transfer)"
     ),
   body("bankInfo")
     .optional()

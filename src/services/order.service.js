@@ -308,7 +308,10 @@ const orderService = {
         startDate: { $lte: new Date() },
         endDate: { $gte: new Date() },
         $or: [{ isPublic: true }, { users: userId }],
-      });
+      })
+        .populate("applicableProducts")
+        .populate("applicableVariants")
+        .populate("applicableCategories");
 
       if (!coupon) {
         throw new ApiError(
@@ -317,7 +320,7 @@ const orderService = {
         );
       }
 
-      // Kiểm tra số lần sử dụng
+      // Kiểm tra số lần sử dụng toàn cục
       if (coupon.maxUses && coupon.currentUses >= coupon.maxUses) {
         throw new ApiError(422, "Mã giảm giá đã hết lượt sử dụng");
       }
@@ -330,16 +333,43 @@ const orderService = {
         );
       }
 
-      // Tính giảm giá
-      if (coupon.type === "percent") {
-        discount = (subTotal * coupon.value) / 100;
-        if (coupon.maxDiscount) {
-          discount = Math.min(discount, coupon.maxDiscount);
-        }
-      } else {
-        // fixed
-        discount = Math.min(coupon.value, subTotal);
+      // Populate orderItems với đầy đủ thông tin cho validation
+      const populatedOrderItems = await Promise.all(
+        orderItems.map(async (item) => {
+          const variant = await Variant.findById(item.variant)
+            .populate("product")
+            .populate({
+              path: "product",
+              populate: { path: "category" },
+            });
+
+          return {
+            ...item,
+            variant: variant,
+          };
+        })
+      );
+
+      // Validate advanced coupon conditions (scope, tier, firstOrder, etc.)
+      const couponService = require("@services/coupon.service");
+      const validation = await couponService.validateAdvancedCoupon(
+        coupon,
+        userId,
+        populatedOrderItems
+      );
+
+      if (!validation.isValid) {
+        throw new ApiError(422, validation.message);
       }
+
+      // Calculate discount dựa trên scope (ALL/PRODUCTS/VARIANTS/CATEGORIES)
+      const discountResult = couponService.calculateApplicableDiscount(
+        coupon,
+        populatedOrderItems,
+        subTotal
+      );
+
+      discount = discountResult.discountAmount;
 
       // Lưu chi tiết coupon
       couponDetail = {
@@ -347,6 +377,8 @@ const orderService = {
         type: coupon.type,
         value: coupon.value,
         maxDiscount: coupon.maxDiscount,
+        scope: coupon.scope,
+        applicableSubtotal: discountResult.applicableSubtotal,
       };
     }
 
@@ -386,8 +418,27 @@ const orderService = {
       newOrder.coupon = coupon._id;
       newOrder.couponDetail = couponDetail;
 
-      // Tăng số lần sử dụng mã giảm giá
+      // Tăng số lần sử dụng toàn cục
       coupon.currentUses += 1;
+
+      // Tăng số lần sử dụng per user (userUsage array)
+      const userUsageIndex = coupon.userUsage.findIndex(
+        (u) => u.user.toString() === userId.toString()
+      );
+
+      if (userUsageIndex !== -1) {
+        // User đã từng dùng coupon này, tăng usageCount
+        coupon.userUsage[userUsageIndex].usageCount += 1;
+        coupon.userUsage[userUsageIndex].lastUsedAt = new Date();
+      } else {
+        // Lần đầu user dùng coupon này, thêm vào array
+        coupon.userUsage.push({
+          user: userId,
+          usageCount: 1,
+          lastUsedAt: new Date(),
+        });
+      }
+
       await coupon.save();
     }
 
@@ -1177,8 +1228,8 @@ const orderService = {
   },
 
   /**
-   * Xử lý hoàn tiền cho đơn hàng (COD - Manual)
-   * Admin ghi nhận hoàn tiền thủ công (tiền mặt hoặc chuyển khoản)
+   * Xử lý hoàn tiền cho đơn hàng (MANUAL ONLY - Không có VNPAY auto refund)
+   * Flow: Admin nhận thông tin tài khoản từ khách → Chuyển khoản thủ công → Đánh dấu hoàn tất
    * @param {String} orderId - ID đơn hàng
    * @param {Object} refundData - { amount, method, bankInfo?, notes }
    * @param {String} processedBy - ID admin xử lý
@@ -1218,12 +1269,10 @@ const orderService = {
       );
     }
 
-    // Validate method
+    // Validate method - CHỈ 2 PHƯƠNG THỨC THỦ CÔNG
     const validMethods = [
-      "cash",
-      "bank_transfer",
-      "vnpay_online",
-      "store_credit",
+      "cash", // Hoàn tiền mặt tại cửa hàng
+      "bank_transfer", // Chuyển khoản ngân hàng (yêu cầu bankInfo)
     ];
     if (!validMethods.includes(method)) {
       throw new ApiError(
@@ -1252,7 +1301,7 @@ const orderService = {
     order.refund = {
       amount,
       method,
-      status: "completed", // COD là manual nên mặc định completed luôn
+      status: "completed", // Manual refund - Admin đánh dấu completed sau khi chuyển khoản xong
       bankInfo: method === "bank_transfer" ? bankInfo : undefined,
       transactionId: `REFUND-${order.code}-${Date.now()}`,
       notes: notes || "",

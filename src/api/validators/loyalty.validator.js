@@ -22,7 +22,7 @@ const loyaltyValidator = {
 
     query("source")
       .optional()
-      .isIn(["ORDER", "REVIEW", "REFERRAL", "BIRTHDAY", "PROMOTION", "MANUAL"])
+      .isIn(["ORDER", "MANUAL"])
       .withMessage("Nguồn giao dịch không hợp lệ"),
 
     query("startDate")
@@ -51,4 +51,3 @@ const loyaltyValidator = {
 };
 
 module.exports = loyaltyValidator;
-

@@ -33,7 +33,7 @@ const LoyaltyTransactionSchema = new mongoose.Schema(
     // Nguồn gốc điểm
     source: {
       type: String,
-      enum: ["ORDER", "REVIEW", "REFERRAL", "BIRTHDAY", "PROMOTION", "MANUAL"],
+      enum: ["ORDER", "MANUAL"],
       required: true,
     },
 
@@ -82,4 +82,3 @@ LoyaltyTransactionSchema.index({ expiresAt: 1, isExpired: 1 }); // Cho cronjob
 LoyaltyTransactionSchema.index({ order: 1 });
 
 module.exports = LoyaltyTransactionSchema;
-

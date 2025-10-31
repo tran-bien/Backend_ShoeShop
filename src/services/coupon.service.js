@@ -33,7 +33,7 @@ const couponService = {
       limit: parseInt(limit),
       sort: sortOptions,
       select:
-        "code description type value maxDiscount minOrderValue startDate endDate",
+        "code description type value maxDiscount minOrderValue startDate endDate isRedeemable pointCost maxRedeemPerUser",
     });
 
     return {
@@ -118,7 +118,7 @@ const couponService = {
    * @returns {Object} - Kết quả thu thập
    */
   collectCoupon: async (userId, couponId) => {
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).populate("loyalty.tier");
     if (!user) {
       throw new ApiError(404, "Không tìm thấy người dùng");
     }
@@ -149,13 +149,57 @@ const couponService = {
       throw new ApiError(422, "Bạn đã thu thập mã giảm giá này rồi");
     }
 
+    // ============================================================
+    // XỬ LÝ ĐỔI ĐIỂM (NẾU COUPON CÓ THỂ REDEEM)
+    // ============================================================
+    let pointsUsed = 0;
+
+    if (coupon.isRedeemable && coupon.pointCost > 0) {
+      // Kiểm tra user có đủ điểm không
+      const currentPoints = user.loyalty?.points || 0;
+
+      if (currentPoints < coupon.pointCost) {
+        throw new ApiError(
+          400,
+          `Không đủ điểm. Cần ${coupon.pointCost} điểm, bạn có ${currentPoints} điểm`
+        );
+      }
+
+      // Kiểm tra giới hạn đổi/user (nếu có)
+      if (coupon.maxRedeemPerUser) {
+        const userRedeemCount = coupon.users.filter(
+          (u) => u.toString() === userId.toString()
+        ).length;
+
+        if (userRedeemCount >= coupon.maxRedeemPerUser) {
+          throw new ApiError(
+            422,
+            `Bạn đã đổi coupon này ${userRedeemCount}/${coupon.maxRedeemPerUser} lần`
+          );
+        }
+      }
+
+      // Trừ điểm
+      const loyaltyService = require("@services/loyalty.service");
+      await loyaltyService.deductPoints(userId, coupon.pointCost, {
+        type: "REDEEM",
+        source: "MANUAL",
+        description: `Đổi ${coupon.pointCost} điểm lấy coupon ${coupon.code}`,
+      });
+
+      pointsUsed = coupon.pointCost;
+    }
+
     // Thêm người dùng vào danh sách đã thu thập
     coupon.users.push(userId);
     await coupon.save();
 
     return {
       success: true,
-      message: "Thu thập mã giảm giá thành công",
+      message: coupon.isRedeemable
+        ? `Đã đổi ${pointsUsed} điểm lấy coupon thành công`
+        : "Thu thập mã giảm giá thành công",
+      pointsUsed,
       coupon: {
         _id: coupon._id,
         code: coupon.code,
@@ -166,6 +210,8 @@ const couponService = {
         minOrderValue: coupon.minOrderValue,
         startDate: coupon.startDate,
         endDate: coupon.endDate,
+        isRedeemable: coupon.isRedeemable,
+        pointCost: coupon.pointCost,
       },
     };
   },
@@ -542,6 +588,13 @@ const adminCouponService = {
       }
     }
 
+    // Kiểm tra logic redeem
+    if (couponData.isRedeemable) {
+      if (!couponData.pointCost || couponData.pointCost <= 0) {
+        throw new ApiError(400, "Coupon có thể đổi phải có pointCost > 0");
+      }
+    }
+
     // Kiểm tra mã đã tồn tại chưa
     const existingCoupon = await Coupon.findOne({
       code: couponData.code.toUpperCase(),
@@ -594,6 +647,19 @@ const adminCouponService = {
             "Giá trị phần trăm giảm giá phải từ 0 đến 100"
           );
         }
+      }
+    }
+
+    // Kiểm tra logic redeem khi update
+    if (couponData.isRedeemable !== undefined) {
+      const isRedeemable = couponData.isRedeemable;
+      const pointCost =
+        couponData.pointCost !== undefined
+          ? couponData.pointCost
+          : coupon.pointCost;
+
+      if (isRedeemable && (!pointCost || pointCost <= 0)) {
+        throw new ApiError(400, "Coupon có thể đổi phải có pointCost > 0");
       }
     }
 
