@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 
 const returnRequestSchema = new mongoose.Schema(
   {
+    code: {
+      type: String,
+      unique: true,
+      comment: "Mã yêu cầu đổi/trả, VD: RET-001, EXC-001",
+    },
     order: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Order",
@@ -189,17 +194,7 @@ returnRequestSchema.index({
   "items.size": 1,
 });
 
-// MIDDLEWARE - Auto set expiresAt khi tạo request
-returnRequestSchema.pre("save", function (next) {
-  // Nếu là document mới và chưa có expiresAt
-  if (this.isNew && !this.expiresAt) {
-    // Set expiresAt = 7 ngày từ bây giờ
-    this.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  }
-  next();
-});
-
-// Apply email notification middleware
+// Apply middleware (auto-generate code, expiresAt, email notifications, loyalty points)
 const applyReturnRequestMiddleware = require("./middlewares");
 applyReturnRequestMiddleware(returnRequestSchema);
 

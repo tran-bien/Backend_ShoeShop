@@ -253,7 +253,7 @@ exports.returnRequestEmailTemplate = (userName, returnRequest, frontendUrl) => {
 
   const statusInfo =
     statusMessages[returnRequest.status] || statusMessages.pending;
-  const typeText = returnRequest.type === "return" ? "Trả hàng" : "Đổi hàng";
+  const typeText = returnRequest.type === "RETURN" ? "Trả hàng" : "Đổi hàng";
 
   const content = `
     <div style="${baseStyles.content}">

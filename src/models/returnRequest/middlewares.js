@@ -2,10 +2,37 @@ const mongoose = require("mongoose");
 
 /**
  * Middleware cho ReturnRequest model
- * Xử lý email notifications khi status thay đổi
+ * Xử lý auto-generate code, expiresAt và email notifications
  */
 module.exports = (schema) => {
-  // Pre-save: Lưu status cũ để so sánh
+  // ============================================================
+  // PRE-SAVE: Auto set expiresAt và code khi tạo request
+  // ============================================================
+  schema.pre("save", async function (next) {
+    try {
+      // Nếu là document mới
+      if (this.isNew) {
+        // Auto set expiresAt = 7 ngày từ bây giờ
+        if (!this.expiresAt) {
+          this.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        }
+
+        // Auto generate code
+        if (!this.code) {
+          const prefix = this.type === "RETURN" ? "RET" : "EXC";
+          const count = await mongoose.model("ReturnRequest").countDocuments();
+          this.code = `${prefix}-${String(count + 1).padStart(5, "0")}`;
+        }
+      }
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ============================================================
+  // PRE-SAVE: Lưu status cũ để so sánh
+  // ============================================================
   schema.pre("save", function (next) {
     if (this.isModified("status")) {
       this._previousStatus = this.isNew ? null : this.$locals.previousStatus;
@@ -13,7 +40,9 @@ module.exports = (schema) => {
     next();
   });
 
-  // Pre-save: Lưu status cũ vào $locals
+  // ============================================================
+  // PRE-SAVE: Lưu status cũ vào $locals
+  // ============================================================
   schema.pre("save", async function (next) {
     if (this.isNew) {
       next();
@@ -34,7 +63,9 @@ module.exports = (schema) => {
     }
   });
 
-  // Post-save: Gửi email khi status thay đổi
+  // ============================================================
+  // POST-SAVE: Gửi email và xử lý loyalty khi status thay đổi
+  // ============================================================
   schema.post("save", async function (doc) {
     try {
       const previousStatus = this._previousStatus;

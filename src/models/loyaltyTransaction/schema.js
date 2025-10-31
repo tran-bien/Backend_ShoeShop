@@ -10,8 +10,10 @@ const LoyaltyTransactionSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["EARN", "REDEEM", "EXPIRE", "ADJUST"],
+      enum: ["EARN", "REDEEM", "EXPIRE", "ADJUST", "DEDUCT"],
       required: true,
+      comment:
+        "EARN: Tích điểm, REDEEM: Đổi điểm, EXPIRE: Hết hạn, ADJUST: Điều chỉnh, DEDUCT: Trừ điểm (trả hàng)",
     },
 
     points: {
@@ -33,8 +35,10 @@ const LoyaltyTransactionSchema = new mongoose.Schema(
     // Nguồn gốc điểm
     source: {
       type: String,
-      enum: ["ORDER", "MANUAL"],
+      enum: ["ORDER", "MANUAL", "RETURN", "REVIEW"],
       required: true,
+      comment:
+        "ORDER: Từ đơn hàng, MANUAL: Thủ công, RETURN: Trả hàng, REVIEW: Đánh giá",
     },
 
     // References
