@@ -15,7 +15,13 @@ const BlogPostSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Nội dung xen kẽ text và ảnh
+    // Content - Simple markdown string (recommended for new posts)
+    content: {
+      type: String,
+      maxlength: 50000,
+    },
+
+    // Nội dung xen kẽ text và ảnh (legacy - for complex layouts)
     contentBlocks: [
       {
         type: {
