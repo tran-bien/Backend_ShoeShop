@@ -149,7 +149,7 @@ const BlogPostSchema = new mongoose.Schema(
 );
 
 // Index
-BlogPostSchema.index({ slug: 1 });
+// Note: slug index is automatically created by unique: true in schema definition
 BlogPostSchema.index({ status: 1, publishedAt: -1 });
 BlogPostSchema.index({ category: 1, status: 1 });
 BlogPostSchema.index({ tags: 1 });
@@ -159,4 +159,3 @@ BlogPostSchema.index({ author: 1 });
 BlogPostSchema.index({ title: "text", excerpt: "text" });
 
 module.exports = BlogPostSchema;
-

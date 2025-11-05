@@ -43,7 +43,7 @@ const setupSessionCleanup = () => {
 // ============================================================
 const setupCronjobs = () => {
   // === RETURN REQUEST CRONJOBS ===
-  
+
   // 1. Auto-reject return requests quá hạn - Chạy mỗi 6 giờ
   setInterval(() => {
     returnRequestJob.autoRejectExpiredRequests().catch((error) => {
@@ -114,10 +114,12 @@ const setupCronjobs = () => {
 const app = express();
 
 // Các middleware
-app.use(cors({
-  origin: "http://localhost:5173",
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+  })
+);
 
 app.use(helmet());
 app.use(express.json());

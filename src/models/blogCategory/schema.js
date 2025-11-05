@@ -46,8 +46,7 @@ const BlogCategorySchema = new mongoose.Schema(
 );
 
 // Index
-BlogCategorySchema.index({ slug: 1 });
+// Note: slug index is automatically created by unique: true in schema definition
 BlogCategorySchema.index({ isActive: 1, deletedAt: 1 });
 
 module.exports = BlogCategorySchema;
-
