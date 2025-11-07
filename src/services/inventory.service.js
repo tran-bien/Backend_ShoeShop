@@ -416,7 +416,22 @@ const getInventoryList = async (filter = {}, options = {}) => {
 
   const [items, total] = await Promise.all([
     InventoryItem.find(query)
-      .populate("product variant size")
+      .populate({
+        path: "product",
+        select: "name slug brand category",
+      })
+      .populate({
+        path: "variant",
+        select: "color imagesvariant",
+        populate: {
+          path: "color",
+          select: "name hexCode",
+        },
+      })
+      .populate({
+        path: "size",
+        select: "value",
+      })
       .sort(sort)
       .skip(skip)
       .limit(limit),
@@ -441,9 +456,23 @@ const getInventoryList = async (filter = {}, options = {}) => {
  * @throws {ApiError} 404 nếu không tìm thấy
  */
 const getInventoryById = async (id) => {
-  const inventory = await InventoryItem.findById(id).populate(
-    "product variant size"
-  );
+  const inventory = await InventoryItem.findById(id)
+    .populate({
+      path: "product",
+      select: "name slug brand category",
+    })
+    .populate({
+      path: "variant",
+      select: "color imagesvariant",
+      populate: {
+        path: "color",
+        select: "name hexCode",
+      },
+    })
+    .populate({
+      path: "size",
+      select: "value",
+    });
 
   if (!inventory) {
     throw new ApiError(404, "Không tìm thấy mục tồn kho");

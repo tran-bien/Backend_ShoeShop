@@ -68,18 +68,16 @@ const inventoryTransactionSchema = new mongoose.Schema(
     reason: {
       type: String,
       enum: [
-        "initial_stock",
-        "restock",
-        "sale",
-        "return",
-        "exchange",
-        "damage",
-        "adjustment",
-        "cancelled",
-        "refunded",
-        "other",
+        "restock", // Nhập hàng thường
+        "manual", // Xuất/Nhập thủ công
+        "sale", // Bán hàng (qua order)
+        "return", // Trả hàng
+        "damage", // Hàng hư hỏng
+        "lost", // Hàng mất
+        "adjustment", // Điều chỉnh kiểm kê
+        "other", // Khác
       ],
-      required: true,
+      default: "manual",
     },
     // Reference đơn giản - ObjectId tham chiếu đến Order/ReturnRequest
     reference: {

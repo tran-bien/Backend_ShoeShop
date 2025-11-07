@@ -47,17 +47,19 @@ const stockIn = asyncHandler(async (req, res) => {
  * @route POST /api/v1/admin/inventory/stock-out
  */
 const stockOut = asyncHandler(async (req, res) => {
-  const { productId, variantId, sizeId, quantity, note, orderId } = req.body;
+  const { productId, variantId, sizeId, quantity, note, reason } = req.body;
 
-  const result = await inventoryService.stockOut({
-    productId,
-    variantId,
-    sizeId,
-    quantity,
-    note,
-    orderId,
-    createdBy: req.user._id,
-  });
+  const result = await inventoryService.stockOut(
+    {
+      product: productId,
+      variant: variantId,
+      size: sizeId,
+      quantity,
+      reason: reason || "manual",
+      notes: note,
+    },
+    req.user._id
+  );
 
   res.status(200).json({
     success: true,
@@ -73,16 +75,19 @@ const stockOut = asyncHandler(async (req, res) => {
  * @route POST /api/v1/admin/inventory/adjust
  */
 const adjustStock = asyncHandler(async (req, res) => {
-  const { productId, variantId, sizeId, newQuantity, reason } = req.body;
+  const { productId, variantId, sizeId, newQuantity, reason, note } = req.body;
 
-  const result = await inventoryService.adjustStock({
-    productId,
-    variantId,
-    sizeId,
-    newQuantity,
-    reason,
-    createdBy: req.user._id,
-  });
+  const result = await inventoryService.adjustStock(
+    {
+      product: productId,
+      variant: variantId,
+      size: sizeId,
+      newQuantity,
+      reason: reason || "adjustment",
+      notes: note,
+    },
+    req.user._id
+  );
 
   res.status(200).json({
     success: true,
@@ -100,15 +105,18 @@ const getInventoryList = asyncHandler(async (req, res) => {
   const { page, limit, productId, lowStock, outOfStock, sortBy, sortOrder } =
     req.query;
 
-  const result = await inventoryService.getInventoryList({
-    page: parseInt(page) || 1,
-    limit: parseInt(limit) || 20,
-    productId,
-    lowStock: lowStock === "true",
-    outOfStock: outOfStock === "true",
-    sortBy,
-    sortOrder,
-  });
+  const result = await inventoryService.getInventoryList(
+    {},
+    {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 20,
+      product: productId,
+      lowStock: lowStock === "true",
+      outOfStock: outOfStock === "true",
+      sortBy,
+      sortOrder,
+    }
+  );
 
   res.status(200).json({
     success: true,
@@ -148,17 +156,21 @@ const getTransactionHistory = asyncHandler(async (req, res) => {
     type,
     startDate,
     endDate,
+    sortBy,
+    sortOrder,
   } = req.query;
 
   const result = await inventoryService.getTransactionHistory({
     page: parseInt(page) || 1,
-    limit: parseInt(limit) || 20,
+    limit: parseInt(limit) || 50,
     productId,
     variantId,
     sizeId,
     type,
     startDate,
     endDate,
+    sortBy,
+    sortOrder,
   });
 
   res.status(200).json({

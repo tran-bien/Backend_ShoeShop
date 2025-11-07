@@ -88,9 +88,22 @@ exports.validateStockOut = [
     .isInt({ min: 1 })
     .withMessage("Số lượng phải là số nguyên dương"),
 
-  body("note").optional().isString(),
+  body("reason")
+    .optional()
+    .isString()
+    .isIn([
+      "restock",
+      "manual",
+      "sale",
+      "return",
+      "damage",
+      "lost",
+      "adjustment",
+      "other",
+    ])
+    .withMessage("Lý do xuất kho không hợp lệ"),
 
-  body("orderId").optional().isMongoId().withMessage("Order ID không hợp lệ"),
+  body("note").optional().isString(),
 ];
 
 /**
@@ -121,7 +134,22 @@ exports.validateAdjustStock = [
     .isInt({ min: 0 })
     .withMessage("Số lượng mới phải >= 0"),
 
-  body("reason").notEmpty().withMessage("Lý do không được để trống").isString(),
+  body("reason")
+    .optional()
+    .isString()
+    .isIn([
+      "restock",
+      "manual",
+      "sale",
+      "return",
+      "damage",
+      "lost",
+      "adjustment",
+      "other",
+    ])
+    .withMessage("Lý do điều chỉnh không hợp lệ"),
+
+  body("note").optional().isString(),
 ];
 
 /**
