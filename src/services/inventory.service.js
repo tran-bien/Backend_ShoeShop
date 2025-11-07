@@ -61,6 +61,11 @@ const calculatePrice = (
  * @returns {InventoryItem}
  */
 const getOrCreateInventoryItem = async (product, variant, size) => {
+  console.log("===== getOrCreateInventoryItem DEBUG =====");
+  console.log("Received product:", product);
+  console.log("Received variant:", variant);
+  console.log("Received size:", size);
+
   let inventoryItem = await InventoryItem.findOne({
     product,
     variant,
@@ -73,8 +78,12 @@ const getOrCreateInventoryItem = async (product, variant, size) => {
       Variant.findById(variant)
         .populate("color", "name")
         .select("gender color"),
-      Size.findById(size).select("value"),
+      Size.findById(size).select("value").setOptions({ includeDeleted: true }),
     ]);
+
+    console.log("Found productDoc:", productDoc);
+    console.log("Found variantDoc:", variantDoc);
+    console.log("Found sizeDoc:", sizeDoc);
 
     if (!productDoc || !variantDoc || !sizeDoc) {
       throw new ApiError(404, "Không tìm thấy thông tin product/variant/size");
@@ -162,18 +171,12 @@ const stockIn = async (data, performedBy) => {
   }
 
   if (typeof costPrice !== "number" || isNaN(costPrice)) {
-    throw new ApiError(
-      400,
-      "Giá nhập (costPrice) phải là một số hợp lệ"
-    );
+    throw new ApiError(400, "Giá nhập (costPrice) phải là một số hợp lệ");
   }
 
   // Validate quantity
   if (!quantity || quantity <= 0) {
-    throw new ApiError(
-      400,
-      "Số lượng nhập (quantity) phải lớn hơn 0"
-    );
+    throw new ApiError(400, "Số lượng nhập (quantity) phải lớn hơn 0");
   }
 
   const inventoryItem = await getOrCreateInventoryItem(product, variant, size);

@@ -8,17 +8,30 @@ const inventoryService = require("../../services/inventory.service");
  * @route POST /api/v1/admin/inventory/stock-in
  */
 const stockIn = asyncHandler(async (req, res) => {
-  const { productId, variantId, sizeId, quantity, costPrice, note } = req.body;
-
-  const result = await inventoryService.stockIn({
+  const {
     productId,
     variantId,
     sizeId,
     quantity,
     costPrice,
+    targetProfitPercent,
+    percentDiscount,
     note,
-    createdBy: req.user._id,
-  });
+  } = req.body;
+
+  const result = await inventoryService.stockIn(
+    {
+      product: productId,
+      variant: variantId,
+      size: sizeId,
+      quantity,
+      costPrice,
+      targetProfitPercent,
+      percentDiscount,
+      notes: note,
+    },
+    req.user._id
+  );
 
   res.status(201).json({
     success: true,
