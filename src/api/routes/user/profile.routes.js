@@ -14,7 +14,7 @@ router.use(protect);
  * @desc    Lấy thông tin cá nhân
  * @access  Private
  */
-router.get("/profile", profileController.getUserProfile);
+router.get("/", profileController.getUserProfile);
 
 /**
  * @route   PUT /api/v1/users/profile
@@ -22,7 +22,7 @@ router.get("/profile", profileController.getUserProfile);
  * @access  Private
  */
 router.put(
-  "/profile",
+  "/",
   validate(userValidator.validateUpdateProfile),
   profileController.updateUserProfile
 );

@@ -14,7 +14,7 @@ router.use(protect);
  * @desc    Lấy danh sách đánh giá của người dùng hiện tại
  * @access  Private
  */
-router.get("/reviews/my-reviews", reviewController.getUserReviews);
+router.get("/my-reviews", reviewController.getUserReviews);
 
 /**
  * @route   POST /api/v1/users/reviews
@@ -22,7 +22,7 @@ router.get("/reviews/my-reviews", reviewController.getUserReviews);
  * @access  Private
  */
 router.post(
-  "/reviews",
+  "/",
   validate(reviewValidator.validateCreateReview),
   reviewController.createReview
 );
@@ -32,10 +32,7 @@ router.post(
  * @desc    Lấy danh sách sản phẩm có thể đánh giá từ đơn hàng đã giao
  * @access  Private
  */
-router.get(
-  "/reviews/reviewable-products",
-  reviewController.getReviewableProducts
-);
+router.get("/reviewable-products", reviewController.getReviewableProducts);
 
 /**
  * @route   PUT /api/v1/users/reviews/:reviewId
@@ -43,7 +40,7 @@ router.get(
  * @access  Private
  */
 router.put(
-  "/reviews/:reviewId",
+  "/:reviewId",
   reviewValidator.validateReviewId,
   reviewValidator.validateReviewOwnership,
   validate(reviewValidator.validateUpdateReview),
@@ -56,7 +53,7 @@ router.put(
  * @access  Private
  */
 router.delete(
-  "/reviews/:reviewId",
+  "/:reviewId",
   reviewValidator.validateReviewId,
   reviewValidator.validateReviewOwnership,
   reviewController.deleteReview
@@ -68,7 +65,7 @@ router.delete(
  * @access  Private
  */
 router.post(
-  "/reviews/:reviewId/like",
+  "/:reviewId/like",
   validate(reviewValidator.validateLikeReview),
   reviewController.likeReview
 );

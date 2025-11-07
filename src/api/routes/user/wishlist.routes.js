@@ -14,7 +14,7 @@ router.use(protect);
  * @desc    Lấy danh sách yêu thích
  * @access  Private
  */
-router.get("/wishlist", wishlistController.getUserWishlist);
+router.get("/", wishlistController.getUserWishlist);
 
 /**
  * @route   POST /api/v1/users/wishlist
@@ -22,7 +22,7 @@ router.get("/wishlist", wishlistController.getUserWishlist);
  * @access  Private
  */
 router.post(
-  "/wishlist",
+  "/",
   validate(userValidator.validateAddToWishlist),
   wishlistController.addToWishlist
 );
@@ -32,6 +32,6 @@ router.post(
  * @desc    Xóa sản phẩm khỏi danh sách yêu thích
  * @access  Private
  */
-router.delete("/wishlist/:id", wishlistController.removeFromWishlist);
+router.delete("/:id", wishlistController.removeFromWishlist);
 
 module.exports = router;
