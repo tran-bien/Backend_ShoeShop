@@ -4,18 +4,6 @@ const { baseStyles } = require("@utils/emailTemplates");
 
 require("dotenv").config();
 
-// Debug: Log biến môi trường email
-console.log("=== EMAIL CONFIG DEBUG ===");
-console.log("EMAIL_SERVICE:", process.env.EMAIL_SERVICE);
-console.log("EMAIL_USER:", process.env.EMAIL_USER);
-console.log("EMAIL_PASSWORD exists:", !!process.env.EMAIL_PASSWORD);
-console.log("EMAIL_PASSWORD length:", process.env.EMAIL_PASSWORD?.length);
-console.log(
-  "EMAIL_PASSWORD value (first 4 chars):",
-  process.env.EMAIL_PASSWORD?.substring(0, 4)
-);
-console.log("========================");
-
 // Kiểm tra biến môi trường
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
   console.error(

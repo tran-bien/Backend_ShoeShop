@@ -2190,6 +2190,7 @@ const productService = {
     // Tính stock info và rating info cho từng sản phẩm
     const inventoryService = require("@services/inventory.service");
     const reviewService = require("@services/review.service");
+    const variantService = require("@services/variant.service");
     const productsWithStockAndRating = await Promise.all(
       limitedProducts.map(async (product) => {
         const productObj = product.toObject
@@ -2211,6 +2212,20 @@ const productService = {
         productObj.numReviews = ratingInfo.numReviews;
         productObj.averageRating = ratingInfo.rating;
         productObj.reviewCount = ratingInfo.numReviews;
+
+        // CRITICAL FIX: Tính inventorySummary cho mỗi variant để có priceRange
+        if (productObj.variants && productObj.variants.length > 0) {
+          productObj.variants = await Promise.all(
+            productObj.variants.map(async (variant) => {
+              const inventorySummary =
+                await variantService.calculateInventorySummary(variant);
+              return {
+                ...variant,
+                inventorySummary,
+              };
+            })
+          );
+        }
 
         return transformProductForPublicList(productObj);
       })
@@ -2261,6 +2276,7 @@ const productService = {
     // Tính stock info và rating info cho từng sản phẩm
     const inventoryService = require("@services/inventory.service");
     const reviewService = require("@services/review.service");
+    const variantService = require("@services/variant.service");
     const productsWithStockAndRating = await Promise.all(
       limitedProducts.map(async (product) => {
         const productObj = product.toObject
@@ -2282,6 +2298,20 @@ const productService = {
         productObj.numReviews = ratingInfo.numReviews;
         productObj.averageRating = ratingInfo.rating;
         productObj.reviewCount = ratingInfo.numReviews;
+
+        // CRITICAL FIX: Tính inventorySummary cho mỗi variant để có priceRange
+        if (productObj.variants && productObj.variants.length > 0) {
+          productObj.variants = await Promise.all(
+            productObj.variants.map(async (variant) => {
+              const inventorySummary =
+                await variantService.calculateInventorySummary(variant);
+              return {
+                ...variant,
+                inventorySummary,
+              };
+            })
+          );
+        }
 
         return transformProductForPublicList(productObj);
       })
@@ -2423,15 +2453,57 @@ const productService = {
       const limitedProducts = sortedProducts.slice(0, Number(limit));
 
       // 5. Chuyển đổi và trả về kết quả
-      const result = {
-        success: true,
-        products: limitedProducts.map((product) => {
-          const transformedProduct = transformProductForPublicList(product);
+      const inventoryService = require("@services/inventory.service");
+      const reviewService = require("@services/review.service");
+      const variantService = require("@services/variant.service");
+
+      const transformedProducts = await Promise.all(
+        limitedProducts.map(async (product) => {
+          const productObj = product.toObject
+            ? product.toObject()
+            : { ...product };
+
+          // Tính stock info
+          const stockInfo = await inventoryService.getProductStockInfo(
+            product._id
+          );
+          productObj.totalQuantity = stockInfo.totalQuantity;
+          productObj.stockStatus = stockInfo.stockStatus;
+
+          // Tính rating info
+          const ratingInfo = await reviewService.getProductRatingInfo(
+            product._id
+          );
+          productObj.rating = ratingInfo.rating;
+          productObj.numReviews = ratingInfo.numReviews;
+          productObj.averageRating = ratingInfo.rating;
+          productObj.reviewCount = ratingInfo.numReviews;
+
+          // ✅ CRITICAL FIX: Tính inventorySummary cho mỗi variant để có priceRange
+          if (productObj.variants && productObj.variants.length > 0) {
+            productObj.variants = await Promise.all(
+              productObj.variants.map(async (variant) => {
+                const inventorySummary =
+                  await variantService.calculateInventorySummary(variant);
+                return {
+                  ...variant,
+                  inventorySummary,
+                };
+              })
+            );
+          }
+
+          const transformedProduct = transformProductForPublicList(productObj);
           // Thêm thông tin số lượng đã bán vào kết quả để frontend có thể hiển thị
           transformedProduct.totalSold =
             productSalesMap[product._id.toString()] || 0;
           return transformedProduct;
-        }),
+        })
+      );
+
+      const result = {
+        success: true,
+        products: transformedProducts,
       };
 
       return result;
