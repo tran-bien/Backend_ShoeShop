@@ -2,13 +2,54 @@ const nodemailer = require("nodemailer");
 const ApiError = require("@utils/ApiError");
 const { baseStyles } = require("@utils/emailTemplates");
 
+require("dotenv").config();
+
+// Debug: Log biến môi trường email
+console.log("=== EMAIL CONFIG DEBUG ===");
+console.log("EMAIL_SERVICE:", process.env.EMAIL_SERVICE);
+console.log("EMAIL_USER:", process.env.EMAIL_USER);
+console.log("EMAIL_PASSWORD exists:", !!process.env.EMAIL_PASSWORD);
+console.log("EMAIL_PASSWORD length:", process.env.EMAIL_PASSWORD?.length);
+console.log(
+  "EMAIL_PASSWORD value (first 4 chars):",
+  process.env.EMAIL_PASSWORD?.substring(0, 4)
+);
+console.log("========================");
+
+// Kiểm tra biến môi trường
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+  console.error(
+    "❌ CRITICAL: EMAIL_USER hoặc EMAIL_PASSWORD chưa được cấu hình trong .env"
+  );
+  throw new Error("Missing email configuration in .env file");
+}
+
+// Loại bỏ dấu ngoặc kép và khoảng trắng thừa (nếu có)
+const emailPassword = process.env.EMAIL_PASSWORD.replace(/['"]/g, "").trim();
+console.log("📧 Cleaned password length:", emailPassword.length);
+
 // Khởi tạo transporter (sẽ được shared giữa utils và service)
 const transporter = nodemailer.createTransport({
   service: process.env.EMAIL_SERVICE || "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false, // true for 465, false for other ports
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
+    pass: emailPassword, // Sử dụng password đã được clean
   },
+  tls: {
+    rejectUnauthorized: false,
+  },
+});
+
+// Verify transporter configuration
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("❌ Email transporter verification failed:", error);
+  } else {
+    console.log("✅ Email server is ready to send messages");
+  }
 });
 
 // Export transporter để tái sử dụng
@@ -439,6 +480,9 @@ exports.newsletterEmailTemplate = (
  * Helper function: Gửi email xác nhận OTP
  */
 exports.sendVerificationEmail = async (email, name, otp) => {
+  console.log(`📧 Attempting to send verification email to: ${email}`);
+  console.log(`📧 OTP: ${otp}`);
+
   const mailOptions = {
     from: `"Shoe Shop" <${process.env.EMAIL_USER}>`,
     to: email,
@@ -447,9 +491,25 @@ exports.sendVerificationEmail = async (email, name, otp) => {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    console.log("✅ Verification email sent successfully:", info.messageId);
+    console.log("✅ Accepted:", info.accepted);
+    console.log("✅ Response:", info.response);
+    return info;
   } catch (error) {
-    console.error("Error sending verification email:", error);
+    console.error("❌ Error sending verification email:", error);
+    console.error("❌ Error code:", error.code);
+    console.error("❌ Error message:", error.message);
+    console.error("❌ Error stack:", error.stack);
+
+    // Kiểm tra lỗi cụ thể
+    if (error.code === "EAUTH") {
+      throw new ApiError(
+        500,
+        "Lỗi xác thực email. Vui lòng kiểm tra cấu hình EMAIL_USER và EMAIL_PASSWORD trong file .env"
+      );
+    }
+
     throw new ApiError(500, "Không thể gửi email xác nhận. Vui lòng thử lại!");
   }
 };

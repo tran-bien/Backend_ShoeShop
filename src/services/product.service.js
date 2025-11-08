@@ -91,6 +91,7 @@ const createVariantSummary = (variants) => {
             _id: variant.color._id,
             name: variant.color.name,
             code: variant.color.code,
+            hexCode: variant.color.code, // Map code -> hexCode for FE compatibility
             type: variant.color.type,
             colors: variant.color.colors || [],
           });
@@ -282,13 +283,20 @@ const transformProductForPublic = (product) => {
     publicData.priceRange = {
       min: priceInfo.minPrice || 0,
       max: Math.max(
-        ...productObj.variants.map((v) => v.priceFinal || v.price || 0),
+        ...productObj.variants.map(
+          (v) =>
+            v.inventorySummary?.pricing?.maxPrice ||
+            v.inventorySummary?.pricing?.minPrice ||
+            0
+        ),
         priceInfo.minPrice || 0
       ),
       isSinglePrice:
         productObj.variants.length === 1 ||
         productObj.variants.every(
-          (v) => (v.priceFinal || v.price || 0) === (priceInfo.minPrice || 0)
+          (v) =>
+            (v.inventorySummary?.pricing?.minPrice || 0) ===
+            (priceInfo.minPrice || 0)
         ),
     };
 
@@ -1762,6 +1770,10 @@ const productService = {
             isAvailable: size.isAvailable, //  FIXED: was size.isSizeAvailable
             isLowStock: size.isLowStock, // ADDED: expose low stock status
             isOutOfStock: size.isOutOfStock, //  ADDED: expose out of stock status
+            // CRITICAL FIX: Add pricing information from InventoryItem
+            price: variant.price || 0, // calculatedPrice from inventory
+            finalPrice: variant.priceFinal || 0, // calculatedPriceFinal from inventory
+            discountPercent: variant.percentDiscount || 0, // percentDiscount from inventory
           };
         });
 
@@ -1992,6 +2004,10 @@ const productService = {
             isAvailable: size.isAvailable, // FIXED: was size.isSizeAvailable
             isLowStock: size.isLowStock, // ADDED
             isOutOfStock: size.isOutOfStock, // ADDED
+            // ✅ CRITICAL FIX: Add pricing information from InventoryItem
+            price: variant.price || 0, // calculatedPrice from inventory
+            finalPrice: variant.priceFinal || 0, // calculatedPriceFinal from inventory
+            discountPercent: variant.percentDiscount || 0, // percentDiscount from inventory
           };
         });
 
