@@ -72,6 +72,12 @@ const createVariantSummary = (variants) => {
   if (variants && variants.length > 0) {
     variantSummary.total = variants.length;
 
+    // Variables to calculate price range and discount across variants
+    let minPrice = null;
+    let maxPrice = null;
+    let hasDiscount = false;
+    let maxDiscountPercent = 0;
+
     variants.forEach((variant) => {
       // Đếm variants active
       if (variant.isActive) {
@@ -91,7 +97,13 @@ const createVariantSummary = (variants) => {
             _id: variant.color._id,
             name: variant.color.name,
             code: variant.color.code,
-            hexCode: variant.color.code, // Map code -> hexCode for FE compatibility
+            // Map code -> hexCode for FE compatibility. If code is missing (e.g. half type),
+            // fallback to first color in colors array when available
+            hexCode:
+              variant.color.code ||
+              (Array.isArray(variant.color.colors) &&
+                variant.color.colors[0]) ||
+              null,
             type: variant.color.type,
             colors: variant.color.colors || [],
           });
@@ -109,16 +121,47 @@ const createVariantSummary = (variants) => {
       }
 
       // REMOVED: variant.priceFinal/price/percentDiscount đã bị xóa khỏi schema
-      // Giá được quản lý bởi InventoryItem, phải dùng inventoryService.getVariantPricing()
-      // để lấy thông tin giá chính xác
+      // Giá được quản lý bởi InventoryItem, try to extract pricing from
+      // variant.inventorySummary if available so variantSummary.priceRange can be built
+      const pricing = variant.inventorySummary?.pricing || {};
+      const vMin =
+        pricing.minPrice ??
+        pricing.calculatedPrice ??
+        pricing.sellingPrice ??
+        null;
+      const vMax =
+        pricing.maxPrice ??
+        pricing.calculatedPrice ??
+        pricing.finalPrice ??
+        null;
+      const vPercent = pricing.percentDiscount ?? pricing.discountPercent ?? 0;
 
-      // Note: buildVariantSummary() chỉ dùng để đếm colors/sizes
-      // Không dùng để tính priceRange - phải dùng InventoryService
+      if (vMin !== null && vMin !== undefined) {
+        if (minPrice === null || vMin < minPrice) minPrice = vMin;
+      }
+      if (vMax !== null && vMax !== undefined) {
+        if (maxPrice === null || vMax > maxPrice) maxPrice = vMax;
+      }
+      if (vPercent && vPercent > 0) {
+        hasDiscount = true;
+        if (vPercent > maxDiscountPercent) maxDiscountPercent = vPercent;
+      }
+
+      // Note: If inventory pricing is not populated here, transformProductForPublic
+      // or calling code should populate inventory summaries before calling this helper.
     });
 
     // Cập nhật số lượng màu và kích thước
     variantSummary.colorCount = colorSet.size;
     variantSummary.sizeCount = sizeSet.size;
+
+    // Assign computed priceRange and discount info
+    variantSummary.priceRange.min = minPrice;
+    variantSummary.priceRange.max = maxPrice;
+    variantSummary.priceRange.isSinglePrice =
+      minPrice !== null && maxPrice !== null && minPrice === maxPrice;
+    variantSummary.discount.hasDiscount = hasDiscount;
+    variantSummary.discount.maxPercent = maxDiscountPercent;
 
     // Kiểm tra xem tất cả các biến thể có cùng mức giá hay không
     variantSummary.priceRange.isSinglePrice =
