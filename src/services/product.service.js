@@ -235,25 +235,11 @@ const transformProductForPublic = (product) => {
   // Xử lý variants cho public
   if (productObj.variants && productObj.variants.length > 0) {
     publicData.variants = productObj.variants
-      .filter((v) => v.isActive)
+      // ✅ FIX: Không filter isActive nữa vì variants đã được filter khi query
+      // Filter này có thể loại bỏ variants valid do field isActive bị undefined sau khi map
+      // .filter((v) => v.isActive)
+      .filter((v) => v.isActive !== false) // Chỉ loại bỏ variants có isActive === false
       .map((variant) => {
-        // FIXED: inventorySummary phải được populate TRƯỚC KHI gọi transform
-        // Không thể gọi async function trong map() synchronous
-        const inventorySummary = variant.inventorySummary || {
-          totalQuantity: 0,
-          availableSizes: 0,
-          totalSizes: 0,
-          stockStatus: "out_of_stock",
-          sizeInventory: [],
-          pricing: {
-            minPrice: 0,
-            maxPrice: 0,
-            hasDiscount: false,
-            maxDiscountPercent: 0,
-            isSinglePrice: true,
-          },
-        };
-
         return {
           _id: variant._id,
           color: {
@@ -263,11 +249,9 @@ const transformProductForPublic = (product) => {
             type: variant.color?.type,
             colors: variant.color?.colors || [],
           },
-          // REMOVED: variant.price, variant.percentDiscount, variant.priceFinal đã xóa
-          // Giá được lấy từ InventoryItem thông qua inventorySummary
           gender: variant.gender,
           images: variant.imagesvariant,
-          inventorySummary,
+          // inventorySummary REMOVED - thông tin đã có trong variants object và inventoryMatrix
           sizes: variant.sizes?.map((size) => ({
             _id: size._id,
             sizeInfo: size.size
@@ -420,21 +404,37 @@ const transformProductForPublicList = (product) => {
  * @param {Object} product - Sản phẩm đã được populate các thông tin liên quan
  */
 const getProductAttributesHelper = async (product) => {
+  // Lấy khoảng giá từ InventoryItem (luôn cần lấy, dù có variant hay không)
+  const inventoryService = require("@services/inventory.service");
+  const productPricing = await inventoryService.getProductPricing(product._id);
+
+  const basePriceRange = {
+    min: productPricing.min || 0,
+    max: productPricing.max || 0,
+  };
+
   // Kiểm tra nếu sản phẩm không có variants
   if (!product.variants || product.variants.length === 0) {
     return {
       colors: [],
       sizes: [],
-      priceRange: { min: 0, max: 0 },
+      priceRange: basePriceRange, // FIX: Trả về giá từ InventoryItem thay vì {min:0, max:0}
       genders: [],
       sizesCountByColor: {},
       sizeInventoryByColor: {},
       variantsByColor: {},
+      variantsByGender: {},
       inventoryMatrix: {
         colors: [],
         sizes: [],
         genders: [],
         stock: {},
+        summary: {
+          byGender: {},
+          byColor: {},
+          bySize: {},
+          total: 0,
+        },
       },
     };
   }
@@ -532,14 +532,8 @@ const getProductAttributesHelper = async (product) => {
   const sizes = Object.values(availableSizes);
   const genders = Array.from(availableGenders);
 
-  // Lấy khoảng giá từ InventoryItem
-  const inventoryService = require("@services/inventory.service");
-  const productPricing = await inventoryService.getProductPricing(product._id);
-
-  const priceRange = {
-    min: productPricing.min || 0,
-    max: productPricing.max || 0,
-  };
+  // ✅ Sử dụng basePriceRange đã tính ở đầu hàm (tránh duplicate API call)
+  const priceRange = basePriceRange;
 
   // Chuyển đổi sizeInventoryByColor từ object sang array
   const formattedSizeInventory = {};
@@ -620,17 +614,22 @@ const getProductAttributesHelper = async (product) => {
     });
   });
 
-  // Thêm thông tin tổng hợp tồn kho
+  // Thêm thông tin tổng hợp tồn kho với populated data
   inventoryMatrix.summary = {
-    byGender: {},
-    byColor: {},
-    bySize: {},
+    byGender: [],
+    byColor: [],
+    bySize: [],
     total: 0,
   };
 
+  // Temporary maps để tính toán quantities
+  const genderQuantities = {};
+  const colorQuantities = {};
+  const sizeQuantities = {};
+
   // Tính tổng số lượng tồn kho theo giới tính
   genders.forEach((gender) => {
-    inventoryMatrix.summary.byGender[gender] = 0;
+    genderQuantities[gender] = 0;
 
     colors.forEach((color) => {
       const colorId = color._id.toString();
@@ -641,23 +640,46 @@ const getProductAttributesHelper = async (product) => {
           inventoryMatrix.stock[gender][colorId][sizeId].quantity;
 
         // Cộng dồn tổng số lượng
-        inventoryMatrix.summary.byGender[gender] += quantity;
+        genderQuantities[gender] += quantity;
         inventoryMatrix.summary.total += quantity;
 
         // Tính tổng số lượng theo màu
-        if (!inventoryMatrix.summary.byColor[colorId]) {
-          inventoryMatrix.summary.byColor[colorId] = 0;
+        if (!colorQuantities[colorId]) {
+          colorQuantities[colorId] = 0;
         }
-        inventoryMatrix.summary.byColor[colorId] += quantity;
+        colorQuantities[colorId] += quantity;
 
         // Tính tổng số lượng theo kích thước
-        if (!inventoryMatrix.summary.bySize[sizeId]) {
-          inventoryMatrix.summary.bySize[sizeId] = 0;
+        if (!sizeQuantities[sizeId]) {
+          sizeQuantities[sizeId] = 0;
         }
-        inventoryMatrix.summary.bySize[sizeId] += quantity;
+        sizeQuantities[sizeId] += quantity;
       });
     });
   });
+
+  // ✅ Populate summary với objects thay vì chỉ có IDs
+  inventoryMatrix.summary.byGender = genders.map((gender) => ({
+    id: gender,
+    name: gender === "male" ? "Nam" : gender === "female" ? "Nữ" : "Unisex",
+    quantity: genderQuantities[gender] || 0,
+  }));
+
+  inventoryMatrix.summary.byColor = colors.map((color) => ({
+    id: color._id.toString(),
+    name: color.name,
+    code: color.code,
+    type: color.type,
+    colors: color.colors,
+    quantity: colorQuantities[color._id.toString()] || 0,
+  }));
+
+  inventoryMatrix.summary.bySize = sizes.map((size) => ({
+    id: size._id.toString(),
+    value: size.value,
+    description: size.description,
+    quantity: sizeQuantities[size._id.toString()] || 0,
+  }));
 
   return {
     colors,
@@ -1409,7 +1431,7 @@ const productService = {
                     return Object.entries(condition).reduce(
                       (result, [key, value]) => {
                         if (key === "priceFinal") {
-                          // ✅ REMOVED: variant.priceFinal không tồn tại
+                          // REMOVED: variant.priceFinal không tồn tại
                           // Price filtering được xử lý riêng thông qua InventoryItem
                           // Skip price condition trong variant filter
                           // (Price range filter được handle bởi filter.service.js)
@@ -1650,7 +1672,7 @@ const productService = {
         productWithRating.rating = ratingInfo.rating;
         productWithRating.numReviews = ratingInfo.numReviews;
 
-        // ✅ CRITICAL FIX: Tính inventorySummary cho mỗi variant trước khi transform
+        // CRITICAL FIX: Tính inventorySummary cho mỗi variant trước khi transform
         if (
           productWithRating.variants &&
           productWithRating.variants.length > 0
@@ -1689,6 +1711,29 @@ const productService = {
    * @param {String} id ID của sản phẩm
    */
   getPublicProductById: async (id) => {
+    // ✅ FIX: Lấy product raw trước để debug variants array
+    const productRaw = await Product.findOne({
+      _id: id,
+      isActive: true,
+      deletedAt: null,
+    });
+
+    if (!productRaw) {
+      throw new ApiError(404, `Không tìm thấy sản phẩm`);
+    }
+
+    // ✅ FIX: Query variants trực tiếp từ Variant model thay vì dùng populate
+    // Vì populate với match có thể filter quá strict
+    const Variant = require("@models").Variant;
+    const activeVariants = await Variant.find({
+      product: id,
+      isActive: true,
+      deletedAt: null,
+    })
+      .populate("color", "name code type colors")
+      .populate("sizes.size", "value description");
+
+    // Populate category, brand, tags
     const product = await Product.findOne({
       _id: id,
       isActive: true,
@@ -1705,19 +1750,14 @@ const productService = {
         match: { isActive: true, deletedAt: null },
       },
       {
-        path: "variants",
+        path: "tags",
+        select: "name type description",
         match: { isActive: true, deletedAt: null },
-        select: "color gender imagesvariant sizes",
-        populate: [
-          { path: "color", select: "name code type colors" },
-          { path: "sizes.size", select: "value description" },
-        ],
       },
     ]);
 
-    if (!product) {
-      throw new ApiError(404, `Không tìm thấy sản phẩm`);
-    }
+    // ✅ Gán variants đã query trực tiếp vào product
+    product.variants = activeVariants;
 
     // GET INVENTORY DATA FOR ALL VARIANTS
     const inventoryService = require("@services/inventory.service");
@@ -1733,56 +1773,53 @@ const productService = {
     const inventoryData = await Promise.all(inventoryDataPromises);
 
     // MAP INVENTORY DATA TO VARIANTS
-    product.variants = product.variants.map((v) => {
-      const variantObj = v.toObject ? v.toObject() : { ...v };
+    // ✅ MAP INVENTORY DATA TO VARIANTS - Gán trực tiếp thay vì tạo object mới
+    for (let i = 0; i < product.variants.length; i++) {
+      const variant = product.variants[i];
       const inventory = inventoryData.find(
-        (i) => i.variantId === variantObj._id.toString()
+        (inv) => inv.variantId === variant._id.toString()
       );
 
-      // Map sizes with inventory quantities
-      const sizesWithInventory = variantObj.sizes.map((size) => {
+      // ✅ CRITICAL FIX: Map inventory data INTO existing sizes structure
+      // Không tạo object mới, mà merge data vào structure hiện tại
+      variant.sizes.forEach((sizeItem) => {
         const sizeInventory = inventory?.quantities?.find(
-          (q) => q.sizeId.toString() === size.size._id.toString()
+          (q) => q.sizeId.toString() === sizeItem.size._id.toString()
         );
-        return {
-          size: size.size,
-          quantity: sizeInventory?.quantity || 0,
-          isAvailable: sizeInventory?.isAvailable || false,
-          isLowStock: sizeInventory?.isLowStock || false,
-          isOutOfStock: sizeInventory?.isOutOfStock || true,
-          sku: sizeInventory?.sku || null,
-        };
+
+        // Gán trực tiếp các field inventory vào sizeItem
+        sizeItem.quantity = sizeInventory?.quantity || 0;
+        sizeItem.isAvailable = sizeInventory?.isAvailable || false;
+        sizeItem.isLowStock = sizeInventory?.isLowStock || false;
+        sizeItem.isOutOfStock = sizeInventory?.isOutOfStock !== false; // Default to true if not found
+        if (sizeInventory?.sku) {
+          sizeItem.sku = sizeInventory.sku;
+        }
       });
 
-      // Add pricing from inventory
-      return {
-        ...variantObj,
-        sizes: sizesWithInventory,
-        price: inventory?.pricing?.calculatedPrice || 0,
-        priceFinal: inventory?.pricing?.calculatedPriceFinal || 0,
-        percentDiscount: inventory?.pricing?.percentDiscount || 0,
-      };
-    });
-
-    // ✅ CRITICAL FIX: Tính inventorySummary cho mỗi variant trước khi transform
-    const variantService = require("@services/variant.service");
-    product.variants = await Promise.all(
-      product.variants.map(async (variant) => {
-        const inventorySummary = await variantService.calculateInventorySummary(
-          variant
-        );
-        return {
-          ...variant,
-          inventorySummary,
-        };
-      })
-    );
+      // ✅ Gán pricing vào variant (không tạo object mới)
+      variant.price = inventory?.pricing?.calculatedPrice || 0;
+      variant.priceFinal = inventory?.pricing?.calculatedPriceFinal || 0;
+      variant.percentDiscount = inventory?.pricing?.percentDiscount || 0;
+    }
 
     // Tính toán ma trận tồn kho và thông tin cơ bản
     const productAttributes = await getProductAttributesHelper(product);
 
+    console.log(`[DEBUG getPublicProductById] productAttributes:`, {
+      colors: productAttributes.colors?.length,
+      sizes: productAttributes.sizes?.length,
+      genders: productAttributes.genders?.length,
+    });
+
     // Xử lý thông tin sản phẩm
     const publicProduct = transformProductForPublic(product);
+
+    console.log(
+      `[DEBUG getPublicProductById] publicProduct.variants: ${
+        publicProduct.variants?.length || 0
+      }`
+    );
 
     // Tạo collection ảnh từ tất cả các biến thể
     const variantImages = {};
@@ -1826,7 +1863,7 @@ const productService = {
           colorId: colorId,
           colorName: variant.color?.name || "",
           gender: gender,
-          // ✅ REMOVED: variant.price, variant.priceFinal, variant.percentDiscount đã xóa
+          // REMOVED: variant.price, variant.priceFinal, variant.percentDiscount đã xóa
           // Giá được lấy từ InventoryItem trong sizesWithQuantity
           sizes: sizesWithQuantity, // Thêm thông tin sizes chi tiết (có price từ InventoryItem)
           totalQuantity: sizesWithQuantity.reduce(
@@ -1908,6 +1945,24 @@ const productService = {
     publicProduct.averageRating = ratingInfo.rating;
     publicProduct.reviewCount = ratingInfo.numReviews;
 
+    // SYNC priceRange từ productAttributes vào publicProduct (trường hợp không có variant active)
+    if (
+      productAttributes.priceRange &&
+      productAttributes.priceRange.min > 0 &&
+      (!publicProduct.priceRange || publicProduct.priceRange.min === 0)
+    ) {
+      publicProduct.priceRange = productAttributes.priceRange;
+      publicProduct.price = productAttributes.priceRange.min;
+      publicProduct.originalPrice = productAttributes.priceRange.max;
+    }
+
+    // Lấy thông tin Size Guide (nếu có)
+    const SizeGuide = require("@models/sizeGuide");
+    const sizeGuide = await SizeGuide.findOne({
+      product: product._id,
+      isActive: true,
+    }).select("sizeChart measurementGuide");
+
     return {
       success: true,
       product: publicProduct,
@@ -1915,6 +1970,7 @@ const productService = {
       summary: summary,
       images: variantImages,
       variants: variantsInfo, // Thêm thông tin biến thể với sizes chi tiết
+      sizeGuide: sizeGuide || null, // Thêm size guide
     };
   },
 
@@ -1923,6 +1979,28 @@ const productService = {
    * @param {String} slug Slug của sản phẩm
    */
   getPublicProductBySlug: async (slug) => {
+    // ✅ FIX: Lấy product raw trước để debug variants array
+    const productRaw = await Product.findOne({
+      slug,
+      isActive: true,
+      deletedAt: null,
+    });
+
+    if (!productRaw) {
+      throw new ApiError(404, `Không tìm thấy sản phẩm`);
+    }
+
+    // ✅ FIX: Query variants trực tiếp từ Variant model thay vì dùng populate
+    const Variant = require("@models").Variant;
+    const activeVariants = await Variant.find({
+      product: productRaw._id,
+      isActive: true,
+      deletedAt: null,
+    })
+      .populate("color", "name code type colors")
+      .populate("sizes.size", "value description");
+
+    // Populate category, brand, tags
     const product = await Product.findOne({
       slug,
       isActive: true,
@@ -1939,19 +2017,14 @@ const productService = {
         match: { isActive: true, deletedAt: null },
       },
       {
-        path: "variants",
+        path: "tags",
+        select: "name type description",
         match: { isActive: true, deletedAt: null },
-        select: "color gender imagesvariant sizes",
-        populate: [
-          { path: "color", select: "name code type colors" },
-          { path: "sizes.size", select: "value description" },
-        ],
       },
     ]);
 
-    if (!product) {
-      throw new ApiError(404, `Không tìm thấy sản phẩm`);
-    }
+    // ✅ Gán variants đã query trực tiếp vào product
+    product.variants = activeVariants;
 
     // GET INVENTORY DATA FOR ALL VARIANTS
     const inventoryService = require("@services/inventory.service");
@@ -1966,51 +2039,35 @@ const productService = {
     });
     const inventoryData = await Promise.all(inventoryDataPromises);
 
-    // MAP INVENTORY DATA TO VARIANTS
-    product.variants = product.variants.map((v) => {
-      const variantObj = v.toObject ? v.toObject() : { ...v };
+    // ✅ MAP INVENTORY DATA TO VARIANTS - Gán trực tiếp thay vì tạo object mới
+    for (let i = 0; i < product.variants.length; i++) {
+      const variant = product.variants[i];
       const inventory = inventoryData.find(
-        (i) => i.variantId === variantObj._id.toString()
+        (inv) => inv.variantId === variant._id.toString()
       );
 
-      // Map sizes with inventory quantities
-      const sizesWithInventory = variantObj.sizes.map((size) => {
+      // ✅ CRITICAL FIX: Map inventory data INTO existing sizes structure
+      // Không tạo object mới, mà merge data vào structure hiện tại
+      variant.sizes.forEach((sizeItem) => {
         const sizeInventory = inventory?.quantities?.find(
-          (q) => q.sizeId.toString() === size.size._id.toString()
+          (q) => q.sizeId.toString() === sizeItem.size._id.toString()
         );
-        return {
-          size: size.size,
-          quantity: sizeInventory?.quantity || 0,
-          isAvailable: sizeInventory?.isAvailable || false,
-          isLowStock: sizeInventory?.isLowStock || false, // Added
-          isOutOfStock: sizeInventory?.isOutOfStock || true, // Added
-          sku: sizeInventory?.sku || null,
-        };
+
+        // Gán trực tiếp các field inventory vào sizeItem
+        sizeItem.quantity = sizeInventory?.quantity || 0;
+        sizeItem.isAvailable = sizeInventory?.isAvailable || false;
+        sizeItem.isLowStock = sizeInventory?.isLowStock || false;
+        sizeItem.isOutOfStock = sizeInventory?.isOutOfStock !== false; // Default to true if not found
+        if (sizeInventory?.sku) {
+          sizeItem.sku = sizeInventory.sku;
+        }
       });
 
-      // Add pricing from inventory
-      return {
-        ...variantObj,
-        sizes: sizesWithInventory,
-        price: inventory?.pricing?.calculatedPrice || 0,
-        priceFinal: inventory?.pricing?.calculatedPriceFinal || 0,
-        percentDiscount: inventory?.pricing?.percentDiscount || 0,
-      };
-    });
-
-    //  CRITICAL FIX: Tính inventorySummary cho mỗi variant trước khi transform
-    const variantService = require("@services/variant.service");
-    product.variants = await Promise.all(
-      product.variants.map(async (variant) => {
-        const inventorySummary = await variantService.calculateInventorySummary(
-          variant
-        );
-        return {
-          ...variant,
-          inventorySummary,
-        };
-      })
-    );
+      // ✅ Gán pricing vào variant (không tạo object mới)
+      variant.price = inventory?.pricing?.calculatedPrice || 0;
+      variant.priceFinal = inventory?.pricing?.calculatedPriceFinal || 0;
+      variant.percentDiscount = inventory?.pricing?.percentDiscount || 0;
+    }
 
     // Tính toán ma trận tồn kho và thông tin cơ bản
     const productAttributes = await getProductAttributesHelper(product);
@@ -2047,7 +2104,7 @@ const productService = {
             isAvailable: size.isAvailable, // FIXED: was size.isSizeAvailable
             isLowStock: size.isLowStock, // ADDED
             isOutOfStock: size.isOutOfStock, // ADDED
-            // ✅ CRITICAL FIX: Add pricing information from InventoryItem
+            // CRITICAL FIX: Add pricing information from InventoryItem
             price: variant.price || 0, // calculatedPrice from inventory
             finalPrice: variant.priceFinal || 0, // calculatedPriceFinal from inventory
             discountPercent: variant.percentDiscount || 0, // percentDiscount from inventory
@@ -2142,6 +2199,24 @@ const productService = {
     publicProduct.averageRating = ratingInfo.rating;
     publicProduct.reviewCount = ratingInfo.numReviews;
 
+    // ✅ SYNC priceRange từ productAttributes vào publicProduct (trường hợp không có variant active)
+    if (
+      productAttributes.priceRange &&
+      productAttributes.priceRange.min > 0 &&
+      (!publicProduct.priceRange || publicProduct.priceRange.min === 0)
+    ) {
+      publicProduct.priceRange = productAttributes.priceRange;
+      publicProduct.price = productAttributes.priceRange.min;
+      publicProduct.originalPrice = productAttributes.priceRange.max;
+    }
+
+    // Lấy thông tin Size Guide (nếu có)
+    const SizeGuide = require("@models/sizeGuide");
+    const sizeGuide = await SizeGuide.findOne({
+      product: product._id,
+      isActive: true,
+    }).select("sizeChart measurementGuide");
+
     return {
       success: true,
       product: publicProduct,
@@ -2149,6 +2224,7 @@ const productService = {
       summary: summary,
       images: variantImages,
       variants: variantsInfo, // Thêm thông tin biến thể với sizes chi tiết
+      sizeGuide: sizeGuide || null, // Thêm size guide
     };
   },
 
