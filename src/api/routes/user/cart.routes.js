@@ -41,11 +41,9 @@ router.put(
  * @route   DELETE /api/v1/cart/items
  * @desc    Xóa sản phẩm đã chọn khỏi giỏ hàng
  * @access  Private
+ * @note    Endpoint này xóa các items có isSelected = true, không cần body
  */
-router.delete(
-  "/items",
-  cartController.removeCartItems
-);
+router.delete("/items", cartController.removeCartItems);
 
 /**
  * @route   DELETE /api/v1/cart
@@ -59,10 +57,7 @@ router.delete("/", cartController.clearCart);
  * @desc    Chuyển đổi trạng thái chọn sản phẩm trong giỏ hàng
  * @access  Private
  */
-router.patch(
-  "/items/:itemId/toggle",
-  cartController.toggleSelectCartItem
-);
+router.patch("/items/:itemId/toggle", cartController.toggleSelectCartItem);
 
 /**
  * @route   POST /api/v1/cart/preview-before-order

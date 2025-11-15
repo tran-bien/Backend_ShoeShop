@@ -4,7 +4,6 @@ const returnController = require("../controllers/return.controller");
 const {
   protect,
   requireStaffOrAdmin,
-  isAuthenticated,
 } = require("../middlewares/auth.middleware");
 const validate = require("@utils/validatehelper");
 const {
@@ -29,7 +28,6 @@ const {
 router.post(
   "/",
   protect,
-  isAuthenticated,
   validate(validateCreateReturnRequest),
   returnController.createReturnRequest
 );
@@ -59,7 +57,6 @@ router.get(
 router.get(
   "/check-eligibility",
   protect,
-  isAuthenticated,
   validate(validateCheckEligibility),
   returnController.checkExchangeEligibility
 );
@@ -76,7 +73,6 @@ router.get(
 router.get(
   "/",
   protect,
-  isAuthenticated,
   validate(validateGetReturns),
   returnController.getReturnRequests
 );
@@ -89,7 +85,6 @@ router.get(
 router.get(
   "/:id",
   protect,
-  isAuthenticated,
   validate(validateReturnId),
   returnController.getReturnRequestDetail
 );
@@ -102,7 +97,6 @@ router.get(
 router.delete(
   "/:id",
   protect,
-  isAuthenticated,
   validate(validateReturnId),
   returnController.cancelReturnRequest
 );

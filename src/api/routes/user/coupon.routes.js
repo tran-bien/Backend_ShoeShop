@@ -1,25 +1,25 @@
 const express = require("express");
-const { isAuthenticated } = require("@middlewares/auth.middleware");
+const { protect } = require("@middlewares/auth.middleware");
 const couponController = require("@controllers/user/coupon.controller");
 const validate = require("@utils/validatehelper");
 const { validateCollectCoupon } = require("@validators/coupon.validator");
 
 const router = express.Router();
 // Middleware kiểm tra xác thực
-router.use(isAuthenticated);
+router.use(protect);
 /**
  * @route   GET /api/v1/users/coupons
  * @desc    Lấy danh sách mã giảm giá công khai
  * @access  Private - User
  */
-router.get("/coupons", couponController.getPublicCoupons);
+router.get("/", couponController.getPublicCoupons);
 
 /**
  * @route   GET /api/v1/users/coupons/collected
  * @desc    Lấy danh sách mã giảm giá đã thu thập của người dùng
  * @access  Private - User
  */
-router.get("/coupons/collected", couponController.getUserCoupons);
+router.get("/collected", couponController.getUserCoupons);
 
 /**
  * @route   POST /api/v1/users/coupons/:id/collect
@@ -27,7 +27,7 @@ router.get("/coupons/collected", couponController.getUserCoupons);
  * @access  Private - User
  */
 router.post(
-  "/coupons/:id/collect",
+  "/:id/collect",
   validate(validateCollectCoupon),
   couponController.collectCoupon
 );

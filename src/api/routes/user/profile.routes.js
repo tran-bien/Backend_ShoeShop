@@ -87,8 +87,7 @@ router.get(
  */
 router.put(
   "/preferences/notifications",
-  userValidator.validateUpdateNotificationPreferences,
-  validate,
+  validate(userValidator.validateUpdateNotificationPreferences),
   profileController.updateNotificationPreferences
 );
 

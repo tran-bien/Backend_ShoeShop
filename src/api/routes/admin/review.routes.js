@@ -39,6 +39,18 @@ router.get(
 );
 
 /**
+ * @route   GET /api/v1/admin/reviews/:productId/stats
+ * @desc    Lấy thống kê đánh giá của sản phẩm
+ * @access  Staff/Admin
+ */
+router.get(
+  "/:productId/stats",
+  requireStaffOrAdmin,
+  validate(reviewValidator.validateGetProductReviews),
+  reviewController.getProductReviewStats
+);
+
+/**
  * @route   GET /api/v1/admin/reviews/:id
  * @desc    Lấy chi tiết đánh giá (bao gồm cả đánh giá đã xóa)
  * @access  Staff/Admin
@@ -60,18 +72,6 @@ router.patch(
   requireStaffOrAdmin,
   validate(reviewValidator.validateToggleReviewVisibility),
   reviewController.toggleReviewVisibility
-);
-
-/**
- * @route   GET /api/v1/admin/reviews/:productId/stats
- * @desc    Lấy thống kê đánh giá của sản phẩm
- * @access  Staff/Admin
- */
-router.get(
-  "/:productId/stats",
-  requireStaffOrAdmin,
-  validate(reviewValidator.validateGetProductReviews),
-  reviewController.getProductReviewStats
 );
 
 /**
