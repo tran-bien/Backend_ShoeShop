@@ -72,8 +72,9 @@ router.use("/reviews", publicReviewRoutes);
 router.use("/filters", filterRoutes);
 router.use("/coupons", publicCouponRoutes);
 router.use("/banners", publicBannerRoutes);
-router.use("/blogs", publicBlogRoutes);
+// Blog categories MUST come before /blogs to avoid :slug matching "categories"
 router.use("/blogs/categories", publicBlogCategoryRoutes);
+router.use("/blogs", publicBlogRoutes);
 
 // USER ROUTES (Cần đăng nhập - role: user)
 router.use("/users/profile", userProfileRoutes);

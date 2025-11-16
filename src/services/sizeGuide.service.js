@@ -1,6 +1,7 @@
 const { Product } = require("@models");
 const SizeGuide = require("../models/sizeGuide");
 const ApiError = require("@utils/ApiError");
+const paginate = require("@utils/pagination");
 
 const sizeGuideService = {
   /**
@@ -9,7 +10,10 @@ const sizeGuideService = {
   getAllSizeGuides: async (query = {}) => {
     const { page = 1, limit = 20, isActive } = query;
 
-    const filter = {};
+    const filter = {
+      deletedAt: null,
+    };
+
     if (isActive !== undefined) {
       filter.isActive = isActive === "true";
     }
@@ -17,22 +21,11 @@ const sizeGuideService = {
     const options = {
       page: parseInt(page),
       limit: parseInt(limit),
-      populate: "product",
+      populate: { path: "product", select: "name slug" },
       sort: { createdAt: -1 },
     };
 
-    const result = await SizeGuide.paginate(filter, options);
-
-    return {
-      success: true,
-      sizeGuides: result.docs,
-      pagination: {
-        total: result.totalDocs,
-        page: result.page,
-        limit: result.limit,
-        totalPages: result.totalPages,
-      },
-    };
+    return await paginate(SizeGuide, filter, options);
   },
 
   /**
