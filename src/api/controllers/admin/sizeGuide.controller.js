@@ -4,6 +4,26 @@ const imageService = require("@services/image.service");
 
 const sizeGuideController = {
   /**
+   * @route GET /api/admin/size-guides
+   * @desc Lấy danh sách size guides
+   * @access Staff/Admin
+   */
+  getAllSizeGuides: asyncHandler(async (req, res) => {
+    const result = await sizeGuideService.getAllSizeGuides(req.query);
+    return res.json(result);
+  }),
+
+  /**
+   * @route GET /api/admin/size-guides/:id
+   * @desc Lấy chi tiết size guide
+   * @access Staff/Admin
+   */
+  getSizeGuideById: asyncHandler(async (req, res) => {
+    const result = await sizeGuideService.getSizeGuideById(req.params.id);
+    return res.json(result);
+  }),
+
+  /**
    * @route POST /api/admin/size-guides
    * @desc Tạo size guide cho sản phẩm
    * @access Staff/Admin

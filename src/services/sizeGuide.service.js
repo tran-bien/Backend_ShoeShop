@@ -4,6 +4,57 @@ const ApiError = require("@utils/ApiError");
 
 const sizeGuideService = {
   /**
+   * [ADMIN] Lấy tất cả size guides
+   */
+  getAllSizeGuides: async (query = {}) => {
+    const { page = 1, limit = 20, isActive } = query;
+
+    const filter = {};
+    if (isActive !== undefined) {
+      filter.isActive = isActive === "true";
+    }
+
+    const options = {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      populate: "product",
+      sort: { createdAt: -1 },
+    };
+
+    const result = await SizeGuide.paginate(filter, options);
+
+    return {
+      success: true,
+      sizeGuides: result.docs,
+      pagination: {
+        total: result.totalDocs,
+        page: result.page,
+        limit: result.limit,
+        totalPages: result.totalPages,
+      },
+    };
+  },
+
+  /**
+   * [ADMIN] Lấy size guide theo ID
+   */
+  getSizeGuideById: async (guideId) => {
+    const sizeGuide = await SizeGuide.findById(guideId).populate(
+      "product",
+      "name slug"
+    );
+
+    if (!sizeGuide) {
+      throw new ApiError(404, "Không tìm thấy size guide");
+    }
+
+    return {
+      success: true,
+      sizeGuide,
+    };
+  },
+
+  /**
    * [PUBLIC] Lấy size guide của sản phẩm
    */
   getProductSizeGuide: async (productId) => {
@@ -61,7 +112,8 @@ const sizeGuideService = {
 
     return {
       success: true,
-      message: "Tạo size guide thành công. Vui lòng upload ảnh cho size chart và measurement guide",
+      message:
+        "Tạo size guide thành công. Vui lòng upload ảnh cho size chart và measurement guide",
       sizeGuide,
     };
   },
@@ -98,7 +150,6 @@ const sizeGuideService = {
       sizeGuide,
     };
   },
-
 
   /**
    * [ADMIN] Xóa size guide
@@ -140,4 +191,3 @@ const sizeGuideService = {
 };
 
 module.exports = sizeGuideService;
-

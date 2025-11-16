@@ -86,7 +86,7 @@ const compareService = {
           },
           color: colorData,
           gender: variant.gender,
-          images: variant.images || [],
+          images: variant.imagesvariant || [],
           availableSizes,
           totalQuantity: inventorySummary.totalQuantity,
           stockStatus: inventorySummary.stockStatus,

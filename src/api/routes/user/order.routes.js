@@ -12,7 +12,21 @@ const { protect } = require("@middlewares/auth.middleware");
  * @access  Public
  */
 router.get("/vnpay/test-callback", orderController.testVnpayCallback);
+
+/**
+ * @route   GET /api/v1/orders/vnpay/callback
+ * @desc    Callback từ VNPAY sau khi thanh toán (redirect từ VNPAY về frontend)
+ * @access  Public
+ */
 router.get("/vnpay/callback", orderController.vnpayCallback);
+
+/**
+ * @route   POST/GET /api/v1/orders/vnpay/ipn
+ * @desc    IPN (Instant Payment Notification) từ VNPAY
+ * @note    VNPAY có thể gửi IPN bằng cả POST và GET tùy cấu hình
+ *          Controller sẽ tự động xử lý cả 2 methods
+ * @access  Public
+ */
 router.post("/vnpay/ipn", orderController.vnpayIpn);
 router.get("/vnpay/ipn", orderController.vnpayIpn);
 

@@ -17,6 +17,22 @@ router.use(requireStaffOrAdmin);
 const uploadSizeGuideImage = uploadMiddleware.uploadSizeGuideImage;
 
 /**
+ * @route GET /api/admin/size-guides
+ * @desc Lấy danh sách size guides
+ */
+router.get("/", sizeGuideController.getAllSizeGuides);
+
+/**
+ * @route GET /api/admin/size-guides/:id
+ * @desc Lấy chi tiết size guide
+ */
+router.get(
+  "/:id",
+  validate(sizeGuideValidator.validateSizeGuideId),
+  sizeGuideController.getSizeGuideById
+);
+
+/**
  * @route POST /api/admin/size-guides
  * @desc Tạo size guide mới
  */
