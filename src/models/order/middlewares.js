@@ -8,63 +8,29 @@ const mongoose = require("mongoose");
  * @param {ObjectId} orderId ID đơn hàng
  * @param {ObjectId} performedBy Người thực hiện
  */
-const updateInventory = async (
-  orderItem,
-  action,
-  reason = "other",
-  orderId = null,
-  performedBy = null
-) => {
+const updateInventory = async (orderItem, action, orderId, notes) => {
+  const { variant, size, quantity } = orderItem;
+
   try {
-    const inventoryService = require("@services/inventory.service");
-
-    if (!orderItem.variant || !orderItem.size || !orderItem.quantity) return;
-
-    // Lấy productId từ variant (vì orderItem không có trực tiếp product field)
-    const Variant = mongoose.model("Variant");
-    const variant = await Variant.findById(orderItem.variant).select("product");
-
-    if (!variant || !variant.product) {
-      console.error(
-        `[order/middlewares] Không tìm thấy product từ variant ${orderItem.variant}`
-      );
-      return;
-    }
-
-    // Chỉ xử lý khi action là increment (trả hàng về kho)
-    if (action === "increment") {
+    if (action === "restore") {
+      // FIXED Bug #8: Pass ObjectId trực tiếp thay vì object
       await inventoryService.stockIn(
         {
-          product: variant.product,
-          variant: orderItem.variant,
-          size: orderItem.size,
-          quantity: orderItem.quantity,
-          costPrice: 0, // Không có giá nhập khi trả hàng
-          reason: reason,
-          reference: orderId
-            ? {
-                type: "Order",
-                id: orderId,
-              }
-            : undefined,
-          notes: `Nhập kho tự động: ${
-            reason === "return"
-              ? "Trả hàng"
-              : reason === "cancelled"
-              ? "Hủy đơn"
-              : "Điều chỉnh"
-          }`,
+          product: orderItem.product,
+          variant,
+          size,
+          quantity,
+          costPrice: 0, // Will be handled by stockIn() with averageCostPrice
+          reason: "return",
+          reference: orderId, // ObjectId only
+          notes: notes || "Hoàn trả tồn kho",
         },
-        performedBy
-      );
-
-      console.log(
-        `[order/middlewares] Đã trả ${orderItem.quantity} sản phẩm về kho (reason: ${reason})`
+        null
       );
     }
-    // Action decrement không cần xử lý vì đã xuất kho tự động khi gán shipper
   } catch (error) {
-    console.error(`[order/middlewares] Lỗi cập nhật tồn kho: ${error.message}`);
+    console.error("[updateInventory] Lỗi:", error.message);
+    throw error;
   }
 };
 

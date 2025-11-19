@@ -124,18 +124,40 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
     }
 
     const inventoryService = require("@services/inventory.service");
+    const InventoryItem = require("../models").InventoryItem;
 
+    // FIXED Bug #6: PRE-VALIDATE tất cả items có đủ stock TRƯỚC KHI trừ
     for (const item of order.orderItems) {
-      try {
-        // Lấy productId từ variant (vì orderItem không có trực tiếp product field)
-        const productId = item.variant?.product?._id || item.variant?.product;
+      const productId = item.variant?.product?._id || item.variant?.product;
 
-        if (!productId) {
-          throw new ApiError(
-            400,
-            `Không tìm thấy product từ variant ${item.variant?._id}`
-          );
-        }
+      if (!productId) {
+        throw new ApiError(
+          400,
+          `Không tìm thấy product từ variant ${item.variant?._id}`
+        );
+      }
+
+      const inventoryItem = await InventoryItem.findOne({
+        product: productId,
+        variant: item.variant._id,
+        size: item.size._id,
+      });
+
+      if (!inventoryItem || inventoryItem.quantity < item.quantity) {
+        throw new ApiError(
+          400,
+          `Không đủ hàng trong kho cho "${item.name || "sản phẩm"}". Cần: ${
+            item.quantity
+          }, Còn: ${inventoryItem?.quantity || 0}`
+        );
+      }
+    }
+
+    // FIXED Bug #10: Wrap stockOut loop trong try-catch để rollback nếu fail
+    const deductedItems = [];
+    try {
+      for (const item of order.orderItems) {
+        const productId = item.variant?.product?._id || item.variant?.product;
 
         await inventoryService.stockOut(
           {
@@ -144,15 +166,45 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
             size: item.size._id,
             quantity: item.quantity,
             reason: "sale",
-            reference: order._id, // ObjectId của Order
+            reference: order._id,
             notes: `Xuất kho tự động cho đơn hàng ${order.code} - Giao cho shipper ${shipper.name}`,
           },
-          assignedBy // Người gán đơn hàng
+          assignedBy
         );
-      } catch (error) {
-        console.error(`Lỗi khi xuất kho cho orderItem:`, error.message);
-        throw new ApiError(400, `Không thể xuất kho: ${error.message}`);
+        deductedItems.push(item);
       }
+    } catch (error) {
+      // Rollback: Hoàn lại các items đã trừ
+      console.error(
+        `[assignOrderToShipper] Lỗi khi trừ kho, rollback ${deductedItems.length} items:`,
+        error
+      );
+
+      for (const item of deductedItems) {
+        try {
+          const productId = item.variant?.product?._id || item.variant?.product;
+          await inventoryService.stockIn(
+            {
+              product: productId,
+              variant: item.variant._id,
+              size: item.size._id,
+              quantity: item.quantity,
+              costPrice: 0,
+              reason: "return",
+              reference: order._id,
+              notes: `Rollback do lỗi trừ kho: ${error.message}`,
+            },
+            assignedBy
+          );
+        } catch (rollbackError) {
+          console.error(
+            `[assignOrderToShipper] Lỗi rollback item:`,
+            rollbackError
+          );
+        }
+      }
+
+      throw new ApiError(400, `Không thể trừ kho: ${error.message}`);
     }
 
     order.inventoryDeducted = true;

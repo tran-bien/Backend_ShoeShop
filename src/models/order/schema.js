@@ -476,4 +476,8 @@ OrderSchema.index({ user: 1, status: 1, deletedAt: 1 });
 // Index cho hasCancelRequest - query orders with cancel requests
 OrderSchema.index({ hasCancelRequest: 1, status: 1 });
 
+// FIXED Bug #24: Index cho inventory flags - tối ưu query khi xử lý inventory restoration
+OrderSchema.index({ inventoryDeducted: 1, status: 1 });
+OrderSchema.index({ inventoryRestored: 1, status: 1 });
+
 module.exports = OrderSchema;

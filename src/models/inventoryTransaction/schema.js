@@ -72,6 +72,7 @@ const inventoryTransactionSchema = new mongoose.Schema(
         "manual", // Xuất/Nhập thủ công
         "sale", // Bán hàng (qua order)
         "return", // Trả hàng
+        "exchange", // Đổi hàng
         "damage", // Hàng hư hỏng
         "lost", // Hàng mất
         "adjustment", // Điều chỉnh kiểm kê
@@ -104,5 +105,8 @@ const inventoryTransactionSchema = new mongoose.Schema(
 inventoryTransactionSchema.index({ inventoryItem: 1, createdAt: -1 });
 inventoryTransactionSchema.index({ type: 1, createdAt: -1 });
 inventoryTransactionSchema.index({ reference: 1 });
+// FIXED Bug #25: Index cho performedBy - audit/tracking queries
+inventoryTransactionSchema.index({ performedBy: 1, createdAt: -1 });
+inventoryTransactionSchema.index({ reason: 1, type: 1 });
 
 module.exports = inventoryTransactionSchema;

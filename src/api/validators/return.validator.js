@@ -95,7 +95,7 @@ exports.validateCreateReturnRequest = [
       }
 
       // Check exchangeToVariant phải GIỐNG với variant gốc (chỉ đổi size)
-      if (item.exchangeToVariant !== item.variant) {
+      if (item.exchangeToVariant.toString() !== item.variant.toString()) {
         throw new Error(
           `Item thứ ${
             index + 1
@@ -104,7 +104,7 @@ exports.validateCreateReturnRequest = [
       }
 
       // Check exchangeToSize phải KHÁC với size gốc
-      if (item.exchangeToSize === item.size) {
+      if (item.exchangeToSize.toString() === item.size.toString()) {
         throw new Error(
           `Item thứ ${index + 1}: Size đổi sang phải khác với size hiện tại`
         );

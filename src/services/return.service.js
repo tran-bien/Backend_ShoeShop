@@ -434,6 +434,14 @@ const processReturn = async (id, processedBy) => {
     throw new ApiError(404, "Không tìm thấy đơn hàng liên kết");
   }
 
+  // FIXED Bug #18: Ngăn chặn double restoration
+  if (order.inventoryRestored === true) {
+    throw new ApiError(
+      400,
+      "Kho đã được khôi phục cho đơn hàng này rồi, không thể xử lý trả hàng nữa"
+    );
+  }
+
   // Chỉ cho phép trả hàng từ các trạng thái hợp lệ
   const allowedOrderStatuses = ["delivered", "returning_to_warehouse"];
   if (!allowedOrderStatuses.includes(order.status)) {
@@ -466,7 +474,7 @@ const processReturn = async (id, processedBy) => {
   request.status = "processing";
   await request.save();
 
-  // Nhập hàng về kho
+  // FIXED Bug #5: Dùng costPrice=0, stockIn sẽ tự lấy averageCostPrice
   for (const item of request.items) {
     await inventoryService.stockIn(
       {
@@ -474,7 +482,7 @@ const processReturn = async (id, processedBy) => {
         variant: item.variant._id,
         size: item.size,
         quantity: item.quantity,
-        costPrice: item.priceAtPurchase * 0.8, // Giả sử giá nhập = 80% giá bán
+        costPrice: 0, // Will use averageCostPrice from InventoryItem
         reason: "return",
         notes: `Trả hàng từ đơn ${request.order.code}`,
       },
@@ -536,9 +544,9 @@ const processExchange = async (id, processedBy) => {
   request.status = "processing";
   await request.save();
 
-  // Nhập hàng cũ về kho và xuất hàng mới
+  // FIXED Bug #19: Pre-validate TẤT CẢ items trước khi xuất/nhập
   for (const item of request.items) {
-    // Verify exchangeToVariant exists và có đủ inventory
+    // Verify exchangeToVariant exists
     if (!item.exchangeToVariant) {
       throw new ApiError(400, "Biến thể đổi sang không hợp lệ");
     }
@@ -547,7 +555,7 @@ const processExchange = async (id, processedBy) => {
       throw new ApiError(400, "Kích cỡ đổi sang không hợp lệ");
     }
 
-    // Check inventory của sản phẩm mới trước khi xuất
+    // Check inventory của sản phẩm mới TRƯỚC khi xuất
     const newInventoryItem = await InventoryItem.findOne({
       product: item.exchangeToVariant.product,
       variant: item.exchangeToVariant._id,
@@ -562,7 +570,10 @@ const processExchange = async (id, processedBy) => {
         }, cần: ${item.quantity}`
       );
     }
+  }
 
+  // Nhập hàng cũ về kho và xuất hàng mới
+  for (const item of request.items) {
     // Nhập hàng cũ
     await inventoryService.stockIn(
       {
@@ -570,7 +581,7 @@ const processExchange = async (id, processedBy) => {
         variant: item.variant._id,
         size: item.size,
         quantity: item.quantity,
-        costPrice: item.priceAtPurchase * 0.8,
+        costPrice: 0, // Will use averageCostPrice from InventoryItem
         reason: "exchange",
         notes: `Đổi hàng từ đơn ${request.order.code}`,
       },
@@ -585,7 +596,7 @@ const processExchange = async (id, processedBy) => {
         size: item.exchangeToSize,
         quantity: item.quantity,
         reason: "exchange",
-        reference: request._id, // ✅ FIXED: ObjectId thay vì object
+        reference: request._id, // ObjectId (already correct)
         notes: `Đổi hàng mới cho đơn ${request.order.code}`,
       },
       processedBy

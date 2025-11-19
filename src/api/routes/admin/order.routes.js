@@ -86,4 +86,15 @@ router.post(
   orderController.confirmReturn
 );
 
+/**
+ * @route   POST /api/v1/admin/orders/:id/force-confirm-payment
+ * @desc    FIXED Bug #11: Force confirm payment cho VNPAY failed callbacks
+ * @access  Admin only
+ */
+router.post(
+  "/:id/force-confirm-payment",
+  requireStaff,
+  orderController.forceConfirmPayment
+);
+
 module.exports = router;

@@ -39,7 +39,7 @@ const inventoryItemSchema = new mongoose.Schema(
       min: 0,
     },
     // Thông tin giá bán của sản phẩm
-    sellingPrice: { 
+    sellingPrice: {
       type: Number,
       default: 0,
       min: 0,
@@ -80,6 +80,9 @@ inventoryItemSchema.index(
   { unique: true }
 );
 inventoryItemSchema.index({ quantity: 1 });
+// FIXED Bug #13: Thêm index cho sku (unique) và compound index cho lowStock alerts
+inventoryItemSchema.index({ sku: 1 }, { unique: true });
+inventoryItemSchema.index({ quantity: 1, lowStockThreshold: 1 });
 
 // Virtual để kiểm tra cảnh báo hết hàng
 inventoryItemSchema.virtual("isLowStock").get(function () {

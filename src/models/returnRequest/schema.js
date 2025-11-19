@@ -67,6 +67,7 @@ const returnRequestSchema = new mongoose.Schema(
         "defective",
         "not_as_described",
         "changed_mind",
+        "exchange",
         "other",
       ],
       required: true,

@@ -167,6 +167,34 @@ const confirmReturn = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * FORCE CONFIRM PAYMENT (ADMIN)
+ *
+ * Business Logic:
+ * - FIXED Bug #11: Admin force-confirm payment cho VNPAY failed callbacks
+ * - Use case: VNPAY callback failed (network issue, signature error) nhưng admin verify payment thành công qua VNPAY portal
+ * - Chỉ áp dụng cho: VNPAY + pending payment + pending status
+ * - Auto confirm order sau khi force-confirm payment
+ * - Yêu cầu admin nhập transactionId và notes để track
+ *
+ * @access  Admin only
+ * @route   POST /api/admin/orders/:id/force-confirm-payment
+ * @params  { id: orderId }
+ * @body    { transactionId, notes }
+ * @flow    order.route.js (admin) → order.controller.js → order.service.js → forceConfirmPayment()
+ */
+const forceConfirmPayment = asyncHandler(async (req, res) => {
+  const { transactionId, notes } = req.body;
+
+  const result = await orderService.forceConfirmPayment(
+    req.params.id,
+    req.user.id,
+    { transactionId, notes }
+  );
+
+  res.status(200).json(result);
+});
+
 module.exports = {
   getOrders,
   getOrderById,
@@ -174,4 +202,5 @@ module.exports = {
   getCancelRequests,
   processCancelRequest,
   confirmReturn,
+  forceConfirmPayment,
 };

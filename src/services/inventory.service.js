@@ -185,41 +185,70 @@ const stockIn = async (data, performedBy) => {
     notes,
   } = data;
 
-  // FIXED: VALIDATE costPrice - Tránh lỗi weighted average cost
-  if (!costPrice || costPrice <= 0) {
-    throw new ApiError(
-      400,
-      "Giá nhập (costPrice) phải lớn hơn 0. Vui lòng kiểm tra lại."
-    );
-  }
+  // FIXED Bug #3: Cho phép costPrice=0 khi return, dùng averageCostPrice
+  let actualCostPrice = costPrice;
 
-  if (typeof costPrice !== "number" || isNaN(costPrice)) {
-    throw new ApiError(400, "Giá nhập (costPrice) phải là một số hợp lệ");
-  }
+  // Nếu reason = 'return' và costPrice = 0, lấy averageCostPrice từ InventoryItem hiện tại
+  if (reason === "return" && (!costPrice || costPrice === 0)) {
+    const existingItem = await InventoryItem.findOne({
+      product,
+      variant,
+      size,
+    });
 
-  // Validate quantity
-  if (!quantity || quantity <= 0) {
-    throw new ApiError(400, "Số lượng nhập (quantity) phải lớn hơn 0");
+    if (existingItem && existingItem.averageCostPrice > 0) {
+      actualCostPrice = existingItem.averageCostPrice;
+      console.log(
+        `[stockIn] Sử dụng averageCostPrice=${actualCostPrice} cho return`
+      );
+    } else {
+      // Fallback: nếu không có averageCostPrice, dùng costPrice=0 (cho phép)
+      actualCostPrice = 0;
+      console.warn(
+        `[stockIn] Không tìm thấy averageCostPrice, sử dụng costPrice=0 cho return`
+      );
+    }
   }
+  // NOTE: costPrice and quantity validation removed - already validated in inventory.validator.js
 
   const inventoryItem = await getOrCreateInventoryItem(product, variant, size);
+
+  // FIXED Bug #7: Thêm duplicate check giống stockOut()
+  if (data.reference) {
+    const existingTransaction = await InventoryTransaction.findOne({
+      inventoryItem: inventoryItem._id,
+      type: "IN",
+      reason,
+      reference: data.reference,
+    });
+
+    if (existingTransaction) {
+      console.warn(
+        `[stockIn] Duplicate transaction detected for reference=${data.reference}`
+      );
+      throw new ApiError(
+        409,
+        `Giao dịch nhập kho cho tham chiếu này đã tồn tại (Transaction ID: ${existingTransaction._id})`
+      );
+    }
+  }
 
   const quantityBefore = inventoryItem.quantity;
   const quantityAfter = quantityBefore + quantity;
 
-  const totalCost = costPrice * quantity;
+  const totalCost = actualCostPrice * quantity;
   const previousTotalCost = inventoryItem.averageCostPrice * quantityBefore;
   const newAverageCostPrice =
     quantityAfter > 0 ? (previousTotalCost + totalCost) / quantityAfter : 0;
 
   const priceCalculation = calculatePrice(
-    costPrice,
+    actualCostPrice,
     targetProfitPercent,
     percentDiscount
   );
 
   inventoryItem.quantity = quantityAfter;
-  inventoryItem.costPrice = costPrice;
+  inventoryItem.costPrice = actualCostPrice;
   inventoryItem.averageCostPrice = newAverageCostPrice;
   inventoryItem.sellingPrice = priceCalculation.calculatedPrice;
   inventoryItem.discountPercent = percentDiscount;
@@ -233,7 +262,7 @@ const stockIn = async (data, performedBy) => {
     quantityBefore,
     quantityChange: quantity,
     quantityAfter,
-    costPrice,
+    costPrice: actualCostPrice,
     totalCost,
     targetProfitPercent,
     percentDiscount,
@@ -325,21 +354,29 @@ const stockOut = async (data, performedBy) => {
 
   await syncInventoryToVariant(inventoryItem);
 
-  const transaction = await InventoryTransaction.create({
-    type: "OUT",
-    inventoryItem: inventoryItem._id,
-    quantityBefore,
-    quantityChange: -quantity,
-    quantityAfter,
-    costPrice: inventoryItem.averageCostPrice,
-    totalCost: inventoryItem.averageCostPrice * quantity,
-    reason,
-    reference,
-    performedBy,
-    notes,
-  });
-
-  await updateProductStockFromInventory(product);
+  let transaction;
+  try {
+    transaction = await InventoryTransaction.create({
+      type: "OUT",
+      inventoryItem: inventoryItem._id,
+      quantityBefore,
+      quantityChange: -quantity,
+      quantityAfter,
+      costPrice: inventoryItem.averageCostPrice,
+      totalCost: inventoryItem.averageCostPrice * quantity,
+      reason,
+      reference,
+      performedBy,
+      notes,
+    });
+  } finally {
+    // FIXED Bug #12: Đảm bảo luôn update Product.totalQuantity dù transaction fail
+    try {
+      await updateProductStockFromInventory(product);
+    } catch (err) {
+      console.error("[stockOut] Lỗi khi update Product stock:", err);
+    }
+  }
 
   return {
     inventoryItem: await inventoryItem.populate("product variant size"),

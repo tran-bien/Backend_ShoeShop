@@ -415,7 +415,8 @@ const orderService = {
           note: "Đơn hàng được tạo",
         },
       ],
-      inventoryDeducted: paymentMethod === "COD", // Chỉ đánh dấu true nếu là COD
+      // FIXED Bug #1: Luôn set false khi tạo đơn, chỉ set true trong assignOrderToShipper()
+      inventoryDeducted: false,
     });
 
     // Nếu có coupon, lưu thông tin và tăng số lần sử dụng (ATOMIC UPDATE)
@@ -1188,6 +1189,7 @@ const orderService = {
         ? "return"
         : "cancelled";
 
+    // FIXED Bug #4: Set inventoryRestored=true TRƯỚC khi stockIn để skip middleware
     // Hoàn kho thủ công (vì middleware chỉ chạy khi returnConfirmed = true)
     const inventoryService = require("@services/inventory.service");
     for (const item of order.orderItems) {
@@ -1207,9 +1209,9 @@ const orderService = {
           variant: item.variant?._id || item.variant,
           size: item.size?._id || item.size,
           quantity: item.quantity,
-          costPrice: 0, // Hàng trả về không tính giá nhập
+          costPrice: 0, // Will use averageCostPrice from InventoryItem
           reason: stockInReason,
-          reference: order._id, // ✅ FIXED: ObjectId thay vì object
+          reference: order._id,
           notes: `Staff xác nhận nhận hàng trả về - ${
             notes || order.cancelReason || "Hoàn kho"
           }`,
@@ -1224,11 +1226,12 @@ const orderService = {
       order.cancelledAt = new Date();
     }
 
-    // Cập nhật trạng thái xác nhận
+    // FIXED Bug #4: Set inventoryRestored=true TRƯỚC save() để skip middleware
+    order.inventoryRestored = true;
+    order.inventoryDeducted = false;
     order.returnConfirmed = true;
     order.returnConfirmedAt = new Date();
     order.returnConfirmedBy = confirmedBy;
-    order.inventoryDeducted = false; // Reset flag sau khi hoàn kho
 
     // Thêm ghi chú vào statusHistory
     order.statusHistory.push({
@@ -1240,7 +1243,7 @@ const orderService = {
       }`,
     });
 
-    // Lưu đơn hàng - Middleware KHÔNG chạy hoàn kho nữa vì đã xử lý thủ công ở trên
+    // Lưu đơn hàng - Middleware KHÔNG chạy hoàn kho nữa vì inventoryRestored=true
     await order.save();
 
     // Populate để trả về thông tin đầy đủ
@@ -1380,6 +1383,88 @@ const orderService = {
         refund: order.refund,
         previousStatus,
       },
+    };
+  },
+
+  /**
+   * FIXED Bug #11: Admin force-confirm payment for VNPAY failed callbacks
+   * Use case: VNPAY callback failed (network issue, signature error) nhưng admin verify payment thành công
+   * @param {String} orderId - ID đơn hàng
+   * @param {String} adminId - ID admin xác nhận
+   * @param {Object} data - { transactionId, notes }
+   * @returns {Object}
+   */
+  forceConfirmPayment: async (orderId, adminId, data = {}) => {
+    const { transactionId, notes } = data;
+
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      throw new ApiError(404, "Không tìm thấy đơn hàng");
+    }
+
+    // Validate: Chỉ cho phép force-confirm VNPAY pending
+    if (order.payment.method !== "VNPAY") {
+      throw new ApiError(400, "Chỉ có thể force-confirm cho đơn hàng VNPAY");
+    }
+
+    if (order.payment.paymentStatus === "paid") {
+      throw new ApiError(400, "Đơn hàng đã được thanh toán trước đó");
+    }
+
+    if (order.status !== "pending") {
+      throw new ApiError(
+        400,
+        `Đơn hàng đang ở trạng thái "${order.status}", không thể force-confirm`
+      );
+    }
+
+    // Update payment status
+    order.payment.paymentStatus = "paid";
+    order.payment.paidAt = new Date();
+    order.payment.transactionId = transactionId || `FORCE-${Date.now()}`;
+    order.payment.forceConfirmedBy = adminId;
+    order.payment.forceConfirmedAt = new Date();
+
+    // Auto confirm order
+    order.status = "confirmed";
+    order.confirmedAt = new Date();
+
+    // Add to payment history
+    order.paymentHistory.push({
+      status: "paid",
+      transactionId: order.payment.transactionId,
+      amount: order.totalAfterDiscountAndShipping,
+      method: "VNPAY",
+      updatedAt: new Date(),
+      responseData: {
+        forceConfirmed: true,
+        adminId,
+        notes: notes || "Admin xác nhận thanh toán thủ công",
+      },
+    });
+
+    // Add to status history
+    order.statusHistory.push({
+      status: "confirmed",
+      updatedAt: new Date(),
+      updatedBy: adminId,
+      note: `[Force Confirm] ${
+        notes || "Admin xác nhận thanh toán VNPAY thủ công"
+      }`,
+    });
+
+    await order.save();
+
+    await order.populate([
+      { path: "user", select: "name email phone" },
+      { path: "payment.forceConfirmedBy", select: "name email role" },
+    ]);
+
+    return {
+      success: true,
+      message: "Đã xác nhận thanh toán VNPAY thủ công thành công",
+      data: order,
     };
   },
 };
