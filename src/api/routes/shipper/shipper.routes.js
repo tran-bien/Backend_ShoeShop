@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const shipperController = require("@controllers/shipper.controller");
+const shipperController = require("@controllers/shipper/shipper.controller");
 const { protect, requireShipper } = require("@middlewares/auth.middleware");
 const validate = require("@utils/validatehelper");
 const {

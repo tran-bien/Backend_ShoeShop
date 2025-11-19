@@ -20,7 +20,7 @@ const getPublicCoupons = asyncHandler(async (req, res) => {
  * @access  Private - User
  */
 const getUserCoupons = asyncHandler(async (req, res) => {
-  const result = await couponService.getUserCoupons(req.user.id, req.query);
+  const result = await couponService.getUserCoupons(req.user._id, req.query);
   return res.status(200).json({
     success: true,
     ...result,
@@ -33,7 +33,7 @@ const getUserCoupons = asyncHandler(async (req, res) => {
  * @access  Private - User
  */
 const collectCoupon = asyncHandler(async (req, res) => {
-  const result = await couponService.collectCoupon(req.user.id, req.params.id);
+  const result = await couponService.collectCoupon(req.user._id, req.params.id);
   return res.status(200).json({
     success: true,
     ...result,

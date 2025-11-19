@@ -80,8 +80,7 @@ inventoryItemSchema.index(
   { unique: true }
 );
 inventoryItemSchema.index({ quantity: 1 });
-// FIXED Bug #13: Thêm index cho sku (unique) và compound index cho lowStock alerts
-inventoryItemSchema.index({ sku: 1 }, { unique: true });
+// FIXED: sku đã có unique: true trong schema, chỉ cần compound index cho lowStock alerts
 inventoryItemSchema.index({ quantity: 1, lowStockThreshold: 1 });
 
 // Virtual để kiểm tra cảnh báo hết hàng

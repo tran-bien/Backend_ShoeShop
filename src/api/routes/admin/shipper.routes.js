@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const shipperController = require("@controllers/shipper.controller");
+const shipperController = require("@controllers/admin/shipper.controller");
 const {
   protect,
   requireStaffOrAdmin,

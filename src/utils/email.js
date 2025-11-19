@@ -7,14 +7,14 @@ require("dotenv").config();
 // Kiểm tra biến môi trường
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
   console.error(
-    "❌ CRITICAL: EMAIL_USER hoặc EMAIL_PASSWORD chưa được cấu hình trong .env"
+    "CRITICAL: EMAIL_USER hoặc EMAIL_PASSWORD chưa được cấu hình trong .env"
   );
   throw new Error("Missing email configuration in .env file");
 }
 
 // Loại bỏ dấu ngoặc kép và khoảng trắng thừa (nếu có)
 const emailPassword = process.env.EMAIL_PASSWORD.replace(/['"]/g, "").trim();
-console.log("📧 Cleaned password length:", emailPassword.length);
+// console.log("Cleaned password length:", emailPassword.length);
 
 // Khởi tạo transporter (sẽ được shared giữa utils và service)
 const transporter = nodemailer.createTransport({
@@ -34,9 +34,9 @@ const transporter = nodemailer.createTransport({
 // Verify transporter configuration
 transporter.verify((error, success) => {
   if (error) {
-    console.error("❌ Email transporter verification failed:", error);
+    console.error("Email transporter verification failed:", error);
   } else {
-    console.log("✅ Email server is ready to send messages");
+    console.log("Email server is ready to send messages");
   }
 });
 
@@ -480,15 +480,15 @@ exports.sendVerificationEmail = async (email, name, otp) => {
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log("✅ Verification email sent successfully:", info.messageId);
-    console.log("✅ Accepted:", info.accepted);
-    console.log("✅ Response:", info.response);
+    console.log("Verification email sent successfully:", info.messageId);
+    console.log("Accepted:", info.accepted);
+    console.log("Response:", info.response);
     return info;
   } catch (error) {
-    console.error("❌ Error sending verification email:", error);
-    console.error("❌ Error code:", error.code);
-    console.error("❌ Error message:", error.message);
-    console.error("❌ Error stack:", error.stack);
+    console.error("Error sending verification email:", error);
+    console.error("Error code:", error.code);
+    console.error("Error message:", error.message);
+    console.error("Error stack:", error.stack);
 
     // Kiểm tra lỗi cụ thể
     if (error.code === "EAUTH") {

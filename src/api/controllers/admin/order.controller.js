@@ -75,7 +75,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   const result = await orderService.updateOrderStatus(req.params.id, {
     status,
     note,
-    updatedBy: req.user.id,
+    updatedBy: req.user._id,
   });
 
   res.status(200).json({
@@ -168,7 +168,7 @@ const confirmReturn = asyncHandler(async (req, res) => {
 });
 
 /**
- * FORCE CONFIRM PAYMENT (ADMIN)
+ * FORCE CONFIRM PAYMENT (ADMIN/STAFF)
  *
  * Business Logic:
  * - FIXED Bug #11: Admin force-confirm payment cho VNPAY failed callbacks
@@ -177,7 +177,7 @@ const confirmReturn = asyncHandler(async (req, res) => {
  * - Auto confirm order sau khi force-confirm payment
  * - Yêu cầu admin nhập transactionId và notes để track
  *
- * @access  Admin only
+ * @access  Staff/Admin
  * @route   POST /api/admin/orders/:id/force-confirm-payment
  * @params  { id: orderId }
  * @body    { transactionId, notes }

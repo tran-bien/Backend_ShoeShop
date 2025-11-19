@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const returnController = require("@controllers/return.controller");
+const returnController = require("@controllers/admin/return.controller");
 const {
   protect,
   requireStaffOrAdmin,

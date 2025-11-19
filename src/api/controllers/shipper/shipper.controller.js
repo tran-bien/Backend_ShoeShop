@@ -1,0 +1,74 @@
+const asyncHandler = require("express-async-handler");
+const shipperService = require("@services/shipper.service");
+
+/**
+ * SHIPPER CONTROLLER
+ * Chứa các endpoints dành cho Shipper quản lý đơn hàng và trạng thái giao hàng
+ */
+
+/**
+ * Cập nhật trạng thái giao hàng
+ * @access  Shipper (requireShipper middleware)
+ * @route   PATCH /api/v1/shipper/delivery-status/:orderId
+ */
+const updateDeliveryStatus = asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+  const { status, note, images, location } = req.body;
+  const shipperId = req.user._id;
+
+  const result = await shipperService.updateDeliveryStatus(orderId, shipperId, {
+    status,
+    note,
+    images,
+    location,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Cập nhật trạng thái giao hàng thành công",
+    data: result,
+  });
+});
+
+/**
+ * Lấy danh sách đơn hàng của shipper
+ * @access  Shipper (requireShipper middleware)
+ * @route   GET /api/v1/shipper/my-orders
+ */
+const getShipperOrders = asyncHandler(async (req, res) => {
+  const shipperId = req.user._id;
+
+  const result = await shipperService.getShipperOrders(shipperId, req.query);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
+});
+
+/**
+ * Cập nhật trạng thái sẵn sàng của shipper
+ * @access  Shipper (requireShipper middleware)
+ * @route   PATCH /api/v1/shipper/availability
+ */
+const updateAvailability = asyncHandler(async (req, res) => {
+  const shipperId = req.user._id;
+  const { isAvailable } = req.body;
+
+  const result = await shipperService.updateShipperAvailability(
+    shipperId,
+    isAvailable
+  );
+
+  res.status(200).json({
+    success: true,
+    message: `Đã ${isAvailable ? "bật" : "tắt"} trạng thái sẵn sàng`,
+    data: result,
+  });
+});
+
+module.exports = {
+  updateDeliveryStatus,
+  getShipperOrders,
+  updateAvailability,
+};

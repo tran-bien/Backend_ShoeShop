@@ -4,9 +4,16 @@ const User = require("../../models/user");
 const Session = require("../../models/session");
 const asyncHandler = require("express-async-handler");
 const ApiError = require("@utils/ApiError");
+const { cleanSessions } = require("@services/session.service");
 
 // Bảo vệ các route yêu cầu đăng nhập
 exports.protect = asyncHandler(async (req, res, next) => {
+  // MIDDLEWARE-BASED CLEANUP: Trigger session cleanup on authenticated requests
+  // Thay thế setInterval - cleanup xảy ra khi user request
+  cleanSessions().catch((err) => {
+    console.error("[CLEANUP ERROR]", err.message);
+  });
+
   const token = req.headers.authorization?.startsWith("Bearer")
     ? req.headers.authorization.split(" ")[1]
     : null;

@@ -7,7 +7,7 @@ const reviewService = require("@services/review.service");
  * @access  Private
  */
 const getUserReviews = asyncHandler(async (req, res) => {
-  const result = await reviewService.getUserReviews(req.user.id, req.query);
+  const result = await reviewService.getUserReviews(req.user._id, req.query);
 
   res.status(200).json({
     success: true,
@@ -23,7 +23,7 @@ const getUserReviews = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const createReview = asyncHandler(async (req, res) => {
-  const result = await reviewService.createReview(req.user.id, req.body);
+  const result = await reviewService.createReview(req.user._id, req.body);
 
   res.status(201).json(result);
 });
@@ -35,7 +35,7 @@ const createReview = asyncHandler(async (req, res) => {
  */
 const updateReview = asyncHandler(async (req, res) => {
   const result = await reviewService.updateReview(
-    req.user.id,
+    req.user._id,
     req.params.reviewId,
     req.body
   );
@@ -50,7 +50,7 @@ const updateReview = asyncHandler(async (req, res) => {
  */
 const deleteReview = asyncHandler(async (req, res) => {
   const result = await reviewService.deleteReview(
-    req.user.id,
+    req.user._id,
     req.params.reviewId
   );
 
@@ -64,7 +64,7 @@ const deleteReview = asyncHandler(async (req, res) => {
  */
 const likeReview = asyncHandler(async (req, res) => {
   const result = await reviewService.likeReview(
-    req.user.id,
+    req.user._id,
     req.params.reviewId
   );
 
@@ -78,7 +78,7 @@ const likeReview = asyncHandler(async (req, res) => {
  */
 const getReviewableProducts = asyncHandler(async (req, res) => {
   const result = await reviewService.getReviewableProducts(
-    req.user.id,
+    req.user._id,
     req.query
   );
 

@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const blogCategoryController = require("@controllers/blogCategory.controller");
+const blogCategoryController = require("@controllers/public/blogCategory.controller");
 
 /**
  * @route GET /api/v1/blogs/categories

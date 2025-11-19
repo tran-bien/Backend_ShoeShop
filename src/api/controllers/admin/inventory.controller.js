@@ -1,5 +1,5 @@
 const asyncHandler = require("express-async-handler");
-const inventoryService = require("../../services/inventory.service");
+const inventoryService = require("@services/inventory.service");
 
 /**
  * Nhập hàng vào kho (manual)

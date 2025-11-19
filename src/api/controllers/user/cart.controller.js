@@ -7,9 +7,9 @@ const cartService = require("@services/cart.service");
  * @access  Private
  */
 const getCart = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user._id;
   const result = await cartService.getCartByUser(userId);
-  
+
   res.status(200).json(result);
 });
 
@@ -22,7 +22,7 @@ const addToCart = asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const itemData = req.body;
   const result = await cartService.addToCart(userId, itemData);
-  
+
   res.status(201).json(result);
 });
 
@@ -32,11 +32,10 @@ const addToCart = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const updateCartItem = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
-  const { itemId } = req.params;
-  const { quantity } = req.body;
+  const userId = req.user._id;
+  const { cartItemId, quantity } = req.body;
   const result = await cartService.updateCartItem(userId, itemId, quantity);
-  
+
   res.status(200).json(result);
 });
 
@@ -46,9 +45,9 @@ const updateCartItem = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const removeCartItems = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user._id;
   const result = await cartService.removeCartItem(userId);
-  
+
   res.status(200).json(result);
 });
 
@@ -58,9 +57,9 @@ const removeCartItems = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const clearCart = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user._id;
   const result = await cartService.clearCart(userId);
-  
+
   res.status(200).json(result);
 });
 
@@ -73,7 +72,7 @@ const toggleSelectCartItem = asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const { itemId } = req.params;
   const result = await cartService.toggleSelectCartItem(userId, itemId);
-  
+
   res.status(200).json(result);
 });
 
@@ -85,7 +84,7 @@ const toggleSelectCartItem = asyncHandler(async (req, res) => {
 const previewBeforeOrder = asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const result = await cartService.previewBeforeOrder(userId, req.body);
-  
+
   res.status(200).json(result);
 });
 
@@ -96,5 +95,5 @@ module.exports = {
   removeCartItems,
   clearCart,
   toggleSelectCartItem,
-  previewBeforeOrder
+  previewBeforeOrder,
 };

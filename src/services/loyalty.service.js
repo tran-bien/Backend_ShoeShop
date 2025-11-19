@@ -238,8 +238,42 @@ const loyaltyService = {
 
   /**
    * Lấy thống kê loyalty của user
+   * Tự động expire các điểm hết hạn trước khi tính toán stats
    */
   getUserLoyaltyStats: async (userId) => {
+    // AUTO-EXPIRE logic: Expire điểm hết hạn trước khi tính stats
+    const now = new Date();
+    const expiredTransactions = await LoyaltyTransaction.find({
+      user: userId,
+      type: "EARN",
+      isExpired: false,
+      expiresAt: { $lt: now },
+    });
+
+    if (expiredTransactions.length > 0) {
+      console.log(
+        `[STATS AUTO-EXPIRE] Found ${expiredTransactions.length} expired loyalty transactions for user ${userId}`
+      );
+
+      for (const tx of expiredTransactions) {
+        try {
+          await loyaltyService.deductPoints(tx.user, tx.points, {
+            type: "EXPIRE",
+            source: tx.source,
+            description: `Hết hạn ${tx.points} điểm từ ${tx.source}`,
+          });
+
+          tx.isExpired = true;
+          await tx.save();
+        } catch (error) {
+          console.error(
+            `[STATS AUTO-EXPIRE] Error expiring transaction ${tx._id}:`,
+            error.message
+          );
+        }
+      }
+    }
+
     const user = await User.findById(userId).populate("loyalty.tier");
 
     if (!user) {

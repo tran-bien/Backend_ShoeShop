@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const inventoryService = require("@services/inventory.service");
 
 /**
  * Cập nhật số lượng tồn kho từ đơn hàng (sử dụng InventoryItem)
@@ -96,9 +97,9 @@ const generateOrderCode = async () => {
       attempt++;
 
       if (attempt >= maxRetries) {
-        // Phương án cuối cùng: sử dụng UUID
+        // Phương án cuối cùng: sử dụng random bytes
         const crypto = require("crypto");
-        const uuid = crypto.randomUUID().replace(/-/g, "").substring(0, 10);
+        const uuid = crypto.randomBytes(5).toString("hex"); // 10 hex chars
         return `ORD${Date.now().toString().slice(-6)}${uuid}`;
       }
 
@@ -107,9 +108,9 @@ const generateOrderCode = async () => {
     }
   }
 
-  // Nếu tất cả attempts đều thất bại, tạo mã với UUID
+  // Nếu tất cả attempts đều thất bại, tạo mã với random bytes
   const crypto = require("crypto");
-  const uuid = crypto.randomUUID().replace(/-/g, "").substring(0, 8);
+  const uuid = crypto.randomBytes(4).toString("hex"); // 8 hex chars
   return `ORD${Date.now().toString().slice(-6)}${uuid}`;
 };
 

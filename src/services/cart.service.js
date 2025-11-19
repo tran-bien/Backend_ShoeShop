@@ -82,14 +82,14 @@ const cartService = {
     // FIXED: Populate và filter inactive/deleted products
     await cart.populate({
       path: "cartItems.variant",
-      select: "color product gender imagesvariant isActive deletedAt", 
+      select: "color product gender imagesvariant isActive deletedAt",
       match: { isActive: true, deletedAt: null }, // Chỉ lấy variant active và chưa xóa
       populate: [
         { path: "color", select: "name code" },
-        { 
-          path: "product", 
+        {
+          path: "product",
           select: "_id name slug isActive deletedAt",
-          match: { isActive: true, deletedAt: null } // Chỉ lấy product active và chưa xóa
+          match: { isActive: true, deletedAt: null }, // Chỉ lấy product active và chưa xóa
         },
       ],
     });
@@ -99,7 +99,7 @@ const cartService = {
       select: "value description",
     });
 
-    // FIXED: Loại bỏ items có variant/product bị xóa hoặc inactive
+    // FIXED Bug #3: Loại bỏ items có variant/product bị xóa hoặc inactive
     const validItems = [];
     const invalidItems = [];
 
@@ -111,19 +111,34 @@ const cartService = {
           reason: "Sản phẩm không còn tồn tại hoặc đã bị vô hiệu hóa",
         });
         item.isAvailable = false;
-        item.unavailableReason = "Sản phẩm không còn tồn tại hoặc đã bị vô hiệu hóa";
+        item.unavailableReason =
+          "Sản phẩm không còn tồn tại hoặc đã bị vô hiệu hóa";
       } else {
         validItems.push(item);
       }
     }
 
-    // Nếu có items bị xóa/inactive, log và có thể cleanup
+    // Auto cleanup: Xóa items không hợp lệ khỏi cart
     if (invalidItems.length > 0) {
-      console.log(`[CART CLEANUP] Tìm thấy ${invalidItems.length} item(s) với sản phẩm inactive/deleted:`, invalidItems);
-      
+      cart.cartItems = cart.cartItems.filter(
+        (item) => item.variant && item.variant.product
+      );
+      await cart.save();
+      console.log(
+        `[CART CLEANUP] Removed ${invalidItems.length} invalid items from cart ${cart._id}`
+      );
+    }
+
+    // Nếu có items bị xóa/inactive, log thông tin
+    if (invalidItems.length > 0) {
+      console.log(
+        `[CART CLEANUP] Tìm thấy ${invalidItems.length} item(s) với sản phẩm inactive/deleted:`,
+        invalidItems
+      );
+
       // Auto-remove các items không hợp lệ khỏi giỏ hàng
-      cart.cartItems = cart.cartItems.filter(item => 
-        item.variant && item.variant.product
+      cart.cartItems = cart.cartItems.filter(
+        (item) => item.variant && item.variant.product
       );
       await cart.save();
     }
@@ -131,10 +146,13 @@ const cartService = {
     return {
       success: true,
       cart,
-      warnings: invalidItems.length > 0 ? {
-        removedItems: invalidItems,
-        message: `Đã loại bỏ ${invalidItems.length} sản phẩm không còn khả dụng khỏi giỏ hàng`
-      } : null,
+      warnings:
+        invalidItems.length > 0
+          ? {
+              removedItems: invalidItems,
+              message: `Đã loại bỏ ${invalidItems.length} sản phẩm không còn khả dụng khỏi giỏ hàng`,
+            }
+          : null,
     };
   },
 

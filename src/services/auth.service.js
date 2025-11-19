@@ -6,6 +6,7 @@ const bcrypt = require("bcryptjs");
 const uaParser = require("ua-parser-js");
 const { limitActiveSessions } = require("./session.service");
 const ApiError = require("@utils/ApiError");
+const LoyaltyTransaction = require("../models/loyaltyTransaction");
 
 const authService = {
   /**
@@ -324,6 +325,48 @@ const authService = {
     );
     if (!isPasswordMatch) {
       throw new ApiError(401, "Mật khẩu không đúng");
+    }
+
+    // MIDDLEWARE-BASED LOYALTY EXPIRATION: Auto-expire khi user login
+    // Tìm và expire các loyalty points hết hạn
+    try {
+      const now = new Date();
+      const expiredTransactions = await LoyaltyTransaction.find({
+        user: user._id,
+        type: "EARN",
+        isExpired: false,
+        expiresAt: { $lt: now },
+      });
+
+      if (expiredTransactions.length > 0) {
+        console.log(
+          `[LOGIN AUTO-EXPIRE] Found ${expiredTransactions.length} expired loyalty transactions for user ${user._id}`
+        );
+
+        // Dynamically import to avoid circular dependency
+        const loyaltyService = require("./loyalty.service");
+
+        for (const tx of expiredTransactions) {
+          try {
+            await loyaltyService.deductPoints(tx.user, tx.points, {
+              type: "EXPIRE",
+              source: tx.source,
+              description: `Hết hạn ${tx.points} điểm từ ${tx.source}`,
+            });
+
+            tx.isExpired = true;
+            await tx.save();
+          } catch (error) {
+            console.error(
+              `[LOGIN AUTO-EXPIRE] Error expiring transaction ${tx._id}:`,
+              error.message
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[LOGIN AUTO-EXPIRE] Error:", error.message);
+      // Don't block login if loyalty expiration fails
     }
 
     const { token, refreshToken } = await authService.manageUserSession(

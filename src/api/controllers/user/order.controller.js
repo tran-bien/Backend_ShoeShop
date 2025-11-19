@@ -18,7 +18,7 @@ const paymentService = require("@services/payment.service");
  * @flow    order.route.js (user) → order.controller.js → order.service.js → getUserOrders()
  */
 const getOrders = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user._id;
   const result = await orderService.getUserOrders(userId, req.query);
 
   res.status(200).json({
@@ -42,7 +42,7 @@ const getOrders = asyncHandler(async (req, res) => {
  * @flow    order.route.js (user) → order.controller.js → order.service.js → getOrderById()
  */
 const getOrderById = asyncHandler(async (req, res) => {
-  const order = await orderService.getOrderById(req.params.id, req.user.id);
+  const order = await orderService.getOrderById(req.params.id, req.user._id);
 
   res.status(200).json({
     success: true,
@@ -151,7 +151,7 @@ const createOrder = asyncHandler(async (req, res) => {
 const cancelOrder = asyncHandler(async (req, res) => {
   const { reason } = req.body;
 
-  const result = await orderService.cancelOrder(req.params.id, req.user.id, {
+  const result = await orderService.cancelOrder(req.params.id, req.user._id, {
     reason,
   });
 
@@ -318,7 +318,7 @@ const testVnpayCallback = asyncHandler(async (req, res) => {
  */
 const getUserCancelRequests = asyncHandler(async (req, res) => {
   const result = await orderService.getUserCancelRequests(
-    req.user.id,
+    req.user._id,
     req.query
   );
 

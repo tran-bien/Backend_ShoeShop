@@ -94,7 +94,7 @@ const productController = {
   /**
    * @desc    Cập nhật trạng thái tồn kho sản phẩm
    * @route   POST /api/admin/products/:id/update-stock-status
-   * @access  Admin
+   * @access  Staff/Admin
    */
   updateProductStockStatus: asyncHandler(async (req, res) => {
     const result = await productService.updateProductStockStatus(req.params.id);

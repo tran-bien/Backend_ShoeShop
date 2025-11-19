@@ -97,7 +97,7 @@ const authController = {
    */
   changePassword: asyncHandler(async (req, res) => {
     const result = await authService.changePassword(
-      req.user.id,
+      req.user._id,
       req.body.currentPassword,
       req.body.newPassword
     );
@@ -110,12 +110,11 @@ const authController = {
    * @access  Private
    */
   getCurrentSessions: asyncHandler(async (req, res) => {
-    const result = await authService.getCurrentSessions(req.user.id, req.token);
-    res.json({
-      success: true,
-      message: "Lấy danh sách phiên đăng nhập thành công",
-      data: result,
-    });
+    const result = await authService.getCurrentSessions(
+      req.user._id,
+      req.token
+    );
+    res.json(result);
   }),
 
   /**
@@ -125,9 +124,8 @@ const authController = {
    */
   logoutSession: asyncHandler(async (req, res) => {
     const result = await authService.logoutSession(
-      req.params.sessionId,
-      req.user.id,
-      req.token
+      req.user._id,
+      req.params.sessionId
     );
     res.json({
       success: true,
@@ -142,13 +140,13 @@ const authController = {
    * @access  Private
    */
   logoutAllOtherSessions: asyncHandler(async (req, res) => {
-    const count = await authService.logoutAllOtherSessions(
-      req.user.id,
+    const result = await authService.logoutOtherSessions(
+      req.user._id,
       req.token
     );
     res.json({
       success: true,
-      message: `Đã đăng xuất khỏi ${count} phiên khác`,
+      message: `Đã đăng xuất khỏi ${result.count} phiên khác`,
     });
   }),
 
@@ -158,7 +156,7 @@ const authController = {
    * @access  Private
    */
   logoutAll: asyncHandler(async (req, res) => {
-    const count = await authService.logoutAll(req.user.id);
+    const count = await authService.logoutAll(req.user._id);
     res.json({
       success: true,
       message: `Đã đăng xuất khỏi tất cả ${count} phiên`,
