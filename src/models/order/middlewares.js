@@ -368,6 +368,7 @@ const applyMiddlewares = (schema) => {
 
         // CASE 1: ĐƠN HÀNG BỊ HỦY (cancelled, refunded)
         // → NHẬP KHO NGAY, không cần returnConfirmed
+        // FIXED Bug #4: Thêm check inventoryRestored để tránh double restore
         if (
           (currentStatus === "cancelled" || currentStatus === "refunded") &&
           this.inventoryDeducted &&
@@ -377,30 +378,40 @@ const applyMiddlewares = (schema) => {
             `[Order ${this.code}] Đơn hàng bị ${currentStatus}, hoàn trả tồn kho NGAY`
           );
 
-          for (const item of this.orderItems) {
-            await updateInventory(
-              item,
-              "increment",
-              currentStatus === "cancelled" ? "cancelled" : "refunded",
-              this._id,
-              this.user
-            );
-          }
-
-          // Đánh dấu đã hoàn kho
-          await mongoose.model("Order").updateOne(
-            { _id: this._id },
-            {
-              inventoryRestored: true,
-              inventoryDeducted: false,
+          try {
+            for (const item of this.orderItems) {
+              await updateInventory(
+                item,
+                "increment",
+                currentStatus === "cancelled" ? "cancelled" : "refunded",
+                this._id,
+                this.user
+              );
             }
-          );
+
+            // Đánh dấu đã hoàn kho
+            await mongoose.model("Order").updateOne(
+              { _id: this._id },
+              {
+                inventoryRestored: true,
+                inventoryDeducted: false,
+              }
+            );
+          } catch (inventoryError) {
+            console.error(
+              `[Order ${this.code}] LỖI khi restore inventory:`,
+              inventoryError.message
+            );
+            // Throw để rollback transaction nếu có
+            throw inventoryError;
+          }
 
           console.log(`[Order ${this.code}] Đã hoàn trả tồn kho`);
         }
 
         // CASE 2: ĐƠN HÀNG TRẢ HÀNG (returned)
         // → CHỈ nhập kho KHI returnConfirmed = true (Staff đã xác nhận nhận hàng)
+        // FIXED Bug #4: Thêm check inventoryRestored để tránh double restore
         else if (
           currentStatus === "returned" &&
           this.inventoryDeducted &&
@@ -415,24 +426,32 @@ const applyMiddlewares = (schema) => {
               `[Order ${this.code}] Trả hàng và ĐÃ xác nhận nhận hàng. Hoàn trả tồn kho.`
             );
 
-            for (const item of this.orderItems) {
-              await updateInventory(
-                item,
-                "increment",
-                "return",
-                this._id,
-                this.user
-              );
-            }
-
-            // Đánh dấu đã hoàn kho
-            await mongoose.model("Order").updateOne(
-              { _id: this._id },
-              {
-                inventoryRestored: true,
-                inventoryDeducted: false,
+            try {
+              for (const item of this.orderItems) {
+                await updateInventory(
+                  item,
+                  "increment",
+                  "return",
+                  this._id,
+                  this.user
+                );
               }
-            );
+
+              // Đánh dấu đã hoàn kho
+              await mongoose.model("Order").updateOne(
+                { _id: this._id },
+                {
+                  inventoryRestored: true,
+                  inventoryDeducted: false,
+                }
+              );
+            } catch (inventoryError) {
+              console.error(
+                `[Order ${this.code}] LỖI khi restore inventory:`,
+                inventoryError.message
+              );
+              throw inventoryError;
+            }
 
             console.log(`[Order ${this.code}] Đã hoàn trả tồn kho`);
           }
@@ -497,6 +516,7 @@ const applyMiddlewares = (schema) => {
 
         // CASE 1: ĐƠN HÀNG BỊ HỦY (cancelled, refunded)
         // → NHẬP KHO NGAY, không cần returnConfirmed
+        // FIXED Bug #4: Thêm check và error handling
         if (
           (doc.status === "cancelled" || doc.status === "refunded") &&
           doc.inventoryDeducted &&
@@ -506,52 +526,12 @@ const applyMiddlewares = (schema) => {
             `[post findOneAndUpdate] [Order ${doc.code}] Đơn hàng bị ${doc.status}, hoàn trả tồn kho NGAY`
           );
 
-          for (const item of doc.orderItems) {
-            await updateInventory(
-              item,
-              "increment",
-              doc.status === "cancelled" ? "cancelled" : "refunded",
-              doc._id,
-              doc.user
-            );
-          }
-
-          // Cập nhật trạng thái
-          await mongoose.model("Order").findByIdAndUpdate(
-            doc._id,
-            {
-              inventoryRestored: true,
-              inventoryDeducted: false,
-            },
-            { new: true }
-          );
-
-          console.log(
-            `[post findOneAndUpdate] [Order ${doc.code}] Đã hoàn trả tồn kho`
-          );
-        }
-
-        // CASE 2: ĐƠN HÀNG TRẢ HÀNG (returned)
-        // → CHỈ nhập kho KHI returnConfirmed = true (Staff đã xác nhận nhận hàng)
-        else if (
-          doc.status === "returned" &&
-          doc.inventoryDeducted &&
-          !doc.inventoryRestored
-        ) {
-          if (!doc.returnConfirmed) {
-            console.log(
-              `[post findOneAndUpdate] [Order ${doc.code}] Trả hàng nhưng CHƯA xác nhận nhận hàng. Chờ staff xác nhận.`
-            );
-          } else {
-            console.log(
-              `[post findOneAndUpdate] [Order ${doc.code}] Trả hàng và ĐÃ xác nhận nhận hàng. Hoàn trả tồn kho.`
-            );
-
+          try {
             for (const item of doc.orderItems) {
               await updateInventory(
                 item,
                 "increment",
-                "return",
+                doc.status === "cancelled" ? "cancelled" : "refunded",
                 doc._id,
                 doc.user
               );
@@ -566,6 +546,62 @@ const applyMiddlewares = (schema) => {
               },
               { new: true }
             );
+          } catch (inventoryError) {
+            console.error(
+              `[post findOneAndUpdate] [Order ${doc.code}] LỖI restore inventory:`,
+              inventoryError.message
+            );
+            // Log error nhưng không throw để không block middleware chain
+          }
+
+          console.log(
+            `[post findOneAndUpdate] [Order ${doc.code}] Đã hoàn trả tồn kho`
+          );
+        }
+
+        // CASE 2: ĐƠN HÀNG TRẢ HÀNG (returned)
+        // → CHỈ nhập kho KHI returnConfirmed = true (Staff đã xác nhận nhận hàng)
+        // FIXED Bug #4: Thêm error handling
+        else if (
+          doc.status === "returned" &&
+          doc.inventoryDeducted &&
+          !doc.inventoryRestored
+        ) {
+          if (!doc.returnConfirmed) {
+            console.log(
+              `[post findOneAndUpdate] [Order ${doc.code}] Trả hàng nhưng CHƯA xác nhận nhận hàng. Chờ staff xác nhận.`
+            );
+          } else {
+            console.log(
+              `[post findOneAndUpdate] [Order ${doc.code}] Trả hàng và ĐÃ xác nhận nhận hàng. Hoàn trả tồn kho.`
+            );
+
+            try {
+              for (const item of doc.orderItems) {
+                await updateInventory(
+                  item,
+                  "increment",
+                  "return",
+                  doc._id,
+                  doc.user
+                );
+              }
+
+              // Cập nhật trạng thái
+              await mongoose.model("Order").findByIdAndUpdate(
+                doc._id,
+                {
+                  inventoryRestored: true,
+                  inventoryDeducted: false,
+                },
+                { new: true }
+              );
+            } catch (inventoryError) {
+              console.error(
+                `[post findOneAndUpdate] [Order ${doc.code}] LỖI restore inventory:`,
+                inventoryError.message
+              );
+            }
 
             console.log(
               `[post findOneAndUpdate] [Order ${doc.code}] Đã hoàn trả tồn kho`

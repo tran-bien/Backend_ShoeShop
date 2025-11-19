@@ -415,7 +415,7 @@ const orderService = {
           note: "Đơn hàng được tạo",
         },
       ],
-      // FIXED Bug #1: Luôn set false khi tạo đơn, chỉ set true trong assignOrderToShipper()
+      // FIXED Bug: Luôn set false khi tạo đơn, chỉ set true trong assignOrderToShipper()
       inventoryDeducted: false,
     });
 
@@ -424,7 +424,7 @@ const orderService = {
       newOrder.coupon = coupon._id;
       newOrder.couponDetail = couponDetail;
 
-      // ATOMIC UPDATE - Tăng số lần sử dụng với check điều kiện
+      // FIXED: Atomic update cho cả currentUses VÀ userUsage để tránh race condition
       const Coupon = mongoose.model("Coupon");
       const updatedCoupon = await Coupon.findOneAndUpdate(
         {
@@ -435,20 +435,13 @@ const orderService = {
           ],
         },
         {
-          $inc: { currentUses: 1 },
-          $set: {
-            "userUsage.$[elem].usageCount": {
-              $add: ["$userUsage.$[elem].usageCount", 1],
-            },
-            "userUsage.$[elem].lastUsedAt": new Date(),
+          $inc: {
+            currentUses: 1,
+            // FIXED: Dùng $inc thay vì $add (MongoDB operator hợp lệ)
+            "userUsage.$[elem].usageCount": 1,
           },
-          $setOnInsert: {
-            userUsage: {
-              $concatArrays: [
-                "$userUsage",
-                [{ user: userId, usageCount: 1, lastUsedAt: new Date() }],
-              ],
-            },
+          $set: {
+            "userUsage.$[elem].lastUsedAt": new Date(),
           },
         },
         {
@@ -463,21 +456,27 @@ const orderService = {
         throw new ApiError(422, "Mã giảm giá đã hết lượt sử dụng");
       }
 
-      // Nếu user chưa có trong userUsage, thêm mới (fallback)
+      // FIXED Bug #10: Fallback với điều kiện $ne để tránh duplicate entries
       const userExists = updatedCoupon.userUsage.some(
         (u) => u.user.toString() === userId.toString()
       );
 
       if (!userExists) {
-        await Coupon.findByIdAndUpdate(coupon._id, {
-          $push: {
-            userUsage: {
-              user: userId,
-              usageCount: 1,
-              lastUsedAt: new Date(),
-            },
+        await Coupon.findOneAndUpdate(
+          {
+            _id: coupon._id,
+            "userUsage.user": { $ne: userId }, // Chỉ push nếu user CHƯA có
           },
-        });
+          {
+            $push: {
+              userUsage: {
+                user: userId,
+                usageCount: 1,
+                lastUsedAt: new Date(),
+              },
+            },
+          }
+        );
       }
     }
 

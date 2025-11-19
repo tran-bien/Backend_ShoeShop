@@ -30,13 +30,15 @@ const userViewHistoryRoutes = require("@routes/user/viewHistory.routes");
 const userRecommendationRoutes = require("@routes/user/recommendation.routes");
 
 // Shipper Routes
-const shipperRoutes = require("@routes/shipper.route");
+const shipperRoutes = require("@routes/shipper/shipper.routes");
 
 // Admin/Staff Routes
 const adminAuthRoutes = require("@routes/admin/auth.routes");
 const adminDashboardRoutes = require("@routes/admin/dashboard.routes");
-const inventoryRoutes = require("@routes/inventory.route");
-const returnRoutes = require("@routes/return.route");
+const adminInventoryRoutes = require("@routes/admin/inventory.routes");
+const adminShipperRoutes = require("@routes/admin/shipper.routes");
+const adminReturnRoutes = require("@routes/admin/return.routes");
+const userReturnRoutes = require("@routes/user/return.routes");
 const adminOrderRoutes = require("@routes/admin/order.routes");
 const adminUserRoutes = require("@routes/admin/user.routes");
 const adminProductRoutes = require("@routes/admin/product.routes");
@@ -84,7 +86,7 @@ router.use("/users/reviews", userReviewRoutes);
 router.use("/users/orders", userOrderRoutes);
 router.use("/users/cart", userCartRoutes);
 router.use("/users/images", userImageRoutes);
-router.use("/users/returns", returnRoutes);
+router.use("/users/returns", userReturnRoutes); // User tạo và quản lý đổi trả của mình
 router.use("/users/loyalty", userLoyaltyRoutes);
 router.use("/users/notifications", userNotificationRoutes);
 router.use("/users/view-history", userViewHistoryRoutes);
@@ -96,8 +98,9 @@ router.use("/shipper", shipperRoutes);
 // ADMIN/STAFF ROUTES (role: admin hoặc staff)
 router.use("/admin/auth", adminAuthRoutes);
 router.use("/admin/dashboard", adminDashboardRoutes);
-router.use("/admin/inventory", inventoryRoutes);
-router.use("/admin/returns", returnRoutes); // Admin/Staff xử lý đổi trả
+router.use("/admin/inventory", adminInventoryRoutes);
+router.use("/admin/shippers", adminShipperRoutes);
+router.use("/admin/returns", adminReturnRoutes);
 router.use("/admin/orders", adminOrderRoutes);
 router.use("/admin/users", adminUserRoutes);
 router.use("/admin/products", adminProductRoutes);

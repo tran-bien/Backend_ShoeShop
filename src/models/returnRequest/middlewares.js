@@ -169,6 +169,7 @@ module.exports = (schema) => {
 
           // ============================================================
           // LOYALTY: TRỪ ĐIỂM KHI TRẢ HÀNG HOÀN TẤT (COMPLETED)
+          // FIXED Bug #5: Thêm proper error handling
           // ============================================================
           if (
             currentStatus === "completed" &&
@@ -197,16 +198,24 @@ module.exports = (schema) => {
                 const pointsToDeduct = Math.min(pointsEarned, currentPoints);
 
                 if (pointsToDeduct > 0) {
-                  await loyaltyService.deductPoints(
-                    populatedRequest.customer._id,
-                    pointsToDeduct,
-                    {
-                      type: "DEDUCT",
-                      source: "RETURN",
-                      description: `Trừ điểm do trả hàng đơn ${order.code} (Yêu cầu: ${this.code})`,
-                      processedBy: populatedRequest.processedBy,
-                    }
-                  );
+                  try {
+                    await loyaltyService.deductPoints(
+                      populatedRequest.customer._id,
+                      pointsToDeduct,
+                      {
+                        type: "DEDUCT",
+                        source: "RETURN",
+                        description: `Trừ điểm do trả hàng đơn ${order.code} (Yêu cầu: ${this.code})`,
+                        processedBy: populatedRequest.processedBy,
+                      }
+                    );
+                  } catch (deductError) {
+                    console.error(
+                      `[LOYALTY] LỖI khi trừ điểm cho return request ${this.code}:`,
+                      deductError.message
+                    );
+                    // Không throw để không block flow chính
+                  }
 
                   console.log(
                     `[LOYALTY] Đã trừ ${pointsToDeduct}/${pointsEarned} điểm từ user ${populatedRequest.customer._id} do trả hàng ${this.code}`

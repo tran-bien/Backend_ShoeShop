@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const inventoryController = require("../controllers/inventory.controller");
+const inventoryController = require("@controllers/inventory.controller");
 const {
   protect,
   requireStaffOrAdmin,
-} = require("../middlewares/auth.middleware");
+} = require("@middlewares/auth.middleware");
 const validate = require("@utils/validatehelper");
 const {
   validateStockIn,
@@ -15,29 +15,21 @@ const {
   validateGetInventory,
   validateGetTransactions,
   validateInventoryId,
-} = require("../validators/inventory.validator");
-
-// Tất cả routes yêu cầu đăng nhập và quyền Staff/Admin
-router.use(protect, requireStaffOrAdmin);
+} = require("@validators/inventory.validator");
 
 /**
- * @route   GET /api/v1/admin/inventory
- * @desc    Lấy danh sách tồn kho với phân trang và filter
- * @query   page, limit, productId, lowStock, outOfStock, sortBy, sortOrder
- * @access  Staff/Admin
- * @flow    inventory.route.js → inventoryController.getInventoryList() → inventoryService.getInventoryList()
+ * ADMIN/STAFF INVENTORY ROUTES
+ * Quản lý kho hàng, nhập/xuất/điều chỉnh tồn kho
  */
-router.get(
-  "/",
-  validate(validateGetInventory),
-  inventoryController.getInventoryList
-);
+
+// Tất cả routes yêu cầu đăng nhập và quyền Staff/Admin
+router.use(protect);
+router.use(requireStaffOrAdmin);
 
 /**
  * @route   GET /api/v1/admin/inventory/stats
- * @desc    Lấy thống kê tổng quan kho hàng cho dashboard (totalItems, lowStockItems, outOfStockItems, totalValue)
+ * @desc    Lấy thống kê tổng quan kho hàng cho dashboard
  * @access  Staff/Admin
- * @flow    inventory.route.js → inventoryController.getInventoryStats() → inventoryService.getInventoryStats()
  */
 router.get("/stats", inventoryController.getInventoryStats);
 
@@ -46,10 +38,6 @@ router.get("/stats", inventoryController.getInventoryStats);
  * @desc    Lấy lịch sử giao dịch kho (IN/OUT/ADJUST) với filter chi tiết
  * @query   page, limit, type (IN|OUT|ADJUST), productId, variantId, sizeId, startDate, endDate
  * @access  Staff/Admin
- * @flow    inventory.route.js → inventoryController.getTransactionHistory() → inventoryService.getTransactionHistory()
- * @example GET /api/v1/admin/inventory/transactions?type=IN (Lấy lịch sử nhập kho)
- * @example GET /api/v1/admin/inventory/transactions?type=OUT (Lấy lịch sử xuất kho)
- * @example GET /api/v1/admin/inventory/transactions?productId=670abc123... (Lịch sử theo product)
  */
 router.get(
   "/transactions",
@@ -58,11 +46,22 @@ router.get(
 );
 
 /**
+ * @route   GET /api/v1/admin/inventory
+ * @desc    Lấy danh sách tồn kho với phân trang và filter
+ * @query   page, limit, productId, lowStock, outOfStock, sortBy, sortOrder
+ * @access  Staff/Admin
+ */
+router.get(
+  "/",
+  validate(validateGetInventory),
+  inventoryController.getInventoryList
+);
+
+/**
  * @route   GET /api/v1/admin/inventory/:id
- * @desc    Lấy chi tiết một mục tồn kho cụ thể (InventoryItem)
+ * @desc    Lấy chi tiết một mục tồn kho cụ thể
  * @params  id - InventoryItem ID
  * @access  Staff/Admin
- * @flow    inventory.route.js → inventoryController.getInventoryDetail() → inventoryService.getInventoryById()
  */
 router.get(
   "/:id",
@@ -75,7 +74,6 @@ router.get(
  * @desc    Nhập hàng vào kho (manual) - Tính weighted average cost, tạo SKU, cập nhật giá
  * @body    productId, variantId, sizeId, quantity, costPrice, targetProfitPercent, percentDiscount, note
  * @access  Staff/Admin
- * @flow    inventory.route.js → inventoryController.stockIn() → inventoryService.stockIn()
  */
 router.post(
   "/stock-in",
@@ -85,10 +83,9 @@ router.post(
 
 /**
  * @route   POST /api/v1/admin/inventory/stock-out
- * @desc    Xuất hàng khỏi kho thủ công (không qua order) - Kiểm tra số lượng tồn kho
+ * @desc    Xuất hàng khỏi kho thủ công (không qua order)
  * @body    productId, variantId, sizeId, quantity, note, orderId (optional)
  * @access  Staff/Admin
- * @flow    inventory.route.js → inventoryController.stockOut() → inventoryService.stockOut()
  */
 router.post(
   "/stock-out",
@@ -98,10 +95,9 @@ router.post(
 
 /**
  * @route   POST /api/v1/admin/inventory/adjust
- * @desc    Điều chỉnh số lượng tồn kho thủ công (kiểm kê, sửa sai số liệu, hàng hư hỏng)
+ * @desc    Điều chỉnh số lượng tồn kho thủ công (kiểm kê, sửa sai số liệu)
  * @body    productId, variantId, sizeId, newQuantity, reason
  * @access  Staff/Admin
- * @flow    inventory.route.js → inventoryController.adjustStock() → inventoryService.adjustStock()
  */
 router.post(
   "/adjust",
@@ -111,11 +107,10 @@ router.post(
 
 /**
  * @route   POST /api/v1/admin/inventory/calculate-price
- * @desc    Helper API - Tính giá bán từ giá vốn (không lưu DB, chỉ tính toán)
+ * @desc    Helper API - Tính giá bán từ giá vốn (không lưu DB)
  * @body    costPrice, targetProfitPercent, percentDiscount
  * @return  calculatedPrice, calculatedPriceFinal, profitPerItem, margin, markup
  * @access  Staff/Admin
- * @flow    inventory.route.js → inventoryController.calculatePrice() → inventoryService.calculatePrice()
  */
 router.post(
   "/calculate-price",
@@ -125,11 +120,10 @@ router.post(
 
 /**
  * @route   PATCH /api/v1/admin/inventory/:id/low-stock-threshold
- * @desc    Cập nhật ngưỡng cảnh báo tồn kho thấp cho một InventoryItem
+ * @desc    Cập nhật ngưỡng cảnh báo tồn kho thấp
  * @params  id - InventoryItem ID
  * @body    lowStockThreshold (number)
  * @access  Staff/Admin
- * @flow    inventory.route.js → inventoryController.updateLowStockThreshold() → inventoryService.updateLowStockThreshold()
  */
 router.patch(
   "/:id/low-stock-threshold",
