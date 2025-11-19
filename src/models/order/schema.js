@@ -205,6 +205,7 @@ const OrderSchema = new mongoose.Schema(
         type: String,
         required: true,
         enum: ["COD", "VNPAY"],
+        uppercase: true,
       },
       paymentStatus: {
         type: String,

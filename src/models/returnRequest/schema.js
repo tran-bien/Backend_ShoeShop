@@ -62,13 +62,13 @@ const returnRequestSchema = new mongoose.Schema(
     reason: {
       type: String,
       enum: [
-        "wrong_size",
-        "wrong_product",
-        "defective",
-        "not_as_described",
-        "changed_mind",
-        "exchange",
-        "other",
+        "wrong_size", // Sai kích cỡ
+        "wrong_product", // Sai sản phẩm (giao nhầm)
+        "defective", // Sản phẩm lỗi/hư hỏng
+        "not_as_described", // Không giống mô tả
+        "changed_mind", // Đổi ý (không muốn nữa)
+        "exchange", // Đổi hàng (sang size/màu khác)
+        "other", // Lý do khác
       ],
       required: true,
     },
@@ -186,6 +186,8 @@ returnRequestSchema.index({ order: 1 });
 returnRequestSchema.index({ customer: 1, createdAt: -1 });
 returnRequestSchema.index({ status: 1, createdAt: -1 });
 returnRequestSchema.index({ expiresAt: 1, status: 1 }); // For auto-reject cronjob
+// Add compound index for type + status queries
+returnRequestSchema.index({ type: 1, status: 1, createdAt: -1 });
 // ADDED: Compound index để optimize duplicate exchange request check
 returnRequestSchema.index({
   order: 1,

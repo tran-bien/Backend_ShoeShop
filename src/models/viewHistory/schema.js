@@ -46,14 +46,15 @@ const ViewHistorySchema = new mongoose.Schema(
     },
 
     // TTL - Tự động xóa sau 30 ngày
-    createdAt: {
+    // Dùng expireAt field riêng thay vì createdAt với expires
+    expireAt: {
       type: Date,
-      default: Date.now,
-      expires: 2592000, // 30 ngày = 30 * 24 * 60 * 60
+      default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      index: { expires: 0 }, // TTL index
     },
   },
   {
-    timestamps: false, // Chỉ dùng createdAt với TTL
+    timestamps: { createdAt: true, updatedAt: false }, // Chỉ dùng createdAt
   }
 );
 
@@ -63,4 +64,3 @@ ViewHistorySchema.index({ sessionId: 1, createdAt: -1 });
 ViewHistorySchema.index({ createdAt: -1 }); // TTL index
 
 module.exports = ViewHistorySchema;
-

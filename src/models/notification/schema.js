@@ -112,14 +112,15 @@ const NotificationSchema = new mongoose.Schema(
     },
 
     // TTL - Tự động xóa sau 90 ngày
-    createdAt: {
+    // FIXED Bug #2: Dùng expireAt field riêng thay vì createdAt với expires
+    expireAt: {
       type: Date,
-      default: Date.now,
-      expires: 7776000, // 90 ngày = 90 * 24 * 60 * 60
+      default: () => new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      index: { expires: 0 }, // TTL index
     },
   },
   {
-    timestamps: true,
+    timestamps: true, // An toàn khi dùng expireAt riêng
   }
 );
 
@@ -129,4 +130,3 @@ NotificationSchema.index({ user: 1, isRead: 1 });
 NotificationSchema.index({ type: 1, createdAt: -1 });
 
 module.exports = NotificationSchema;
-
