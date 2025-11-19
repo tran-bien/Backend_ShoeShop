@@ -144,8 +144,74 @@ const couponService = {
       throw new ApiError(422, "Mã giảm giá không trong thời gian sử dụng");
     }
 
-    // Kiểm tra người dùng đã thu thập coupon này chưa
-    if (coupon.users.includes(userId)) {
+    // Validate advanced conditions (required tiers, first order, etc.)
+    if (coupon.conditions) {
+      // Check required tiers
+      if (coupon.conditions.requiredTiers?.length > 0) {
+        if (!user.loyalty?.tier) {
+          throw new ApiError(
+            403,
+            "Mã giảm giá này chỉ dành cho thành viên có hạng thành viên"
+          );
+        }
+        const userTierId =
+          user.loyalty.tier._id?.toString() || user.loyalty.tier.toString();
+        const isValidTier = coupon.conditions.requiredTiers.some(
+          (t) => t.toString() === userTierId
+        );
+        if (!isValidTier) {
+          throw new ApiError(
+            403,
+            "Hạng thành viên của bạn không đủ điều kiện để thu thập coupon này"
+          );
+        }
+      }
+
+      // Check first order only
+      if (coupon.conditions.firstOrderOnly) {
+        const orderCount = await Order.countDocuments({
+          user: userId,
+          status: { $in: ["delivered", "confirmed", "shipping"] },
+        });
+        if (orderCount > 0) {
+          throw new ApiError(
+            403,
+            "Mã giảm giá này chỉ dành cho đơn hàng đầu tiên"
+          );
+        }
+      }
+
+      // Check required total spent
+      if (coupon.conditions.requiredTotalSpent) {
+        const totalSpent = await Order.aggregate([
+          {
+            $match: {
+              user: new mongoose.Types.ObjectId(userId),
+              status: "delivered",
+              deletedAt: null,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: "$totalAfterDiscountAndShipping" },
+            },
+          },
+        ]);
+        const userTotalSpent = totalSpent.length > 0 ? totalSpent[0].total : 0;
+        if (userTotalSpent < coupon.conditions.requiredTotalSpent) {
+          throw new ApiError(
+            403,
+            `Cần chi tiêu tối thiểu ${coupon.conditions.requiredTotalSpent.toLocaleString(
+              "vi-VN"
+            )}đ để thu thập coupon này`
+          );
+        }
+      }
+    }
+
+    // ATOMIC CHECK: Kiểm tra người dùng đã thu thập coupon này chưaoupon này chưa
+    if (coupon.users.some((u) => u.toString() === userId.toString())) {
       throw new ApiError(422, "Bạn đã thu thập mã giảm giá này rồi");
     }
 
@@ -167,9 +233,10 @@ const couponService = {
 
       // Kiểm tra giới hạn đổi/user (nếu có)
       if (coupon.maxRedeemPerUser) {
-        const userRedeemCount = coupon.users.filter(
-          (u) => u.toString() === userId.toString()
-        ).length;
+        const userUsageEntry = coupon.userUsage?.find(
+          (u) => u.user?.toString() === userId.toString()
+        );
+        const userRedeemCount = userUsageEntry?.usageCount || 0;
 
         if (userRedeemCount >= coupon.maxRedeemPerUser) {
           throw new ApiError(
@@ -177,9 +244,7 @@ const couponService = {
             `Bạn đã đổi coupon này ${userRedeemCount}/${coupon.maxRedeemPerUser} lần`
           );
         }
-      }
-
-      // Trừ điểm
+      } // Trừ điểm
       const loyaltyService = require("@services/loyalty.service");
       await loyaltyService.deductPoints(userId, coupon.pointCost, {
         type: "REDEEM",
@@ -365,7 +430,14 @@ const couponService = {
       // Check requiredTiers (loyalty tiers)
       if (conditions.requiredTiers && conditions.requiredTiers.length > 0) {
         const user = await User.findById(userId).populate("loyalty.tier");
-        if (!user || !user.loyalty?.tier) {
+        if (!user) {
+          return {
+            isValid: false,
+            message: "Không tìm thấy người dùng",
+          };
+        }
+
+        if (!user.loyalty?.tier) {
           return {
             isValid: false,
             message:
@@ -373,16 +445,16 @@ const couponService = {
           };
         }
 
-        const userTierId = user.loyalty.tier._id?.toString();
+        const userTierId =
+          user.loyalty.tier._id?.toString() || user.loyalty.tier.toString();
         const isValidTier = conditions.requiredTiers.some(
           (t) => t.toString() === userTierId
         );
         if (!isValidTier) {
           return {
             isValid: false,
-            message: `Mã giảm giá này chỉ dành cho hạng thành viên: ${conditions.requiredTiers.join(
-              ", "
-            )}`,
+            message:
+              "Hạng thành viên của bạn không đủ điều kiện sử dụng mã giảm giá này",
           };
         }
       }
@@ -397,34 +469,6 @@ const couponService = {
           return {
             isValid: false,
             message: "Mã giảm giá này chỉ dành cho đơn hàng đầu tiên",
-          };
-        }
-      }
-
-      // Check requiredTotalSpent
-      if (conditions.requiredTotalSpent) {
-        const totalSpent = await Order.aggregate([
-          {
-            $match: {
-              user: new mongoose.Types.ObjectId(userId),
-              status: "delivered",
-            },
-          },
-          {
-            $group: {
-              _id: null,
-              total: { $sum: "$totalAfterDiscountAndShipping" },
-            },
-          },
-        ]);
-
-        const userTotalSpent = totalSpent.length > 0 ? totalSpent[0].total : 0;
-        if (userTotalSpent < conditions.requiredTotalSpent) {
-          return {
-            isValid: false,
-            message: `Cần chi tiêu tối thiểu ${conditions.requiredTotalSpent.toLocaleString(
-              "vi-VN"
-            )}đ để sử dụng mã này`,
           };
         }
       }
@@ -457,24 +501,32 @@ const couponService = {
           coupon.scope === "PRODUCTS" &&
           coupon.applicableProducts?.length > 0
         ) {
-          isApplicable = coupon.applicableProducts.some(
-            (p) => p.toString() === item.variant?.product?._id?.toString()
-          );
+          const productId = item.variant?.product?._id;
+          if (productId) {
+            isApplicable = coupon.applicableProducts.some(
+              (p) => p.toString() === productId.toString()
+            );
+          }
         } else if (
           coupon.scope === "VARIANTS" &&
           coupon.applicableVariants?.length > 0
         ) {
-          isApplicable = coupon.applicableVariants.some(
-            (v) => v.toString() === item.variant?._id?.toString()
-          );
+          const variantId = item.variant?._id;
+          if (variantId) {
+            isApplicable = coupon.applicableVariants.some(
+              (v) => v.toString() === variantId.toString()
+            );
+          }
         } else if (
           coupon.scope === "CATEGORIES" &&
           coupon.applicableCategories?.length > 0
         ) {
-          isApplicable = coupon.applicableCategories.some(
-            (c) =>
-              c.toString() === item.variant?.product?.category?._id?.toString()
-          );
+          const categoryId = item.variant?.product?.category?._id;
+          if (categoryId) {
+            isApplicable = coupon.applicableCategories.some(
+              (c) => c.toString() === categoryId.toString()
+            );
+          }
         }
 
         if (isApplicable) {
@@ -595,6 +647,41 @@ const adminCouponService = {
       }
     }
 
+    // CRITICAL FIX Bug #8: Validate scope applicability
+    if (couponData.scope && couponData.scope !== "ALL") {
+      if (couponData.scope === "PRODUCTS") {
+        if (
+          !couponData.applicableProducts ||
+          couponData.applicableProducts.length === 0
+        ) {
+          throw new ApiError(
+            400,
+            "Coupon với scope PRODUCTS phải chọn ít nhất 1 sản phẩm"
+          );
+        }
+      } else if (couponData.scope === "VARIANTS") {
+        if (
+          !couponData.applicableVariants ||
+          couponData.applicableVariants.length === 0
+        ) {
+          throw new ApiError(
+            400,
+            "Coupon với scope VARIANTS phải chọn ít nhất 1 variant"
+          );
+        }
+      } else if (couponData.scope === "CATEGORIES") {
+        if (
+          !couponData.applicableCategories ||
+          couponData.applicableCategories.length === 0
+        ) {
+          throw new ApiError(
+            400,
+            "Coupon với scope CATEGORIES phải chọn ít nhất 1 danh mục"
+          );
+        }
+      }
+    }
+
     // Kiểm tra mã đã tồn tại chưa
     const existingCoupon = await Coupon.findOne({
       code: couponData.code.toUpperCase(),
@@ -633,6 +720,46 @@ const adminCouponService = {
     const coupon = await Coupon.findById(couponId);
     if (!coupon) {
       throw new ApiError(404, "Không tìm thấy mã giảm giá");
+    }
+
+    // CRITICAL FIX Bug #8: Validate scope applicability
+    const finalScope =
+      couponData.scope !== undefined ? couponData.scope : coupon.scope;
+    if (finalScope && finalScope !== "ALL") {
+      if (finalScope === "PRODUCTS") {
+        const products =
+          couponData.applicableProducts !== undefined
+            ? couponData.applicableProducts
+            : coupon.applicableProducts;
+        if (!products || products.length === 0) {
+          throw new ApiError(
+            400,
+            "Coupon với scope PRODUCTS phải chọn ít nhất 1 sản phẩm"
+          );
+        }
+      } else if (finalScope === "VARIANTS") {
+        const variants =
+          couponData.applicableVariants !== undefined
+            ? couponData.applicableVariants
+            : coupon.applicableVariants;
+        if (!variants || variants.length === 0) {
+          throw new ApiError(
+            400,
+            "Coupon với scope VARIANTS phải chọn ít nhất 1 variant"
+          );
+        }
+      } else if (finalScope === "CATEGORIES") {
+        const categories =
+          couponData.applicableCategories !== undefined
+            ? couponData.applicableCategories
+            : coupon.applicableCategories;
+        if (!categories || categories.length === 0) {
+          throw new ApiError(
+            400,
+            "Coupon với scope CATEGORIES phải chọn ít nhất 1 danh mục"
+          );
+        }
+      }
     }
 
     // Kiểm tra loại giảm giá nếu được cung cấp

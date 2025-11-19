@@ -173,4 +173,26 @@ router.delete(
   imageController.deleteFromCloudinary
 );
 
+/**
+ * @route   POST /api/v1/admin/images/blog-content
+ * @desc    Upload ảnh cho blog content (dùng trong markdown editor)
+ * @access  Staff/Admin
+ * @note    Frontend: Kết hợp Option A + B (Markdown Editor + Drag/Paste)
+ *          - Dùng react-markdown-editor-lite hoặc SimpleMDE
+ *          - Implement onImageUpload callback để gọi API này
+ *          - Hỗ trợ Ctrl+V paste ảnh và drag & drop
+ *          - API trả về { url, public_id } để chèn vào markdown: ![](url)
+ *          - Khi xóa blog, ảnh trong content sẽ tự động cleanup
+ */
+router.post(
+  "/blog-content",
+  uploadMiddleware.handleBlogContentImageUpload,
+  validate([
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
+  imageController.uploadBlogContentImage
+);
+
 module.exports = router;

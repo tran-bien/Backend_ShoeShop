@@ -107,7 +107,22 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
   }
 
   // TỰ ĐỘNG XUẤT KHO KHI GÁN CHO SHIPPER
+  // CRITICAL FIX Bug #6: Chỉ xuất kho nếu:
+  // - COD: Luôn xuất kho (paymentMethod = "COD")
+  // - VNPAY: Chỉ xuất kho khi đã thanh toán (paymentStatus = "paid")
   if (!order.inventoryDeducted) {
+    const shouldDeductInventory =
+      order.payment.paymentMethod === "COD" ||
+      (order.payment.paymentMethod === "VNPAY" &&
+        order.payment.paymentStatus === "paid");
+
+    if (!shouldDeductInventory) {
+      throw new ApiError(
+        400,
+        "Không thể gán shipper cho đơn hàng VNPAY chưa thanh toán. Vui lòng chờ khách hàng thanh toán."
+      );
+    }
+
     const inventoryService = require("@services/inventory.service");
 
     for (const item of order.orderItems) {

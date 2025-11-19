@@ -35,29 +35,30 @@ const applyMiddlewares = (schema) => {
   });
 
   // Trước khi tìm, tự động cập nhật trạng thái expired nếu đã hết hạn
-schema.pre("find", function () {
-  const now = new Date();
+  schema.pre("find", async function () {
+    const now = new Date();
 
-  // Cập nhật các mã giảm giá đã hết hạn nhưng chưa được đánh dấu
-  this.model
-    .updateMany(
-      {
-        status: "active",
-        $or: [
-          { endDate: { $lt: now } },
-          {
-            $and: [
-              { maxUses: { $ne: null } },
-              // Sử dụng $expr để so sánh hai trường
-              { $expr: { $gte: ["$currentUses", "$maxUses"] } }
-            ],
-          },
-        ],
-      },
-      { status: "expired" }
-    )
-    .exec();
-});
+    // ASYNC UPDATE: Cập nhật các mã giảm giá đã hết hạn
+    try {
+      await this.model.updateMany(
+        {
+          status: "active",
+          $or: [
+            { endDate: { $lt: now } },
+            {
+              $and: [
+                { maxUses: { $ne: null, $exists: true } },
+                { $expr: { $gte: ["$currentUses", "$maxUses"] } },
+              ],
+            },
+          ],
+        },
+        { status: "expired" }
+      );
+    } catch (error) {
+      console.error("[Coupon Middleware] Auto-expire error:", error);
+    }
+  });
 
   // Trước khi xóa, kiểm tra xem mã giảm giá đã được sử dụng chưa
   schema.pre(

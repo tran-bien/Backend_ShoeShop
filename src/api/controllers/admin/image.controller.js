@@ -167,3 +167,24 @@ exports.deleteFromCloudinary = asyncHandler(async (req, res) => {
     results,
   });
 });
+
+/**
+ * @desc    Upload ảnh cho blog content (markdown editor)
+ * @route   POST /api/admin/images/blog-content
+ * @access  Staff/Admin
+ * @note    Frontend implementation guide:
+ *          - Use react-markdown-editor-lite, SimpleMDE, or Toast UI Editor
+ *          - Implement onImageUpload callback to call this API
+ *          - Support Ctrl+V paste and drag & drop
+ *          - API returns { url, public_id } for markdown insertion: ![](url)
+ *          - Images auto-cleanup when blog post is deleted
+ */
+exports.uploadBlogContentImage = asyncHandler(async (req, res) => {
+  const imageData = {
+    url: req.file.path,
+    public_id: req.file.filename,
+  };
+
+  const result = await imageService.uploadBlogContentImage(imageData);
+  res.json(result);
+});

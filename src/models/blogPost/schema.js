@@ -15,43 +15,12 @@ const BlogPostSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Content - Simple markdown string (recommended for new posts)
+    // Content - Markdown string
     content: {
       type: String,
+      required: true,
       maxlength: 50000,
     },
-
-    // Nội dung xen kẽ text và ảnh (legacy - for complex layouts)
-    contentBlocks: [
-      {
-        type: {
-          type: String,
-          enum: ["TEXT", "IMAGE"],
-          required: true,
-        },
-        order: {
-          type: Number,
-          required: true,
-        },
-
-        // Cho TEXT block
-        text: {
-          type: String,
-          maxlength: 10000,
-        },
-
-        // Cho IMAGE block
-        image: {
-          url: String,
-          public_id: String,
-          caption: {
-            type: String,
-            maxlength: 200,
-          },
-          alt: String,
-        },
-      },
-    ],
 
     // Ảnh thumbnail (preview trong danh sách)
     thumbnail: {

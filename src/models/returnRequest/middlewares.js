@@ -7,6 +7,7 @@ const mongoose = require("mongoose");
 module.exports = (schema) => {
   // ============================================================
   // PRE-SAVE: Auto set expiresAt và code khi tạo request
+  // AUTO-REJECT nếu quá hạn
   // ============================================================
   schema.pre("save", async function (next) {
     try {
@@ -24,6 +25,21 @@ module.exports = (schema) => {
           this.code = `${prefix}-${String(count + 1).padStart(5, "0")}`;
         }
       }
+
+      // AUTO-REJECT logic: Tự động reject nếu pending và quá hạn
+      if (this.status === "pending" && this.expiresAt) {
+        const now = new Date();
+        if (now > this.expiresAt) {
+          this.status = "rejected";
+          this.rejectionReason =
+            "Tự động từ chối do quá thời hạn xử lý (7 ngày kể từ khi tạo)";
+          this.autoRejectedAt = now;
+          console.log(
+            `[AUTO-REJECT] Return request ${this.code} đã quá hạn, tự động reject`
+          );
+        }
+      }
+
       next();
     } catch (error) {
       next(error);

@@ -3,6 +3,53 @@ const { Product, Variant, Brand, User, Banner } = require("@models");
 const SizeGuide = require("../models/sizeGuide");
 const ApiError = require("@utils/ApiError");
 
+/**
+ * Helper: Parse markdown content để tìm tất cả URL ảnh
+ * Hỗ trợ cả markdown syntax và HTML img tag
+ * @param {String} markdownContent - Nội dung markdown
+ * @returns {Array} - Mảng các URL ảnh
+ */
+const extractMarkdownImageUrls = (markdownContent) => {
+  if (!markdownContent) return [];
+
+  const urls = [];
+
+  // Regex tìm markdown images: ![alt](url)
+  const markdownImageRegex = /!\[.*?\]\((https?:\/\/[^\)]+)\)/g;
+  let match;
+  while ((match = markdownImageRegex.exec(markdownContent)) !== null) {
+    urls.push(match[1]);
+  }
+
+  // Regex tìm HTML img tags: <img src="url" />
+  const htmlImageRegex = /<img[^>]+src=["']([^"']+)["']/g;
+  while ((match = htmlImageRegex.exec(markdownContent)) !== null) {
+    urls.push(match[1]);
+  }
+
+  return urls;
+};
+
+/**
+ * Helper: Extract public_id từ Cloudinary URL
+ * @param {String} url - Cloudinary URL
+ * @returns {String|null} - public_id hoặc null nếu không phải Cloudinary URL
+ */
+const extractPublicIdFromUrl = (url) => {
+  if (!url || !url.includes("cloudinary.com")) return null;
+
+  // URL format: https://res.cloudinary.com/{cloud_name}/image/upload/{transformations}/{public_id}.{ext}
+  const regex = /\/upload\/(?:v\d+\/)?(.+)$/;
+  const match = url.match(regex);
+
+  if (match && match[1]) {
+    // Remove file extension
+    return match[1].replace(/\.[^.]+$/, "");
+  }
+
+  return null;
+};
+
 const imageService = {
   /**
    * Xóa một hoặc nhiều ảnh từ Cloudinary
@@ -761,163 +808,116 @@ const imageService = {
   // ======================== BLOG IMAGE OPERATIONS ========================
 
   /**
-   * Cập nhật thumbnail cho blog post
-   * @param {String} blogPostId - ID blog post
-   * @param {Object} imageData - Dữ liệu ảnh { url, public_id }
-   * @returns {Promise<Object>} - Kết quả cập nhật
+   * Upload ảnh cho blog content (dùng trong markdown editor)
+   *
+   * NOTE FOR FRONTEND:
+   * - Endpoint: POST /api/admin/images/blog-content
+   * - Use case: Chèn ảnh vào markdown content khi viết blog
+   * - Frontend implementation:
+   *   + Option A: Markdown Editor với toolbar button (react-markdown-editor-lite, SimpleMDE)
+   *   + Option B: Drag & Drop + Paste (Ctrl+V) ảnh từ clipboard
+   *   + Recommend: Kết hợp cả 2 (Editor có onImageUpload callback)
+   *
+   * - Upload flow:
+   *   1. User click button "Insert Image" hoặc Ctrl+V paste ảnh
+   *   2. Frontend gọi API này với FormData { image: file }
+   *   3. Backend upload lên Cloudinary folder: blogs/content
+   *   4. Backend trả về: { url, public_id }
+   *   5. Frontend tự động chèn markdown: ![](url) vào editor
+   *
+   * - Example Frontend (react-markdown-editor-lite):
+   *   ```jsx
+   *   import MdEditor from 'react-markdown-editor-lite';
+   *
+   *   const handleImageUpload = async (file) => {
+   *     const formData = new FormData();
+   *     formData.append('image', file);
+   *     const res = await axios.post('/api/admin/images/blog-content', formData);
+   *     return res.data.url; // Editor sẽ tự chèn ![](url)
+   *   };
+   *
+   *   <MdEditor onImageUpload={handleImageUpload} />
+   *   ```
+   *
+   * - Cleanup: Khi xóa blog post, API sẽ tự động parse markdown content,
+   *   tìm tất cả ảnh Cloudinary và xóa chúng (xem blog.service.js deletePost)
+   *
+   * @param {Object} imageData - Dữ liệu ảnh từ multer { url, public_id }
+   * @returns {Promise<Object>} - URL và public_id của ảnh đã upload
    */
-  updateBlogThumbnail: async (blogPostId, imageData) => {
-    const { BlogPost } = require("@models");
-
-    const blogPost = await BlogPost.findById(blogPostId);
-    if (!blogPost) {
-      throw new ApiError(404, "Không tìm thấy blog post");
+  uploadBlogContentImage: async (imageData) => {
+    if (!imageData || !imageData.url || !imageData.public_id) {
+      throw new ApiError(400, "Dữ liệu ảnh không hợp lệ");
     }
 
-    // Xóa thumbnail cũ trên Cloudinary nếu có
-    if (blogPost.thumbnail?.public_id) {
-      try {
-        await cloudinary.uploader.destroy(blogPost.thumbnail.public_id);
-      } catch (err) {
-        console.error("Không thể xóa thumbnail cũ:", err);
-      }
-    }
-
-    // Cập nhật thumbnail mới
-    blogPost.thumbnail = {
+    return {
+      success: true,
+      message: "Upload ảnh blog content thành công",
       url: imageData.url,
       public_id: imageData.public_id,
     };
-
-    await blogPost.save();
-
-    return {
-      success: true,
-      message: "Cập nhật thumbnail blog thành công",
-      blogPost,
-    };
   },
 
   /**
-   * Cập nhật featured image cho blog post
-   * @param {String} blogPostId - ID blog post
-   * @param {Object} imageData - Dữ liệu ảnh { url, public_id, caption, alt }
-   * @returns {Promise<Object>} - Kết quả cập nhật
+   * Xóa tất cả ảnh trong markdown content của blog post
+   * Được gọi tự động khi xóa blog post
+   *
+   * @param {String} markdownContent - Nội dung markdown của blog
+   * @returns {Promise<Object>} - Kết quả xóa ảnh
    */
-  updateBlogFeaturedImage: async (blogPostId, imageData) => {
-    const { BlogPost } = require("@models");
-
-    const blogPost = await BlogPost.findById(blogPostId);
-    if (!blogPost) {
-      throw new ApiError(404, "Không tìm thấy blog post");
+  deleteBlogContentImages: async (markdownContent) => {
+    if (!markdownContent) {
+      return {
+        success: true,
+        message: "Không có ảnh để xóa",
+        deletedCount: 0,
+      };
     }
 
-    // Xóa featured image cũ trên Cloudinary nếu có
-    if (blogPost.featuredImage?.public_id) {
-      try {
-        await cloudinary.uploader.destroy(blogPost.featuredImage.public_id);
-      } catch (err) {
-        console.error("Không thể xóa featured image cũ:", err);
-      }
+    // Extract tất cả URL ảnh từ markdown
+    const imageUrls = extractMarkdownImageUrls(markdownContent);
+
+    if (imageUrls.length === 0) {
+      return {
+        success: true,
+        message: "Không có ảnh Cloudinary trong content",
+        deletedCount: 0,
+      };
     }
 
-    // Cập nhật featured image mới
-    blogPost.featuredImage = {
-      url: imageData.url,
-      public_id: imageData.public_id,
-      caption: imageData.caption || "",
-      alt: imageData.alt || "",
-    };
+    // Filter chỉ lấy Cloudinary URLs và extract public_id
+    const publicIds = imageUrls
+      .map((url) => extractPublicIdFromUrl(url))
+      .filter((id) => id !== null);
 
-    await blogPost.save();
-
-    return {
-      success: true,
-      message: "Cập nhật featured image blog thành công",
-      blogPost,
-    };
-  },
-
-  /**
-   * Thêm content image vào blog post
-   * @param {String} blogPostId - ID blog post
-   * @param {Object} imageData - Dữ liệu ảnh { url, public_id, caption, alt }
-   * @param {Number} order - Thứ tự của image block
-   * @returns {Promise<Object>} - Kết quả thêm ảnh
-   */
-  addBlogContentImage: async (blogPostId, imageData, order) => {
-    const { BlogPost } = require("@models");
-
-    const blogPost = await BlogPost.findById(blogPostId);
-    if (!blogPost) {
-      throw new ApiError(404, "Không tìm thấy blog post");
-    }
-
-    // Thêm image block vào contentBlocks
-    const imageBlock = {
-      type: "IMAGE",
-      order: order || blogPost.contentBlocks.length,
-      image: {
-        url: imageData.url,
-        public_id: imageData.public_id,
-        caption: imageData.caption || "",
-        alt: imageData.alt || "",
-      },
-    };
-
-    blogPost.contentBlocks.push(imageBlock);
-
-    // Sắp xếp lại theo order
-    blogPost.contentBlocks.sort((a, b) => a.order - b.order);
-
-    await blogPost.save();
-
-    return {
-      success: true,
-      message: "Thêm content image thành công",
-      blogPost,
-    };
-  },
-
-  /**
-   * Xóa content image từ blog post
-   * @param {String} blogPostId - ID blog post
-   * @param {String} blockId - ID của content block cần xóa
-   * @returns {Promise<Object>} - Kết quả xóa
-   */
-  removeBlogContentImage: async (blogPostId, blockId) => {
-    const { BlogPost } = require("@models");
-
-    const blogPost = await BlogPost.findById(blogPostId);
-    if (!blogPost) {
-      throw new ApiError(404, "Không tìm thấy blog post");
-    }
-
-    // Tìm image block cần xóa
-    const imageBlock = blogPost.contentBlocks.id(blockId);
-    if (!imageBlock || imageBlock.type !== "IMAGE") {
-      throw new ApiError(404, "Không tìm thấy image block");
+    if (publicIds.length === 0) {
+      return {
+        success: true,
+        message: "Không có ảnh Cloudinary để xóa",
+        deletedCount: 0,
+      };
     }
 
     // Xóa ảnh từ Cloudinary
-    if (imageBlock.image?.public_id) {
-      try {
-        await cloudinary.uploader.destroy(imageBlock.image.public_id);
-      } catch (err) {
-        console.error("Không thể xóa content image từ Cloudinary:", err);
-      }
+    try {
+      const deleteResults = await Promise.all(
+        publicIds.map((publicId) => cloudinary.uploader.destroy(publicId))
+      );
+
+      const successCount = deleteResults.filter(
+        (result) => result.result === "ok"
+      ).length;
+
+      return {
+        success: true,
+        message: `Đã xóa ${successCount}/${publicIds.length} ảnh từ Cloudinary`,
+        deletedCount: successCount,
+        totalFound: publicIds.length,
+      };
+    } catch (err) {
+      console.error("Lỗi khi xóa ảnh blog content:", err);
+      throw new ApiError(500, "Không thể xóa ảnh từ Cloudinary");
     }
-
-    // Xóa block khỏi mảng
-    blogPost.contentBlocks.pull(blockId);
-
-    await blogPost.save();
-
-    return {
-      success: true,
-      message: "Xóa content image thành công",
-      blogPost,
-    };
   },
 };
 

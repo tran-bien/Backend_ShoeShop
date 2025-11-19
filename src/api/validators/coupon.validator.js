@@ -160,6 +160,68 @@ const validateCreateCoupon = [
     .optional()
     .isInt({ min: 0 })
     .withMessage("Giới hạn đổi/user phải là số nguyên không âm"),
+
+  // Advanced scope validation
+  body("scope")
+    .optional()
+    .isIn(["ALL", "PRODUCTS", "VARIANTS", "CATEGORIES"])
+    .withMessage("Scope không hợp lệ"),
+
+  body("applicableProducts")
+    .optional()
+    .isArray()
+    .withMessage("applicableProducts phải là array"),
+
+  body("applicableProducts.*")
+    .optional()
+    .isMongoId()
+    .withMessage("Product ID không hợp lệ"),
+
+  body("applicableVariants")
+    .optional()
+    .isArray()
+    .withMessage("applicableVariants phải là array"),
+
+  body("applicableVariants.*")
+    .optional()
+    .isMongoId()
+    .withMessage("Variant ID không hợp lệ"),
+
+  body("applicableCategories")
+    .optional()
+    .isArray()
+    .withMessage("applicableCategories phải là array"),
+
+  body("applicableCategories.*")
+    .optional()
+    .isMongoId()
+    .withMessage("Category ID không hợp lệ"),
+
+  // Advanced conditions validation
+  body("conditions.minQuantity")
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage("minQuantity phải là số nguyên không âm"),
+
+  body("conditions.maxUsagePerUser")
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage("maxUsagePerUser phải là số nguyên không âm"),
+
+  body("conditions.requiredTiers")
+    .optional()
+    .isArray()
+    .withMessage("requiredTiers phải là array"),
+
+  body("conditions.requiredTiers.*")
+    .optional()
+    .isMongoId()
+    .withMessage("Tier ID không hợp lệ"),
+
+  body("conditions.firstOrderOnly")
+    .optional()
+    .isBoolean()
+    .withMessage("firstOrderOnly phải là boolean"),
 ];
 
 /**
@@ -259,6 +321,27 @@ const validateUpdateCoupon = [
     .optional()
     .isInt({ min: 0 })
     .withMessage("Giới hạn đổi/user phải là số nguyên không âm"),
+
+  // Advanced scope validation (for UPDATE)
+  body("scope")
+    .optional()
+    .isIn(["ALL", "PRODUCTS", "VARIANTS", "CATEGORIES"])
+    .withMessage("Scope không hợp lệ"),
+
+  body("applicableProducts")
+    .optional()
+    .isArray()
+    .withMessage("applicableProducts phải là array"),
+
+  body("applicableVariants")
+    .optional()
+    .isArray()
+    .withMessage("applicableVariants phải là array"),
+
+  body("applicableCategories")
+    .optional()
+    .isArray()
+    .withMessage("applicableCategories phải là array"),
 ];
 
 /**

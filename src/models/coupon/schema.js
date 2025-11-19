@@ -141,12 +141,6 @@ const CouponSchema = new mongoose.Schema(
         default: false,
         comment: "Chỉ cho đơn hàng đầu tiên",
       },
-
-      requiredTotalSpent: {
-        type: Number,
-        min: 0,
-        comment: "Yêu cầu đã mua tối thiểu bao nhiêu tiền",
-      },
     },
 
     // Usage tracking per user

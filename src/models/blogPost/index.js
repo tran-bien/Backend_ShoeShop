@@ -8,13 +8,12 @@ BlogPostSchema.pre("save", function (next) {
     this.slug = createSlug(this.title);
   }
 
-  // Auto-sort content blocks
-  if (this.contentBlocks && this.contentBlocks.length > 0) {
-    this.contentBlocks.sort((a, b) => a.order - b.order);
-  }
-
   // Auto set publishedAt khi status = PUBLISHED
-  if (this.isModified("status") && this.status === "PUBLISHED" && !this.publishedAt) {
+  if (
+    this.isModified("status") &&
+    this.status === "PUBLISHED" &&
+    !this.publishedAt
+  ) {
     this.publishedAt = new Date();
   }
 
@@ -24,4 +23,3 @@ BlogPostSchema.pre("save", function (next) {
 const BlogPost = mongoose.model("BlogPost", BlogPostSchema);
 
 module.exports = BlogPost;
-

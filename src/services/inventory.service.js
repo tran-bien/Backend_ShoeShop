@@ -89,13 +89,36 @@ const getOrCreateInventoryItem = async (product, variant, size) => {
       throw new ApiError(404, "Không tìm thấy thông tin product/variant/size");
     }
 
-    const sku = generateSKU({
-      productName: productDoc.name,
-      colorName: variantDoc.color?.name || "Unknown",
-      gender: variantDoc.gender,
-      sizeValue: sizeDoc.value,
-      productId: product.toString(),
-    });
+    // CRITICAL FIX Bug #13: Retry nếu SKU bị trùng
+    let sku;
+    let attempt = 0;
+    const maxAttempts = 5;
+
+    while (attempt < maxAttempts) {
+      sku = generateSKU({
+        productName: productDoc.name,
+        colorName: variantDoc.color?.name || "Unknown",
+        gender: variantDoc.gender,
+        sizeValue: sizeDoc.value,
+        productId: product.toString(),
+      });
+
+      // Kiểm tra SKU đã tồn tại chưa
+      const existingSKU = await InventoryItem.findOne({ sku });
+      if (!existingSKU) {
+        break; // SKU unique, thoát loop
+      }
+
+      attempt++;
+      console.log(
+        `SKU ${sku} đã tồn tại, thử lại lần ${attempt}/${maxAttempts}`
+      );
+    }
+
+    if (attempt >= maxAttempts) {
+      // Fallback: thêm timestamp vào cuối
+      sku = `${sku}-${Date.now().toString().slice(-4)}`;
+    }
 
     inventoryItem = await InventoryItem.create({
       product,

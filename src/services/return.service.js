@@ -177,16 +177,18 @@ const createReturnRequest = async (data, userId) => {
       if (item.exchangeToVariant) {
         const Variant = mongoose.model("Variant");
         const Product = mongoose.model("Product");
-        
+
         // Lấy giá sản phẩm mới
-        const newVariant = await Variant.findById(item.exchangeToVariant).populate("product");
+        const newVariant = await Variant.findById(
+          item.exchangeToVariant
+        ).populate("product");
         const newProduct = newVariant ? newVariant.product : null;
-        
+
         if (newProduct) {
           const newPrice = newProduct.price || 0;
           const oldPrice = item.priceAtPurchase;
           const priceDiff = (newPrice - oldPrice) * item.quantity;
-          
+
           priceDifferenceData.amount += priceDiff;
         }
       }
@@ -232,6 +234,29 @@ const createReturnRequest = async (data, userId) => {
  * Lấy danh sách yêu cầu đổi/trả
  */
 const getReturnRequests = async (filter = {}, options = {}) => {
+  // AUTO-REJECT expired pending requests trước khi query
+  const now = new Date();
+  const expiredResult = await ReturnRequest.updateMany(
+    {
+      status: "pending",
+      expiresAt: { $lt: now },
+    },
+    {
+      $set: {
+        status: "rejected",
+        rejectionReason:
+          "Tự động từ chối do quá thời hạn xử lý (7 ngày kể từ khi tạo)",
+        autoRejectedAt: now,
+      },
+    }
+  );
+
+  if (expiredResult.modifiedCount > 0) {
+    console.log(
+      `[AUTO-REJECT] Đã tự động reject ${expiredResult.modifiedCount} return request(s) quá hạn`
+    );
+  }
+
   const {
     page = 1,
     limit = 20,

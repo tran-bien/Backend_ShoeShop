@@ -47,53 +47,83 @@ const authService = {
     const parsedDevice = uaParser(userAgent);
 
     // Tìm session hiện tại theo thiết bị
-    const existingSession = await Session.findOne({
-      user: userId,
-      userAgent,
-      ip,
-      isActive: true,
-    });
+    // CRITICAL FIX Bug #11: Sử dụng findOneAndUpdate atomic thay vì findOne + save
+    // Để tránh race condition khi đăng nhập đồng thời từ nhiều device
+    const updatedSession = await Session.findOneAndUpdate(
+      {
+        user: userId,
+        userAgent,
+        ip,
+        isActive: true,
+      },
+      {
+        $set: {
+          token,
+          refreshToken,
+          lastActive: new Date(),
+          expiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+        },
+      },
+      { new: true }
+    );
 
-    if (existingSession) {
-      // Cập nhật session đã có
-      existingSession.token = token;
-      existingSession.refreshToken = refreshToken;
-      existingSession.lastActive = new Date();
-      existingSession.expiresAt = new Date(
-        Date.now() + 10 * 24 * 60 * 60 * 1000
-      );
-      await existingSession.save();
-
+    if (updatedSession) {
       console.log(
         `Cập nhật session cho user ${userId}, thiết bị: ${userAgent.substring(
           0,
           30
         )}...`
       );
-      return { token, refreshToken, session: existingSession };
+      return { token, refreshToken, session: updatedSession };
     }
 
     // Tạo session mới nếu không tìm thấy
-    const newSession = await Session.create({
-      user: userId,
-      token,
-      refreshToken,
-      userAgent,
-      ip,
-      device: parsedDevice,
-      expiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
-      isActive: true,
-      lastActive: new Date(),
-    });
+    // Sử dụng try-catch để handle duplicate key error nếu có concurrent create
+    try {
+      const newSession = await Session.create({
+        user: userId,
+        token,
+        refreshToken,
+        userAgent,
+        ip,
+        device: parsedDevice,
+        expiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+        isActive: true,
+        lastActive: new Date(),
+      });
 
-    console.log(
-      `Tạo mới session cho user ${userId}, thiết bị: ${userAgent.substring(
-        0,
-        30
-      )}...`
-    );
-    await limitActiveSessions(userId, 5); // Giới hạn tối đa 5 session active
-    return { token, refreshToken, session: newSession };
+      console.log(
+        `Tạo mới session cho user ${userId}, thiết bị: ${userAgent.substring(
+          0,
+          30
+        )}...`
+      );
+      await limitActiveSessions(userId, 5); // Giới hạn tối đa 5 session active
+      return { token, refreshToken, session: newSession };
+    } catch (error) {
+      // Nếu duplicate error, retry với findOneAndUpdate
+      if (error.code === 11000) {
+        const existingSession = await Session.findOneAndUpdate(
+          {
+            user: userId,
+            userAgent,
+            ip,
+          },
+          {
+            $set: {
+              token,
+              refreshToken,
+              isActive: true,
+              lastActive: new Date(),
+              expiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+            },
+          },
+          { new: true, upsert: true }
+        );
+        return { token, refreshToken, session: existingSession };
+      }
+      throw error;
+    }
   },
 
   /**

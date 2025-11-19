@@ -55,29 +55,15 @@ const blogValidator = {
       .isString()
       .withMessage("Mô tả ngắn phải là chuỗi")
       .isLength({ max: 500 })
-      .withMessage("Mô tả ngắn không được vượt quá 300 ký tự"),
+      .withMessage("Mô tả ngắn không được vượt quá 500 ký tự"),
 
-    body("contentBlocks")
-      .optional()
-      .isArray()
-      .withMessage("Content blocks phải là mảng"),
-
-    body("contentBlocks.*.type")
-      .optional()
-      .isIn(["TEXT", "IMAGE"])
-      .withMessage("Loại block phải là TEXT hoặc IMAGE"),
-
-    body("contentBlocks.*.order")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Thứ tự block phải là số nguyên không âm"),
-
-    body("contentBlocks.*.text")
-      .optional()
+    body("content")
+      .notEmpty()
+      .withMessage("Nội dung không được để trống")
       .isString()
-      .withMessage("Nội dung text phải là chuỗi")
-      .isLength({ max: 10000 })
-      .withMessage("Nội dung text không được vượt quá 10000 ký tự"),
+      .withMessage("Nội dung phải là chuỗi")
+      .isLength({ max: 50000 })
+      .withMessage("Nội dung không được vượt quá 50000 ký tự"),
 
     body("category")
       .optional()
@@ -138,10 +124,12 @@ const blogValidator = {
       .isLength({ max: 500 })
       .withMessage("Mô tả ngắn không được vượt quá 500 ký tự"),
 
-    body("contentBlocks")
+    body("content")
       .optional()
-      .isArray()
-      .withMessage("Content blocks phải là mảng"),
+      .isString()
+      .withMessage("Nội dung phải là chuỗi")
+      .isLength({ max: 50000 })
+      .withMessage("Nội dung không được vượt quá 50000 ký tự"),
 
     body("category")
       .optional()

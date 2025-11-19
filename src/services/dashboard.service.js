@@ -61,6 +61,7 @@ const dashboardService = {
                     $and: [
                       { $eq: ["$variant", "$$variantId"] },
                       { $eq: ["$size", "$$sizeId"] },
+                      { $eq: [{ $ifNull: ["$deletedAt", null] }, null] },
                     ],
                   },
                 },
@@ -193,6 +194,7 @@ const dashboardService = {
                     $and: [
                       { $eq: ["$variant", "$$variantId"] },
                       { $eq: ["$size", "$$sizeId"] },
+                      { $eq: [{ $ifNull: ["$deletedAt", null] }, null] },
                     ],
                   },
                 },
@@ -359,6 +361,7 @@ const dashboardService = {
                     $and: [
                       { $eq: ["$variant", "$$variantId"] },
                       { $eq: ["$size", "$$sizeId"] },
+                      { $eq: [{ $ifNull: ["$deletedAt", null] }, null] },
                     ],
                   },
                 },
@@ -552,6 +555,7 @@ const dashboardService = {
                     $and: [
                       { $eq: ["$variant", "$$variantId"] },
                       { $eq: ["$size", "$$sizeId"] },
+                      { $eq: [{ $ifNull: ["$deletedAt", null] }, null] },
                     ],
                   },
                 },

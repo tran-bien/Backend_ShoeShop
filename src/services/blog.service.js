@@ -39,7 +39,6 @@ const blogService = {
         { path: "category", select: "name slug" },
         { path: "author", select: "name avatar" },
       ],
-      select: "-contentBlocks", // Không trả về content blocks trong danh sách
     };
 
     return await paginate(BlogPost, filter, options);
@@ -95,7 +94,6 @@ const blogService = {
         { path: "category", select: "name slug" },
         { path: "author", select: "name avatar" },
       ],
-      select: "-contentBlocks", // Không trả về content blocks trong danh sách
     };
 
     return await paginate(BlogPost, filter, options);
@@ -211,18 +209,29 @@ const blogService = {
 
     // Xóa ảnh trên Cloudinary
     const cloudinary = require("@config/cloudinary");
+    const imageService = require("./image.service");
     const imagesToDelete = [];
 
+    // 1. Xóa thumbnail
     if (post.thumbnail?.public_id) {
       imagesToDelete.push(post.thumbnail.public_id);
     }
 
-    post.contentBlocks.forEach((block) => {
-      if (block.type === "IMAGE" && block.image?.public_id) {
-        imagesToDelete.push(block.image.public_id);
-      }
-    });
+    // 2. Xóa featured image
+    if (post.featuredImage?.public_id) {
+      imagesToDelete.push(post.featuredImage.public_id);
+    }
 
+    // 3. Xóa tất cả ảnh trong markdown content
+    if (post.content) {
+      try {
+        await imageService.deleteBlogContentImages(post.content);
+      } catch (err) {
+        console.error("Không thể xóa ảnh content:", err);
+      }
+    }
+
+    // Xóa thumbnail và featured image
     if (imagesToDelete.length > 0) {
       try {
         await cloudinary.api.delete_resources(imagesToDelete);

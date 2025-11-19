@@ -3,6 +3,26 @@ const { createSlug } = require("@utils/slugify");
 const paginate = require("@utils/pagination");
 const ApiError = require("@utils/ApiError");
 
+/**
+ * Helper: Kiểm tra tên category đã tồn tại chưa
+ * @param {String} name - Tên category
+ * @param {String} excludeId - ID category cần loại trừ (cho update)
+ * @returns {Promise<Boolean>} - True nếu tên đã tồn tại
+ */
+const checkDuplicateName = async (name, excludeId = null) => {
+  const filter = {
+    name,
+    deletedAt: null,
+  };
+
+  if (excludeId) {
+    filter._id = { $ne: excludeId };
+  }
+
+  const existingCategory = await BlogCategory.findOne(filter);
+  return !!existingCategory;
+};
+
 const blogCategoryService = {
   /**
    * [PUBLIC] Lấy tất cả categories đang active
@@ -78,12 +98,8 @@ const blogCategoryService = {
     const { name, description } = categoryData;
 
     // Kiểm tra tên đã tồn tại
-    const existingCategory = await BlogCategory.findOne({
-      name,
-      deletedAt: null,
-    });
-
-    if (existingCategory) {
+    const isDuplicate = await checkDuplicateName(name);
+    if (isDuplicate) {
       throw new ApiError(400, "Tên danh mục đã tồn tại");
     }
 
@@ -109,13 +125,8 @@ const blogCategoryService = {
 
     if (name && name !== category.name) {
       // Kiểm tra tên mới đã tồn tại chưa
-      const existingCategory = await BlogCategory.findOne({
-        name,
-        deletedAt: null,
-        _id: { $ne: categoryId },
-      });
-
-      if (existingCategory) {
+      const isDuplicate = await checkDuplicateName(name, categoryId);
+      if (isDuplicate) {
         throw new ApiError(400, "Tên danh mục đã tồn tại");
       }
 

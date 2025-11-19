@@ -13,7 +13,8 @@ const connectDB = async () => {
   } catch (error) {
     console.error(`Lỗi kết nối MongoDB: ${error.message}`);
     console.error(`Chi tiết lỗi: ${error.stack}`);
-    return false;
+    console.error("Server không thể khởi động mà không có kết nối database.");
+    process.exit(1);
   }
 };
 

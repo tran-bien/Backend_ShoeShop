@@ -164,8 +164,47 @@ const loyaltyService = {
 
   /**
    * Lấy lịch sử giao dịch điểm
+   * Tự động expire các điểm hết hạn trước khi query
    */
   getUserTransactions: async (userId, query = {}) => {
+    // AUTO-EXPIRE logic: Tự động expire các điểm hết hạn
+    const now = new Date();
+    const expiredTransactions = await LoyaltyTransaction.find({
+      type: "EARN",
+      isExpired: false,
+      expiresAt: { $lt: now },
+    });
+
+    if (expiredTransactions.length > 0) {
+      console.log(
+        `[AUTO-EXPIRE] Tìm thấy ${expiredTransactions.length} transaction(s) hết hạn`
+      );
+
+      for (const tx of expiredTransactions) {
+        try {
+          // Trừ điểm của user
+          await loyaltyService.deductPoints(tx.user, tx.points, {
+            type: "EXPIRE",
+            source: tx.source,
+            description: `Hết hạn ${tx.points} điểm từ ${tx.source}`,
+          });
+
+          // Đánh dấu đã expire
+          tx.isExpired = true;
+          await tx.save();
+
+          console.log(
+            `[AUTO-EXPIRE] Đã expire ${tx.points} điểm từ transaction ${tx._id}`
+          );
+        } catch (error) {
+          console.error(
+            `[AUTO-EXPIRE] Lỗi khi expire transaction ${tx._id}:`,
+            error.message
+          );
+        }
+      }
+    }
+
     const { page = 1, limit = 20, type } = query;
 
     const filter = { user: userId };

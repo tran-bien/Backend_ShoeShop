@@ -13,7 +13,7 @@ const recommendationService = {
     const userOrders = await Order.find({
       user: userId,
       status: "delivered",
-    }).populate({ 
+    }).populate({
       path: "orderItems.variant",
       select: "product",
     });
@@ -37,6 +37,7 @@ const recommendationService = {
         $match: {
           user: { $ne: new mongoose.Types.ObjectId(userId) },
           status: "delivered",
+          deletedAt: null,
         },
       },
       { $unwind: "$orderItems" },
@@ -177,9 +178,7 @@ const recommendationService = {
       });
     });
 
-    products = products.filter(
-      (p) => !recentProductIds.has(p._id.toString())
-    );
+    products = products.filter((p) => !recentProductIds.has(p._id.toString()));
 
     return products
       .slice(0, 10)
@@ -197,6 +196,7 @@ const recommendationService = {
         $match: {
           status: "delivered",
           createdAt: { $gte: sevenDaysAgo },
+          deletedAt: null,
         },
       },
       { $unwind: "$orderItems" },
@@ -307,14 +307,12 @@ const recommendationService = {
 
     switch (algorithm) {
       case "COLLABORATIVE":
-        recommendations = await recommendationService.getCollaborativeRecommendations(
-          userId
-        );
+        recommendations =
+          await recommendationService.getCollaborativeRecommendations(userId);
         break;
       case "CONTENT_BASED":
-        recommendations = await recommendationService.getContentBasedRecommendations(
-          userId
-        );
+        recommendations =
+          await recommendationService.getContentBasedRecommendations(userId);
         break;
       case "TRENDING":
         recommendations = await recommendationService.getTrendingProducts();
@@ -359,4 +357,3 @@ const recommendationService = {
 };
 
 module.exports = recommendationService;
-

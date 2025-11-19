@@ -70,6 +70,7 @@ const updateInventory = async (
 
 /**
  * Tạo mã đơn hàng không trùng (cải thiện để tránh race condition)
+ * CRITICAL FIX Bug #12: Sử dụng atomic findOneAndUpdate thay vì findOne + create
  * @returns {String} Mã đơn hàng mới
  */
 const generateOrderCode = async () => {
@@ -88,49 +89,51 @@ const generateOrderCode = async () => {
       const seconds = now.getSeconds().toString().padStart(2, "0");
       const milliseconds = now.getMilliseconds().toString().padStart(3, "0");
 
-      // Format: ORD + YY + MM + DD + HH + MM + SS + milliseconds (3 chữ số cuối)
-      const timeBasedCode = `ORD${year}${month}${day}${hours}${minutes}${seconds}${milliseconds.slice(
-        -2
-      )}`;
-
-      // Kiểm tra xem mã này đã tồn tại chưa
-      const existingOrder = await mongoose
-        .model("Order")
-        .findOne({ code: timeBasedCode });
-
-      if (!existingOrder) {
-        return timeBasedCode;
-      }
-
-      // Nếu trùng, thêm số ngẫu nhiên vào cuối
-      const randomSuffix = Math.floor(Math.random() * 99)
+      // Thêm random ngay từ đầu để tăng uniqueness
+      const random = Math.floor(Math.random() * 999)
         .toString()
-        .padStart(2, "0");
-      const finalCode = `${timeBasedCode}${randomSuffix}`;
+        .padStart(3, "0");
 
-      const duplicateCheck = await mongoose
-        .model("Order")
-        .findOne({ code: finalCode });
+      // Format: ORD + YY + MM + DD + HH + MM + SS + random (3 chữ số)
+      const timeBasedCode = `ORD${year}${month}${day}${hours}${minutes}${seconds}${random}`;
 
-      if (!duplicateCheck) {
-        return finalCode;
+      // ATOMIC CHECK: Sử dụng findOneAndUpdate với upsert để đảm bảo unique
+      // Tạo một placeholder document tạm thời
+      const OrderCounterModel =
+        mongoose.models.OrderCounter ||
+        mongoose.model(
+          "OrderCounter",
+          new mongoose.Schema({
+            code: { type: String, unique: true, required: true },
+            createdAt: { type: Date, default: Date.now },
+          })
+        );
+
+      try {
+        await OrderCounterModel.create({ code: timeBasedCode });
+        // Nếu tạo thành công = code chưa tồn tại
+        return timeBasedCode;
+      } catch (err) {
+        // Nếu duplicate key error = code đã tồn tại, thử lại
+        if (err.code === 11000) {
+          attempt++;
+          // Chờ một chút trước khi thử lại
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.random() * 50)
+          );
+          continue;
+        }
+        throw err;
       }
-
-      attempt++;
-
-      // Chờ một chút trước khi thử lại
-      await new Promise((resolve) => setTimeout(resolve, Math.random() * 100));
     } catch (error) {
       console.error(`Attempt ${attempt + 1} failed:`, error);
       attempt++;
 
       if (attempt >= maxRetries) {
-        // Phương án cuối cùng: sử dụng timestamp + random
-        const fallbackCode = `ORD${Date.now()}${Math.floor(
-          Math.random() * 1000
-        )}`;
-        console.warn(`Using fallback code: ${fallbackCode}`);
-        return fallbackCode;
+        // Phương án cuối cùng: sử dụng UUID
+        const crypto = require("crypto");
+        const uuid = crypto.randomUUID().replace(/-/g, "").substring(0, 10);
+        return `ORD${Date.now().toString().slice(-6)}${uuid}`;
       }
 
       // Chờ trước khi thử lại
@@ -351,12 +354,13 @@ const applyMiddlewares = (schema) => {
         }
       }
 
-      // LOYALTY: Tích điểm khi đơn hàng delivered
+      // LOYALTY: Tự động cộng điểm khi đơn hàng delivered
+      // Điểm được cộng NGAY sau khi delivered (đơn giản hóa logic)
       if (
         currentStatus === "delivered" &&
         previousStatus !== "delivered" &&
         this.payment.paymentStatus === "paid" &&
-        !this.loyaltyPointsAwarded // Tránh tích 2 lần
+        !this.loyaltyPointsAwarded
       ) {
         try {
           const loyaltyService = require("@services/loyalty.service");
@@ -365,13 +369,14 @@ const applyMiddlewares = (schema) => {
           );
 
           if (pointsToEarn > 0) {
+            // Cộng điểm ngay lập tức
             await loyaltyService.addPoints(this.user, pointsToEarn, {
               source: "ORDER",
               order: this._id,
               description: `Tích điểm từ đơn hàng ${this.code}`,
             });
 
-            // Đánh dấu đã tích điểm
+            // Đánh dấu đã cộng điểm
             await mongoose.model("Order").updateOne(
               { _id: this._id },
               {
@@ -381,7 +386,7 @@ const applyMiddlewares = (schema) => {
             );
 
             console.log(
-              `[LOYALTY] User ${this.user} nhận ${pointsToEarn} điểm từ đơn ${this.code}`
+              `[LOYALTY] Đã cộng ${pointsToEarn} điểm cho đơn ${this.code}`
             );
           }
         } catch (error) {
