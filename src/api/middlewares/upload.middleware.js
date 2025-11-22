@@ -1,7 +1,8 @@
 const multer = require("multer");
-const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("@config/cloudinary");
 const ApiError = require("@utils/ApiError");
+const { Readable } = require("stream");
+
 // Danh sách các loại file ảnh được phép
 const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
@@ -14,24 +15,43 @@ const ALLOWED_IMAGE_TYPES = [
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 /**
- * Tạo storage theo folder tùy chỉnh
- * @param {string} folder - Thư mục trên Cloudinary
- * @returns {CloudinaryStorage} - Đối tượng storage cho multer
+ * Upload file buffer to Cloudinary
+ * @param {Buffer} buffer - File buffer
+ * @param {string} folder - Folder path on Cloudinary
+ * @param {string} originalname - Original filename
+ * @returns {Promise<Object>} - Cloudinary upload result
  */
-const createStorage = (folder) => {
-  return new CloudinaryStorage({
-    cloudinary,
-    params: {
-      folder: folder,
-      allowed_formats: ["jpg", "jpeg", "png", "webp"],
-      transformation: [{ quality: "auto" }],
-      public_id: (req, file) => {
-        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-        const filename = file.originalname.split(".")[0].replace(/\s+/g, "-");
-        return `${filename}-${uniqueSuffix}`;
+const uploadToCloudinary = (buffer, folder, originalname) => {
+  return new Promise((resolve, reject) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const filename = originalname.split(".")[0].replace(/\s+/g, "-");
+    const public_id = `${filename}-${uniqueSuffix}`;
+
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: folder,
+        public_id: public_id,
+        resource_type: "auto",
+        allowed_formats: ["jpg", "jpeg", "png", "webp"],
+        transformation: [{ quality: "auto" }],
       },
-    },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
+
+    const readableStream = Readable.from(buffer);
+    readableStream.pipe(uploadStream);
   });
+};
+
+/**
+ * Tạo memory storage cho multer
+ * @returns {multer.StorageEngine} - Memory storage
+ */
+const createStorage = () => {
+  return multer.memoryStorage();
 };
 
 /**
@@ -92,18 +112,47 @@ const createMultiUploadMiddleware = (folderPath, fieldName, maxCount = 10) => {
     throw new ApiError(400, "Field name không hợp lệ");
   }
 
-  const storage = createStorage(folderPath);
-  return multer({
+  const storage = createStorage();
+  const upload = multer({
     storage,
     limits: {
       fileSize: MAX_FILE_SIZE,
-      files: maxCount, // Giới hạn số file
-      fields: 10, // Giới hạn số field (tránh DoS)
-      parts: 20, // Giới hạn số part trong form-data
-      headerPairs: 2000, // Giới hạn header pairs
+      files: maxCount,
+      fields: 10,
+      parts: 20,
+      headerPairs: 2000,
     },
     fileFilter,
   }).array(fieldName, maxCount);
+
+  // Return async middleware that handles Cloudinary upload
+  return async (req, res, next) => {
+    upload(req, res, async (err) => {
+      if (err) {
+        return next(err);
+      }
+
+      try {
+        if (req.files && req.files.length > 0) {
+          const uploadPromises = req.files.map((file) =>
+            uploadToCloudinary(file.buffer, folderPath, file.originalname)
+          );
+          const results = await Promise.all(uploadPromises);
+
+          // Replace file objects with Cloudinary results
+          req.files = results.map((result) => ({
+            filename: result.public_id,
+            path: result.secure_url,
+            size: result.bytes,
+            mimetype: `image/${result.format}`,
+          }));
+        }
+        next();
+      } catch (error) {
+        next(new ApiError(500, `Lỗi upload ảnh: ${error.message}`));
+      }
+    });
+  };
 };
 
 /**
@@ -118,18 +167,48 @@ const createSingleUploadMiddleware = (folderPath, fieldName) => {
     throw new ApiError(400, "Field name không hợp lệ");
   }
 
-  const storage = createStorage(folderPath);
-  return multer({
+  const storage = createStorage();
+  const upload = multer({
     storage,
     limits: {
       fileSize: MAX_FILE_SIZE,
-      files: 1, // Chỉ 1 file cho single upload
-      fields: 5, // Giới hạn số field
-      parts: 10, // Giới hạn số part trong form-data
-      headerPairs: 2000, // Giới hạn header pairs
+      files: 1,
+      fields: 5,
+      parts: 10,
+      headerPairs: 2000,
     },
     fileFilter,
   }).single(fieldName);
+
+  // Return async middleware that handles Cloudinary upload
+  return async (req, res, next) => {
+    upload(req, res, async (err) => {
+      if (err) {
+        return next(err);
+      }
+
+      try {
+        if (req.file) {
+          const result = await uploadToCloudinary(
+            req.file.buffer,
+            folderPath,
+            req.file.originalname
+          );
+
+          // Replace file object with Cloudinary result
+          req.file = {
+            filename: result.public_id,
+            path: result.secure_url,
+            size: result.bytes,
+            mimetype: `image/${result.format}`,
+          };
+        }
+        next();
+      } catch (error) {
+        next(new ApiError(500, `Lỗi upload ảnh: ${error.message}`));
+      }
+    });
+  };
 };
 
 // Middleware upload cho từng entity
@@ -203,7 +282,6 @@ const uploadMiddleware = {
       if (err.code === "LIMIT_FIELD_VALUE") {
         throw new ApiError(400, "Giá trị field quá dài");
       }
-      // Xử lý lỗi field name rỗng hoặc không hợp lệ
       if (err.message && err.message.includes("field name")) {
         throw new ApiError(
           400,
@@ -214,7 +292,6 @@ const uploadMiddleware = {
     }
 
     if (err) {
-      // Kiểm tra nếu là lỗi validation field name từ validateFieldName
       if (err.message && err.message.includes("Field name không hợp lệ")) {
         throw new ApiError(
           400,
@@ -225,114 +302,6 @@ const uploadMiddleware = {
     }
 
     next();
-  },
-
-  /**
-   * Middleware xử lý upload avatar
-   */
-  handleAvatarUpload: (req, res, next) => {
-    uploadMiddleware.uploadAvatar(req, res, (err) => {
-      if (err) {
-        return uploadMiddleware.handleUploadError(err, req, res, next);
-      }
-      next();
-    });
-  },
-
-  /**
-   * Middleware xử lý upload product images
-   */
-  handleProductImagesUpload: (req, res, next) => {
-    uploadMiddleware.uploadProductImages(req, res, (err) => {
-      if (err) {
-        return uploadMiddleware.handleUploadError(err, req, res, next);
-      }
-      next();
-    });
-  },
-
-  /**
-   * Middleware xử lý upload variant images
-   */
-  handleVariantImagesUpload: (req, res, next) => {
-    uploadMiddleware.uploadVariantImages(req, res, (err) => {
-      if (err) {
-        return uploadMiddleware.handleUploadError(err, req, res, next);
-      }
-      next();
-    });
-  },
-
-  /**
-   * Middleware xử lý upload brand logo
-   */
-  handleBrandLogoUpload: (req, res, next) => {
-    uploadMiddleware.uploadBrandLogo(req, res, (err) => {
-      if (err) {
-        return uploadMiddleware.handleUploadError(err, req, res, next);
-      }
-      next();
-    });
-  },
-
-  /**
-   * Middleware xử lý upload banner image
-   */
-  handleBannerImageUpload: (req, res, next) => {
-    uploadMiddleware.uploadBannerImage(req, res, (err) => {
-      if (err) {
-        return uploadMiddleware.handleUploadError(err, req, res, next);
-      }
-      next();
-    });
-  },
-
-  /**
-   * Middleware xử lý upload size guide image
-   */
-  handleSizeGuideImageUpload: (req, res, next) => {
-    uploadMiddleware.uploadSizeGuideImage(req, res, (err) => {
-      if (err) {
-        return uploadMiddleware.handleUploadError(err, req, res, next);
-      }
-      next();
-    });
-  },
-
-  /**
-   * Middleware xử lý upload blog thumbnail
-   */
-  handleBlogThumbnailUpload: (req, res, next) => {
-    uploadMiddleware.uploadBlogThumbnail(req, res, (err) => {
-      if (err) {
-        return uploadMiddleware.handleUploadError(err, req, res, next);
-      }
-      next();
-    });
-  },
-
-  /**
-   * Middleware xử lý upload blog featured image
-   */
-  handleBlogFeaturedImageUpload: (req, res, next) => {
-    uploadMiddleware.uploadBlogFeaturedImage(req, res, (err) => {
-      if (err) {
-        return uploadMiddleware.handleUploadError(err, req, res, next);
-      }
-      next();
-    });
-  },
-
-  /**
-   * Middleware xử lý upload blog content image
-   */
-  handleBlogContentImageUpload: (req, res, next) => {
-    uploadMiddleware.uploadBlogContentImage(req, res, (err) => {
-      if (err) {
-        return uploadMiddleware.handleUploadError(err, req, res, next);
-      }
-      next();
-    });
   },
 };
 

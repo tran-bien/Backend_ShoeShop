@@ -5,7 +5,7 @@ const {
   protect,
   requireStaffOrAdmin,
 } = require("@middlewares/auth.middleware");
-const { handleBannerImageUpload } = require("@middlewares/upload.middleware");
+const { uploadBannerImage } = require("@middlewares/upload.middleware");
 const validate = require("@utils/validatehelper");
 const {
   validateBannerId,
@@ -50,7 +50,7 @@ router.get("/:id", validate(validateBannerId), bannerController.getBannerById);
  */
 router.post(
   "/",
-  handleBannerImageUpload,
+  uploadBannerImage,
   validate(validateCreateBanner),
   bannerController.createBanner
 );
@@ -74,7 +74,7 @@ router.put(
 router.put(
   "/:id/image",
   validate(validateBannerId),
-  handleBannerImageUpload,
+  uploadBannerImage,
   bannerController.updateBannerImage
 );
 

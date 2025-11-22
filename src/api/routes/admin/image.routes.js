@@ -22,7 +22,7 @@ router.use(requireStaffOrAdmin);
 router.post(
   "/brand/:brandId/logo",
   validate(uploadValidator.validateBrandId),
-  uploadMiddleware.handleBrandLogoUpload,
+  uploadMiddleware.uploadBrandLogo,
   validate([
     uploadValidator.validateSingleFileExists,
     uploadValidator.validateImageFileType,
@@ -50,7 +50,7 @@ router.delete(
 router.post(
   "/product/:productId",
   validate(uploadValidator.validateProductId),
-  uploadMiddleware.handleProductImagesUpload,
+  uploadMiddleware.uploadProductImages,
   validate([
     uploadValidator.validateMultipleFilesExist,
     uploadValidator.validateMultipleImageFileTypes,
@@ -82,7 +82,7 @@ router.delete(
 router.post(
   "/variant/:variantId",
   validate(uploadValidator.validateVariantId),
-  uploadMiddleware.handleVariantImagesUpload,
+  uploadMiddleware.uploadVariantImages,
   validate([
     uploadValidator.validateMultipleFilesExist,
     uploadValidator.validateMultipleImageFileTypes,
@@ -186,7 +186,7 @@ router.delete(
  */
 router.post(
   "/blog-content",
-  uploadMiddleware.handleBlogContentImageUpload,
+  uploadMiddleware.uploadBlogContentImage,
   validate([
     uploadValidator.validateSingleFileExists,
     uploadValidator.validateImageFileType,
