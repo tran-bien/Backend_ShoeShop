@@ -32,7 +32,7 @@ const orderService = {
         select: "color product",
         populate: [
           { path: "color", select: "name code" },
-          { path: "product", select: "name slug images price" },
+          { path: "product", select: "name slug images description" },
         ],
       },
       { path: "orderItems.size", select: "value description" },
@@ -945,7 +945,7 @@ const orderService = {
         select: "color gender imagesvariant", // FIXED: Removed 'price' - không còn trong Variant schema
         populate: [
           { path: "color", select: "name code" },
-          { path: "product", select: "name slug images price" },
+          { path: "product", select: "name slug images description" },
         ],
       })
       .populate({

@@ -6,13 +6,28 @@ const asyncHandler = require("express-async-handler");
 const ApiError = require("@utils/ApiError");
 const { cleanSessions } = require("@services/session.service");
 
+// HYBRID CLEANUP STRATEGY: TTL Index (primary) + Debounce (fallback)
+let lastCleanupTime = 0;
+let isCleanupRunning = false; // Prevent race conditions
+const CLEANUP_INTERVAL = 10 * 60 * 1000; // 10 minutes
+// Reason: TTL handles most cleanup, so we only need to clean inactive sessions less frequently
+
 // Bảo vệ các route yêu cầu đăng nhập
 exports.protect = asyncHandler(async (req, res, next) => {
-  // MIDDLEWARE-BASED CLEANUP: Trigger session cleanup on authenticated requests
-  // Thay thế setInterval - cleanup xảy ra khi user request
-  cleanSessions().catch((err) => {
-    console.error("[CLEANUP ERROR]", err.message);
-  });
+  // HYBRID CLEANUP: Only clean inactive sessions (TTL handles expired)
+  const now = Date.now();
+  if (now - lastCleanupTime > CLEANUP_INTERVAL && !isCleanupRunning) {
+    lastCleanupTime = now;
+    isCleanupRunning = true;
+
+    // NON-BLOCKING: Run cleanup in background, don't await
+    // Request continues immediately without waiting for cleanup to finish
+    cleanSessions()
+      .catch((err) => console.error("[CLEANUP ERROR]", err.message))
+      .finally(() => {
+        isCleanupRunning = false;
+      });
+  }
 
   const token = req.headers.authorization?.startsWith("Bearer")
     ? req.headers.authorization.split(" ")[1]

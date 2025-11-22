@@ -1493,7 +1493,31 @@ const productService = {
       $match: {
         "filteredVariants.0": { $exists: true },
       },
-    }); // Stage 5: Project để giữ các trường cần thiết và tính giá min/max
+    });
+
+    // Stage 5: Lookup InventoryItem để tính minPrice/maxPrice cho sorting
+    pipeline.push({
+      $lookup: {
+        from: "inventoryitems",
+        localField: "_id",
+        foreignField: "product",
+        as: "inventoryItems",
+      },
+    });
+
+    // Stage 6: Tính minPrice và maxPrice từ InventoryItem
+    pipeline.push({
+      $addFields: {
+        minPrice: {
+          $min: "$inventoryItems.finalPrice",
+        },
+        maxPrice: {
+          $max: "$inventoryItems.finalPrice",
+        },
+      },
+    });
+
+    // Stage 7: Project để giữ các trường cần thiết
     pipeline.push({
       $project: {
         _id: 1,
@@ -1503,39 +1527,37 @@ const productService = {
         category: 1,
         brand: 1,
         isActive: 1,
-        // REMOVED: rating, numReviews - fields không tồn tại trong Product schema
         stockStatus: 1,
         totalQuantity: 1,
         images: 1,
         createdAt: 1,
         filteredVariantsCount: { $size: "$filteredVariants" },
-        // REMOVED: Không thể tính price từ variant.priceFinal (field đã xóa)
-        // Price sẽ được tính sau từ InventoryItem cho mỗi product
-        filteredVariants: 1, // Giữ lại để dùng sau này
+        filteredVariants: 1,
+        minPrice: 1,
+        maxPrice: 1,
       },
     });
 
-    // Sắp xếp
+    // Stage 8: Sắp xếp
     let sortOption = { createdAt: -1 }; // Mặc định theo mới nhất
     switch (sort) {
       case "price-asc":
-        // CHANGED: Sort by createdAt vì không có minPrice trong schema
-        sortOption = { createdAt: 1 }; // Fallback: sắp xếp theo thời gian
+        sortOption = { minPrice: 1, _id: 1 };
         break;
       case "price-desc":
-        // CHANGED: Sort by createdAt vì không có maxPrice trong schema
-        sortOption = { createdAt: -1 }; // Fallback: sắp xếp theo thời gian mới nhất
+        sortOption = { maxPrice: -1, _id: 1 };
         break;
       case "popular":
-        sortOption = { totalQuantity: -1 };
+        sortOption = { totalQuantity: -1, _id: 1 };
         break;
       case "rating":
-        // CHANGED: rating field không tồn tại, sort by totalQuantity thay thế
-        sortOption = { totalQuantity: -1 }; // Fallback: sản phẩm bán chạy
+        // Rating field không tồn tại, sort by totalQuantity thay thế
+        sortOption = { totalQuantity: -1, _id: 1 };
         break;
+      default:
+        sortOption = { createdAt: -1, _id: 1 };
     }
 
-    sortOption._id = 1; // Đảm bảo sắp xếp ổn định
     pipeline.push({ $sort: sortOption });
 
     // Tạo pipeline đếm tổng

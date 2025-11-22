@@ -1,8 +1,16 @@
 const { Session } = require("@models");
 
 /**
- * Dọn dẹp session hết hạn và session không hoạt động
- * @returns {Promise<void>}
+ * Dọn dẹp session không hoạt động (inactive sessions)
+ *
+ * NOTE: Expired sessions are automatically deleted by MongoDB TTL index every 60 seconds.
+ * This function ONLY handles inactive sessions because TTL can't handle compound conditions.
+ *
+ * HYBRID CLEANUP STRATEGY:
+ * - TTL Index: Deletes expired sessions (expiresAt <= now) automatically
+ * - This function: Deletes inactive sessions (isActive=false AND updatedAt > 2 days)
+ *
+ * @returns {Promise<Object>} Cleanup statistics
  */
 async function cleanSessions() {
   try {
@@ -11,23 +19,15 @@ async function cleanSessions() {
       console.error(
         "Model Session không tồn tại hoặc không được import đúng cách"
       );
-      return;
+      return { inactiveDeleted: 0 };
     }
 
     const now = new Date();
 
-    // 1. Xóa các session đã hết hạn
-    let expiredResult = null;
-    try {
-      expiredResult = await Session.deleteMany({
-        expiresAt: { $lte: now },
-      });
-    } catch (error) {
-      console.error("Lỗi khi xóa session hết hạn:", error);
-      expiredResult = { deletedCount: 0 };
-    }
+    // ❌ REMOVED: Expired session cleanup (TTL index handles this automatically)
+    // MongoDB TTL index deletes expired sessions every 60 seconds with zero app overhead
 
-    // 2. Xóa các session không còn active sau 2 ngày
+    // ✅ ONLY: Delete inactive sessions (TTL can't handle compound conditions)
     const TWO_DAYS_AGO = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
     let inactiveResult = null;
     try {
@@ -40,14 +40,21 @@ async function cleanSessions() {
       inactiveResult = { deletedCount: 0 };
     }
 
-    console.log(
-      `[${now.toISOString().replace("T", " ").substring(0, 19)}] ` +
-        `Đã dọn dẹp ${expiredResult.deletedCount} session hết hạn và ` +
-        `${inactiveResult.deletedCount} session không hoạt động.`
-    );
+    if (inactiveResult.deletedCount > 0) {
+      console.log(
+        `[${now.toISOString().replace("T", " ").substring(0, 19)}] ` +
+          `Đã dọn dẹp ${inactiveResult.deletedCount} session không hoạt động. ` +
+          `(Session hết hạn được MongoDB TTL index tự động xóa mỗi 60 giây)`
+      );
+    }
+
+    return {
+      inactiveDeleted: inactiveResult.deletedCount,
+      note: "Expired sessions are auto-deleted by MongoDB TTL index",
+    };
   } catch (error) {
     console.error("Lỗi tổng thể khi dọn dẹp session:", error);
-    // Xử lý lỗi mà không throw để tránh crash ứng dụng
+    return { inactiveDeleted: 0, error: error.message };
   }
 }
 

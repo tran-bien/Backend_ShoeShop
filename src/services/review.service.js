@@ -631,7 +631,7 @@ const reviewService = {
         paginatedItems.map(async (item) => {
           // Lấy thông tin variant
           const variant = await Variant.findById(item.variant)
-            .populate("product", "name slug images price")
+            .populate("product", "name slug images description")
             .populate("color", "name code");
 
           // Lấy thông tin size
