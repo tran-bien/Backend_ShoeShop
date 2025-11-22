@@ -123,7 +123,7 @@ const processCancelRequest = asyncHandler(async (req, res) => {
   const result = await orderService.processCancelRequest(
     req.params.id,
     { approved, note },
-    req.user.id
+    req.user._id
   );
 
   res.status(200).json(result);
@@ -156,7 +156,7 @@ const confirmReturn = asyncHandler(async (req, res) => {
   const { notes } = req.body;
 
   const result = await orderService.confirmReturn(req.params.id, {
-    confirmedBy: req.user.id,
+    confirmedBy: req.user._id,
     notes,
   });
 
@@ -188,7 +188,7 @@ const forceConfirmPayment = asyncHandler(async (req, res) => {
 
   const result = await orderService.forceConfirmPayment(
     req.params.id,
-    req.user.id,
+    req.user._id,
     { transactionId, notes }
   );
 

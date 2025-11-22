@@ -98,7 +98,7 @@ const validateReviewId = async (req, res, next) => {
 const validateReviewOwnership = async (req, res, next) => {
   try {
     const reviewId = req.params.reviewId || req.params.id;
-    const userId = req.user.id;
+    const userId = req.user._id;
 
     const review = await Review.findOne({
       _id: reviewId,

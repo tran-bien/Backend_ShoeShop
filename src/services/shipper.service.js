@@ -315,13 +315,15 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
 
     // Giảm số đơn active của shipper
     const shipper = await User.findById(shipperId);
-    shipper.shipper.activeOrders = Math.max(
-      0,
-      shipper.shipper.activeOrders - 1
-    );
-    shipper.shipper.deliveryStats.total += 1;
-    shipper.shipper.deliveryStats.successful += 1;
-    await shipper.save();
+    if (shipper && shipper.shipper) {
+      shipper.shipper.activeOrders = Math.max(
+        0,
+        shipper.shipper.activeOrders - 1
+      );
+      shipper.shipper.deliveryStats.total += 1;
+      shipper.shipper.deliveryStats.successful += 1;
+      await shipper.save();
+    }
   } else if (status === "delivery_failed") {
     order.status = "delivery_failed";
 
@@ -348,13 +350,15 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
 
       // Giảm số đơn active của shipper
       const shipper = await User.findById(shipperId);
-      shipper.shipper.activeOrders = Math.max(
-        0,
-        shipper.shipper.activeOrders - 1
-      );
-      shipper.shipper.deliveryStats.total += 1;
-      shipper.shipper.deliveryStats.failed += 1;
-      await shipper.save();
+      if (shipper && shipper.shipper) {
+        shipper.shipper.activeOrders = Math.max(
+          0,
+          shipper.shipper.activeOrders - 1
+        );
+        shipper.shipper.deliveryStats.total += 1;
+        shipper.shipper.deliveryStats.failed += 1;
+        await shipper.save();
+      }
     }
   } else if (status === "out_for_delivery") {
     order.status = "out_for_delivery";
