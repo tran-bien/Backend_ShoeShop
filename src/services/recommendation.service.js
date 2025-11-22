@@ -73,24 +73,42 @@ const recommendationService = {
     // Đếm frequency của products mà similar users mua
     const productFreq = {};
 
-    for (const similarUser of similarOrders) {
-      const theirOrders = await Order.find({
-        user: similarUser._id,
-        status: "delivered",
-      }).populate({
-        path: "orderItems.variant",
-        select: "product",
-      });
+    // Tối ưu: Dùng aggregate thay vì loop N+1 query
+    const similarUserIds = similarOrders.map((u) => u._id);
+    const allSimilarUserOrders = await Order.aggregate([
+      {
+        $match: {
+          user: { $in: similarUserIds },
+          status: "delivered",
+          deletedAt: null,
+        },
+      },
+      { $unwind: "$orderItems" },
+      {
+        $lookup: {
+          from: "variants",
+          localField: "orderItems.variant",
+          foreignField: "_id",
+          as: "variantData",
+        },
+      },
+      { $unwind: "$variantData" },
+      {
+        $group: {
+          _id: "$variantData.product",
+          count: { $sum: "$orderItems.quantity" },
+        },
+      },
+      { $sort: { count: -1 } },
+    ]);
 
-      theirOrders.forEach((order) => {
-        order.orderItems.forEach((item) => {
-          const pid = item.variant?.product?.toString();
-          if (pid && !userProductIds.has(pid)) {
-            productFreq[pid] = (productFreq[pid] || 0) + 1;
-          }
-        });
-      });
-    }
+    // Filter out products user already bought
+    allSimilarUserOrders.forEach((item) => {
+      const pid = item._id.toString();
+      if (!userProductIds.has(pid)) {
+        productFreq[pid] = item.count;
+      }
+    });
 
     // Sort và trả về top 10
     const recommendations = Object.entries(productFreq)
@@ -110,8 +128,12 @@ const recommendationService = {
   getContentBasedRecommendations: async (userId) => {
     const behavior = await UserBehavior.findOne({ user: userId });
 
+    // FIX BUG #5: Fallback sang TRENDING nếu chưa có behavior
     if (!behavior) {
-      return [];
+      console.log(
+        `[RECOMMENDATION] User ${userId} chưa có behavior, fallback sang TRENDING`
+      );
+      return await recommendationService.getTrendingProducts();
     }
 
     const query = {

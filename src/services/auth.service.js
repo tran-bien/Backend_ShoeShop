@@ -369,6 +369,21 @@ const authService = {
       // Don't block login if loyalty expiration fails
     }
 
+    // Merge anonymous view history
+    try {
+      const sessionId = req.body.sessionId || req.headers["x-session-id"];
+      if (sessionId) {
+        const viewHistoryService = require("./viewHistory.service");
+        await viewHistoryService.mergeAnonymousHistory(user._id, sessionId);
+        console.log(
+          `[LOGIN] Merged anonymous view history for user ${user._id}`
+        );
+      }
+    } catch (error) {
+      console.error("[LOGIN MERGE HISTORY] Error:", error.message);
+      // Don't block login if merge fails
+    }
+
     const { token, refreshToken } = await authService.manageUserSession(
       user._id,
       req

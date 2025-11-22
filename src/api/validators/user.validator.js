@@ -199,11 +199,6 @@ const validateUpdateNotificationPreferences = [
     .isBoolean()
     .withMessage("orderUpdates phải là boolean"),
 
-  body("emailNotifications.newsletter")
-    .optional()
-    .isBoolean()
-    .withMessage("newsletter phải là boolean"),
-
   body("inAppNotifications")
     .optional()
     .isBoolean()

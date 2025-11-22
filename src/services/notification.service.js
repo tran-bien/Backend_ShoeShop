@@ -1,6 +1,60 @@
 const Notification = require("../models/notification");
-const { renderTemplate, generateIdempotencyKey } = require("@utils/notificationTemplates");
+const {
+  renderTemplate,
+  generateIdempotencyKey,
+} = require("@utils/notificationTemplates");
 const ApiError = require("@utils/ApiError");
+
+// FIX BUG #14: In-memory rate limiter cho notification spam protection
+const notificationRateLimiter = new Map();
+
+const checkRateLimit = (userId, limit = 10, windowMs = 60000) => {
+  const now = Date.now();
+  const userKey = userId.toString();
+
+  if (!notificationRateLimiter.has(userKey)) {
+    notificationRateLimiter.set(userKey, []);
+  }
+
+  const timestamps = notificationRateLimiter.get(userKey);
+
+  // Xóa timestamps cũ hơn window
+  const validTimestamps = timestamps.filter((ts) => now - ts < windowMs);
+  notificationRateLimiter.set(userKey, validTimestamps);
+
+  // Check limit
+  if (validTimestamps.length >= limit) {
+    const oldestTimestamp = Math.min(...validTimestamps);
+    const resetTime = oldestTimestamp + windowMs;
+    const waitSeconds = Math.ceil((resetTime - now) / 1000);
+
+    throw new ApiError(
+      429,
+      `Quá nhiều thông báo. Vui lòng đợi ${waitSeconds}s`
+    );
+  }
+
+  // Thêm timestamp hiện tại
+  validTimestamps.push(now);
+  notificationRateLimiter.set(userKey, validTimestamps);
+
+  return true;
+};
+
+// Cleanup rate limiter mỗi 5 phút
+setInterval(() => {
+  const now = Date.now();
+  const fiveMinutes = 5 * 60 * 1000;
+
+  for (const [userKey, timestamps] of notificationRateLimiter.entries()) {
+    const validTimestamps = timestamps.filter((ts) => now - ts < fiveMinutes);
+    if (validTimestamps.length === 0) {
+      notificationRateLimiter.delete(userKey);
+    } else {
+      notificationRateLimiter.set(userKey, validTimestamps);
+    }
+  }
+}, 5 * 60 * 1000);
 
 const notificationService = {
   /**
@@ -8,6 +62,22 @@ const notificationService = {
    */
   send: async (userId, type, data, options = {}) => {
     const { channels, idempotencyKey } = options;
+
+    // FIX BUG #14: Check rate limit trước khi tạo notification
+    try {
+      checkRateLimit(userId);
+    } catch (error) {
+      console.warn(
+        `[NOTIFICATION RATE LIMIT] User ${userId} đã vượt quá giới hạn:`,
+        error.message
+      );
+      // Không throw error, chỉ log warning và skip notification
+      return {
+        success: false,
+        rateLimited: true,
+        message: error.message,
+      };
+    }
 
     // Generate idempotency key nếu không có
     const finalIdempotencyKey =
@@ -181,4 +251,3 @@ const notificationService = {
 };
 
 module.exports = notificationService;
-

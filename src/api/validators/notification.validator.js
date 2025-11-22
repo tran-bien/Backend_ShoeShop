@@ -18,12 +18,16 @@ const notificationValidator = {
     query("type")
       .optional()
       .isIn([
-        "ORDER_STATUS",
-        "PAYMENT",
-        "RETURN_REQUEST",
-        "LOYALTY",
-        "PROMOTION",
-        "SYSTEM",
+        "ORDER_CONFIRMED",
+        "ORDER_SHIPPING",
+        "ORDER_DELIVERED",
+        "ORDER_CANCELLED",
+        "RETURN_APPROVED",
+        "RETURN_REJECTED",
+        "RETURN_COMPLETED",
+        "LOYALTY_TIER_UP",
+        "POINTS_EARNED",
+        "POINTS_EXPIRE_SOON",
       ])
       .withMessage("Loại thông báo không hợp lệ"),
 
@@ -48,4 +52,3 @@ const notificationValidator = {
 };
 
 module.exports = notificationValidator;
-

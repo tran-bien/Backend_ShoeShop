@@ -19,7 +19,7 @@ const getCart = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const addToCart = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user._id;
   const itemData = req.body;
   const result = await cartService.addToCart(userId, itemData);
 
@@ -69,7 +69,7 @@ const clearCart = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const toggleSelectCartItem = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user._id;
   const { itemId } = req.params;
   const result = await cartService.toggleSelectCartItem(userId, itemId);
 
@@ -82,7 +82,7 @@ const toggleSelectCartItem = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const previewBeforeOrder = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
+  const userId = req.user._id;
   const result = await cartService.previewBeforeOrder(userId, req.body);
 
   res.status(200).json(result);

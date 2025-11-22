@@ -21,8 +21,6 @@ const NotificationSchema = new mongoose.Schema(
         "LOYALTY_TIER_UP",
         "POINTS_EARNED",
         "POINTS_EXPIRE_SOON",
-        "PROMOTION",
-        "SYSTEM",
       ],
       required: true,
     },

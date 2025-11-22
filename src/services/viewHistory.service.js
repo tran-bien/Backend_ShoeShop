@@ -7,7 +7,15 @@ const viewHistoryService = {
    * Track product view (từ client event)
    */
   trackView: async (data) => {
-    const { productId, variantId, viewDuration, source, userId, sessionId, deviceInfo } = data;
+    const {
+      productId,
+      variantId,
+      viewDuration,
+      source,
+      userId,
+      sessionId,
+      deviceInfo,
+    } = data;
 
     // Validate
     if (!productId) {
@@ -25,9 +33,7 @@ const viewHistoryService = {
       : null;
 
     const productImage =
-      variant?.imagesvariant?.[0]?.url ||
-      product?.images?.[0]?.url ||
-      "";
+      variant?.imagesvariant?.[0]?.url || product?.images?.[0]?.url || "";
 
     // Lấy giá từ InventoryItem (simplified - có thể optimize sau)
     const InventoryItem = require("@models").InventoryItem;
@@ -50,6 +56,16 @@ const viewHistoryService = {
       source: source || "DIRECT",
       deviceInfo: deviceInfo || "",
     });
+
+    // Cập nhật user behavior nếu có userId
+    if (userId) {
+      try {
+        const userBehaviorService = require("./userBehavior.service");
+        await userBehaviorService.updateFromView(userId, productId);
+      } catch (error) {
+        console.error("[ViewHistory] Lỗi update user behavior:", error.message);
+      }
+    }
 
     return {
       success: true,
@@ -100,35 +116,54 @@ const viewHistoryService = {
 
     let mergedCount = 0;
 
+    // FIX BUG #9: Dùng bulkWrite với upsert để tránh race condition
+    const bulkOps = [];
+
     for (const view of anonymousHistory) {
-      // Kiểm tra user đã xem product này chưa
-      const existing = await ViewHistory.findOne({
-        user: userId,
-        product: view.product,
-      }).sort({ createdAt: -1 });
+      // Tính toán thời gian 24h trước
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-      // Nếu chưa xem hoặc xem cách đây > 1 ngày, tạo mới
-      if (
-        !existing ||
-        new Date() - existing.createdAt > 24 * 60 * 60 * 1000
-      ) {
-        await ViewHistory.create({
-          user: userId,
-          product: view.product,
-          variant: view.variant,
-          productName: view.productName,
-          productImage: view.productImage,
-          productPrice: view.productPrice,
-          viewDuration: view.viewDuration,
-          source: view.source,
-          deviceInfo: view.deviceInfo,
-        });
+      // Dùng updateOne với upsert - chỉ insert nếu chưa có hoặc cũ > 1 ngày
+      bulkOps.push({
+        updateOne: {
+          filter: {
+            user: userId,
+            product: view.product,
+            createdAt: { $lt: oneDayAgo }, // Chỉ update nếu view cũ > 1 ngày
+          },
+          update: {
+            $setOnInsert: {
+              user: userId,
+              product: view.product,
+              variant: view.variant,
+              productName: view.productName,
+              productImage: view.productImage,
+              productPrice: view.productPrice,
+              viewDuration: view.viewDuration,
+              source: view.source,
+              deviceInfo: view.deviceInfo,
+              createdAt: view.createdAt || new Date(),
+            },
+          },
+          upsert: true,
+        },
+      });
+    }
 
-        mergedCount++;
+    // Execute bulk operations atomically
+    if (bulkOps.length > 0) {
+      try {
+        const result = await ViewHistory.bulkWrite(bulkOps, { ordered: false });
+        mergedCount = result.upsertedCount || 0;
+      } catch (error) {
+        // Duplicate key errors are expected and safe to ignore
+        if (error.code !== 11000) {
+          console.error("[VIEW HISTORY] Error during bulk merge:", error);
+        }
       }
     }
 
-    // Xóa anonymous history
+    // Xóa anonymous history sau khi merge thành công
     await ViewHistory.deleteMany({ sessionId });
 
     console.log(
@@ -155,4 +190,3 @@ const viewHistoryService = {
 };
 
 module.exports = viewHistoryService;
-

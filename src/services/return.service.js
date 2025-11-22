@@ -359,6 +359,22 @@ const approveReturnRequest = async (id, approvedBy, staffNotes) => {
 
   await request.save();
 
+  // Gửi notification
+  try {
+    const notificationService = require("./notification.service");
+    const populatedRequest = await ReturnRequest.findById(request._id).populate(
+      "order"
+    );
+    await notificationService.send(request.customer, "RETURN_APPROVED", {
+      type: request.type === "RETURN" ? "trả hàng" : "đổi hàng",
+      orderCode: populatedRequest.order?.code || "",
+      returnRequestId: request._id,
+      returnRequestCode: request.code,
+    });
+  } catch (error) {
+    console.error("[Return] Lỗi gửi notification approved:", error.message);
+  }
+
   return await request.populate([
     { path: "order" },
     { path: "customer", select: "name email phone" },
@@ -386,6 +402,23 @@ const rejectReturnRequest = async (id, approvedBy, rejectionReason) => {
   request.rejectionReason = rejectionReason;
 
   await request.save();
+
+  // Gửi notification
+  try {
+    const notificationService = require("./notification.service");
+    const populatedRequest = await ReturnRequest.findById(request._id).populate(
+      "order"
+    );
+    await notificationService.send(request.customer, "RETURN_REJECTED", {
+      type: request.type === "RETURN" ? "trả hàng" : "đổi hàng",
+      orderCode: populatedRequest.order?.code || "",
+      returnRequestId: request._id,
+      returnRequestCode: request.code,
+      rejectionReason: rejectionReason, // Thay 'reason' thành 'rejectionReason' để match template
+    });
+  } catch (error) {
+    console.error("[Return] Lỗi gửi notification rejected:", error.message);
+  }
 
   return await request.populate([
     { path: "order" },
@@ -490,6 +523,38 @@ const processReturn = async (id, processedBy) => {
     );
   }
 
+  // Trừ điểm loyalty nếu user đã nhận điểm từ order này
+  try {
+    const loyaltyService = require("./loyalty.service");
+    const LoyaltyTransaction = require("../models/loyaltyTransaction");
+
+    // Tìm transaction tích điểm từ order này
+    const earnTransaction = await LoyaltyTransaction.findOne({
+      user: request.customer,
+      type: "EARN",
+      source: "ORDER",
+      order: request.order._id,
+      isExpired: false,
+    });
+
+    if (earnTransaction && earnTransaction.points > 0) {
+      await loyaltyService.deductPoints(
+        request.customer,
+        earnTransaction.points,
+        {
+          type: "DEDUCT",
+          source: "RETURN",
+          description: `Trừ điểm do trả hàng #${request.code}`,
+        }
+      );
+      console.log(
+        `[Return] Đã trừ ${earnTransaction.points} điểm cho user ${request.customer}`
+      );
+    }
+  } catch (error) {
+    console.error("[Return] Lỗi trừ điểm loyalty:", error.message);
+  }
+
   // Cập nhật trạng thái đơn hàng
   order.status = "returned";
   order.statusHistory.push({
@@ -506,6 +571,20 @@ const processReturn = async (id, processedBy) => {
   request.processedAt = new Date();
   request.completedAt = new Date();
   await request.save();
+
+  // Gửi notification
+  try {
+    const notificationService = require("./notification.service");
+    await notificationService.send(request.customer, "RETURN_COMPLETED", {
+      type: request.type === "RETURN" ? "trả hàng" : "đổi hàng",
+      orderCode: request.order?.code || "",
+      returnRequestId: request._id,
+      returnRequestCode: request.code,
+      refundAmount: request.refundAmount || 0, // Thêm refundAmount để hiển thị trong email
+    });
+  } catch (error) {
+    console.error("[Return] Lỗi gửi notification completed:", error.message);
+  }
 
   return await request.populate([
     { path: "customer", select: "name email phone" },

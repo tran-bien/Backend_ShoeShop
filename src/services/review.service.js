@@ -313,6 +313,24 @@ const reviewService = {
       const savedReview = await newReview.save();
       console.log("Review đã lưu:", savedReview);
 
+      // Thưởng điểm loyalty cho review
+      try {
+        const loyaltyService = require("./loyalty.service");
+        await loyaltyService.addPoints(userId, 50, {
+          source: "REVIEW",
+          review: savedReview._id,
+          description: "Thưởng điểm đánh giá sản phẩm",
+          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        });
+        console.log(`[Review] Đã thưởng 50 điểm cho user ${userId}`);
+      } catch (loyaltyError) {
+        console.error(
+          "[Review] Lỗi thưởng điểm loyalty:",
+          loyaltyError.message
+        );
+        // Don't block review creation if loyalty fails
+      }
+
       // Lấy đánh giá đã tạo kèm theo thông tin người dùng và sản phẩm
       const createdReview = await Review.findById(newReview._id)
         .populate("user", "name avatar")
@@ -1214,7 +1232,10 @@ const adminReviewService = {
     }
 
     if (replyContent.length > 1000) {
-      throw new ApiError(400, "Nội dung trả lời không được vượt quá 1000 ký tự");
+      throw new ApiError(
+        400,
+        "Nội dung trả lời không được vượt quá 1000 ký tự"
+      );
     }
 
     // Cập nhật reply
@@ -1266,7 +1287,10 @@ const adminReviewService = {
     }
 
     if (replyContent.length > 1000) {
-      throw new ApiError(400, "Nội dung trả lời không được vượt quá 1000 ký tự");
+      throw new ApiError(
+        400,
+        "Nội dung trả lời không được vượt quá 1000 ký tự"
+      );
     }
 
     // Cập nhật reply

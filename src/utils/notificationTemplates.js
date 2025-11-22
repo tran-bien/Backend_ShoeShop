@@ -116,20 +116,6 @@ const templates = {
     actionText: "Đổi điểm",
     actionUrl: "/loyalty",
   },
-
-  PROMOTION: {
-    title: "{{promoTitle}}",
-    message: "{{promoMessage}}",
-    actionText: "Xem ngay",
-    actionUrl: "{{promoUrl}}",
-  },
-
-  SYSTEM: {
-    title: "{{systemTitle}}",
-    message: "{{systemMessage}}",
-    actionText: "{{systemActionText}}",
-    actionUrl: "{{systemActionUrl}}",
-  },
 };
 
 /**

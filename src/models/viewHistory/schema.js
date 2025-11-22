@@ -63,4 +63,15 @@ ViewHistorySchema.index({ user: 1, product: 1, createdAt: -1 });
 ViewHistorySchema.index({ sessionId: 1, createdAt: -1 });
 ViewHistorySchema.index({ createdAt: -1 }); // TTL index
 
+// FIX BUG #9: Unique index để tránh duplicate khi merge (cho views trong cùng ngày)
+// Sparse index: chỉ áp dụng cho documents có user field
+ViewHistorySchema.index(
+  { user: 1, product: 1, createdAt: 1 },
+  { 
+    unique: true, 
+    sparse: true,
+    partialFilterExpression: { user: { $exists: true } }
+  }
+);
+
 module.exports = ViewHistorySchema;

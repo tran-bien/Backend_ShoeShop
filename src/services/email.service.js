@@ -5,9 +5,48 @@ const emailTemplates = require("@utils/email");
 // Import transporter từ utils/email.js (shared instance)
 const { transporter } = emailTemplates;
 
+/**
+ * FIX BUG #13: Helper function để retry email với exponential backoff
+ */
+const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await transporter.sendMail(mailOptions);
+      if (attempt > 1) {
+        console.log(
+          `[EMAIL RETRY] Gửi thành công sau ${attempt} lần thử - To: ${mailOptions.to}`
+        );
+      }
+      return { success: true, attempts: attempt };
+    } catch (error) {
+      lastError = error;
+      console.error(
+        `[EMAIL RETRY] Lần thử ${attempt}/${maxRetries} thất bại:`,
+        error.message
+      );
+
+      if (attempt < maxRetries) {
+        // Exponential backoff: 1s, 2s, 4s
+        const waitTime = Math.pow(2, attempt - 1) * 1000;
+        console.log(`[EMAIL RETRY] Đợi ${waitTime}ms trước khi thử lại...`);
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+      }
+    }
+  }
+
+  // Tất cả retry đều thất bại
+  throw new ApiError(
+    500,
+    `Không thể gửi email sau ${maxRetries} lần thử: ${lastError.message}`
+  );
+};
+
 const emailService = {
   /**
-   * Gửi email notification chung
+   * Gửi email notification chung (với template chuyên biệt)
+   * Mapping đầy đủ cho 12 notification types trong schema
    */
   sendNotificationEmail: async (userId, notification) => {
     const user = await User.findById(userId);
@@ -16,26 +55,131 @@ const emailService = {
       throw new ApiError(404, "Không tìm thấy email người dùng");
     }
 
+    let htmlContent;
+    let subject = notification.title;
+
+    // Chọn template phù hợp với notification type
+    switch (notification.type) {
+      case "ORDER_CONFIRMED":
+        htmlContent = emailTemplates.orderConfirmedEmailTemplate(
+          user.name,
+          notification.data,
+          process.env.FRONTEND_URL
+        );
+        subject = `Đơn hàng ${notification.data.orderCode} đã được xác nhận`;
+        break;
+
+      case "ORDER_SHIPPING":
+        htmlContent = emailTemplates.orderShippingEmailTemplate(
+          user.name,
+          notification.data,
+          process.env.FRONTEND_URL
+        );
+        subject = `Đơn hàng ${notification.data.orderCode} đang được giao`;
+        break;
+
+      case "ORDER_DELIVERED":
+        htmlContent = emailTemplates.orderDeliveredEmailTemplate(
+          user.name,
+          notification.data,
+          notification.data.pointsEarned || null,
+          process.env.FRONTEND_URL
+        );
+        subject = `Đơn hàng ${notification.data.orderCode} đã giao thành công`;
+        break;
+
+      case "ORDER_CANCELLED":
+        htmlContent = emailTemplates.orderCancelledEmailTemplate(
+          user.name,
+          notification.data,
+          notification.data.reason || "",
+          process.env.FRONTEND_URL
+        );
+        subject = `Đơn hàng ${notification.data.orderCode} đã bị hủy`;
+        break;
+
+      case "RETURN_APPROVED":
+        htmlContent = emailTemplates.returnApprovedEmailTemplate(
+          user.name,
+          notification.data,
+          process.env.FRONTEND_URL
+        );
+        subject = `Yêu cầu ${notification.data.type} được chấp nhận`;
+        break;
+
+      case "RETURN_REJECTED":
+        htmlContent = emailTemplates.returnRejectedEmailTemplate(
+          user.name,
+          notification.data,
+          process.env.FRONTEND_URL
+        );
+        subject = `Yêu cầu ${notification.data.type} bị từ chối`;
+        break;
+
+      case "RETURN_COMPLETED":
+        htmlContent = emailTemplates.returnCompletedEmailTemplate(
+          user.name,
+          notification.data,
+          process.env.FRONTEND_URL
+        );
+        subject = `Yêu cầu ${notification.data.type} đã hoàn tất`;
+        break;
+
+      case "LOYALTY_TIER_UP":
+        htmlContent = emailTemplates.loyaltyTierUpEmailTemplate(
+          user.name,
+          notification.data,
+          process.env.FRONTEND_URL
+        );
+        subject = `Chúc mừng! Bạn đã lên hạng ${notification.data.tierName}`;
+        break;
+
+      case "POINTS_EARNED":
+        htmlContent = emailTemplates.pointsEarnedEmailTemplate(
+          user.name,
+          notification.data.points,
+          notification.data.description,
+          notification.data.balance || 0,
+          process.env.FRONTEND_URL
+        );
+        subject = `Bạn đã nhận ${notification.data.points} điểm!`;
+        break;
+
+      case "POINTS_EXPIRE_SOON":
+        htmlContent = emailTemplates.pointsExpireSoonEmailTemplate(
+          user.name,
+          notification.data.points,
+          notification.data.expiryDate,
+          process.env.FRONTEND_URL
+        );
+        subject = `${notification.data.points} điểm sắp hết hạn`;
+        break;
+
+      default:
+        // Fallback: Log lỗi nếu type không hợp lệ
+        console.error(
+          `[Email] Unknown notification type: ${notification.type}`
+        );
+        throw new ApiError(
+          400,
+          `Loại thông báo không được hỗ trợ: ${notification.type}`
+        );
+    }
+
     const mailOptions = {
       from: `"Shoe Shop" <${process.env.EMAIL_USER}>`,
       to: user.email,
-      subject: notification.title,
-      html: emailTemplates.notificationEmailTemplate(
-        notification.title,
-        notification.message,
-        notification.actionUrl
-          ? `${process.env.FRONTEND_URL}${notification.actionUrl}`
-          : null,
-        notification.actionText
-      ),
+      subject: subject,
+      html: htmlContent,
     };
 
     try {
-      await transporter.sendMail(mailOptions);
-      return { success: true };
+      // FIX BUG #13: Sử dụng retry logic
+      const result = await sendEmailWithRetry(mailOptions);
+      return result;
     } catch (error) {
-      console.error("Lỗi gửi email:", error);
-      throw new ApiError(500, "Không thể gửi email");
+      console.error("Lỗi gửi email sau khi retry:", error);
+      throw error; // Re-throw error để notification service xử lý
     }
   },
 
@@ -61,10 +205,11 @@ const emailService = {
     };
 
     try {
-      await transporter.sendMail(mailOptions);
-      return { success: true };
+      // FIX BUG #13: Sử dụng retry logic
+      const result = await sendEmailWithRetry(mailOptions);
+      return result;
     } catch (error) {
-      console.error("Lỗi gửi email xác nhận đơn hàng:", error);
+      console.error("Lỗi gửi email xác nhận đơn hàng sau khi retry:", error);
       throw new ApiError(500, "Không thể gửi email");
     }
   },
@@ -103,52 +248,15 @@ const emailService = {
     };
 
     try {
-      await transporter.sendMail(mailOptions);
+      // FIX BUG #13: Sử dụng retry logic
+      const result = await sendEmailWithRetry(mailOptions);
       console.log(
         `[EMAIL] Đã gửi email đổi/trả hàng cho ${user.email} - Mã: ${returnRequest.code}`
       );
-      return { success: true };
+      return result;
     } catch (error) {
-      console.error("Lỗi gửi email đổi/trả hàng:", error);
+      console.error("Lỗi gửi email đổi/trả hàng sau khi retry:", error);
       throw new ApiError(500, "Không thể gửi email đổi/trả hàng");
-    }
-  },
-
-  /**
-   * Gửi newsletter đến người dùng đã đăng ký
-   */
-  sendNewsletterEmail: async (userEmails, newsletterData) => {
-    const {
-      subject,
-      title,
-      heroImageUrl,
-      sections = [],
-      featuredProducts = [],
-      ctaText,
-      ctaUrl,
-    } = newsletterData;
-
-    const mailOptions = {
-      from: `"Shoe Shop Newsletter" <${process.env.EMAIL_USER}>`,
-      bcc: userEmails,
-      subject: subject || "Newsletter từ Shoe Shop",
-      html: emailTemplates.newsletterEmailTemplate(
-        title,
-        heroImageUrl,
-        sections,
-        featuredProducts,
-        ctaText,
-        ctaUrl,
-        process.env.FRONTEND_URL
-      ),
-    };
-
-    try {
-      await transporter.sendMail(mailOptions);
-      return { success: true, sentCount: userEmails.length };
-    } catch (error) {
-      console.error("Lỗi gửi newsletter:", error);
-      throw new ApiError(500, "Không thể gửi newsletter");
     }
   },
 };

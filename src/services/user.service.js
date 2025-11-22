@@ -540,7 +540,6 @@ const adminUserService = {
       user.preferences = {
         emailNotifications: {
           orderUpdates: true,
-          newsletter: false,
         },
         inAppNotifications: true,
       };
@@ -551,10 +550,6 @@ const adminUserService = {
       if (preferences.emailNotifications.orderUpdates !== undefined) {
         user.preferences.emailNotifications.orderUpdates =
           preferences.emailNotifications.orderUpdates;
-      }
-      if (preferences.emailNotifications.newsletter !== undefined) {
-        user.preferences.emailNotifications.newsletter =
-          preferences.emailNotifications.newsletter;
       }
     }
 
@@ -587,7 +582,6 @@ const adminUserService = {
     const defaultPreferences = {
       emailNotifications: {
         orderUpdates: true,
-        newsletter: false,
       },
       inAppNotifications: true,
     };

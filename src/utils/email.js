@@ -4,6 +4,36 @@ const { baseStyles } = require("@utils/emailTemplates");
 
 require("dotenv").config();
 
+/**
+ * ================================================================================================
+ * EMAIL TEMPLATES MAPPING - COMPREHENSIVE LIST
+ * ================================================================================================
+ *
+ * NOTIFICATION TYPES (10 types trong notification schema):
+ * ✅ ORDER_CONFIRMED      → orderConfirmedEmailTemplate (Template 3A)
+ * ✅ ORDER_SHIPPING       → orderShippingEmailTemplate (Template 3B)
+ * ✅ ORDER_DELIVERED      → orderDeliveredEmailTemplate (Template 3C)
+ * ✅ ORDER_CANCELLED      → orderCancelledEmailTemplate (Template 3D)
+ * ✅ RETURN_APPROVED      → returnApprovedEmailTemplate (Template 3H)
+ * ✅ RETURN_REJECTED      → returnRejectedEmailTemplate (Template 3I)
+ * ✅ RETURN_COMPLETED     → returnCompletedEmailTemplate (Template 3J)
+ * ✅ LOYALTY_TIER_UP      → loyaltyTierUpEmailTemplate (Template 3E)
+ * ✅ POINTS_EARNED        → pointsEarnedEmailTemplate (Template 3F)
+ * ✅ POINTS_EXPIRE_SOON   → pointsExpireSoonEmailTemplate (Template 3G)
+ *
+ * OTHER EMAIL TYPES:
+ * ✅ Verification OTP     → verificationEmailTemplate (Template 1)
+ * ✅ Reset Password       → resetPasswordEmailTemplate (Template 2)
+ * ✅ Order Confirmation   → orderConfirmationEmailTemplate (Template 4) - Không dùng qua notification
+ * ✅ Return Request       → returnRequestEmailTemplate (Template 5) - Không dùng qua notification
+ *
+ * USAGE:
+ * - Tất cả notification emails được gửi qua email.service.sendNotificationEmail()
+ * - Switch case trong sendNotificationEmail() map notification.type → template tương ứng
+ *
+ * ================================================================================================
+ */
+
 // Kiểm tra biến môi trường
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
   console.error(
@@ -111,24 +141,403 @@ exports.resetPasswordEmailTemplate = (name, resetUrl) => {
 };
 
 /**
- * Template 3: Email thông báo chung
+ * Template 3A: Email xác nhận đơn hàng (ORDER_CONFIRMED)
  */
-exports.notificationEmailTemplate = (title, message, actionUrl, actionText) => {
+exports.orderConfirmedEmailTemplate = (userName, order, frontendUrl) => {
   const content = `
     <div style="${baseStyles.content}">
-      <h2 style="${baseStyles.title}">${title}</h2>
-      <p style="${baseStyles.text}">${message}</p>
-      ${
-        actionUrl
-          ? `
+      <h2 style="${baseStyles.title}">✅ Đơn hàng đã được xác nhận</h2>
+      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
+      <p style="${baseStyles.text}">
+        Đơn hàng <strong>${
+          order.code
+        }</strong> của bạn đã được xác nhận và đang được chuẩn bị.
+      </p>
+      
+      <div style="background-color: #F5F5F5; border-left: 4px solid #000000; padding: 20px; margin: 25px 0;">
+        <p style="margin: 0 0 10px 0; color: #000000; font-size: 14px; font-weight: 600;">Thông tin đơn hàng</p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Mã đơn: <strong>${
+          order.code
+        }</strong></p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Tổng tiền: <strong>${
+          order.totalAfterDiscountAndShipping?.toLocaleString("vi-VN") || "N/A"
+        }đ</strong></p>
+      </div>
+      
+      <p style="${
+        baseStyles.text
+      }">Chúng tôi sẽ thông báo cho bạn khi đơn hàng được giao.</p>
+      
       <div style="${baseStyles.buttonWrapper}">
-        <a href="${actionUrl}" style="${baseStyles.button}">${
-              actionText || "Xem chi tiết"
-            }</a>
+        <a href="${frontendUrl}/orders/${order._id}" style="${
+    baseStyles.button
+  }">Xem đơn hàng</a>
+      </div>
+    </div>
+  `;
+  return createEmailWrapper(content);
+};
+
+/**
+ * Template 3B: Email đơn hàng đang giao (ORDER_SHIPPING)
+ */
+exports.orderShippingEmailTemplate = (userName, order, frontendUrl) => {
+  const content = `
+    <div style="${baseStyles.content}">
+      <h2 style="${baseStyles.title}">🚚 Đơn hàng đang được giao</h2>
+      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
+      <p style="${baseStyles.text}">
+        Đơn hàng <strong>${
+          order.code
+        }</strong> của bạn đang trên đường giao đến. 
+        Shipper sẽ liên hệ bạn trong thời gian sớm nhất.
+      </p>
+      
+      <div style="background-color: #F5F5F5; border-left: 4px solid #000000; padding: 20px; margin: 25px 0;">
+        <p style="margin: 0 0 10px 0; color: #000000; font-size: 14px; font-weight: 600;">Thông tin giao hàng</p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Địa chỉ: ${
+          order.shippingAddress?.detail || "N/A"
+        }</p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">SĐT: ${
+          order.shippingAddress?.phone || "N/A"
+        }</p>
+      </div>
+      
+      <p style="${baseStyles.text}">Vui lòng chú ý điện thoại để nhận hàng!</p>
+      
+      <div style="${baseStyles.buttonWrapper}">
+        <a href="${frontendUrl}/orders/${order._id}" style="${
+    baseStyles.button
+  }">Theo dõi đơn hàng</a>
+      </div>
+    </div>
+  `;
+  return createEmailWrapper(content);
+};
+
+/**
+ * Template 3C: Email đơn hàng đã giao (ORDER_DELIVERED)
+ */
+exports.orderDeliveredEmailTemplate = (
+  userName,
+  order,
+  pointsEarned,
+  frontendUrl
+) => {
+  const content = `
+    <div style="${baseStyles.content}">
+      <h2 style="${baseStyles.title}">✅ Đơn hàng đã giao thành công</h2>
+      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
+      <p style="${baseStyles.text}">
+        Đơn hàng <strong>${order.code}</strong> đã được giao thành công. 
+        Cảm ơn bạn đã mua hàng tại Shoe Shop!
+      </p>
+      
+      ${
+        pointsEarned
+          ? `
+      <div style="background-color: #000000; color: #FFFFFF; padding: 25px; text-align: center; margin: 25px 0;">
+        <p style="margin: 0 0 10px 0; font-size: 14px; letter-spacing: 2px; text-transform: uppercase;">Bạn đã nhận được</p>
+        <p style="margin: 0; font-size: 36px; font-weight: 700;">${pointsEarned} điểm</p>
+        <p style="margin: 10px 0 0 0; font-size: 13px;">Loyalty Points</p>
       </div>
       `
           : ""
       }
+      
+      <p style="${baseStyles.text}">
+        Đánh giá sản phẩm để nhận thêm <strong>50 điểm</strong> và giúp người mua khác!
+      </p>
+      
+      <div style="${baseStyles.buttonWrapper}">
+        <a href="${frontendUrl}/orders/${order._id}" style="${
+    baseStyles.button
+  }">Đánh giá ngay</a>
+      </div>
+    </div>
+  `;
+  return createEmailWrapper(content);
+};
+
+/**
+ * Template 3D: Email đơn hàng bị hủy (ORDER_CANCELLED)
+ */
+exports.orderCancelledEmailTemplate = (
+  userName,
+  order,
+  reason,
+  frontendUrl
+) => {
+  const content = `
+    <div style="${baseStyles.content}">
+      <h2 style="${baseStyles.title}">❌ Đơn hàng đã bị hủy</h2>
+      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
+      <p style="${baseStyles.text}">
+        Rất tiếc, đơn hàng <strong>${order.code}</strong> đã bị hủy.
+      </p>
+      
+      ${
+        reason
+          ? `
+      <div style="background-color: #F5F5F5; border-left: 4px solid #2C2C2C; padding: 20px; margin: 25px 0;">
+        <p style="margin: 0 0 10px 0; color: #000000; font-size: 14px; font-weight: 600;">Lý do hủy:</p>
+        <p style="margin: 0; color: #2C2C2C; font-size: 14px;">${reason}</p>
+      </div>
+      `
+          : ""
+      }
+      
+      <p style="${baseStyles.text}">
+        ${
+          order.payment?.method === "VNPAY"
+            ? "Số tiền sẽ được hoàn lại vào tài khoản của bạn trong 5-7 ngày làm việc."
+            : "Nếu bạn đã thanh toán, vui lòng liên hệ bộ phận hỗ trợ."
+        }
+      </p>
+      
+      <div style="${baseStyles.buttonWrapper}">
+        <a href="${frontendUrl}/products" style="${
+    baseStyles.button
+  }">Tiếp tục mua sắm</a>
+      </div>
+    </div>
+  `;
+  return createEmailWrapper(content);
+};
+
+/**
+ * Template 3E: Email thông báo lên hạng loyalty (LOYALTY_TIER_UP)
+ */
+exports.loyaltyTierUpEmailTemplate = (userName, tierInfo, frontendUrl) => {
+  const content = `
+    <div style="${baseStyles.content}">
+      <h2 style="${baseStyles.title}">🎉 Chúc mừng lên hạng ${
+    tierInfo.tierName
+  }!</h2>
+      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
+      <p style="${baseStyles.text}">
+        Chúc mừng! Bạn đã được nâng cấp lên hạng thành viên <strong>${
+          tierInfo.tierName
+        }</strong>.
+      </p>
+      
+      <div style="background-color: #000000; color: #FFFFFF; padding: 30px; text-align: center; margin: 25px 0;">
+        <p style="margin: 0 0 15px 0; font-size: 16px; letter-spacing: 3px; text-transform: uppercase;">Hạng của bạn</p>
+        <p style="margin: 0; font-size: 42px; font-weight: 700; letter-spacing: 2px;">${
+          tierInfo.tierName
+        }</p>
+      </div>
+      
+      <h3 style="color: #000000; font-size: 18px; font-weight: 600; margin: 30px 0 15px 0;">Ưu đãi của bạn:</h3>
+      <ul style="color: #2C2C2C; font-size: 15px; line-height: 1.8; padding-left: 20px;">
+        <li>Tích điểm <strong>x${tierInfo.multiplier || 1}</strong></li>
+        ${tierInfo.prioritySupport ? "<li>Hỗ trợ ưu tiên</li>" : ""}
+        <li>Điểm hiện tại: <strong>${tierInfo.currentPoints}</strong></li>
+      </ul>
+      
+      <div style="${baseStyles.buttonWrapper}">
+        <a href="${frontendUrl}/loyalty" style="${
+    baseStyles.button
+  }">Xem ưu đãi</a>
+      </div>
+    </div>
+  `;
+  return createEmailWrapper(content);
+};
+
+/**
+ * Template 3F: Email thông báo nhận điểm (POINTS_EARNED)
+ */
+exports.pointsEarnedEmailTemplate = (
+  userName,
+  points,
+  description,
+  balance,
+  frontendUrl
+) => {
+  const content = `
+    <div style="${baseStyles.content}">
+      <h2 style="${baseStyles.title}">🎁 Bạn đã nhận ${points} điểm!</h2>
+      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
+      
+      <div style="background-color: #F5F5F5; border: 2px solid #000000; padding: 30px; text-align: center; margin: 25px 0;">
+        <p style="margin: 0 0 15px 0; color: #2C2C2C; font-size: 14px;">${description}</p>
+        <p style="margin: 0; color: #000000; font-size: 48px; font-weight: 700;">+${points}</p>
+        <p style="margin: 15px 0 0 0; color: #2C2C2C; font-size: 14px;">điểm đã được cộng vào tài khoản</p>
+      </div>
+      
+      <p style="${baseStyles.text}">
+        Tổng điểm hiện tại: <strong>${balance} điểm</strong>
+      </p>
+      
+      <div style="${baseStyles.buttonWrapper}">
+        <a href="${frontendUrl}/loyalty" style="${baseStyles.button}">Xem điểm thưởng</a>
+      </div>
+    </div>
+  `;
+  return createEmailWrapper(content);
+};
+
+/**
+ * Template 3G: Email cảnh báo điểm sắp hết hạn (POINTS_EXPIRE_SOON)
+ */
+exports.pointsExpireSoonEmailTemplate = (
+  userName,
+  points,
+  expiryDate,
+  frontendUrl
+) => {
+  const content = `
+    <div style="${baseStyles.content}">
+      <h2 style="${baseStyles.title}">⚠️ Điểm của bạn sắp hết hạn</h2>
+      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
+      <p style="${baseStyles.text}">
+        Bạn có <strong>${points} điểm</strong> sắp hết hạn vào ngày <strong>${expiryDate}</strong>.
+      </p>
+      
+      <div style="background-color: #FFF3CD; border-left: 4px solid #FFC107; padding: 20px; margin: 25px 0;">
+        <p style="margin: 0; color: #856404; font-size: 14px; font-weight: 600;">
+          ⏰ Hãy sử dụng điểm trước khi hết hạn để không bị mất!
+        </p>
+      </div>
+      
+      <p style="${baseStyles.text}">
+        Sử dụng ngay điểm của bạn để mua sắm tại Shoe Shop.
+      </p>
+      
+      <div style="${baseStyles.buttonWrapper}">
+        <a href="${frontendUrl}/products" style="${baseStyles.button}">Mua sắm ngay</a>
+      </div>
+    </div>
+  `;
+  return createEmailWrapper(content);
+};
+
+/**
+ * Template 3H: Email yêu cầu đổi/trả được chấp nhận (RETURN_APPROVED)
+ */
+exports.returnApprovedEmailTemplate = (userName, returnInfo, frontendUrl) => {
+  const typeText = returnInfo.type === "RETURN" ? "trả hàng" : "đổi hàng";
+  const content = `
+    <div style="${baseStyles.content}">
+      <h2 style="${baseStyles.title}">✅ Yêu cầu ${typeText} được chấp nhận</h2>
+      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
+      <p style="${baseStyles.text}">
+        Yêu cầu ${typeText} <strong>${returnInfo.returnRequestCode}</strong> của bạn đã được chấp nhận.
+      </p>
+      
+      <div style="background-color: #F5F5F5; border-left: 4px solid #000000; padding: 20px; margin: 25px 0;">
+        <p style="margin: 0 0 10px 0; color: #000000; font-size: 14px; font-weight: 600;">Thông tin yêu cầu</p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Mã yêu cầu: <strong>${returnInfo.returnRequestCode}</strong></p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Đơn hàng: <strong>${returnInfo.orderCode}</strong></p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Loại: <strong>${typeText}</strong></p>
+      </div>
+      
+      <p style="${baseStyles.text}">
+        Chúng tôi sẽ liên hệ với bạn để hướng dẫn các bước tiếp theo.
+      </p>
+      
+      <div style="${baseStyles.buttonWrapper}">
+        <a href="${frontendUrl}/account/return-requests/${returnInfo.returnRequestId}" style="${baseStyles.button}">Xem chi tiết</a>
+      </div>
+    </div>
+  `;
+  return createEmailWrapper(content);
+};
+
+/**
+ * Template 3I: Email yêu cầu đổi/trả bị từ chối (RETURN_REJECTED)
+ */
+exports.returnRejectedEmailTemplate = (userName, returnInfo, frontendUrl) => {
+  const typeText = returnInfo.type === "RETURN" ? "trả hàng" : "đổi hàng";
+  const content = `
+    <div style="${baseStyles.content}">
+      <h2 style="${baseStyles.title}">❌ Yêu cầu ${typeText} bị từ chối</h2>
+      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
+      <p style="${baseStyles.text}">
+        Rất tiếc, yêu cầu ${typeText} <strong>${
+    returnInfo.returnRequestCode
+  }</strong> của bạn không được chấp nhận.
+      </p>
+      
+      <div style="background-color: #F5F5F5; border-left: 4px solid #2C2C2C; padding: 20px; margin: 25px 0;">
+        <p style="margin: 0 0 10px 0; color: #000000; font-size: 14px; font-weight: 600;">Thông tin yêu cầu</p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Mã yêu cầu: <strong>${
+          returnInfo.returnRequestCode
+        }</strong></p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Đơn hàng: <strong>${
+          returnInfo.orderCode
+        }</strong></p>
+        ${
+          returnInfo.rejectionReason
+            ? `<p style="margin: 15px 0 5px 0; color: #000000; font-size: 14px; font-weight: 600;">Lý do từ chối:</p>
+        <p style="margin: 0; color: #2C2C2C; font-size: 14px;">${returnInfo.rejectionReason}</p>`
+            : ""
+        }
+      </div>
+      
+      <p style="${baseStyles.text}">
+        Nếu có thắc mắc, vui lòng liên hệ bộ phận chăm sóc khách hàng.
+      </p>
+      
+      <div style="${baseStyles.buttonWrapper}">
+        <a href="${frontendUrl}/account/return-requests/${
+    returnInfo.returnRequestId
+  }" style="${baseStyles.button}">Xem chi tiết</a>
+      </div>
+    </div>
+  `;
+  return createEmailWrapper(content);
+};
+
+/**
+ * Template 3J: Email yêu cầu đổi/trả hoàn tất (RETURN_COMPLETED)
+ */
+exports.returnCompletedEmailTemplate = (userName, returnInfo, frontendUrl) => {
+  const typeText = returnInfo.type === "RETURN" ? "trả hàng" : "đổi hàng";
+  const content = `
+    <div style="${baseStyles.content}">
+      <h2 style="${baseStyles.title}">✅ ${
+    typeText === "trả hàng" ? "Hoàn tiền" : "Đổi hàng"
+  } hoàn tất</h2>
+      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
+      <p style="${baseStyles.text}">
+        Yêu cầu ${typeText} <strong>${
+    returnInfo.returnRequestCode
+  }</strong> đã được xử lý thành công.
+      </p>
+      
+      <div style="background-color: #000000; color: #FFFFFF; padding: 25px; text-align: center; margin: 25px 0;">
+        <p style="margin: 0 0 10px 0; font-size: 14px; letter-spacing: 2px; text-transform: uppercase;">Trạng thái</p>
+        <p style="margin: 0; font-size: 36px; font-weight: 700;">Hoàn tất</p>
+      </div>
+      
+      <div style="background-color: #F5F5F5; border-left: 4px solid #000000; padding: 20px; margin: 25px 0;">
+        <p style="margin: 0 0 10px 0; color: #000000; font-size: 14px; font-weight: 600;">Thông tin yêu cầu</p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Mã yêu cầu: <strong>${
+          returnInfo.returnRequestCode
+        }</strong></p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Đơn hàng: <strong>${
+          returnInfo.orderCode
+        }</strong></p>
+        ${
+          returnInfo.refundAmount
+            ? `<p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Số tiền hoàn: <strong>${returnInfo.refundAmount.toLocaleString(
+                "vi-VN"
+              )}đ</strong></p>`
+            : ""
+        }
+      </div>
+      
+      <p style="${baseStyles.text}">
+        Cảm ơn bạn đã tin tưởng Shoe Shop!
+      </p>
+      
+      <div style="${baseStyles.buttonWrapper}">
+        <a href="${frontendUrl}/products" style="${
+    baseStyles.button
+  }">Tiếp tục mua sắm</a>
+      </div>
     </div>
   `;
   return createEmailWrapper(content);
@@ -343,113 +752,6 @@ exports.returnRequestEmailTemplate = (userName, returnRequest, frontendUrl) => {
         }" style="${baseStyles.footerLink}">${
     process.env.SUPPORT_EMAIL || process.env.EMAIL_USER
   }</a>
-      </p>
-      <hr style="margin: 20px 0; border: none; border-top: 1px solid #E0E0E0;">
-      <p style="${
-        baseStyles.footerText
-      }"><strong>SHOE SHOP</strong><br>Premium Footwear Collection</p>
-      <p style="${
-        baseStyles.footerText
-      }">© ${new Date().getFullYear()} Shoe Shop. All rights reserved.</p>
-    </div>
-  `;
-
-  return `<div style="${baseStyles.container}"><div style="${baseStyles.header}"><h1 style="${baseStyles.headerTitle}">SHOE SHOP</h1><p style="${baseStyles.headerSubtitle}">Premium Footwear</p></div>${content}${footer}</div>`;
-};
-
-/**
- * Template 6: Newsletter
- */
-exports.newsletterEmailTemplate = (
-  title,
-  heroImageUrl,
-  sections,
-  featuredProducts,
-  ctaText,
-  ctaUrl,
-  frontendUrl
-) => {
-  const sectionsHtml = sections
-    .map((section) => {
-      if (section.type === "text") {
-        return `<div style="margin: 30px 0;">${
-          section.heading
-            ? `<h3 style="color: #000000; font-size: 18px; font-weight: 600; margin-bottom: 15px;">${section.heading}</h3>`
-            : ""
-        }<p style="${baseStyles.text}">${section.content}</p></div>`;
-      } else if (section.type === "image") {
-        return `<div style="margin: 30px 0;"><img src="${
-          section.imageUrl
-        }" alt="${
-          section.alt || "Image"
-        }" style="width: 100%; border: 2px solid #F5F5F5;">${
-          section.caption
-            ? `<p style="font-size: 13px; color: #2C2C2C; margin-top: 10px; text-align: center; font-style: italic;">${section.caption}</p>`
-            : ""
-        }</div>`;
-      }
-      return "";
-    })
-    .join("");
-
-  const productsHtml = featuredProducts.length
-    ? `<div style="margin: 50px 0;"><h3 style="color: #000000; font-size: 20px; font-weight: 600; text-align: center; margin-bottom: 30px; letter-spacing: 2px; text-transform: uppercase;">Sản phẩm nổi bật</h3><table style="width: 100%;"><tr>${featuredProducts
-        .map(
-          (p) =>
-            `<td style="width: 50%; padding: 10px;"><div style="border: 2px solid #F5F5F5;"><img src="${
-              p.imageUrl
-            }" alt="${
-              p.name
-            }" style="width: 100%; height: 200px; object-fit: cover;"><div style="padding: 20px; text-align: center;"><p style="font-weight: 600; color: #000000; font-size: 15px; margin: 0 0 10px 0;">${
-              p.name
-            }</p><p style="color: #2C2C2C; font-size: 18px; font-weight: 700; margin: 0 0 15px 0;">${p.price.toLocaleString(
-              "vi-VN"
-            )}đ</p><a href="${frontendUrl}/products/${
-              p._id
-            }" style="display: inline-block; background-color: #000000; color: #FFFFFF; padding: 10px 20px; text-decoration: none; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; border: 2px solid #000000;">Xem ngay</a></div></div></td>`
-        )
-        .join("")}</tr></table></div>`
-    : "";
-
-  const content = `
-    ${
-      heroImageUrl
-        ? `<div style="background-color: #000000; padding: 0;"><img src="${heroImageUrl}" alt="Newsletter" style="width: 100%; max-height: 400px; object-fit: cover;"></div>`
-        : ""
-    }
-    <div style="${baseStyles.content}">
-      <h2 style="${baseStyles.title}">${title}</h2>
-      ${sectionsHtml}
-      ${productsHtml}
-      ${
-        ctaText && ctaUrl
-          ? `<div style="${baseStyles.buttonWrapper}"><a href="${ctaUrl}" style="${baseStyles.button}">${ctaText}</a></div>`
-          : ""
-      }
-    </div>
-  `;
-
-  const footer = `
-    <div style="${baseStyles.footer}">
-      <p style="${
-        baseStyles.footerText
-      }"><strong>Theo dõi chúng tôi</strong></p>
-      <div style="margin: 15px 0;">
-        <a href="#" style="display: inline-block; margin: 0 10px; color: #000000; text-decoration: none; font-weight: 600;">Facebook</a>
-        <a href="#" style="display: inline-block; margin: 0 10px; color: #000000; text-decoration: none; font-weight: 600;">Instagram</a>
-        <a href="#" style="display: inline-block; margin: 0 10px; color: #000000; text-decoration: none; font-weight: 600;">Twitter</a>
-      </div>
-      <hr style="margin: 20px 0; border: none; border-top: 1px solid #E0E0E0;">
-      <p style="${
-        baseStyles.footerText
-      }">Bạn nhận được email này vì đã đăng ký nhận newsletter từ Shoe Shop.</p>
-      <p style="${baseStyles.footerText}">
-        <a href="${frontendUrl}/preferences/notifications" style="${
-    baseStyles.footerLink
-  }">Quản lý tùy chọn</a> • 
-        <a href="${frontendUrl}/unsubscribe" style="${
-    baseStyles.footerLink
-  }">Hủy đăng ký</a>
       </p>
       <hr style="margin: 20px 0; border: none; border-top: 1px solid #E0E0E0;">
       <p style="${

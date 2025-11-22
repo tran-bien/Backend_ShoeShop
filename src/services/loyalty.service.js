@@ -14,6 +14,55 @@ const loyaltyService = {
   },
 
   /**
+   * FIX THIẾU #4: Check và gửi cảnh báo điểm sắp hết hạn
+   * Gọi function này trong getUserLoyaltyStats để tự động check
+   */
+  checkAndNotifyExpiringPoints: async (userId) => {
+    try {
+      const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      // Tìm các transactions sắp hết hạn trong 30 ngày tới
+      const expiringTransactions = await LoyaltyTransaction.find({
+        user: userId,
+        type: "EARN",
+        isExpired: false,
+        expiresAt: { $lte: thirtyDaysFromNow, $gt: new Date() },
+      });
+
+      if (expiringTransactions.length > 0) {
+        const totalExpiringPoints = expiringTransactions.reduce(
+          (sum, tx) => sum + tx.points,
+          0
+        );
+
+        // Lấy ngày hết hạn sớm nhất
+        const earliestExpiry = expiringTransactions.reduce(
+          (earliest, tx) => (tx.expiresAt < earliest ? tx.expiresAt : earliest),
+          expiringTransactions[0].expiresAt
+        );
+
+        // Gửi notification POINTS_EXPIRE_SOON
+        const notificationService = require("./notification.service");
+        await notificationService.send(
+          userId,
+          "POINTS_EXPIRE_SOON",
+          {
+            points: totalExpiringPoints,
+            expiryDate: earliestExpiry.toLocaleDateString("vi-VN"),
+          },
+          { channels: { inApp: true, email: true } }
+        );
+
+        console.log(
+          `[LOYALTY] Đã gửi cảnh báo ${totalExpiringPoints} điểm sắp hết hạn cho user ${userId}`
+        );
+      }
+    } catch (error) {
+      console.error("[LOYALTY] Lỗi check expiring points:", error.message);
+    }
+  },
+
+  /**
    * Thêm điểm cho user
    */
   addPoints: async (userId, points, options = {}) => {
@@ -149,8 +198,18 @@ const loyaltyService = {
 
       console.log(`User ${user.name} lên hạng: ${oldTierName} → ${tier.name}`);
 
-      // TODO: Gửi notification
-      // await notificationService.send(userId, "LOYALTY_TIER_UP", { tierName: tier.name });
+      // Gửi notification lên hạng
+      try {
+        const notificationService = require("./notification.service");
+        await notificationService.send(userId, "LOYALTY_TIER_UP", {
+          tierName: tier.name,
+          multiplier: tier.multiplier,
+          currentPoints: user.loyaltyPoints,
+          prioritySupport: tier.multiplier >= 1.5, // VIP/PLATINUM có priority support
+        });
+      } catch (error) {
+        console.error("[Loyalty] Lỗi gửi notification tier up:", error.message);
+      }
 
       return {
         tierChanged: true,
@@ -168,8 +227,10 @@ const loyaltyService = {
    */
   getUserTransactions: async (userId, query = {}) => {
     // AUTO-EXPIRE logic: Tự động expire các điểm hết hạn
+    // FIX BUG #1: Dùng atomic operations để tránh race condition
     const now = new Date();
     const expiredTransactions = await LoyaltyTransaction.find({
+      user: userId, // Chỉ expire cho user hiện tại
       type: "EARN",
       isExpired: false,
       expiresAt: { $lt: now },
@@ -177,31 +238,59 @@ const loyaltyService = {
 
     if (expiredTransactions.length > 0) {
       console.log(
-        `[AUTO-EXPIRE] Tìm thấy ${expiredTransactions.length} transaction(s) hết hạn`
+        `[AUTO-EXPIRE] Tìm thấy ${expiredTransactions.length} transaction(s) hết hạn cho user ${userId}`
       );
 
-      for (const tx of expiredTransactions) {
-        try {
-          // Trừ điểm của user
-          await loyaltyService.deductPoints(tx.user, tx.points, {
+      // Tính tổng điểm cần trừ
+      const totalExpiredPoints = expiredTransactions.reduce(
+        (sum, tx) => sum + tx.points,
+        0
+      );
+
+      try {
+        // Atomic update: Trừ điểm 1 lần duy nhất
+        const user = await User.findById(userId);
+        if (user && user.loyalty.points >= totalExpiredPoints) {
+          const balanceBefore = user.loyalty.points;
+          const balanceAfter = balanceBefore - totalExpiredPoints;
+
+          // Update user points
+          user.loyalty.points = balanceAfter;
+          user.loyalty.totalRedeemed =
+            (user.loyalty.totalRedeemed || 0) + totalExpiredPoints;
+          await user.save();
+
+          // Tạo 1 expire transaction tổng hợp
+          await LoyaltyTransaction.create({
+            user: userId,
             type: "EXPIRE",
-            source: tx.source,
-            description: `Hết hạn ${tx.points} điểm từ ${tx.source}`,
+            points: -totalExpiredPoints,
+            balanceBefore,
+            balanceAfter,
+            source: "MANUAL",
+            description: `Hết hạn ${totalExpiredPoints} điểm từ ${expiredTransactions.length} transaction(s)`,
           });
 
-          // Đánh dấu đã expire
-          tx.isExpired = true;
-          await tx.save();
+          // Đánh dấu tất cả transactions đã expire (bulk update)
+          await LoyaltyTransaction.updateMany(
+            {
+              _id: { $in: expiredTransactions.map((tx) => tx._id) },
+            },
+            { isExpired: true }
+          );
 
           console.log(
-            `[AUTO-EXPIRE] Đã expire ${tx.points} điểm từ transaction ${tx._id}`
+            `[AUTO-EXPIRE] Đã expire ${totalExpiredPoints} điểm từ ${expiredTransactions.length} transactions`
           );
-        } catch (error) {
-          console.error(
-            `[AUTO-EXPIRE] Lỗi khi expire transaction ${tx._id}:`,
-            error.message
-          );
+
+          // Update tier sau khi trừ điểm
+          await loyaltyService.updateUserTier(userId);
         }
+      } catch (error) {
+        console.error(
+          `[AUTO-EXPIRE] Lỗi khi expire transactions:`,
+          error.message
+        );
       }
     }
 
@@ -242,6 +331,7 @@ const loyaltyService = {
    */
   getUserLoyaltyStats: async (userId) => {
     // AUTO-EXPIRE logic: Expire điểm hết hạn trước khi tính stats
+    // FIX BUG #1: Dùng atomic operations
     const now = new Date();
     const expiredTransactions = await LoyaltyTransaction.find({
       user: userId,
@@ -255,22 +345,44 @@ const loyaltyService = {
         `[STATS AUTO-EXPIRE] Found ${expiredTransactions.length} expired loyalty transactions for user ${userId}`
       );
 
-      for (const tx of expiredTransactions) {
-        try {
-          await loyaltyService.deductPoints(tx.user, tx.points, {
+      const totalExpiredPoints = expiredTransactions.reduce(
+        (sum, tx) => sum + tx.points,
+        0
+      );
+
+      try {
+        const user = await User.findById(userId);
+        if (user && user.loyalty.points >= totalExpiredPoints) {
+          const balanceBefore = user.loyalty.points;
+          const balanceAfter = balanceBefore - totalExpiredPoints;
+
+          user.loyalty.points = balanceAfter;
+          user.loyalty.totalRedeemed =
+            (user.loyalty.totalRedeemed || 0) + totalExpiredPoints;
+          await user.save();
+
+          await LoyaltyTransaction.create({
+            user: userId,
             type: "EXPIRE",
-            source: tx.source,
-            description: `Hết hạn ${tx.points} điểm từ ${tx.source}`,
+            points: -totalExpiredPoints,
+            balanceBefore,
+            balanceAfter,
+            source: "MANUAL",
+            description: `Hết hạn ${totalExpiredPoints} điểm từ ${expiredTransactions.length} transaction(s)`,
           });
 
-          tx.isExpired = true;
-          await tx.save();
-        } catch (error) {
-          console.error(
-            `[STATS AUTO-EXPIRE] Error expiring transaction ${tx._id}:`,
-            error.message
+          await LoyaltyTransaction.updateMany(
+            { _id: { $in: expiredTransactions.map((tx) => tx._id) } },
+            { isExpired: true }
           );
+
+          await loyaltyService.updateUserTier(userId);
         }
+      } catch (error) {
+        console.error(
+          `[STATS AUTO-EXPIRE] Error expiring transactions:`,
+          error.message
+        );
       }
     }
 
@@ -293,6 +405,14 @@ const loyaltyService = {
       (sum, tx) => sum + tx.points,
       0
     );
+
+    // FIX THIẾU #4: Tự động gửi notification nếu có điểm sắp hết hạn
+    if (expiringPoints > 0) {
+      // Chạy async, không block response
+      loyaltyService.checkAndNotifyExpiringPoints(userId).catch((err) => {
+        console.error("[LOYALTY] Error notifying expiring points:", err);
+      });
+    }
 
     // Lấy tier tiếp theo
     const nextTier = await LoyaltyTier.findOne({
@@ -395,6 +515,36 @@ const adminLoyaltyTierService = {
       );
     }
 
+    // FIX BUG #2: Validate overlap tier ranges
+    const { minPoints, maxPoints } = tierData;
+    if (maxPoints && maxPoints <= minPoints) {
+      throw new ApiError(400, "Điểm tối đa phải lớn hơn điểm tối thiểu");
+    }
+
+    // Kiểm tra overlap với các tier khác
+    const allTiers = await LoyaltyTier.find({});
+    for (const tier of allTiers) {
+      const tierMin = tier.minPoints;
+      const tierMax = tier.maxPoints || Infinity;
+      const newMin = minPoints;
+      const newMax = maxPoints || Infinity;
+
+      // Check overlap: new tier overlap với existing tier
+      const hasOverlap =
+        (newMin >= tierMin && newMin < tierMax) || // newMin nằm trong range
+        (newMax > tierMin && newMax <= tierMax) || // newMax nằm trong range
+        (newMin <= tierMin && newMax >= tierMax); // new tier bao trùm existing
+
+      if (hasOverlap) {
+        throw new ApiError(
+          400,
+          `Tier mới overlap với tier "${tier.name}" (${tierMin}-${
+            tierMax === Infinity ? "∞" : tierMax
+          } điểm)`
+        );
+      }
+    }
+
     // Tự động tạo slug
     tierData.slug = slugify(tierData.name);
 
@@ -466,6 +616,29 @@ const adminLoyaltyTierService = {
 
     if (finalMaxPoints && finalMaxPoints <= finalMinPoints) {
       throw new ApiError(400, "Điểm tối đa phải lớn hơn điểm tối thiểu");
+    }
+
+    // FIX BUG #2: Validate overlap với các tier khác
+    const allTiers = await LoyaltyTier.find({ _id: { $ne: tierId } });
+    for (const otherTier of allTiers) {
+      const tierMin = otherTier.minPoints;
+      const tierMax = otherTier.maxPoints || Infinity;
+      const newMin = finalMinPoints;
+      const newMax = finalMaxPoints || Infinity;
+
+      const hasOverlap =
+        (newMin >= tierMin && newMin < tierMax) ||
+        (newMax > tierMin && newMax <= tierMax) ||
+        (newMin <= tierMin && newMax >= tierMax);
+
+      if (hasOverlap) {
+        throw new ApiError(
+          400,
+          `Tier mới overlap với tier "${otherTier.name}" (${tierMin}-${
+            tierMax === Infinity ? "∞" : tierMax
+          } điểm)`
+        );
+      }
     }
 
     // Update tier

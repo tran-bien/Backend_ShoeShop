@@ -273,6 +273,46 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
     order.payment.paymentStatus = "paid";
     order.payment.paidAt = new Date();
 
+    // Tích điểm loyalty
+    try {
+      const loyaltyService = require("./loyalty.service");
+      const points = loyaltyService.calculatePointsFromOrder(
+        order.totalAfterDiscountAndShipping
+      );
+      await loyaltyService.addPoints(order.user, points, {
+        source: "ORDER",
+        order: order._id,
+        description: `Tích điểm từ đơn hàng ${order.code}`,
+      });
+      console.log(
+        `[Shipper] Đã tích ${points} điểm cho user ${order.user} từ đơn ${order.code}`
+      );
+    } catch (error) {
+      console.error("[Shipper] Lỗi tích điểm loyalty:", error.message);
+    }
+
+    // Gửi notification
+    try {
+      const notificationService = require("./notification.service");
+      await notificationService.send(order.user, "ORDER_DELIVERED", {
+        orderCode: order.code,
+        orderId: order._id,
+      });
+      console.log(
+        `[Shipper] Đã gửi notification delivered cho đơn ${order.code}`
+      );
+    } catch (error) {
+      console.error("[Shipper] Lỗi gửi notification:", error.message);
+    }
+
+    // Cập nhật user behavior
+    try {
+      const userBehaviorService = require("./userBehavior.service");
+      await userBehaviorService.updateFromOrder(order.user, order);
+    } catch (error) {
+      console.error("[Shipper] Lỗi update user behavior:", error.message);
+    }
+
     // Giảm số đơn active của shipper
     const shipper = await User.findById(shipperId);
     shipper.shipper.activeOrders = Math.max(

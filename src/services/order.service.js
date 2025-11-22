@@ -1075,9 +1075,48 @@ const orderService = {
     switch (status) {
       case "confirmed":
         order.confirmedAt = new Date();
+        // Gửi notification
+        try {
+          const notificationService = require("./notification.service");
+          await notificationService.send(
+            order.user._id || order.user,
+            "ORDER_CONFIRMED",
+            {
+              code: order.code, // Thêm code để match với template
+              orderCode: order.code,
+              orderId: order._id,
+              _id: order._id,
+              totalAfterDiscountAndShipping:
+                order.totalAfterDiscountAndShipping,
+            }
+          );
+        } catch (error) {
+          console.error(
+            "[Order] Lỗi gửi notification confirmed:",
+            error.message
+          );
+        }
         break;
       case "shipping":
         order.shippingAt = new Date();
+        // Gửi notification
+        try {
+          const notificationService = require("./notification.service");
+          await notificationService.send(
+            order.user._id || order.user,
+            "ORDER_SHIPPING",
+            {
+              orderCode: order.code,
+              orderId: order._id,
+            },
+            { channels: { inApp: true, email: true } }
+          );
+        } catch (error) {
+          console.error(
+            "[Order] Lỗi gửi notification shipping:",
+            error.message
+          );
+        }
         break;
       case "delivered":
         order.deliveredAt = new Date();
@@ -1092,6 +1131,25 @@ const orderService = {
         break;
       case "cancelled":
         order.cancelledAt = new Date();
+
+        // Gửi notification
+        try {
+          const notificationService = require("./notification.service");
+          await notificationService.send(
+            order.user._id || order.user,
+            "ORDER_CANCELLED",
+            {
+              orderCode: order.code,
+              orderId: order._id,
+              reason: note || order.cancelReason || "Đơn hàng đã bị hủy",
+            }
+          );
+        } catch (error) {
+          console.error(
+            "[Order] Lỗi gửi notification cancelled:",
+            error.message
+          );
+        }
 
         // Nếu đơn hàng có yêu cầu hủy, đánh dấu đã xử lý
         if (order.cancelRequestId) {
