@@ -13,6 +13,7 @@ const {
   validateUpdateBanner,
   validateReorderBanners,
 } = require("@validators/banner.validator");
+const uploadValidator = require("@validators/upload.validator");
 
 // Áp dụng middleware protect cho tất cả routes
 router.use(protect);
@@ -51,7 +52,12 @@ router.get("/:id", validate(validateBannerId), bannerController.getBannerById);
 router.post(
   "/",
   uploadBannerImage,
-  validate(validateCreateBanner),
+  validate([
+    validateCreateBanner,
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
   bannerController.createBanner
 );
 
@@ -75,6 +81,11 @@ router.put(
   "/:id/image",
   validate(validateBannerId),
   uploadBannerImage,
+  validate([
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
   bannerController.updateBannerImage
 );
 

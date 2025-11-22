@@ -1,5 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const imageService = require("@services/image.service");
+const { processCloudinaryUpload } = require("@middlewares/upload.middleware");
 
 const imageController = {
   /**
@@ -8,6 +9,9 @@ const imageController = {
    * @access  Private
    */
   uploadAvatar: asyncHandler(async (req, res) => {
+    // Upload to Cloudinary after validation
+    await processCloudinaryUpload(req);
+
     const avatarData = {
       url: req.file.path,
       public_id: req.file.filename,

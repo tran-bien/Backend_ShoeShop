@@ -24,8 +24,16 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const uploadToCloudinary = (buffer, folder, originalname) => {
   return new Promise((resolve, reject) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const filename = originalname.split(".")[0].replace(/\s+/g, "-");
-    const public_id = `${filename}-${uniqueSuffix}`;
+    // Safely extract filename without extension and sanitize it
+    const nameWithoutExt =
+      originalname.substring(0, originalname.lastIndexOf(".")) || originalname;
+    const filename = nameWithoutExt
+      .replace(/\s+/g, "-") // Replace spaces with dashes
+      .replace(/[^a-zA-Z0-9-_]/g, "") // Remove special characters except dash and underscore
+      .substring(0, 100); // Limit length to prevent issues
+    const public_id = filename
+      ? `${filename}-${uniqueSuffix}`
+      : `upload-${uniqueSuffix}`;
 
     const uploadStream = cloudinary.uploader.upload_stream(
       {
@@ -125,32 +133,18 @@ const createMultiUploadMiddleware = (folderPath, fieldName, maxCount = 10) => {
     fileFilter,
   }).array(fieldName, maxCount);
 
-  // Return async middleware that handles Cloudinary upload
-  return async (req, res, next) => {
-    upload(req, res, async (err) => {
+  // Return middleware that only handles multer (NOT Cloudinary upload yet)
+  // Cloudinary upload will be done in controller after validation
+  return (req, res, next) => {
+    upload(req, res, (err) => {
       if (err) {
         return next(err);
       }
-
-      try {
-        if (req.files && req.files.length > 0) {
-          const uploadPromises = req.files.map((file) =>
-            uploadToCloudinary(file.buffer, folderPath, file.originalname)
-          );
-          const results = await Promise.all(uploadPromises);
-
-          // Replace file objects with Cloudinary results
-          req.files = results.map((result) => ({
-            filename: result.public_id,
-            path: result.secure_url,
-            size: result.bytes,
-            mimetype: `image/${result.format}`,
-          }));
-        }
-        next();
-      } catch (error) {
-        next(new ApiError(500, `Lỗi upload ảnh: ${error.message}`));
+      // Store folderPath for later use in controller
+      if (req.files) {
+        req.uploadFolderPath = folderPath;
       }
+      next();
     });
   };
 };
@@ -180,35 +174,64 @@ const createSingleUploadMiddleware = (folderPath, fieldName) => {
     fileFilter,
   }).single(fieldName);
 
-  // Return async middleware that handles Cloudinary upload
-  return async (req, res, next) => {
-    upload(req, res, async (err) => {
+  // Return middleware that only handles multer (NOT Cloudinary upload yet)
+  // Cloudinary upload will be done in controller after validation
+  return (req, res, next) => {
+    upload(req, res, (err) => {
       if (err) {
         return next(err);
       }
-
-      try {
-        if (req.file) {
-          const result = await uploadToCloudinary(
-            req.file.buffer,
-            folderPath,
-            req.file.originalname
-          );
-
-          // Replace file object with Cloudinary result
-          req.file = {
-            filename: result.public_id,
-            path: result.secure_url,
-            size: result.bytes,
-            mimetype: `image/${result.format}`,
-          };
-        }
-        next();
-      } catch (error) {
-        next(new ApiError(500, `Lỗi upload ảnh: ${error.message}`));
+      // Store folderPath for later use in controller
+      if (req.file) {
+        req.uploadFolderPath = folderPath;
       }
+      next();
     });
   };
+};
+
+/**
+ * Helper function to upload files to Cloudinary (called from controllers)
+ * @param {Object} req - Request object with files
+ * @returns {Promise<void>} - Updates req.file or req.files with Cloudinary results
+ */
+const processCloudinaryUpload = async (req) => {
+  if (!req.uploadFolderPath) {
+    throw new ApiError(500, "Missing upload folder path configuration");
+  }
+
+  if (req.file) {
+    // Single file upload
+    const result = await uploadToCloudinary(
+      req.file.buffer,
+      req.uploadFolderPath,
+      req.file.originalname
+    );
+
+    req.file = {
+      filename: result.public_id,
+      path: result.secure_url,
+      size: req.file.size,
+      mimetype: `image/${result.format}`,
+      originalname: req.file.originalname,
+    };
+  } else if (req.files && req.files.length > 0) {
+    // Multiple files upload - save original files first
+    const originalFiles = [...req.files];
+
+    const uploadPromises = originalFiles.map((file) =>
+      uploadToCloudinary(file.buffer, req.uploadFolderPath, file.originalname)
+    );
+    const results = await Promise.all(uploadPromises);
+
+    req.files = results.map((result, index) => ({
+      filename: result.public_id,
+      path: result.secure_url,
+      size: originalFiles[index].size,
+      mimetype: `image/${result.format}`,
+      originalname: originalFiles[index].originalname,
+    }));
+  }
 };
 
 // Middleware upload cho từng entity
@@ -304,5 +327,8 @@ const uploadMiddleware = {
     next();
   },
 };
+
+// Export helper function
+uploadMiddleware.processCloudinaryUpload = processCloudinaryUpload;
 
 module.exports = uploadMiddleware;

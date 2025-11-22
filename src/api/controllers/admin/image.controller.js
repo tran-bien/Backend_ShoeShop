@@ -1,5 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const imageService = require("@services/image.service");
+const { processCloudinaryUpload } = require("@middlewares/upload.middleware");
 
 /**
  * @desc    Upload logo cho brand
@@ -8,6 +9,9 @@ const imageService = require("@services/image.service");
  */
 exports.uploadBrandLogo = asyncHandler(async (req, res) => {
   const { brandId } = req.params;
+
+  // Upload to Cloudinary after validation
+  await processCloudinaryUpload(req);
 
   const logoData = {
     url: req.file.path,
@@ -36,6 +40,9 @@ exports.removeBrandLogo = asyncHandler(async (req, res) => {
  */
 exports.uploadProductImages = asyncHandler(async (req, res) => {
   const { productId } = req.params;
+
+  // Upload to Cloudinary after validation
+  await processCloudinaryUpload(req);
 
   const images = req.files.map((file, index) => ({
     url: file.path,
@@ -68,6 +75,9 @@ exports.removeProductImages = asyncHandler(async (req, res) => {
  */
 exports.uploadVariantImages = asyncHandler(async (req, res) => {
   const { variantId } = req.params;
+
+  // Upload to Cloudinary after validation
+  await processCloudinaryUpload(req);
 
   const images = req.files.map((file, index) => ({
     url: file.path,
@@ -180,6 +190,9 @@ exports.deleteFromCloudinary = asyncHandler(async (req, res) => {
  *          - Images auto-cleanup when blog post is deleted
  */
 exports.uploadBlogContentImage = asyncHandler(async (req, res) => {
+  // Upload to Cloudinary after validation
+  await processCloudinaryUpload(req);
+
   const imageData = {
     url: req.file.path,
     public_id: req.file.filename,

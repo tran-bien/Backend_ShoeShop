@@ -1,4 +1,4 @@
-const cloudinary = require("cloudinary").v2;
+const cloudinary = require("@config/cloudinary");
 const { Product, Variant, Brand, User, Banner } = require("@models");
 const SizeGuide = require("../models/sizeGuide");
 const ApiError = require("@utils/ApiError");

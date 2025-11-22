@@ -1,6 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const bannerService = require("@services/banner.service");
 const imageService = require("@services/image.service");
+const { processCloudinaryUpload } = require("@middlewares/upload.middleware");
 
 const bannerController = {
   /**
@@ -35,6 +36,9 @@ const bannerController = {
         message: "Vui lòng upload ảnh banner",
       });
     }
+
+    // Upload to Cloudinary after validation
+    await processCloudinaryUpload(req);
 
     const imageData = {
       url: req.file.path,
@@ -86,6 +90,9 @@ const bannerController = {
         message: "Vui lòng upload ảnh mới",
       });
     }
+
+    // Upload to Cloudinary after validation
+    await processCloudinaryUpload(req);
 
     const imageData = {
       url: req.file.path,
