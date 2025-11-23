@@ -74,7 +74,6 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
       },
       { path: "orderItems.size", select: "_id value" },
     ]),
-    User.findOne({ _id: shipperId, role: "shipper" }),
   ]);
 
   if (!order) {
@@ -94,120 +93,55 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
     );
   }
 
-  if (!shipper) {
-    throw new ApiError(404, "Không tìm thấy shipper");
-  }
+  // ATOMIC UPDATE: Kiểm tra + tăng activeOrders trong 1 query
+  // Fix race condition khi nhiều admin gán đơn cùng lúc
+  const updatedShipper = await User.findOneAndUpdate(
+    {
+      _id: shipperId,
+      role: "shipper",
+      "shipper.isAvailable": true,
+      // ATOMIC CHECK: activeOrders < maxOrders
+      $expr: { $lt: ["$shipper.activeOrders", "$shipper.maxOrders"] },
+    },
+    {
+      $inc: { "shipper.activeOrders": 1 },
+    },
+    {
+      new: true,
+      runValidators: true,
+    }
+  );
 
-  if (!shipper.shipper.isAvailable) {
-    throw new ApiError(400, "Shipper hiện không khả dụng");
-  }
-
-  if (shipper.shipper.activeOrders >= shipper.shipper.maxOrders) {
-    throw new ApiError(400, "Shipper đã đạt số đơn tối đa");
+  // Nếu không tìm thấy = shipper không khả dụng hoặc đã đầy đơn
+  if (!updatedShipper) {
+    throw new ApiError(
+      400,
+      "Shipper không khả dụng hoặc đã đạt số đơn tối đa. Vui lòng chọn shipper khác."
+    );
   }
 
   // TỰ ĐỘNG XUẤT KHO KHI GÁN CHO SHIPPER
-  // CRITICAL FIX Bug #6: Chỉ xuất kho nếu:
-  // - COD: Luôn xuất kho (paymentMethod = "COD")
-  // - VNPAY: Chỉ xuất kho khi đã thanh toán (paymentStatus = "paid")
+  // Sử dụng dedicated function từ inventory.service
   if (!order.inventoryDeducted) {
-    const shouldDeductInventory =
-      order.payment.paymentMethod === "COD" ||
-      (order.payment.paymentMethod === "VNPAY" &&
-        order.payment.paymentStatus === "paid");
-
-    if (!shouldDeductInventory) {
-      throw new ApiError(
-        400,
-        "Không thể gán shipper cho đơn hàng VNPAY chưa thanh toán. Vui lòng chờ khách hàng thanh toán."
-      );
-    }
-
     const inventoryService = require("@services/inventory.service");
-    const InventoryItem = require("../models").InventoryItem;
 
-    // FIXED Bug #6: PRE-VALIDATE tất cả items có đủ stock TRƯỚC KHI trừ
-    for (const item of order.orderItems) {
-      const productId = item.variant?.product?._id || item.variant?.product;
-
-      if (!productId) {
-        throw new ApiError(
-          400,
-          `Không tìm thấy product từ variant ${item.variant?._id}`
-        );
-      }
-
-      const inventoryItem = await InventoryItem.findOne({
-        product: productId,
-        variant: item.variant._id,
-        size: item.size._id,
+    try {
+      // GỌI DEDICATED FUNCTION - All logic nằm trong inventory.service
+      await inventoryService.deductInventoryForOrder(order, assignedBy);
+      order.inventoryDeducted = true;
+    } catch (error) {
+      // Rollback shipper activeOrders nếu trừ kho thất bại
+      await User.findByIdAndUpdate(shipperId, {
+        $inc: { "shipper.activeOrders": -1 },
       });
 
-      if (!inventoryItem || inventoryItem.quantity < item.quantity) {
-        throw new ApiError(
-          400,
-          `Không đủ hàng trong kho cho "${item.name || "sản phẩm"}". Cần: ${
-            item.quantity
-          }, Còn: ${inventoryItem?.quantity || 0}`
-        );
-      }
+      throw error; // Re-throw để client nhận error
     }
+  }
 
-    // FIXED Bug #10: Wrap stockOut loop trong try-catch để rollback nếu fail
-    const deductedItems = [];
-    try {
-      for (const item of order.orderItems) {
-        const productId = item.variant?.product?._id || item.variant?.product;
-
-        await inventoryService.stockOut(
-          {
-            product: productId,
-            variant: item.variant._id,
-            size: item.size._id,
-            quantity: item.quantity,
-            reason: "sale",
-            reference: order._id,
-            notes: `Xuất kho tự động cho đơn hàng ${order.code} - Giao cho shipper ${shipper.name}`,
-          },
-          assignedBy
-        );
-        deductedItems.push(item);
-      }
-    } catch (error) {
-      // Rollback: Hoàn lại các items đã trừ
-      console.error(
-        `[assignOrderToShipper] Lỗi khi trừ kho, rollback ${deductedItems.length} items:`,
-        error
-      );
-
-      for (const item of deductedItems) {
-        try {
-          const productId = item.variant?.product?._id || item.variant?.product;
-          await inventoryService.stockIn(
-            {
-              product: productId,
-              variant: item.variant._id,
-              size: item.size._id,
-              quantity: item.quantity,
-              costPrice: 0,
-              reason: "return",
-              reference: order._id,
-              notes: `Rollback do lỗi trừ kho: ${error.message}`,
-            },
-            assignedBy
-          );
-        } catch (rollbackError) {
-          console.error(
-            `[assignOrderToShipper] Lỗi rollback item:`,
-            rollbackError
-          );
-        }
-      }
-
-      throw new ApiError(400, `Không thể trừ kho: ${error.message}`);
-    }
-
-    order.inventoryDeducted = true;
+  // Kiểm tra shipper availability
+  if (!updatedShipper.shipper.isAvailable) {
+    throw new ApiError(400, "Shipper hiện không sẵn sàng nhận đơn");
   }
 
   // Cập nhật đơn hàng

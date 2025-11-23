@@ -9,7 +9,6 @@ const UserSchema = new mongoose.Schema(
     email: {
       type: String,
       required: true,
-      unique: true,
     },
     password: {
       type: String,
@@ -104,23 +103,28 @@ const UserSchema = new mongoose.Schema(
       activeOrders: {
         type: Number,
         default: 0,
+        min: 0,
       },
       maxOrders: {
         type: Number,
-        default: 5,
+        default: 20,
+        min: 1,
       },
       deliveryStats: {
         total: {
           type: Number,
           default: 0,
+          min: 0,
         },
         successful: {
           type: Number,
           default: 0,
+          min: 0,
         },
         failed: {
           type: Number,
           default: 0,
+          min: 0,
         },
       },
     },
@@ -176,5 +180,21 @@ const UserSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// ============================================================
+// INDEXES - Tối ưu hiệu suất truy vấn cho Shipper
+// ============================================================
+
+// Index cho query shipper khả dụng (Admin assign order)
+UserSchema.index({ role: 1, "shipper.isAvailable": 1 });
+
+// Index cho sort theo số đơn đang giao
+UserSchema.index({ role: 1, "shipper.activeOrders": 1 });
+
+// Index cho stats queries (Admin dashboard)
+UserSchema.index({ role: 1, "shipper.deliveryStats.successful": -1 });
+
+// Index cho email lookup (login) - UNIQUE
+UserSchema.index({ email: 1 }, { unique: true });
 
 module.exports = UserSchema;

@@ -811,6 +811,129 @@ const getProductStockInfo = async (productId) => {
 };
 
 /**
+ * TRỪ KHO CHO TOÀN BỘ ĐÔN HÀNG
+ * - Validate payment method (COD hoặc VNPAY đã thanh toán)
+ * - Pre-validate tất cả items có đủ hàng
+ * - Trừ kho từng item với rollback tự động nếu fail
+ *
+ * Use case: Gán shipper cho đơn hàng (shipper.service.js)
+ *
+ * @param {Order} order - Order document (đã populate orderItems.variant)
+ * @param {ObjectId} performedBy - User ID thực hiện
+ * @returns {Object} { success: true, deductedItems: [...] }
+ * @throws {ApiError} Nếu không đủ hàng hoặc payment chưa xác nhận
+ */
+const deductInventoryForOrder = async (order, performedBy) => {
+  // 1. Kiểm tra đã trừ kho chưa
+  if (order.inventoryDeducted) {
+    throw new ApiError(400, "Kho đã được trừ cho đơn hàng này rồi");
+  }
+
+  // 2. Validate payment method
+  const shouldDeduct =
+    order.payment.paymentMethod === "COD" ||
+    (order.payment.paymentMethod === "VNPAY" &&
+      order.payment.paymentStatus === "paid");
+
+  if (!shouldDeduct) {
+    throw new ApiError(
+      400,
+      "Không thể trừ kho cho đơn VNPAY chưa thanh toán. Vui lòng chờ khách hàng thanh toán."
+    );
+  }
+
+  // 3. Pre-validate TẤT CẢ items có đủ hàng TRƯỚC KHI trừ
+  for (const item of order.orderItems) {
+    const productId = item.variant?.product?._id || item.variant?.product;
+
+    if (!productId) {
+      throw new ApiError(
+        400,
+        `Không tìm thấy product từ variant ${item.variant?._id}`
+      );
+    }
+
+    const inventoryItem = await InventoryItem.findOne({
+      product: productId,
+      variant: item.variant._id,
+      size: item.size._id,
+    });
+
+    if (!inventoryItem || inventoryItem.quantity < item.quantity) {
+      throw new ApiError(
+        400,
+        `Không đủ hàng trong kho cho "${
+          item.productName || "sản phẩm"
+        }". Cần: ${item.quantity}, Còn: ${inventoryItem?.quantity || 0}`
+      );
+    }
+  }
+
+  // 4. Trừ kho từng item với rollback tự động
+  const deductedItems = [];
+
+  try {
+    for (const item of order.orderItems) {
+      const productId = item.variant?.product?._id || item.variant?.product;
+
+      await stockOut(
+        {
+          product: productId,
+          variant: item.variant._id,
+          size: item.size._id,
+          quantity: item.quantity,
+          reason: "sale",
+          reference: order._id,
+          notes: `Trừ kho tự động cho đơn hàng ${order.code}`,
+        },
+        performedBy
+      );
+
+      deductedItems.push(item);
+    }
+
+    console.log(
+      `[deductInventoryForOrder] Đã trừ kho thành công cho ${deductedItems.length} items của đơn ${order.code}`
+    );
+
+    return { success: true, deductedItems };
+  } catch (error) {
+    // ROLLBACK: Hoàn lại các items đã trừ
+    console.error(
+      `[deductInventoryForOrder] Lỗi khi trừ kho, rollback ${deductedItems.length} items:`,
+      error
+    );
+
+    for (const item of deductedItems) {
+      try {
+        const productId = item.variant?.product?._id || item.variant?.product;
+
+        await stockIn(
+          {
+            product: productId,
+            variant: item.variant._id,
+            size: item.size._id,
+            quantity: item.quantity,
+            costPrice: 0, // Sử dụng averageCostPrice
+            reason: "return",
+            reference: order._id,
+            notes: `[ROLLBACK] Hoàn kho do lỗi trừ kho: ${error.message}`,
+          },
+          performedBy
+        );
+      } catch (rollbackError) {
+        console.error(
+          `[CRITICAL] [deductInventoryForOrder] Rollback FAILED cho item:`,
+          rollbackError
+        );
+      }
+    }
+
+    throw new ApiError(500, `Không thể trừ kho: ${error.message}`);
+  }
+};
+
+/**
  * LẤY PRICING VÀ QUANTITIES CHO TOÀN BỘ VARIANT
  * - Tìm tất cả InventoryItem thuộc variant
  * - Pricing: Lấy từ item đầu tiên (sellingPrice, discountPercent, finalPrice)
@@ -886,4 +1009,5 @@ module.exports = {
   getProductPricing,
   updateProductStockFromInventory,
   getProductStockInfo,
+  deductInventoryForOrder, // NEW: Function trừ kho cho đơn hàng
 };
