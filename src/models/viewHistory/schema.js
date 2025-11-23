@@ -44,34 +44,24 @@ const ViewHistorySchema = new mongoose.Schema(
       type: String,
       comment: "Browser/device info",
     },
-
-    // TTL - Tự động xóa sau 30 ngày
-    // Dùng expireAt field riêng thay vì createdAt với expires
-    expireAt: {
-      type: Date,
-      default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      index: { expires: 0 }, // TTL index
-    },
   },
   {
-    timestamps: { createdAt: true, updatedAt: false }, // Chỉ dùng createdAt
+    timestamps: { createdAt: true, updatedAt: false },
   }
 );
 
-// Compound index
+// Compound indexes for query performance
 ViewHistorySchema.index({ user: 1, product: 1, createdAt: -1 });
 ViewHistorySchema.index({ sessionId: 1, createdAt: -1 });
-ViewHistorySchema.index({ createdAt: -1 }); // TTL index
 
-// FIX BUG #9: Unique index để tránh duplicate khi merge (cho views trong cùng ngày)
-// Sparse index: chỉ áp dụng cho documents có user field
+// FIX BUG #7: Proper TTL index - auto delete after 30 days
 ViewHistorySchema.index(
-  { user: 1, product: 1, createdAt: 1 },
-  { 
-    unique: true, 
-    sparse: true,
-    partialFilterExpression: { user: { $exists: true } }
-  }
+  { createdAt: 1 },
+  { expireAfterSeconds: 30 * 24 * 60 * 60 } // 30 days in seconds
 );
+
+// FIX BUG #8: Removed overly strict unique index
+// Allow multiple views of same product within same second
+// Duplicate prevention is handled by mergeAnonymousHistory with bulkWrite upsert logic
 
 module.exports = ViewHistorySchema;

@@ -33,7 +33,8 @@ const addToCart = asyncHandler(async (req, res) => {
  */
 const updateCartItem = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  const { cartItemId, quantity } = req.body;
+  const { itemId } = req.params;
+  const { quantity } = req.body;
   const result = await cartService.updateCartItem(userId, itemId, quantity);
 
   res.status(200).json(result);

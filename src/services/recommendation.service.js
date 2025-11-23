@@ -310,7 +310,6 @@ const recommendationService = {
     const cached = await RecommendationCache.findOne({
       user: userId,
       algorithm,
-      expiresAt: { $gt: new Date() },
     });
 
     if (cached && cached.products.length > 0) {
@@ -345,16 +344,21 @@ const recommendationService = {
         );
     }
 
-    // Cache for 24h
-    await RecommendationCache.create({
-      user: userId,
-      algorithm,
-      products: recommendations.map((r) =>
-        typeof r.product === "string" ? r.product : r.product._id
-      ),
-      scores: recommendations.map((r) => r.score || 0),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-    });
+    // Cache for 24h (TTL handled by generatedAt index)
+    // FIX BUG #13: Use upsert to prevent duplicate cache entries
+    await RecommendationCache.findOneAndUpdate(
+      { user: userId, algorithm },
+      {
+        $set: {
+          products: recommendations.map((r) =>
+            typeof r.product === "string" ? r.product : r.product._id
+          ),
+          scores: recommendations.map((r) => r.score || 0),
+          generatedAt: new Date(), // Reset TTL
+        },
+      },
+      { upsert: true, new: true }
+    );
 
     // Populate product details
     const productIds = recommendations.map((r) =>

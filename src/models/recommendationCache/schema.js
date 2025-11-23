@@ -27,21 +27,19 @@ const RecommendationCacheSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-
-    // TTL - Cache 24h
-    expiresAt: {
-      type: Date,
-      required: true,
-      expires: 0, // TTL index tự động
-    },
   },
   {
     timestamps: false,
   }
 );
 
-// Compound index
-RecommendationCacheSchema.index({ user: 1, algorithm: 1 });
+// FIX BUG #13: Unique compound index to prevent duplicate cache entries
+RecommendationCacheSchema.index({ user: 1, algorithm: 1 }, { unique: true });
+
+// FIX BUG #11: Proper TTL index - cache expires in 24 hours
+RecommendationCacheSchema.index(
+  { generatedAt: 1 },
+  { expireAfterSeconds: 24 * 60 * 60 }
+);
 
 module.exports = RecommendationCacheSchema;
-

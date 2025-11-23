@@ -276,20 +276,20 @@ const orderService = {
       });
     }
 
+    // FIXED Bug #4: Kiểm tra không có sản phẩm TRƯỚC KHI check unavailable
+    if (orderItems.length === 0) {
+      throw new ApiError(
+        400,
+        "Không có sản phẩm nào khả dụng trong giỏ hàng. Vui lòng kiểm tra lại."
+      );
+    }
+
     // Nếu có sản phẩm không khả dụng
     if (unavailableItems.length > 0) {
       const errorMessage = `Một số sản phẩm không có sẵn: ${unavailableItems
         .map((item) => `${item.productName} (${item.reason})`)
         .join(", ")}`;
       throw new ApiError(400, errorMessage);
-    }
-
-    // Kiểm tra nếu không có sản phẩm nào khả dụng
-    if (orderItems.length === 0) {
-      throw new ApiError(
-        400,
-        "Không có sản phẩm nào khả dụng trong giỏ hàng. Vui lòng kiểm tra lại."
-      );
     }
 
     // Tính tổng giá trị của các sản phẩm

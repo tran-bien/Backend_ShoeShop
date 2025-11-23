@@ -251,6 +251,14 @@ const uploadMiddleware = {
   uploadAvatar: createSingleUploadMiddleware("users/avatars", "avatar"),
   uploadBannerImage: createSingleUploadMiddleware("banners", "banner"),
   uploadSizeGuideImage: createSingleUploadMiddleware("size-guides", "image"),
+  uploadSizeChartImage: createSingleUploadMiddleware(
+    "size-guides/charts",
+    "sizeChart"
+  ),
+  uploadMeasurementGuideImage: createSingleUploadMiddleware(
+    "size-guides/measurements",
+    "measurementGuide"
+  ),
   uploadBlogThumbnail: createSingleUploadMiddleware(
     "blogs/thumbnails",
     "thumbnail"

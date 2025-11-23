@@ -46,7 +46,13 @@ const dashboardService = {
             preserveNullAndEmptyArrays: true,
           },
         },
-        // ✅ Lookup InventoryItem để lấy averageCostPrice
+        // FIX BUG #9: Filter deleted variants
+        {
+          $match: {
+            "variantInfo.deletedAt": null,
+          },
+        },
+        // Lookup InventoryItem để lấy averageCostPrice
         {
           $lookup: {
             from: "inventoryitems",

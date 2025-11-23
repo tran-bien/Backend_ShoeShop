@@ -118,18 +118,7 @@ const cartService = {
       }
     }
 
-    // Auto cleanup: Xóa items không hợp lệ khỏi cart
-    if (invalidItems.length > 0) {
-      cart.cartItems = cart.cartItems.filter(
-        (item) => item.variant && item.variant.product
-      );
-      await cart.save();
-      console.log(
-        `[CART CLEANUP] Removed ${invalidItems.length} invalid items from cart ${cart._id}`
-      );
-    }
-
-    // Nếu có items bị xóa/inactive, log thông tin
+    // FIXED Bug #2: Remove duplicate code - chỉ filter và save 1 lần
     if (invalidItems.length > 0) {
       console.log(
         `[CART CLEANUP] Tìm thấy ${invalidItems.length} item(s) với sản phẩm inactive/deleted:`,
@@ -141,6 +130,10 @@ const cartService = {
         (item) => item.variant && item.variant.product
       );
       await cart.save();
+
+      console.log(
+        `[CART CLEANUP] Removed ${invalidItems.length} invalid items from cart ${cart._id}`
+      );
     }
 
     return {

@@ -39,6 +39,19 @@ const compareService = {
       );
     }
 
+    // FIXED Bug #3: Batch load all InventoryItems to avoid N+1 queries
+    const allVariantIds = validVariants.map((v) => v._id);
+    const allInventoryItems = await require("@models")
+      .InventoryItem.find({
+        variant: { $in: allVariantIds },
+      })
+      .lean();
+
+    // Create map for O(1) lookup: variantId_sizeId -> inventoryItem
+    const inventoryMap = new Map(
+      allInventoryItems.map((item) => [`${item.variant}_${item.size}`, item])
+    );
+
     // Bổ sung thông tin cho mỗi biến thể
     const compareData = await Promise.all(
       validVariants.map(async (variant) => {
@@ -50,15 +63,24 @@ const compareService = {
         // Lấy thông tin rating của sản phẩm
         const productRating = await getProductRating(variant.product._id);
 
-        // Tạo danh sách sizes có sẵn
-        const availableSizes = variant.sizes
-          .filter((s) => s.quantity > 0)
-          .map((s) => ({
-            _id: s.size._id,
-            value: s.size.value,
-            quantity: s.quantity,
-            sku: s.sku,
-          }));
+        // Tạo danh sách sizes có sẵn (sử dụng inventoryMap thay vì query)
+        const availableSizes = [];
+        for (const s of variant.sizes) {
+          if (!s.size || !s.size._id) continue;
+
+          // Lấy quantity từ inventoryMap (O(1) lookup)
+          const invItem = inventoryMap.get(`${variant._id}_${s.size._id}`);
+
+          const quantity = invItem?.quantity || 0;
+          if (quantity > 0) {
+            availableSizes.push({
+              _id: s.size._id,
+              value: s.size.value,
+              quantity: quantity,
+              sku: s.sku,
+            });
+          }
+        }
 
         // Map color field để tương thích với FE
         const colorData = variant.color
@@ -131,6 +153,21 @@ const compareService = {
       );
     }
 
+    // FIXED Bug #3: Batch load all InventoryItems for all products upfront
+    const allInventoryItems = await require("@models")
+      .InventoryItem.find({
+        product: { $in: productIds },
+        quantity: { $gt: 0 },
+      })
+      .lean();
+
+    // Create map for fast lookup
+    const inventoryMapByProduct = new Map();
+    allInventoryItems.forEach((item) => {
+      const key = `${item.product}_${item.variant}_${item.size}`;
+      inventoryMapByProduct.set(key, item);
+    });
+
     // Lấy variants cho mỗi sản phẩm
     const compareData = await Promise.all(
       products.map(async (product) => {
@@ -199,12 +236,20 @@ const compareService = {
             });
           }
 
-          // Thu thập sizes
-          variant.sizes.forEach((s) => {
-            if (s.quantity > 0 && s.size) {
-              availableSizes.add(s.size.value);
+          // Thu thập sizes (sử dụng inventoryMapByProduct để check stock - O(1) lookup)
+          for (const s of variant.sizes) {
+            if (s.size && s.size.value) {
+              // Check nếu size có stock trong inventoryMapByProduct
+              const key = `${product._id}_${variant._id}_${
+                s.size._id || s.size
+              }`;
+              const hasStock = inventoryMapByProduct.has(key);
+
+              if (hasStock) {
+                availableSizes.add(s.size.value);
+              }
             }
-          });
+          }
         }
 
         // Lấy rating
@@ -271,7 +316,8 @@ async function calculateVariantInventorySummary(variant) {
   for (const sizeObj of variant.sizes || []) {
     if (!sizeObj.size || !sizeObj.size._id) continue;
 
-    totalQuantity += sizeObj.quantity || 0;
+    // FIXED: Không dùng sizeObj.quantity (đã xóa khỏi schema)
+    // totalQuantity sẽ được tính từ InventoryItem bên dưới
 
     // Lấy pricing từ inventory
     try {
@@ -284,6 +330,9 @@ async function calculateVariantInventorySummary(variant) {
         const price = pricing.price;
         const priceFinal = pricing.priceFinal || price;
         const percentDiscount = pricing.percentDiscount || 0;
+
+        // FIXED: Tính totalQuantity từ InventoryItem
+        totalQuantity += pricing.quantity || 0;
 
         // Cập nhật price range
         if (minPrice === null || price < minPrice) minPrice = price;

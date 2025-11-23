@@ -5,6 +5,33 @@ const ApiError = require("@utils/ApiError");
 const paginate = require("@utils/pagination");
 const slugify = require("@utils/slugify");
 
+// FIX BUG #10: In-memory lock để tránh race condition khi auto-expire
+const expiringLocks = new Map();
+
+const acquireExpireLock = (userId) => {
+  const userKey = userId.toString();
+  if (expiringLocks.has(userKey)) {
+    return false; // Lock đã được giữ
+  }
+  expiringLocks.set(userKey, Date.now());
+  return true;
+};
+
+const releaseExpireLock = (userId) => {
+  expiringLocks.delete(userId.toString());
+};
+
+// Cleanup locks cũ hơn 10 giây (expired locks)
+setInterval(() => {
+  const now = Date.now();
+  const tenSeconds = 10 * 1000;
+  for (const [userKey, timestamp] of expiringLocks.entries()) {
+    if (now - timestamp > tenSeconds) {
+      expiringLocks.delete(userKey);
+    }
+  }
+}, 10 * 1000);
+
 const loyaltyService = {
   /**
    * Tính điểm từ đơn hàng (1 điểm / 1000đ)
@@ -226,8 +253,10 @@ const loyaltyService = {
    * Tự động expire các điểm hết hạn trước khi query
    */
   getUserTransactions: async (userId, query = {}) => {
+    // FIX BUG #10: Check lock trước khi auto-expire
+    const canExpire = acquireExpireLock(userId);
+
     // AUTO-EXPIRE logic: Tự động expire các điểm hết hạn
-    // FIX BUG #1: Dùng atomic operations để tránh race condition
     const now = new Date();
     const expiredTransactions = await LoyaltyTransaction.find({
       user: userId, // Chỉ expire cho user hiện tại
@@ -236,7 +265,7 @@ const loyaltyService = {
       expiresAt: { $lt: now },
     });
 
-    if (expiredTransactions.length > 0) {
+    if (canExpire && expiredTransactions.length > 0) {
       console.log(
         `[AUTO-EXPIRE] Tìm thấy ${expiredTransactions.length} transaction(s) hết hạn cho user ${userId}`
       );
@@ -256,8 +285,9 @@ const loyaltyService = {
 
           // Update user points
           user.loyalty.points = balanceAfter;
-          user.loyalty.totalRedeemed =
-            (user.loyalty.totalRedeemed || 0) + totalExpiredPoints;
+          // FIX BUG #14: EXPIRE đến từ hết hạn, KHÔNG phải redeem bởi user
+          // Không tăng totalRedeemed, chỉ tracking totalExpired (optional)
+          // user.loyalty.totalExpired = (user.loyalty.totalExpired || 0) + totalExpiredPoints;
           await user.save();
 
           // Tạo 1 expire transaction tổng hợp
@@ -291,7 +321,16 @@ const loyaltyService = {
           `[AUTO-EXPIRE] Lỗi khi expire transactions:`,
           error.message
         );
+      } finally {
+        // FIX BUG #10: Always release lock
+        if (canExpire) {
+          releaseExpireLock(userId);
+        }
       }
+    } else if (!canExpire) {
+      console.log(
+        `[AUTO-EXPIRE] Skipped - another request is already processing for user ${userId}`
+      );
     }
 
     const { page = 1, limit = 20, type } = query;
@@ -330,8 +369,10 @@ const loyaltyService = {
    * Tự động expire các điểm hết hạn trước khi tính toán stats
    */
   getUserLoyaltyStats: async (userId) => {
+    // FIX BUG #10: Check lock trước khi auto-expire
+    const canExpire = acquireExpireLock(userId);
+
     // AUTO-EXPIRE logic: Expire điểm hết hạn trước khi tính stats
-    // FIX BUG #1: Dùng atomic operations
     const now = new Date();
     const expiredTransactions = await LoyaltyTransaction.find({
       user: userId,
@@ -340,7 +381,7 @@ const loyaltyService = {
       expiresAt: { $lt: now },
     });
 
-    if (expiredTransactions.length > 0) {
+    if (canExpire && expiredTransactions.length > 0) {
       console.log(
         `[STATS AUTO-EXPIRE] Found ${expiredTransactions.length} expired loyalty transactions for user ${userId}`
       );
@@ -357,8 +398,8 @@ const loyaltyService = {
           const balanceAfter = balanceBefore - totalExpiredPoints;
 
           user.loyalty.points = balanceAfter;
-          user.loyalty.totalRedeemed =
-            (user.loyalty.totalRedeemed || 0) + totalExpiredPoints;
+          // FIX BUG #14: EXPIRE đến từ hết hạn, KHÔNG phải redeem bởi user
+          // Không tăng totalRedeemed
           await user.save();
 
           await LoyaltyTransaction.create({
@@ -383,7 +424,16 @@ const loyaltyService = {
           `[STATS AUTO-EXPIRE] Error expiring transactions:`,
           error.message
         );
+      } finally {
+        // FIX BUG #10: Always release lock
+        if (canExpire) {
+          releaseExpireLock(userId);
+        }
       }
+    } else if (!canExpire) {
+      console.log(
+        `[STATS AUTO-EXPIRE] Skipped - another request is already processing for user ${userId}`
+      );
     }
 
     const user = await User.findById(userId).populate("loyalty.tier");
