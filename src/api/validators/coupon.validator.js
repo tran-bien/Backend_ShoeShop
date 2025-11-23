@@ -324,6 +324,8 @@ const validateUpdateCoupon = [
 
   body("priority")
     .optional()
+    .isString()
+    .withMessage("Priority phải là string")
     .isIn(["HIGH", "MEDIUM", "LOW"])
     .withMessage("Độ ưu tiên phải là HIGH, MEDIUM hoặc LOW"),
 

@@ -180,4 +180,8 @@ const CouponSchema = new mongoose.Schema(
   }
 );
 
+// FIXED Bug #33: Index cho priority sort performance
+CouponSchema.index({ priority: 1, createdAt: -1 });
+CouponSchema.index({ status: 1, isPublic: 1, startDate: 1, endDate: 1 });
+
 module.exports = CouponSchema;

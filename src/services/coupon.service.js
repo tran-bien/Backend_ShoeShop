@@ -20,32 +20,75 @@ const couponService = {
       endDate: { $gte: new Date() },
     };
 
-    // Xây dựng thông tin sắp xếp
-    // FIXED: Priority enum (HIGH > MEDIUM > LOW) với fallback createdAt
-    const sortOptions = { priority: -1, createdAt: -1 }; // Fallback sort
+    // FIXED Bug #32: Dùng aggregate với priorityValue mapping để sort đúng
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Xây dựng sort options với user preference
+    let sortStage = { priorityValue: -1, createdAt: -1 }; // Default
     if (sort) {
       const [field, order] = sort.split("_");
-      sortOptions[field] = order === "desc" ? -1 : 1;
+      if (field !== "priority") {
+        sortStage = {
+          priorityValue: -1,
+          [field]: order === "desc" ? -1 : 1,
+        };
+      }
     }
 
-    // Thực hiện truy vấn với phân trang
-    const result = await paginate(Coupon, filter, {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sort: sortOptions,
-      select:
-        "code description type value maxDiscount minOrderValue startDate endDate isRedeemable pointCost maxRedeemPerUser priority",
-    });
+    const [countResult, coupons] = await Promise.all([
+      Coupon.countDocuments(filter),
+      Coupon.aggregate([
+        { $match: filter },
+        {
+          $addFields: {
+            priorityValue: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ["$priority", "HIGH"] }, then: 3 },
+                  { case: { $eq: ["$priority", "MEDIUM"] }, then: 2 },
+                  { case: { $eq: ["$priority", "LOW"] }, then: 1 },
+                ],
+                default: 0,
+              },
+            },
+          },
+        },
+        { $sort: sortStage },
+        { $skip: skip },
+        { $limit: limitNum },
+        {
+          $project: {
+            code: 1,
+            description: 1,
+            type: 1,
+            value: 1,
+            maxDiscount: 1,
+            minOrderValue: 1,
+            startDate: 1,
+            endDate: 1,
+            isRedeemable: 1,
+            pointCost: 1,
+            maxRedeemPerUser: 1,
+            priority: 1,
+            priorityValue: 0, // Exclude virtual field
+          },
+        },
+      ]),
+    ]);
+
+    const totalPages = Math.ceil(countResult / limitNum);
 
     return {
       success: true,
       message: "Lấy danh sách mã giảm giá thành công",
-      coupons: result.data,
+      coupons,
       pagination: {
-        page: result.currentPage,
-        limit: parseInt(limit),
-        total: result.total,
-        totalPages: result.totalPages,
+        page: pageNum,
+        limit: limitNum,
+        total: countResult,
+        totalPages,
       },
     };
   },
@@ -85,30 +128,58 @@ const couponService = {
       }
     }
 
-    // Xây dựng thông tin sắp xếp
-    // FIXED: Priority enum (HIGH > MEDIUM > LOW) với fallback createdAt
-    const sortOptions = { priority: -1, createdAt: -1 }; // Fallback sort
+    // FIXED Bug #32: Dùng aggregate với priorityValue mapping
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    let sortStage = { priorityValue: -1, createdAt: -1 };
     if (sort) {
       const [field, order] = sort.split("_");
-      sortOptions[field] = order === "desc" ? -1 : 1;
+      if (field !== "priority") {
+        sortStage = {
+          priorityValue: -1,
+          [field]: order === "desc" ? -1 : 1,
+        };
+      }
     }
 
-    // Thực hiện truy vấn với phân trang
-    const result = await paginate(Coupon, filter, {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sort: sortOptions,
-    });
+    const [countResult, coupons] = await Promise.all([
+      Coupon.countDocuments(filter),
+      Coupon.aggregate([
+        { $match: filter },
+        {
+          $addFields: {
+            priorityValue: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ["$priority", "HIGH"] }, then: 3 },
+                  { case: { $eq: ["$priority", "MEDIUM"] }, then: 2 },
+                  { case: { $eq: ["$priority", "LOW"] }, then: 1 },
+                ],
+                default: 0,
+              },
+            },
+          },
+        },
+        { $sort: sortStage },
+        { $skip: skip },
+        { $limit: limitNum },
+        { $project: { priorityValue: 0 } },
+      ]),
+    ]);
+
+    const totalPages = Math.ceil(countResult / limitNum);
 
     return {
       success: true,
       message: "Lấy danh sách mã giảm giá đã thu thập thành công",
-      coupons: result.data,
+      coupons,
       pagination: {
-        page: result.currentPage,
-        limit: parseInt(limit),
-        total: result.total,
-        totalPages: result.totalPages,
+        page: pageNum,
+        limit: limitNum,
+        total: countResult,
+        totalPages,
       },
     };
   },
@@ -612,23 +683,78 @@ const adminCouponService = {
       filter.isPublic = isPublic === "true" || isPublic === true;
     }
 
-    // Thực hiện truy vấn với phân trang
-    const options = {
-      page: parseInt(page, 10),
-      limit: parseInt(limit, 10),
-      sort: { priority: -1, createdAt: -1 }, // FIXED: Sort theo priority
-      select: "-__v",
-      populate: [
-        { path: "createdBy", select: "name" },
-        { path: "updatedBy", select: "name" },
-      ],
-    };
+    // FIXED Bug #32: Dùng aggregate với priorityValue mapping
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const skip = (pageNum - 1) * limitNum;
 
-    const result = await paginate(Coupon, filter, options);
+    const [countResult, coupons] = await Promise.all([
+      Coupon.countDocuments(filter),
+      Coupon.aggregate([
+        { $match: filter },
+        {
+          $addFields: {
+            priorityValue: {
+              $switch: {
+                branches: [
+                  { case: { $eq: ["$priority", "HIGH"] }, then: 3 },
+                  { case: { $eq: ["$priority", "MEDIUM"] }, then: 2 },
+                  { case: { $eq: ["$priority", "LOW"] }, then: 1 },
+                ],
+                default: 0,
+              },
+            },
+          },
+        },
+        { $sort: { priorityValue: -1, createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limitNum },
+        {
+          $lookup: {
+            from: "users",
+            localField: "createdBy",
+            foreignField: "_id",
+            as: "createdBy",
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "updatedBy",
+            foreignField: "_id",
+            as: "updatedBy",
+          },
+        },
+        {
+          $addFields: {
+            createdBy: { $arrayElemAt: ["$createdBy", 0] },
+            updatedBy: { $arrayElemAt: ["$updatedBy", 0] },
+          },
+        },
+        {
+          $project: {
+            __v: 0,
+            priorityValue: 0,
+            "createdBy.password": 0,
+            "createdBy.loyalty": 0,
+            "updatedBy.password": 0,
+            "updatedBy.loyalty": 0,
+          },
+        },
+      ]),
+    ]);
+
+    const totalPages = Math.ceil(countResult / limitNum);
 
     return {
       success: true,
-      ...result,
+      count: coupons.length,
+      total: countResult,
+      totalPages,
+      currentPage: pageNum,
+      hasNextPage: pageNum < totalPages,
+      hasPrevPage: pageNum > 1,
+      data: coupons,
     };
   },
 
