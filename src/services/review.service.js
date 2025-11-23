@@ -64,6 +64,7 @@ const reviewService = {
       sort: sortOptions,
       populate: [
         { path: "user", select: "name avatar" },
+        { path: "reply.repliedBy", select: "name role avatar" },
         {
           path: "orderItem",
           populate: [
@@ -187,6 +188,7 @@ const reviewService = {
       deletedAt: null,
     }).populate([
       { path: "user", select: "name avatar" },
+      { path: "reply.repliedBy", select: "name role avatar" },
       {
         path: "orderItem",
         populate: [
@@ -728,6 +730,7 @@ const reviewService = {
       sort: sortOptions,
       populate: [
         { path: "user", select: "name avatar" },
+        { path: "reply.repliedBy", select: "name role avatar" },
         { path: "product", select: "name images slug" },
         {
           path: "orderItem",
@@ -1248,10 +1251,28 @@ const adminReviewService = {
 
     await review.save();
 
+    // GỬI THÔNG BÁO CHO USER
+    try {
+      const notificationService = require("./notification.service");
+      await notificationService.createNotification({
+        user: review.user,
+        type: "REVIEW_REPLY",
+        title: "Admin đã phản hồi đánh giá của bạn",
+        message: `Admin đã trả lời đánh giá của bạn về sản phẩm`,
+        relatedData: {
+          reviewId: review._id,
+          orderId: review.order,
+        },
+      });
+    } catch (notifError) {
+      console.error("[Review] Lỗi gửi notification:", notifError.message);
+      // Don't block reply if notification fails
+    }
+
     // Populate để trả về đầy đủ thông tin
     await review.populate([
       { path: "user", select: "name avatar" },
-      { path: "reply.repliedBy", select: "name role" },
+      { path: "reply.repliedBy", select: "name role avatar" },
     ]);
 
     return {

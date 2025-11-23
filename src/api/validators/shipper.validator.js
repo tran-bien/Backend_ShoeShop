@@ -52,20 +52,6 @@ exports.validateUpdateDeliveryStatus = [
     .optional()
     .isString()
     .withMessage("Mỗi image phải là string"),
-
-  body("location").optional().isObject().withMessage("Location phải là object"),
-
-  body("location.latitude")
-    .optional()
-    .isFloat({ min: -90, max: 90 })
-    .withMessage("Vĩ độ phải từ -90 đến 90"),
-
-  body("location.longitude")
-    .optional()
-    .isFloat({ min: -180, max: 180 })
-    .withMessage("Kinh độ phải từ -180 đến 180"),
-
-  body("location.address").optional().isString(),
 ];
 
 /**

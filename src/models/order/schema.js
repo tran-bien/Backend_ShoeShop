@@ -436,10 +436,6 @@ const OrderSchema = new mongoose.Schema(
           type: String,
           enum: ["success", "failed", "partial"],
         },
-        location: {
-          lat: Number,
-          lng: Number,
-        },
         note: String,
         shipper: {
           type: mongoose.Schema.Types.ObjectId,
