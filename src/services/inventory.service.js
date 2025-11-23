@@ -73,52 +73,28 @@ const getOrCreateInventoryItem = async (product, variant, size) => {
   });
 
   if (!inventoryItem) {
-    const [productDoc, variantDoc, sizeDoc] = await Promise.all([
-      Product.findById(product).select("name"),
-      Variant.findById(variant)
-        .populate("color", "name")
-        .select("gender color"),
-      Size.findById(size).select("value").setOptions({ includeDeleted: true }),
-    ]);
+    // ĐỌC SKU từ Variant (đã được tạo tự động trong variant/middlewares.js)
+    // SKU được tạo bởi pre-save hook, đảm bảo unique và format chuẩn
+    const variantDoc = await Variant.findById(variant)
+      .select("sizes")
+      .populate("sizes.size");
 
-    console.log("Found productDoc:", productDoc);
-    console.log("Found variantDoc:", variantDoc);
-    console.log("Found sizeDoc:", sizeDoc);
-
-    if (!productDoc || !variantDoc || !sizeDoc) {
-      throw new ApiError(404, "Không tìm thấy thông tin product/variant/size");
+    if (!variantDoc) {
+      throw new ApiError(404, "Không tìm thấy variant");
     }
 
-    // CRITICAL FIX Bug #13: Retry nếu SKU bị trùng
-    let sku;
-    let attempt = 0;
-    const maxAttempts = 5;
+    const sizeData = variantDoc.sizes.find(
+      (s) => s.size._id.toString() === size.toString()
+    );
 
-    while (attempt < maxAttempts) {
-      sku = generateSKU({
-        productName: productDoc.name,
-        colorName: variantDoc.color?.name || "Unknown",
-        gender: variantDoc.gender,
-        sizeValue: sizeDoc.value,
-        productId: product.toString(),
-      });
-
-      // Kiểm tra SKU đã tồn tại chưa
-      const existingSKU = await InventoryItem.findOne({ sku });
-      if (!existingSKU) {
-        break; // SKU unique, thoát loop
-      }
-
-      attempt++;
-      console.log(
-        `SKU ${sku} đã tồn tại, thử lại lần ${attempt}/${maxAttempts}`
+    if (!sizeData || !sizeData.sku) {
+      throw new ApiError(
+        400,
+        "Size không tồn tại trong variant hoặc chưa có SKU. Vui lòng lưu lại variant để tạo SKU tự động."
       );
     }
 
-    if (attempt >= maxAttempts) {
-      // Fallback: thêm timestamp vào cuối
-      sku = `${sku}-${Date.now().toString().slice(-4)}`;
-    }
+    const sku = sizeData.sku;
 
     inventoryItem = await InventoryItem.create({
       product,
@@ -130,35 +106,15 @@ const getOrCreateInventoryItem = async (product, variant, size) => {
       averageCostPrice: 0,
     });
 
-    await syncSKUToVariant(variant, size, sku);
+    // KHÔNG CẦN sync SKU lên Variant nữa (đã có sẵn từ pre-save hook)
   }
 
   return inventoryItem;
 };
 
-/**
- * Đồng bộ SKU lên Variant.sizes[].sku
- * @param {ObjectId} variantId
- * @param {ObjectId} sizeId
- * @param {String} sku
- */
-const syncSKUToVariant = async (variantId, sizeId, sku) => {
-  try {
-    const variant = await Variant.findById(variantId);
-    if (!variant) return;
-
-    const sizeIndex = variant.sizes.findIndex(
-      (s) => s.size.toString() === sizeId.toString()
-    );
-
-    if (sizeIndex === -1) return;
-
-    variant.sizes[sizeIndex].sku = sku;
-    await variant.save();
-  } catch (error) {
-    console.error("Error syncing SKU:", error.message);
-  }
-};
+// REMOVED: syncSKUToVariant function
+// SKU giờ được tạo tự động trong variant/middlewares.js (pre-save hook)
+// Không cần sync từ InventoryItem lên Variant nữa
 
 /**
  * NHẬP KHO (Stock In)

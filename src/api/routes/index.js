@@ -116,8 +116,8 @@ router.use("/admin/banners", adminBannerRoutes);
 router.use("/admin/reports", adminReportRoutes);
 router.use("/admin/images", adminImageRoutes);
 router.use("/admin/size-guides", adminSizeGuideRoutes);
-router.use("/admin/blogs", adminBlogRoutes);
 router.use("/admin/blogs/categories", adminBlogCategoryRoutes);
+router.use("/admin/blogs", adminBlogRoutes);
 router.use("/admin/loyalty-tiers", adminLoyaltyTierRoutes);
 
 module.exports = router;

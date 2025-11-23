@@ -24,10 +24,10 @@ async function cleanSessions() {
 
     const now = new Date();
 
-    // ❌ REMOVED: Expired session cleanup (TTL index handles this automatically)
+    // REMOVED: Expired session cleanup (TTL index handles this automatically)
     // MongoDB TTL index deletes expired sessions every 60 seconds with zero app overhead
 
-    // ✅ ONLY: Delete inactive sessions (TTL can't handle compound conditions)
+    // ONLY: Delete inactive sessions (TTL can't handle compound conditions)
     const TWO_DAYS_AGO = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
     let inactiveResult = null;
     try {

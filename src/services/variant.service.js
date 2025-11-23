@@ -315,7 +315,8 @@ const variantService = {
 
         if (!existingSize) {
           // Size chưa tồn tại, thêm reference mới vào biến thể
-          //  CHỈ LƯU REFERENCE - quantity được quản lý bởi InventoryItem
+          // CHỈ LƯU REFERENCE - quantity được quản lý bởi InventoryItem
+          // SKU: sẽ được tạo tự động bởi pre-save middleware
           existingVariant.sizes.push({
             size: sizeId,
             // REMOVED: quantity, isSizeAvailable - Không lưu vào Variant schema
@@ -351,6 +352,7 @@ const variantService = {
     // TH2: Chưa có biến thể với màu và giới tính này, tạo mới hoàn toàn
     else {
       // Chuẩn bị dữ liệu size (CHỈ reference, KHÔNG có quantity)
+      // SKU: sẽ được tạo tự động bởi pre-save middleware
       const sizesData = variantData.sizes.map((sizeData) => ({
         size: sizeData.size,
         // REMOVED: quantity, isSizeAvailable

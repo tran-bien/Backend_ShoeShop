@@ -14,12 +14,22 @@ const updateInventory = async (orderItem, action, orderId, notes) => {
 
   try {
     if (action === "restore") {
-      // FIXED Bug #8: Pass ObjectId trực tiếp thay vì object
+      // FIXED Bug #3: Extract product from variant
+      const productId = variant?.product?._id || variant?.product;
+
+      if (!productId) {
+        throw new Error(
+          `Cannot restore inventory: Missing product ID for variant ${
+            variant?._id || "unknown"
+          }`
+        );
+      }
+
       await inventoryService.stockIn(
         {
-          product: orderItem.product,
-          variant,
-          size,
+          product: productId,
+          variant: variant._id || variant,
+          size: size._id || size,
           quantity,
           costPrice: 0, // Will be handled by stockIn() with averageCostPrice
           reason: "return",
@@ -369,7 +379,7 @@ const applyMiddlewares = (schema) => {
 
         // CASE 1: ĐƠN HÀNG BỊ HỦY (cancelled, refunded)
         // → NHẬP KHO NGAY, không cần returnConfirmed
-        // FIXED Bug #4: Thêm check inventoryRestored để tránh double restore
+        // FIXED Bug #1-2-3-5: Correct params, populate product, add rollback
         if (
           (currentStatus === "cancelled" || currentStatus === "refunded") &&
           this.inventoryDeducted &&
@@ -379,15 +389,30 @@ const applyMiddlewares = (schema) => {
             `[Order ${this.code}] Đơn hàng bị ${currentStatus}, hoàn trả tồn kho NGAY`
           );
 
+          const restoredItems = [];
+
           try {
+            // FIXED Bug #3: Populate variant.product before restore
+            if (!this.populated("orderItems.variant")) {
+              await this.populate({
+                path: "orderItems.variant",
+                select: "product",
+                populate: { path: "product", select: "_id" },
+              });
+            }
+
+            // Restore từng item với rollback tracking
             for (const item of this.orderItems) {
+              // FIXED Bug #1-2: Correct parameters - action='restore', orderId, notes
               await updateInventory(
                 item,
-                "increment",
-                currentStatus === "cancelled" ? "cancelled" : "refunded",
+                "restore",
                 this._id,
-                this.user
+                `Hoàn kho do ${
+                  currentStatus === "cancelled" ? "hủy đơn" : "hoàn tiền"
+                }`
               );
+              restoredItems.push(item);
             }
 
             // Đánh dấu đã hoàn kho
@@ -398,21 +423,50 @@ const applyMiddlewares = (schema) => {
                 inventoryDeducted: false,
               }
             );
+
+            console.log(`[Order ${this.code}] Đã hoàn trả tồn kho thành công`);
           } catch (inventoryError) {
             console.error(
               `[Order ${this.code}] LỖI khi restore inventory:`,
               inventoryError.message
             );
-            // Throw để rollback transaction nếu có
+
+            // FIXED Bug #5: Rollback các items đã restore
+            for (const item of restoredItems) {
+              try {
+                const productId =
+                  item.variant?.product?._id || item.variant?.product;
+                if (!productId) continue;
+
+                await inventoryService.stockOut(
+                  {
+                    product: productId,
+                    variant: item.variant._id || item.variant,
+                    size: item.size._id || item.size,
+                    quantity: item.quantity,
+                    reason: "rollback",
+                    reference: this._id,
+                    notes: `[ROLLBACK] Trừ lại do lỗi restore: ${inventoryError.message}`,
+                  },
+                  null
+                );
+
+                console.log(`[Order ${this.code}] Rollback item thành công`);
+              } catch (rollbackError) {
+                console.error(
+                  `[CRITICAL] [Order ${this.code}] Rollback FAILED:`,
+                  rollbackError
+                );
+              }
+            }
+
             throw inventoryError;
           }
-
-          console.log(`[Order ${this.code}] Đã hoàn trả tồn kho`);
         }
 
         // CASE 2: ĐƠN HÀNG TRẢ HÀNG (returned)
         // → CHỈ nhập kho KHI returnConfirmed = true (Staff đã xác nhận nhận hàng)
-        // FIXED Bug #4: Thêm check inventoryRestored để tránh double restore
+        // FIXED Bug #1-2-3-5: Correct params, populate product, add rollback
         else if (
           currentStatus === "returned" &&
           this.inventoryDeducted &&
@@ -427,15 +481,27 @@ const applyMiddlewares = (schema) => {
               `[Order ${this.code}] Trả hàng và ĐÃ xác nhận nhận hàng. Hoàn trả tồn kho.`
             );
 
+            const restoredItems = [];
+
             try {
+              // FIXED Bug #3: Populate variant.product before restore
+              if (!this.populated("orderItems.variant")) {
+                await this.populate({
+                  path: "orderItems.variant",
+                  select: "product",
+                  populate: { path: "product", select: "_id" },
+                });
+              }
+
               for (const item of this.orderItems) {
+                // FIXED Bug #1-2: Correct parameters
                 await updateInventory(
                   item,
-                  "increment",
-                  "return",
+                  "restore",
                   this._id,
-                  this.user
+                  "Hoàn kho do trả hàng"
                 );
+                restoredItems.push(item);
               }
 
               // Đánh dấu đã hoàn kho
@@ -446,15 +512,45 @@ const applyMiddlewares = (schema) => {
                   inventoryDeducted: false,
                 }
               );
+
+              console.log(
+                `[Order ${this.code}] Đã hoàn trả tồn kho thành công`
+              );
             } catch (inventoryError) {
               console.error(
                 `[Order ${this.code}] LỖI khi restore inventory:`,
                 inventoryError.message
               );
+
+              // FIXED Bug #5: Rollback
+              for (const item of restoredItems) {
+                try {
+                  const productId =
+                    item.variant?.product?._id || item.variant?.product;
+                  if (!productId) continue;
+
+                  await inventoryService.stockOut(
+                    {
+                      product: productId,
+                      variant: item.variant._id || item.variant,
+                      size: item.size._id || item.size,
+                      quantity: item.quantity,
+                      reason: "rollback",
+                      reference: this._id,
+                      notes: `[ROLLBACK] Trừ lại do lỗi restore: ${inventoryError.message}`,
+                    },
+                    null
+                  );
+                } catch (rollbackError) {
+                  console.error(
+                    `[CRITICAL] [Order ${this.code}] Rollback FAILED:`,
+                    rollbackError
+                  );
+                }
+              }
+
               throw inventoryError;
             }
-
-            console.log(`[Order ${this.code}] Đã hoàn trả tồn kho`);
           }
         }
 
@@ -500,131 +596,8 @@ const applyMiddlewares = (schema) => {
     }
   });
 
-  // Xử lý sau khi tìm thấy và cập nhật document - giữ nguyên
-  schema.post("findOneAndUpdate", async function (doc) {
-    try {
-      if (!doc) return;
-
-      // Xử lý cập nhật trạng thái
-      if (doc._oldStatus && doc._oldStatus !== doc.status) {
-        console.log(
-          `[post findOneAndUpdate] Đơn hàng ${doc.code}: ${doc._oldStatus} → ${doc.status}`
-        );
-
-        // ============================================================
-        // XỬ LÝ TỒN KHO KHI ĐƠN HÀNG THAY ĐỔI TRẠNG THÁI
-        // ============================================================
-
-        // CASE 1: ĐƠN HÀNG BỊ HỦY (cancelled, refunded)
-        // → NHẬP KHO NGAY, không cần returnConfirmed
-        // FIXED Bug #4: Thêm check và error handling
-        if (
-          (doc.status === "cancelled" || doc.status === "refunded") &&
-          doc.inventoryDeducted &&
-          !doc.inventoryRestored
-        ) {
-          console.log(
-            `[post findOneAndUpdate] [Order ${doc.code}] Đơn hàng bị ${doc.status}, hoàn trả tồn kho NGAY`
-          );
-
-          try {
-            for (const item of doc.orderItems) {
-              await updateInventory(
-                item,
-                "increment",
-                doc.status === "cancelled" ? "cancelled" : "refunded",
-                doc._id,
-                doc.user
-              );
-            }
-
-            // Cập nhật trạng thái
-            await mongoose.model("Order").findByIdAndUpdate(
-              doc._id,
-              {
-                inventoryRestored: true,
-                inventoryDeducted: false,
-              },
-              { new: true }
-            );
-          } catch (inventoryError) {
-            console.error(
-              `[post findOneAndUpdate] [Order ${doc.code}] LỖI restore inventory:`,
-              inventoryError.message
-            );
-            // Log error nhưng không throw để không block middleware chain
-          }
-
-          console.log(
-            `[post findOneAndUpdate] [Order ${doc.code}] Đã hoàn trả tồn kho`
-          );
-        }
-
-        // CASE 2: ĐƠN HÀNG TRẢ HÀNG (returned)
-        // → CHỈ nhập kho KHI returnConfirmed = true (Staff đã xác nhận nhận hàng)
-        // FIXED Bug #4: Thêm error handling
-        else if (
-          doc.status === "returned" &&
-          doc.inventoryDeducted &&
-          !doc.inventoryRestored
-        ) {
-          if (!doc.returnConfirmed) {
-            console.log(
-              `[post findOneAndUpdate] [Order ${doc.code}] Trả hàng nhưng CHƯA xác nhận nhận hàng. Chờ staff xác nhận.`
-            );
-          } else {
-            console.log(
-              `[post findOneAndUpdate] [Order ${doc.code}] Trả hàng và ĐÃ xác nhận nhận hàng. Hoàn trả tồn kho.`
-            );
-
-            try {
-              for (const item of doc.orderItems) {
-                await updateInventory(
-                  item,
-                  "increment",
-                  "return",
-                  doc._id,
-                  doc.user
-                );
-              }
-
-              // Cập nhật trạng thái
-              await mongoose.model("Order").findByIdAndUpdate(
-                doc._id,
-                {
-                  inventoryRestored: true,
-                  inventoryDeducted: false,
-                },
-                { new: true }
-              );
-            } catch (inventoryError) {
-              console.error(
-                `[post findOneAndUpdate] [Order ${doc.code}] LỖI restore inventory:`,
-                inventoryError.message
-              );
-            }
-
-            console.log(
-              `[post findOneAndUpdate] [Order ${doc.code}] Đã hoàn trả tồn kho`
-            );
-          }
-        }
-
-        // CASE 3: HÀNG ĐANG TRẢ VỀ KHO (returning_to_warehouse)
-        // → Không làm gì, chờ Staff xác nhận
-        else if (doc.status === "returning_to_warehouse") {
-          console.log(
-            `[post findOneAndUpdate] [Order ${doc.code}] Hàng đang trả về kho, chờ Staff xác nhận nhận hàng`
-          );
-        }
-      }
-    } catch (error) {
-      console.error(
-        "[Order]: Lỗi trong middleware post-findOneAndUpdate:",
-        error
-      );
-    }
-  });
+  // REMOVED: post('findOneAndUpdate') middleware to prevent duplicate restoration (Bug #4)
+  // All inventory restoration is now handled by post('save') middleware only
 
   // Thiết lập virtual cho email người dùng
   schema.virtual("userEmail").get(function () {

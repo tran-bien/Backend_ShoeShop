@@ -46,8 +46,10 @@ const VariantSchema = new mongoose.Schema(
         },
         sku: {
           type: String,
+          required: true,
           unique: true,
-          sparse: true, // Cho phép nhiều document không có SKU
+          // SKU được tạo TỰ ĐỘNG bởi variant/middlewares.js (pre-save hook)
+          // Format: XXX-XXX-X-XXX-XXXX (e.g., NIK-BLA-M-40-A1B2)
         },
         // sku để tracking và quản lý kho
         // ĐÃ XÓA: quantity, isSizeAvailable
