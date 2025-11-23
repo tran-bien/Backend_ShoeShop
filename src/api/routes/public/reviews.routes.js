@@ -16,4 +16,15 @@ router.get(
   reviewController.getReviewDetail
 );
 
+/**
+ * @route   GET /api/v1/products/:productId/reviews
+ * @desc    Lấy danh sách đánh giá của sản phẩm
+ * @access  Public
+ */
+router.get(
+  "/products/:productId",
+  validate(reviewValidator.validateGetProductReviews),
+  reviewController.getProductReviews
+);
+
 module.exports = router;
