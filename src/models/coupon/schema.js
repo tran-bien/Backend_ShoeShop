@@ -158,6 +158,14 @@ const CouponSchema = new mongoose.Schema(
       },
     ],
 
+    // FIXED: Thêm priority để sắp xếp coupon
+    priority: {
+      type: String,
+      enum: ["HIGH", "MEDIUM", "LOW"],
+      default: "MEDIUM",
+      comment: "Độ ưu tiên hiển thị (HIGH > MEDIUM > LOW)",
+    },
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

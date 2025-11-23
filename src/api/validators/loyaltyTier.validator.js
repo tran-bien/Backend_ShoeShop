@@ -51,22 +51,37 @@ const loyaltyTierValidator = {
       .isLength({ min: 2, max: 50 })
       .withMessage("Tên tier phải từ 2-50 ký tự"),
 
-    body("minPoints")
+    // FIXED: Thay đổi từ minPoints sang minSpending
+    body("minSpending")
       .notEmpty()
-      .withMessage("Điểm tối thiểu không được để trống")
+      .withMessage("Doanh số tối thiểu không được để trống")
+      .isInt({ min: 0 })
+      .withMessage("Doanh số tối thiểu phải là số nguyên không âm"),
+
+    body("maxSpending")
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage("Doanh số tối đa phải là số nguyên không âm")
+      .custom((value, { req }) => {
+        if (value && req.body.minSpending && value <= req.body.minSpending) {
+          throw new ApiError(
+            400,
+            "Doanh số tối đa phải lớn hơn doanh số tối thiểu"
+          );
+        }
+        return true;
+      }),
+
+    // Giữ lại minPoints/maxPoints cho backward compatibility (optional)
+    body("minPoints")
+      .optional()
       .isInt({ min: 0 })
       .withMessage("Điểm tối thiểu phải là số nguyên không âm"),
 
     body("maxPoints")
       .optional()
       .isInt({ min: 0 })
-      .withMessage("Điểm tối đa phải là số nguyên không âm")
-      .custom((value, { req }) => {
-        if (value && req.body.minPoints && value <= req.body.minPoints) {
-          throw new ApiError(400, "Điểm tối đa phải lớn hơn điểm tối thiểu");
-        }
-        return true;
-      }),
+      .withMessage("Điểm tối đa phải là số nguyên không âm"),
 
     body("benefits.pointsMultiplier")
       .optional()
@@ -111,6 +126,17 @@ const loyaltyTierValidator = {
       .trim()
       .isLength({ min: 2, max: 50 })
       .withMessage("Tên tier phải từ 2-50 ký tự"),
+
+    // FIXED: Cho phép cập nhật minSpending/maxSpending
+    body("minSpending")
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage("Doanh số tối thiểu phải là số nguyên không âm"),
+
+    body("maxSpending")
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage("Doanh số tối đa phải là số nguyên không âm"),
 
     body("minPoints")
       .optional()

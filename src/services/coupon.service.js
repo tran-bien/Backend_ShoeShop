@@ -21,7 +21,8 @@ const couponService = {
     };
 
     // Xây dựng thông tin sắp xếp
-    const sortOptions = {};
+    // FIXED: Priority enum (HIGH > MEDIUM > LOW) với fallback createdAt
+    const sortOptions = { priority: -1, createdAt: -1 }; // Fallback sort
     if (sort) {
       const [field, order] = sort.split("_");
       sortOptions[field] = order === "desc" ? -1 : 1;
@@ -33,7 +34,7 @@ const couponService = {
       limit: parseInt(limit),
       sort: sortOptions,
       select:
-        "code description type value maxDiscount minOrderValue startDate endDate isRedeemable pointCost maxRedeemPerUser",
+        "code description type value maxDiscount minOrderValue startDate endDate isRedeemable pointCost maxRedeemPerUser priority",
     });
 
     return {
@@ -85,7 +86,8 @@ const couponService = {
     }
 
     // Xây dựng thông tin sắp xếp
-    const sortOptions = {};
+    // FIXED: Priority enum (HIGH > MEDIUM > LOW) với fallback createdAt
+    const sortOptions = { priority: -1, createdAt: -1 }; // Fallback sort
     if (sort) {
       const [field, order] = sort.split("_");
       sortOptions[field] = order === "desc" ? -1 : 1;
@@ -210,54 +212,77 @@ const couponService = {
       }
     }
 
-    // ATOMIC CHECK: Kiểm tra người dùng đã thu thập coupon này chưaoupon này chưa
-    if (coupon.users.some((u) => u.toString() === userId.toString())) {
-      throw new ApiError(422, "Bạn đã thu thập mã giảm giá này rồi");
-    }
-
     // ============================================================
-    // XỬ LÝ ĐỔI ĐIỂM (NẾU COUPON CÓ THỂ REDEEM)
+    // XỬ LÝ ĐỔI ĐIỂM (NẾU COUPON CÓ THỂ REDEEM) VỚI TRANSACTION
     // ============================================================
     let pointsUsed = 0;
+    const session = await mongoose.startSession();
 
-    if (coupon.isRedeemable && coupon.pointCost > 0) {
-      // Kiểm tra user có đủ điểm không
-      const currentPoints = user.loyalty?.points || 0;
+    try {
+      await session.startTransaction();
 
-      if (currentPoints < coupon.pointCost) {
-        throw new ApiError(
-          400,
-          `Không đủ điểm. Cần ${coupon.pointCost} điểm, bạn có ${currentPoints} điểm`
-        );
-      }
+      if (coupon.isRedeemable && coupon.pointCost > 0) {
+        // Kiểm tra user có đủ điểm không
+        const currentPoints = user.loyalty?.points || 0;
 
-      // Kiểm tra giới hạn đổi/user (nếu có)
-      if (coupon.maxRedeemPerUser) {
-        const userUsageEntry = coupon.userUsage?.find(
-          (u) => u.user?.toString() === userId.toString()
-        );
-        const userRedeemCount = userUsageEntry?.usageCount || 0;
-
-        if (userRedeemCount >= coupon.maxRedeemPerUser) {
+        if (currentPoints < coupon.pointCost) {
           throw new ApiError(
-            422,
-            `Bạn đã đổi coupon này ${userRedeemCount}/${coupon.maxRedeemPerUser} lần`
+            400,
+            `Không đủ điểm. Cần ${coupon.pointCost} điểm, bạn có ${currentPoints} điểm`
           );
         }
-      } // Trừ điểm
-      const loyaltyService = require("@services/loyalty.service");
-      await loyaltyService.deductPoints(userId, coupon.pointCost, {
-        type: "REDEEM",
-        source: "MANUAL",
-        description: `Đổi ${coupon.pointCost} điểm lấy coupon ${coupon.code}`,
-      });
 
-      pointsUsed = coupon.pointCost;
+        // Kiểm tra giới hạn đổi/user (nếu có)
+        if (coupon.maxRedeemPerUser) {
+          const userUsageEntry = coupon.userUsage?.find(
+            (u) => u.user?.toString() === userId.toString()
+          );
+          const userRedeemCount = userUsageEntry?.usageCount || 0;
+
+          if (userRedeemCount >= coupon.maxRedeemPerUser) {
+            throw new ApiError(
+              422,
+              `Bạn đã đổi coupon này ${userRedeemCount}/${coupon.maxRedeemPerUser} lần`
+            );
+          }
+        }
+
+        // Trừ điểm (trong transaction)
+        const loyaltyService = require("@services/loyalty.service");
+        await loyaltyService.deductPoints(userId, coupon.pointCost, {
+          type: "REDEEM",
+          source: "MANUAL",
+          description: `Đổi ${coupon.pointCost} điểm lấy coupon ${coupon.code}`,
+        });
+
+        pointsUsed = coupon.pointCost;
+      }
+
+      // FIXED Bug #17: ATOMIC UPDATE - Thêm user vào danh sách với $addToSet (tránh race condition)
+      const updatedCoupon = await Coupon.findOneAndUpdate(
+        { _id: coupon._id },
+        { $addToSet: { users: userId } },
+        { new: true, session }
+      );
+
+      // Kiểm tra xem user có thực sự được thêm không (nếu đã tồn tại thì $addToSet không thêm)
+      const wasAlreadyCollected = coupon.users.some(
+        (u) => u.toString() === userId.toString()
+      );
+
+      if (wasAlreadyCollected) {
+        await session.abortTransaction();
+        throw new ApiError(422, "Bạn đã thu thập mã giảm giá này rồi");
+      }
+
+      await session.commitTransaction();
+      coupon.users = updatedCoupon.users; // Update local object
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
     }
-
-    // Thêm người dùng vào danh sách đã thu thập
-    coupon.users.push(userId);
-    await coupon.save();
 
     return {
       success: true,
@@ -591,6 +616,7 @@ const adminCouponService = {
     const options = {
       page: parseInt(page, 10),
       limit: parseInt(limit, 10),
+      sort: { priority: -1, createdAt: -1 }, // FIXED: Sort theo priority
       select: "-__v",
       populate: [
         { path: "createdBy", select: "name" },

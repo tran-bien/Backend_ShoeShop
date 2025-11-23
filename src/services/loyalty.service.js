@@ -190,24 +190,57 @@ const loyaltyService = {
   },
 
   /**
-   * Tự động cập nhật tier của user dựa trên số điểm
+   * FIXED: Tự động cập nhật tier của user dựa trên DOANH SỐ 12 THÁNG
+   * (không phải điểm tích lũy hiện tại)
    */
   updateUserTier: async (userId) => {
     const user = await User.findById(userId);
 
     if (!user) return;
 
-    const currentPoints = user.loyalty?.points || 0;
+    // FIXED: Tính tổng doanh số từ orders delivered trong 12 tháng gần nhất
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
 
-    // Tìm tier phù hợp
+    const spendingResult = await Order.aggregate([
+      {
+        $match: {
+          user: new mongoose.Types.ObjectId(userId),
+          status: "delivered",
+          deliveredAt: { $gte: twelveMonthsAgo, $ne: null }, // FIXED: Chặn deliveredAt null
+          deletedAt: null,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalSpending: { $sum: "$totalAfterDiscountAndShipping" },
+        },
+      },
+    ]);
+
+    const totalSpending =
+      spendingResult.length > 0 ? spendingResult[0].totalSpending : 0;
+
+    console.log(
+      `[Tier Update] User ${userId} - Doanh số 12 tháng: ${totalSpending.toLocaleString(
+        "vi-VN"
+      )}đ`
+    );
+
+    // Tìm tier phù hợp dựa trên doanh số
     const tier = await LoyaltyTier.findOne({
       isActive: true,
-      minPoints: { $lte: currentPoints },
-      $or: [{ maxPoints: { $gte: currentPoints } }, { maxPoints: null }],
-    }).sort({ minPoints: -1 });
+      minSpending: { $lte: totalSpending },
+      $or: [{ maxSpending: { $gte: totalSpending } }, { maxSpending: null }],
+    }).sort({ minSpending: -1 });
 
     if (!tier) {
-      console.log(`Không tìm thấy tier phù hợp cho ${currentPoints} điểm`);
+      console.log(
+        `[Tier Update] Không tìm thấy tier phù hợp cho doanh số ${totalSpending.toLocaleString(
+          "vi-VN"
+        )}đ`
+      );
       return;
     }
 
@@ -223,16 +256,21 @@ const loyaltyService = {
       user.loyalty.lastTierUpdate = new Date();
       await user.save();
 
-      console.log(`User ${user.name} lên hạng: ${oldTierName} → ${tier.name}`);
+      console.log(
+        `[Tier Update] User ${user.name} lên hạng: ${oldTierName} → ${
+          tier.name
+        } (Doanh số: ${totalSpending.toLocaleString("vi-VN")}đ)`
+      );
 
       // Gửi notification lên hạng
       try {
         const notificationService = require("./notification.service");
         await notificationService.send(userId, "LOYALTY_TIER_UP", {
           tierName: tier.name,
-          multiplier: tier.multiplier,
-          currentPoints: user.loyaltyPoints,
-          prioritySupport: tier.multiplier >= 1.5, // VIP/PLATINUM có priority support
+          multiplier: tier.benefits?.pointsMultiplier || 1,
+          currentPoints: user.loyalty?.points || 0,
+          totalSpending: totalSpending,
+          prioritySupport: tier.benefits?.prioritySupport || false,
         });
       } catch (error) {
         console.error("[Loyalty] Lỗi gửi notification tier up:", error.message);
@@ -554,30 +592,33 @@ const adminLoyaltyTierService = {
       throw new ApiError(400, "Tên tier đã tồn tại");
     }
 
-    // Kiểm tra minPoints đã được dùng chưa
-    const existingMinPoints = await LoyaltyTier.findOne({
-      minPoints: tierData.minPoints,
+    // FIXED: Kiểm tra minSpending đã được dùng chưa
+    const existingMinSpending = await LoyaltyTier.findOne({
+      minSpending: tierData.minSpending,
     });
-    if (existingMinPoints) {
+    if (existingMinSpending) {
       throw new ApiError(
         400,
-        "Điểm tối thiểu này đã được sử dụng bởi tier khác"
+        "Doanh số tối thiểu này đã được sử dụng bởi tier khác"
       );
     }
 
-    // FIX BUG #2: Validate overlap tier ranges
-    const { minPoints, maxPoints } = tierData;
-    if (maxPoints && maxPoints <= minPoints) {
-      throw new ApiError(400, "Điểm tối đa phải lớn hơn điểm tối thiểu");
+    // FIXED: Validate overlap tier ranges theo minSpending/maxSpending
+    const { minSpending, maxSpending } = tierData;
+    if (maxSpending && maxSpending <= minSpending) {
+      throw new ApiError(
+        400,
+        "Doanh số tối đa phải lớn hơn doanh số tối thiểu"
+      );
     }
 
     // Kiểm tra overlap với các tier khác
     const allTiers = await LoyaltyTier.find({});
     for (const tier of allTiers) {
-      const tierMin = tier.minPoints;
-      const tierMax = tier.maxPoints || Infinity;
-      const newMin = minPoints;
-      const newMax = maxPoints || Infinity;
+      const tierMin = tier.minSpending;
+      const tierMax = tier.maxSpending || Infinity;
+      const newMin = minSpending;
+      const newMax = maxSpending || Infinity;
 
       // Check overlap: new tier overlap với existing tier
       const hasOverlap =
@@ -588,9 +629,9 @@ const adminLoyaltyTierService = {
       if (hasOverlap) {
         throw new ApiError(
           400,
-          `Tier mới overlap với tier "${tier.name}" (${tierMin}-${
-            tierMax === Infinity ? "∞" : tierMax
-          } điểm)`
+          `Tier mới overlap với tier "${tier.name}" (${tierMin.toLocaleString(
+            "vi-VN"
+          )}-${tierMax === Infinity ? "∞" : tierMax.toLocaleString("vi-VN")}đ)`
         );
       }
     }
@@ -641,40 +682,47 @@ const adminLoyaltyTierService = {
       tierData.slug = slugify(tierData.name);
     }
 
-    // Nếu thay đổi minPoints, kiểm tra trùng lặp
+    // Nếu thay đổi minSpending, kiểm tra trùng lặp
     if (
-      tierData.minPoints !== undefined &&
-      tierData.minPoints !== tier.minPoints
+      tierData.minSpending !== undefined &&
+      tierData.minSpending !== tier.minSpending
     ) {
-      const existingMinPoints = await LoyaltyTier.findOne({
-        minPoints: tierData.minPoints,
+      const existingMinSpending = await LoyaltyTier.findOne({
+        minSpending: tierData.minSpending,
         _id: { $ne: tierId },
       });
-      if (existingMinPoints) {
+      if (existingMinSpending) {
         throw new ApiError(
           400,
-          "Điểm tối thiểu này đã được sử dụng bởi tier khác"
+          "Doanh số tối thiểu này đã được sử dụng bởi tier khác"
         );
       }
     }
 
-    // Validate maxPoints > minPoints
-    const finalMinPoints =
-      tierData.minPoints !== undefined ? tierData.minPoints : tier.minPoints;
-    const finalMaxPoints =
-      tierData.maxPoints !== undefined ? tierData.maxPoints : tier.maxPoints;
+    // Validate maxSpending > minSpending
+    const finalMinSpending =
+      tierData.minSpending !== undefined
+        ? tierData.minSpending
+        : tier.minSpending;
+    const finalMaxSpending =
+      tierData.maxSpending !== undefined
+        ? tierData.maxSpending
+        : tier.maxSpending;
 
-    if (finalMaxPoints && finalMaxPoints <= finalMinPoints) {
-      throw new ApiError(400, "Điểm tối đa phải lớn hơn điểm tối thiểu");
+    if (finalMaxSpending && finalMaxSpending <= finalMinSpending) {
+      throw new ApiError(
+        400,
+        "Doanh số tối đa phải lớn hơn doanh số tối thiểu"
+      );
     }
 
-    // FIX BUG #2: Validate overlap với các tier khác
+    // FIXED: Validate overlap với các tier khác theo minSpending/maxSpending
     const allTiers = await LoyaltyTier.find({ _id: { $ne: tierId } });
     for (const otherTier of allTiers) {
-      const tierMin = otherTier.minPoints;
-      const tierMax = otherTier.maxPoints || Infinity;
-      const newMin = finalMinPoints;
-      const newMax = finalMaxPoints || Infinity;
+      const tierMin = otherTier.minSpending;
+      const tierMax = otherTier.maxSpending || Infinity;
+      const newMin = finalMinSpending;
+      const newMax = finalMaxSpending || Infinity;
 
       const hasOverlap =
         (newMin >= tierMin && newMin < tierMax) ||
@@ -684,9 +732,11 @@ const adminLoyaltyTierService = {
       if (hasOverlap) {
         throw new ApiError(
           400,
-          `Tier mới overlap với tier "${otherTier.name}" (${tierMin}-${
-            tierMax === Infinity ? "∞" : tierMax
-          } điểm)`
+          `Tier mới overlap với tier "${
+            otherTier.name
+          }" (${tierMin.toLocaleString("vi-VN")}-${
+            tierMax === Infinity ? "∞" : tierMax.toLocaleString("vi-VN")
+          }đ)`
         );
       }
     }

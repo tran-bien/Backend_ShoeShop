@@ -59,5 +59,15 @@ SessionSchema.index({ user: 1, token: 1 });
 SessionSchema.index({ user: 1, isActive: 1 });
 SessionSchema.index({ token: 1 });
 
+// FIXED Bug #20: Unique compound index to prevent duplicate active sessions
+// Only enforce uniqueness for active sessions (prevents duplicate logins from same device)
+SessionSchema.index(
+  { user: 1, userAgent: 1, ip: 1, isActive: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isActive: true },
+    name: "unique_active_session_per_device",
+  }
+);
 
 module.exports = SessionSchema;

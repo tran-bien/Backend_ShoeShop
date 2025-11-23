@@ -195,6 +195,13 @@ UserSchema.index({ role: 1, "shipper.activeOrders": 1 });
 UserSchema.index({ role: 1, "shipper.deliveryStats.successful": -1 });
 
 // Index cho email lookup (login) - UNIQUE
-UserSchema.index({ email: 1 }, { unique: true });
+// FIXED Bug #21: Case-insensitive email index to prevent duplicate accounts
+UserSchema.index(
+  { email: 1 },
+  {
+    unique: true,
+    collation: { locale: "en", strength: 2 }, // Case-insensitive
+  }
+);
 
 module.exports = UserSchema;

@@ -74,4 +74,7 @@ const CartSchema = new mongoose.Schema(
   }
 );
 
+// FIXED Bug #19: Unique index on user field to prevent duplicate carts per user
+CartSchema.index({ user: 1 }, { unique: true });
+
 module.exports = CartSchema;

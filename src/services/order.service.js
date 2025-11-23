@@ -424,50 +424,45 @@ const orderService = {
       newOrder.coupon = coupon._id;
       newOrder.couponDetail = couponDetail;
 
-      // FIXED: Atomic update cho cả currentUses VÀ userUsage để tránh race condition
+      // FIXED Bug #18 & #24: Proper atomic update for coupon usage tracking
       const Coupon = mongoose.model("Coupon");
-      const updatedCoupon = await Coupon.findOneAndUpdate(
-        {
-          _id: coupon._id,
-          $or: [
-            { maxUses: null }, // Không giới hạn
-            { currentUses: { $lt: coupon.maxUses } }, // Còn lượt dùng
-          ],
-        },
-        {
-          $inc: {
-            currentUses: 1,
-            // FIXED: Dùng $inc thay vì $add (MongoDB operator hợp lệ)
-            "userUsage.$[elem].usageCount": 1,
-          },
-          $set: {
-            "userUsage.$[elem].lastUsedAt": new Date(),
-          },
-        },
-        {
-          arrayFilters: [{ "elem.user": userId }],
-          new: true,
-          upsert: false,
-        }
-      );
 
-      // Nếu không update được (đã hết lượt), rollback
-      if (!updatedCoupon) {
-        throw new ApiError(422, "Mã giảm giá đã hết lượt sử dụng");
-      }
-
-      // FIXED Bug #10: Fallback với điều kiện $ne để tránh duplicate entries
-      const userExists = updatedCoupon.userUsage.some(
+      // Kiểm tra user đã sử dụng coupon này chưa
+      const userExists = coupon.userUsage?.some(
         (u) => u.user.toString() === userId.toString()
       );
 
-      if (!userExists) {
-        await Coupon.findOneAndUpdate(
+      let updatedCoupon;
+
+      if (userExists) {
+        // User đã sử dụng → increment usageCount
+        updatedCoupon = await Coupon.findOneAndUpdate(
           {
             _id: coupon._id,
-            "userUsage.user": { $ne: userId }, // Chỉ push nếu user CHƯA có
+            "userUsage.user": userId,
+            $or: [{ maxUses: null }, { currentUses: { $lt: coupon.maxUses } }],
           },
           {
+            $inc: {
+              currentUses: 1,
+              "userUsage.$.usageCount": 1,
+            },
+            $set: {
+              "userUsage.$.lastUsedAt": new Date(),
+            },
+          },
+          { new: true }
+        );
+      } else {
+        // User chưa sử dụng → thêm vào userUsage array
+        updatedCoupon = await Coupon.findOneAndUpdate(
+          {
+            _id: coupon._id,
+            "userUsage.user": { $ne: userId },
+            $or: [{ maxUses: null }, { currentUses: { $lt: coupon.maxUses } }],
+          },
+          {
+            $inc: { currentUses: 1 },
             $push: {
               userUsage: {
                 user: userId,
@@ -475,8 +470,14 @@ const orderService = {
                 lastUsedAt: new Date(),
               },
             },
-          }
+          },
+          { new: true }
         );
+      }
+
+      // Nếu không update được (đã hết lượt), rollback
+      if (!updatedCoupon) {
+        throw new ApiError(422, "Mã giảm giá đã hết lượt sử dụng");
       }
     }
 

@@ -14,15 +14,32 @@ const LoyaltyTierSchema = new mongoose.Schema(
       unique: true,
     },
 
-    minPoints: {
+    // FIXED: Tier tính theo doanh số 12 tháng, không phải điểm hiện tại
+    minSpending: {
       type: Number,
       required: true,
       min: 0,
+      comment: "Doanh số tối thiểu trong 12 tháng để đạt tier này",
+    },
+
+    maxSpending: {
+      type: Number,
+      min: 0,
+      comment: "Doanh số tối đa (null = không giới hạn)",
+    },
+
+    // Giữ lại minPoints cho backward compatibility và tier benefits
+    minPoints: {
+      type: Number,
+      min: 0,
+      default: 0,
+      comment: "Điểm tối thiểu (không dùng để tính tier, chỉ để reference)",
     },
 
     maxPoints: {
       type: Number,
       min: 0,
+      comment: "Điểm tối đa (không dùng để tính tier, chỉ để reference)",
     },
 
     benefits: {
@@ -58,7 +75,8 @@ const LoyaltyTierSchema = new mongoose.Schema(
 );
 
 // Index
-LoyaltyTierSchema.index({ minPoints: 1 });
+LoyaltyTierSchema.index({ minSpending: 1 });
+LoyaltyTierSchema.index({ minPoints: 1 }); // Backward compatibility
 LoyaltyTierSchema.index({ displayOrder: 1 });
 
 module.exports = LoyaltyTierSchema;

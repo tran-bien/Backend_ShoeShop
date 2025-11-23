@@ -156,6 +156,11 @@ const validateCreateCoupon = [
       return true;
     }),
 
+  body("priority")
+    .optional()
+    .isIn(["HIGH", "MEDIUM", "LOW"])
+    .withMessage("Độ ưu tiên phải là HIGH, MEDIUM hoặc LOW"),
+
   body("maxRedeemPerUser")
     .optional()
     .isInt({ min: 0 })
@@ -316,6 +321,11 @@ const validateUpdateCoupon = [
     .optional()
     .isInt({ min: 0 })
     .withMessage("Chi phí điểm phải là số nguyên không âm"),
+
+  body("priority")
+    .optional()
+    .isIn(["HIGH", "MEDIUM", "LOW"])
+    .withMessage("Độ ưu tiên phải là HIGH, MEDIUM hoặc LOW"),
 
   body("maxRedeemPerUser")
     .optional()
