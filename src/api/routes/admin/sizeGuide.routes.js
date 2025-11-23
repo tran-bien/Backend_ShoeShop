@@ -5,16 +5,11 @@ const {
   protect,
   requireStaffOrAdmin,
 } = require("@middlewares/auth.middleware");
-const uploadMiddleware = require("@middlewares/upload.middleware");
 const sizeGuideValidator = require("@validators/sizeGuide.validator");
-const uploadValidator = require("@validators/upload.validator");
 const validate = require("@utils/validatehelper");
 
 router.use(protect);
 router.use(requireStaffOrAdmin);
-
-// Định nghĩa middleware upload cho size guide images
-const uploadSizeGuideImage = uploadMiddleware.uploadSizeGuideImage;
 
 /**
  * @route GET /api/admin/size-guides
@@ -53,38 +48,6 @@ router.put(
     sizeGuideValidator.validateUpdateSizeGuide,
   ]),
   sizeGuideController.updateSizeGuide
-);
-
-/**
- * @route PUT /api/admin/size-guides/:id/size-chart-image
- * @desc Upload ảnh size chart
- */
-router.put(
-  "/:id/size-chart-image",
-  validate(sizeGuideValidator.validateSizeGuideId),
-  uploadSizeGuideImage,
-  validate([
-    uploadValidator.validateSingleFileExists,
-    uploadValidator.validateImageFileType,
-    uploadValidator.validateImageFileSize,
-  ]),
-  sizeGuideController.updateSizeChartImage
-);
-
-/**
- * @route PUT /api/admin/size-guides/:id/measurement-image
- * @desc Upload ảnh hướng dẫn đo chân
- */
-router.put(
-  "/:id/measurement-image",
-  validate(sizeGuideValidator.validateSizeGuideId),
-  uploadSizeGuideImage,
-  validate([
-    uploadValidator.validateSingleFileExists,
-    uploadValidator.validateImageFileType,
-    uploadValidator.validateImageFileSize,
-  ]),
-  sizeGuideController.updateMeasurementGuideImage
 );
 
 /**

@@ -919,6 +919,166 @@ const imageService = {
       throw new ApiError(500, "Không thể xóa ảnh từ Cloudinary");
     }
   },
+
+  // ======================== BLOG IMAGE OPERATIONS ========================
+
+  /**
+   * Upload/cập nhật ảnh thumbnail cho blog post
+   * @param {String} postId - ID blog post
+   * @param {Object} imageData - Dữ liệu ảnh { url, public_id }
+   * @returns {Promise<Object>} - Kết quả cập nhật
+   */
+  updateBlogThumbnail: async (postId, imageData) => {
+    const BlogPost = require("../models/blogPost");
+
+    const post = await BlogPost.findById(postId);
+    if (!post) {
+      throw new ApiError(404, "Không tìm thấy bài viết");
+    }
+
+    // Xóa ảnh thumbnail cũ trên Cloudinary nếu có
+    if (post.thumbnail?.public_id) {
+      try {
+        await cloudinary.uploader.destroy(post.thumbnail.public_id);
+      } catch (err) {
+        console.error("Không thể xóa thumbnail cũ:", err);
+      }
+    }
+
+    // Cập nhật thumbnail mới
+    post.thumbnail = {
+      url: imageData.url,
+      public_id: imageData.public_id,
+    };
+
+    await post.save();
+
+    return {
+      success: true,
+      message: "Cập nhật ảnh thumbnail thành công",
+      thumbnail: post.thumbnail,
+    };
+  },
+
+  /**
+   * Upload/cập nhật ảnh featured image cho blog post
+   * @param {String} postId - ID blog post
+   * @param {Object} imageData - Dữ liệu ảnh { url, public_id }
+   * @param {String} caption - Caption cho ảnh
+   * @param {String} alt - Alt text cho ảnh
+   * @returns {Promise<Object>} - Kết quả cập nhật
+   */
+  updateBlogFeaturedImage: async (postId, imageData, caption, alt) => {
+    const BlogPost = require("../models/blogPost");
+
+    const post = await BlogPost.findById(postId);
+    if (!post) {
+      throw new ApiError(404, "Không tìm thấy bài viết");
+    }
+
+    // Xóa ảnh featured image cũ trên Cloudinary nếu có
+    if (post.featuredImage?.public_id) {
+      try {
+        await cloudinary.uploader.destroy(post.featuredImage.public_id);
+      } catch (err) {
+        console.error("Không thể xóa featured image cũ:", err);
+      }
+    }
+
+    // Cập nhật featured image mới
+    post.featuredImage = {
+      url: imageData.url,
+      public_id: imageData.public_id,
+      caption: caption || "",
+      alt: alt || "",
+    };
+
+    await post.save();
+
+    return {
+      success: true,
+      message: "Cập nhật ảnh featured image thành công",
+      featuredImage: post.featuredImage,
+    };
+  },
+
+  /**
+   * Xóa ảnh thumbnail của blog post
+   * @param {String} postId - ID blog post
+   * @returns {Promise<Object>} - Kết quả xóa
+   */
+  removeBlogThumbnail: async (postId) => {
+    const BlogPost = require("../models/blogPost");
+
+    const post = await BlogPost.findById(postId);
+    if (!post) {
+      throw new ApiError(404, "Không tìm thấy bài viết");
+    }
+
+    if (!post.thumbnail?.public_id) {
+      throw new ApiError(404, "Bài viết chưa có ảnh thumbnail");
+    }
+
+    // Xóa ảnh trên Cloudinary
+    try {
+      await cloudinary.uploader.destroy(post.thumbnail.public_id);
+    } catch (err) {
+      console.error("Không thể xóa thumbnail:", err);
+    }
+
+    // Xóa thông tin thumbnail
+    post.thumbnail = {
+      url: "",
+      public_id: "",
+    };
+
+    await post.save();
+
+    return {
+      success: true,
+      message: "Đã xóa ảnh thumbnail",
+    };
+  },
+
+  /**
+   * Xóa ảnh featured image của blog post
+   * @param {String} postId - ID blog post
+   * @returns {Promise<Object>} - Kết quả xóa
+   */
+  removeBlogFeaturedImage: async (postId) => {
+    const BlogPost = require("../models/blogPost");
+
+    const post = await BlogPost.findById(postId);
+    if (!post) {
+      throw new ApiError(404, "Không tìm thấy bài viết");
+    }
+
+    if (!post.featuredImage?.public_id) {
+      throw new ApiError(404, "Bài viết chưa có ảnh featured image");
+    }
+
+    // Xóa ảnh trên Cloudinary
+    try {
+      await cloudinary.uploader.destroy(post.featuredImage.public_id);
+    } catch (err) {
+      console.error("Không thể xóa featured image:", err);
+    }
+
+    // Xóa thông tin featured image
+    post.featuredImage = {
+      url: "",
+      public_id: "",
+      caption: "",
+      alt: "",
+    };
+
+    await post.save();
+
+    return {
+      success: true,
+      message: "Đã xóa ảnh featured image",
+    };
+  },
 };
 
 module.exports = imageService;

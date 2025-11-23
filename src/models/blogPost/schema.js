@@ -26,11 +26,11 @@ const BlogPostSchema = new mongoose.Schema(
     thumbnail: {
       url: {
         type: String,
-        required: true,
+        required: false, // Upload sau khi tạo blog post
       },
       public_id: {
         type: String,
-        required: true,
+        required: false, // Upload sau khi tạo blog post
       },
     },
 

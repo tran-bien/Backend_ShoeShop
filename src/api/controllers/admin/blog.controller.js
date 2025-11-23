@@ -1,6 +1,5 @@
 const asyncHandler = require("express-async-handler");
 const blogService = require("@services/blog.service");
-const imageService = require("@services/image.service");
 
 const blogController = {
   /**

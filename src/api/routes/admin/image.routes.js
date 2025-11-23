@@ -6,6 +6,7 @@ const {
 const imageController = require("@controllers/admin/image.controller");
 const uploadMiddleware = require("@middlewares/upload.middleware");
 const uploadValidator = require("@validators/upload.validator");
+const bannerValidator = require("@validators/banner.validator");
 const validate = require("@utils/validatehelper");
 
 const router = express.Router();
@@ -193,6 +194,158 @@ router.post(
     uploadValidator.validateImageFileSize,
   ]),
   imageController.uploadBlogContentImage
+);
+
+// ======================== BANNER IMAGE ROUTES ========================
+
+/**
+ * @route   POST /api/v1/admin/images/banner
+ * @desc    Tạo banner mới với ảnh
+ * @access  Staff/Admin
+ */
+router.post(
+  "/banner",
+  uploadMiddleware.uploadBannerImage,
+  validate([
+    bannerValidator.validateCreateBanner,
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
+  imageController.uploadBannerImage
+);
+
+/**
+ * @route   PUT /api/v1/admin/images/banner/reorder
+ * @desc    Sắp xếp thứ tự banner
+ * @access  Staff/Admin
+ */
+router.put(
+  "/banner/reorder",
+  validate(uploadValidator.validateBannerReorder),
+  imageController.reorderBanners
+);
+
+/**
+ * @route   PUT /api/v1/admin/images/banner/:bannerId
+ * @desc    Cập nhật ảnh banner
+ * @access  Staff/Admin
+ */
+router.put(
+  "/banner/:bannerId",
+  validate(uploadValidator.validateBannerId),
+  uploadMiddleware.uploadBannerImage,
+  validate([
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
+  imageController.updateBannerImage
+);
+
+/**
+ * @route   DELETE /api/v1/admin/images/banner/:bannerId
+ * @desc    Xóa banner
+ * @access  Staff/Admin
+ */
+router.delete(
+  "/banner/:bannerId",
+  validate(uploadValidator.validateBannerId),
+  imageController.deleteBannerImage
+);
+
+// ======================== BLOG IMAGE ROUTES ========================
+
+/**
+ * @route   PUT /api/v1/admin/images/blog/:postId/thumbnail
+ * @desc    Upload/cập nhật thumbnail cho blog post
+ * @access  Staff/Admin
+ */
+router.put(
+  "/blog/:postId/thumbnail",
+  validate(uploadValidator.validateBlogPostId),
+  uploadMiddleware.uploadBlogThumbnail,
+  validate([
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
+  imageController.uploadBlogThumbnail
+);
+
+/**
+ * @route   DELETE /api/v1/admin/images/blog/:postId/thumbnail
+ * @desc    Xóa thumbnail của blog post
+ * @access  Staff/Admin
+ */
+router.delete(
+  "/blog/:postId/thumbnail",
+  validate(uploadValidator.validateBlogPostId),
+  imageController.removeBlogThumbnail
+);
+
+/**
+ * @route   PUT /api/v1/admin/images/blog/:postId/featured-image
+ * @desc    Upload/cập nhật featured image cho blog post
+ * @access  Staff/Admin
+ */
+router.put(
+  "/blog/:postId/featured-image",
+  validate(uploadValidator.validateBlogPostId),
+  uploadMiddleware.uploadBlogFeaturedImage,
+  validate([
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
+  imageController.uploadBlogFeaturedImage
+);
+
+/**
+ * @route   DELETE /api/v1/admin/images/blog/:postId/featured-image
+ * @desc    Xóa featured image của blog post
+ * @access  Staff/Admin
+ */
+router.delete(
+  "/blog/:postId/featured-image",
+  validate(uploadValidator.validateBlogPostId),
+  imageController.removeBlogFeaturedImage
+);
+
+// ======================== SIZE GUIDE IMAGE ROUTES ========================
+
+/**
+ * @route   PUT /api/v1/admin/images/size-guide/:sizeGuideId/size-chart
+ * @desc    Upload/cập nhật ảnh size chart
+ * @access  Staff/Admin
+ */
+router.put(
+  "/size-guide/:sizeGuideId/size-chart",
+  validate(uploadValidator.validateSizeGuideId),
+  uploadMiddleware.uploadSizeChartImage,
+  validate([
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
+  imageController.uploadSizeChartImage
+);
+
+/**
+ * @route   PUT /api/v1/admin/images/size-guide/:sizeGuideId/measurement
+ * @desc    Upload/cập nhật ảnh measurement guide
+ * @access  Staff/Admin
+ */
+router.put(
+  "/size-guide/:sizeGuideId/measurement",
+  validate(uploadValidator.validateSizeGuideId),
+  uploadMiddleware.uploadMeasurementGuideImage,
+  validate([
+    uploadValidator.validateSingleFileExists,
+    uploadValidator.validateImageFileType,
+    uploadValidator.validateImageFileSize,
+  ]),
+  imageController.uploadMeasurementGuideImage
 );
 
 module.exports = router;

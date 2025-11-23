@@ -57,6 +57,52 @@ const uploadValidator = {
   ],
 
   /**
+   * Validator cho bannerId
+   */
+  validateBannerId: [
+    param("bannerId")
+      .custom(isValidObjectId)
+      .withMessage("ID banner không hợp lệ"),
+  ],
+
+  /**
+   * Validator cho blogPostId
+   */
+  validateBlogPostId: [
+    param("postId")
+      .custom(isValidObjectId)
+      .withMessage("ID bài viết không hợp lệ"),
+  ],
+
+  /**
+   * Validator cho sizeGuideId
+   */
+  validateSizeGuideId: [
+    param("sizeGuideId")
+      .custom(isValidObjectId)
+      .withMessage("ID size guide không hợp lệ"),
+  ],
+
+  /**
+   * Validator cho sắp xếp banner
+   */
+  validateBannerReorder: [
+    body("bannerOrders")
+      .notEmpty()
+      .withMessage("Vui lòng cung cấp thông tin sắp xếp banner")
+      .isArray()
+      .withMessage("Vui lòng cung cấp ít nhất một thứ tự banner"),
+
+    body("bannerOrders.*.displayOrder")
+      .isInt({ min: 0 })
+      .withMessage("Thứ tự hiển thị phải là số nguyên không âm"),
+
+    body("bannerOrders.*._id")
+      .custom(isValidObjectId)
+      .withMessage("ID banner không hợp lệ"),
+  ],
+
+  /**
    * Validator cho xóa ảnh
    */
   validateImageIds: [

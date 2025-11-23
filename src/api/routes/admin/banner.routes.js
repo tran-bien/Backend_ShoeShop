@@ -5,15 +5,11 @@ const {
   protect,
   requireStaffOrAdmin,
 } = require("@middlewares/auth.middleware");
-const { uploadBannerImage } = require("@middlewares/upload.middleware");
 const validate = require("@utils/validatehelper");
 const {
   validateBannerId,
-  validateCreateBanner,
   validateUpdateBanner,
-  validateReorderBanners,
 } = require("@validators/banner.validator");
-const uploadValidator = require("@validators/upload.validator");
 
 // Áp dụng middleware protect cho tất cả routes
 router.use(protect);
@@ -27,39 +23,11 @@ router.use(requireStaffOrAdmin);
 router.get("/", bannerController.getAllBanners);
 
 /**
- * @route PUT /api/admin/banners/reorder
- * @desc Sắp xếp lại thứ tự banner
- * @access Staff/Admin
- */
-router.put(
-  "/reorder",
-  validate(validateReorderBanners),
-  bannerController.reorderBanners
-);
-
-/**
  * @route GET /api/admin/banners/:id
  * @desc Lấy chi tiết banner theo ID
  * @access Staff/Admin
  */
 router.get("/:id", validate(validateBannerId), bannerController.getBannerById);
-
-/**
- * @route POST /api/admin/banners
- * @desc Tạo banner mới với upload ảnh
- * @access Staff/Admin
- */
-router.post(
-  "/",
-  uploadBannerImage,
-  validate([
-    validateCreateBanner,
-    uploadValidator.validateSingleFileExists,
-    uploadValidator.validateImageFileType,
-    uploadValidator.validateImageFileSize,
-  ]),
-  bannerController.createBanner
-);
 
 /**
  * @route PUT /api/admin/banners/:id
@@ -70,34 +38,6 @@ router.put(
   "/:id",
   validate([validateBannerId, validateUpdateBanner]),
   bannerController.updateBanner
-);
-
-/**
- * @route PUT /api/admin/banners/:id/image
- * @desc Cập nhật ảnh banner
- * @access Staff/Admin
- */
-router.put(
-  "/:id/image",
-  validate(validateBannerId),
-  uploadBannerImage,
-  validate([
-    uploadValidator.validateSingleFileExists,
-    uploadValidator.validateImageFileType,
-    uploadValidator.validateImageFileSize,
-  ]),
-  bannerController.updateBannerImage
-);
-
-/**
- * @route DELETE /api/admin/banners/:id
- * @desc Xóa mềm banner
- * @access Staff/Admin
- */
-router.delete(
-  "/:id",
-  validate(validateBannerId),
-  bannerController.deleteBanner
 );
 
 /**

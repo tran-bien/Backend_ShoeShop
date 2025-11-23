@@ -5,9 +5,7 @@ const {
   protect,
   requireStaffOrAdmin,
 } = require("@middlewares/auth.middleware");
-const uploadMiddleware = require("@middlewares/upload.middleware");
 const blogValidator = require("@validators/blog.validator");
-const uploadValidator = require("@validators/upload.validator");
 const validate = require("@utils/validatehelper");
 
 // Áp dụng middleware protect cho tất cả routes

@@ -201,3 +201,188 @@ exports.uploadBlogContentImage = asyncHandler(async (req, res) => {
   const result = await imageService.uploadBlogContentImage(imageData);
   res.json(result);
 });
+
+// ======================== BANNER IMAGE OPERATIONS ========================
+
+/**
+ * @desc    Tạo banner với ảnh
+ * @route   POST /api/admin/images/banner
+ * @access  Staff/Admin
+ */
+exports.uploadBannerImage = asyncHandler(async (req, res) => {
+  await processCloudinaryUpload(req);
+
+  const imageData = {
+    url: req.file.path,
+    public_id: req.file.filename,
+  };
+
+  const bannerData = {
+    title: req.body.title,
+    displayOrder: parseInt(req.body.displayOrder),
+    link: req.body.link || "",
+    isActive:
+      req.body.isActive !== undefined
+        ? req.body.isActive === "true" || req.body.isActive === true
+        : true,
+  };
+
+  const result = await imageService.uploadBannerImage(imageData, bannerData);
+  res.status(201).json(result);
+});
+
+/**
+ * @desc    Cập nhật ảnh banner
+ * @route   PUT /api/admin/images/banner/:bannerId
+ * @access  Staff/Admin
+ */
+exports.updateBannerImage = asyncHandler(async (req, res) => {
+  const { bannerId } = req.params;
+
+  await processCloudinaryUpload(req);
+
+  const imageData = {
+    url: req.file.path,
+    public_id: req.file.filename,
+  };
+
+  const result = await imageService.updateBannerImage(bannerId, imageData);
+  res.json(result);
+});
+
+/**
+ * @desc    Xóa banner
+ * @route   DELETE /api/admin/images/banner/:bannerId
+ * @access  Staff/Admin
+ */
+exports.deleteBannerImage = asyncHandler(async (req, res) => {
+  const { bannerId } = req.params;
+  const result = await imageService.deleteBannerImage(bannerId, req.user._id);
+  res.json(result);
+});
+
+/**
+ * @desc    Sắp xếp banners
+ * @route   PUT /api/admin/images/banner/reorder
+ * @access  Staff/Admin
+ */
+exports.reorderBanners = asyncHandler(async (req, res) => {
+  const { bannerOrders } = req.body;
+  const result = await imageService.reorderBanners(bannerOrders);
+  res.json(result);
+});
+
+// ======================== BLOG IMAGE OPERATIONS ========================
+
+/**
+ * @desc    Upload/cập nhật thumbnail cho blog post
+ * @route   PUT /api/admin/images/blog/:postId/thumbnail
+ * @access  Staff/Admin
+ */
+exports.uploadBlogThumbnail = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
+
+  await processCloudinaryUpload(req);
+
+  const imageData = {
+    url: req.file.path,
+    public_id: req.file.filename,
+  };
+
+  const result = await imageService.updateBlogThumbnail(postId, imageData);
+  res.json(result);
+});
+
+/**
+ * @desc    Xóa thumbnail của blog post
+ * @route   DELETE /api/admin/images/blog/:postId/thumbnail
+ * @access  Staff/Admin
+ */
+exports.removeBlogThumbnail = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
+  const result = await imageService.removeBlogThumbnail(postId);
+  res.json(result);
+});
+
+/**
+ * @desc    Upload/cập nhật featured image cho blog post
+ * @route   PUT /api/admin/images/blog/:postId/featured-image
+ * @access  Staff/Admin
+ */
+exports.uploadBlogFeaturedImage = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
+
+  await processCloudinaryUpload(req);
+
+  const imageData = {
+    url: req.file.path,
+    public_id: req.file.filename,
+  };
+
+  const { caption, alt } = req.body;
+
+  const result = await imageService.updateBlogFeaturedImage(
+    postId,
+    imageData,
+    caption,
+    alt
+  );
+  res.json(result);
+});
+
+/**
+ * @desc    Xóa featured image của blog post
+ * @route   DELETE /api/admin/images/blog/:postId/featured-image
+ * @access  Staff/Admin
+ */
+exports.removeBlogFeaturedImage = asyncHandler(async (req, res) => {
+  const { postId } = req.params;
+  const result = await imageService.removeBlogFeaturedImage(postId);
+  res.json(result);
+});
+
+// ======================== SIZE GUIDE IMAGE OPERATIONS ========================
+
+/**
+ * @desc    Upload/cập nhật ảnh size chart cho size guide
+ * @route   PUT /api/admin/images/size-guide/:sizeGuideId/size-chart
+ * @access  Staff/Admin
+ */
+exports.uploadSizeChartImage = asyncHandler(async (req, res) => {
+  const { sizeGuideId } = req.params;
+
+  await processCloudinaryUpload(req);
+
+  const imageData = {
+    url: req.file.path,
+    public_id: req.file.filename,
+  };
+
+  const result = await imageService.updateSizeChartImage(
+    sizeGuideId,
+    imageData
+  );
+  res.json(result);
+});
+
+/**
+ * @desc    Upload/cập nhật ảnh measurement guide cho size guide
+ * @route   PUT /api/admin/images/size-guide/:sizeGuideId/measurement
+ * @access  Staff/Admin
+ */
+exports.uploadMeasurementGuideImage = asyncHandler(async (req, res) => {
+  const { sizeGuideId } = req.params;
+
+  await processCloudinaryUpload(req);
+
+  const imageData = {
+    url: req.file.path,
+    public_id: req.file.filename,
+  };
+
+  const result = await imageService.updateMeasurementGuideImage(
+    sizeGuideId,
+    imageData
+  );
+  res.json(result);
+});

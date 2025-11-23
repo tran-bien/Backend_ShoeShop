@@ -1,7 +1,5 @@
 const asyncHandler = require("express-async-handler");
 const sizeGuideService = require("@services/sizeGuide.service");
-const imageService = require("@services/image.service");
-const { processCloudinaryUpload } = require("@middlewares/upload.middleware");
 
 const sizeGuideController = {
   /**
@@ -49,50 +47,6 @@ const sizeGuideController = {
       req.params.id,
       req.body,
       req.user._id
-    );
-
-    return res.json(result);
-  }),
-
-  /**
-   * @route PUT /api/admin/size-guides/:id/size-chart-image
-   * @desc Upload/cập nhật ảnh size chart
-   * @access Staff/Admin
-   */
-  updateSizeChartImage: asyncHandler(async (req, res) => {
-    // Upload to Cloudinary after validation
-    await processCloudinaryUpload(req);
-
-    const imageData = {
-      url: req.file.path,
-      public_id: req.file.filename,
-    };
-
-    const result = await imageService.updateSizeChartImage(
-      req.params.id,
-      imageData
-    );
-
-    return res.json(result);
-  }),
-
-  /**
-   * @route PUT /api/admin/size-guides/:id/measurement-image
-   * @desc Upload/cập nhật ảnh hướng dẫn đo chân
-   * @access Staff/Admin
-   */
-  updateMeasurementGuideImage: asyncHandler(async (req, res) => {
-    // Upload to Cloudinary after validation
-    await processCloudinaryUpload(req);
-
-    const imageData = {
-      url: req.file.path,
-      public_id: req.file.filename,
-    };
-
-    const result = await imageService.updateMeasurementGuideImage(
-      req.params.id,
-      imageData
     );
 
     return res.json(result);
