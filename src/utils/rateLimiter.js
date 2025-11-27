@@ -7,25 +7,42 @@ const ApiError = require("@utils/ApiError");
  */
 class RateLimiter {
   constructor() {
-    // Khởi tạo Redis client
-    this.redis = new Redis({
-      host: process.env.REDIS_HOST || "localhost",
-      port: process.env.REDIS_PORT || 6379,
-      password: process.env.REDIS_PASSWORD || undefined,
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      },
-      maxRetriesPerRequest: 3,
-    });
+    // Chỉ khởi tạo Redis nếu có config
+    if (process.env.REDIS_HOST) {
+      this.redis = new Redis({
+        host: process.env.REDIS_HOST || "localhost",
+        port: process.env.REDIS_PORT || 6379,
+        password: process.env.REDIS_PASSWORD || undefined,
+        retryStrategy: (times) => {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        },
+        maxRetriesPerRequest: 3,
+        lazyConnect: true, // Không tự động connect
+      });
 
-    this.redis.on("error", (err) => {
-      console.error("[REDIS] Connection error:", err.message);
-    });
+      this.redis.on("error", (err) => {
+        console.warn("[REDIS] Connection error:", err.message);
+      });
 
-    this.redis.on("connect", () => {
-      console.log("✅ Redis connected for rate limiting");
-    });
+      this.redis.on("connect", () => {
+        console.log("Redis connected for rate limiting");
+      });
+
+      // Connect explicitly
+      this.redis.connect().catch((err) => {
+        console.warn("[REDIS] Failed to connect, using in-memory fallback");
+        this.redis = null;
+      });
+    } else {
+      console.log(
+        "Redis not configured, using in-memory rate limiting (not recommended for production)"
+      );
+      this.redis = null;
+    }
+
+    // In-memory fallback
+    this.memoryStore = new Map();
   }
 
   /**
@@ -37,28 +54,60 @@ class RateLimiter {
    */
   async checkLimit(key, maxRequests = 10, windowMs = 60000) {
     try {
-      const redisKey = `ratelimit:${key}`;
-      const windowSeconds = Math.ceil(windowMs / 1000);
+      // Nếu có Redis, dùng Redis
+      if (this.redis && this.redis.status === "ready") {
+        const redisKey = `ratelimit:${key}`;
+        const windowSeconds = Math.ceil(windowMs / 1000);
 
-      // Increment counter
-      const count = await this.redis.incr(redisKey);
+        const count = await this.redis.incr(redisKey);
 
-      // Set expiry nếu là lần đầu tiên
-      if (count === 1) {
-        await this.redis.expire(redisKey, windowSeconds);
+        if (count === 1) {
+          await this.redis.expire(redisKey, windowSeconds);
+        }
+
+        return count <= maxRequests;
       }
 
-      // Check nếu exceed limit
-      if (count > maxRequests) {
-        return false;
-      }
-
-      return true;
+      // Fallback to in-memory
+      return this.checkLimitMemory(key, maxRequests, windowMs);
     } catch (error) {
-      // Nếu Redis lỗi, fallback cho phép request (fail open)
-      console.error("[RATE_LIMITER] Redis error:", error.message);
-      return true;
+      console.warn(
+        "[RATE_LIMITER] Error, using memory fallback:",
+        error.message
+      );
+      return this.checkLimitMemory(key, maxRequests, windowMs);
     }
+  }
+
+  /**
+   * In-memory rate limiting (fallback)
+   */
+  checkLimitMemory(key, maxRequests, windowMs) {
+    const now = Date.now();
+    const record = this.memoryStore.get(key) || {
+      count: 0,
+      resetTime: now + windowMs,
+    };
+
+    // Reset nếu hết window
+    if (now > record.resetTime) {
+      record.count = 0;
+      record.resetTime = now + windowMs;
+    }
+
+    record.count++;
+    this.memoryStore.set(key, record);
+
+    // Cleanup old entries
+    if (this.memoryStore.size > 10000) {
+      const keysToDelete = [];
+      for (const [k, v] of this.memoryStore.entries()) {
+        if (now > v.resetTime) keysToDelete.push(k);
+      }
+      keysToDelete.forEach((k) => this.memoryStore.delete(k));
+    }
+
+    return record.count <= maxRequests;
   }
 
   /**
@@ -66,13 +115,19 @@ class RateLimiter {
    */
   async getRemaining(key, maxRequests = 10) {
     try {
-      const redisKey = `ratelimit:${key}`;
-      const count = await this.redis.get(redisKey);
-      const current = parseInt(count) || 0;
-      return Math.max(0, maxRequests - current);
+      if (this.redis && this.redis.status === "ready") {
+        const redisKey = `ratelimit:${key}`;
+        const count = await this.redis.get(redisKey);
+        const current = parseInt(count) || 0;
+        return Math.max(0, maxRequests - current);
+      }
+
+      // Memory fallback
+      const record = this.memoryStore.get(key);
+      if (!record) return maxRequests;
+      return Math.max(0, maxRequests - record.count);
     } catch (error) {
-      console.error("[RATE_LIMITER] Get remaining error:", error.message);
-      return maxRequests; // Fallback
+      return maxRequests;
     }
   }
 
@@ -81,10 +136,17 @@ class RateLimiter {
    */
   async getTTL(key) {
     try {
-      const redisKey = `ratelimit:${key}`;
-      return await this.redis.ttl(redisKey);
+      if (this.redis && this.redis.status === "ready") {
+        const redisKey = `ratelimit:${key}`;
+        return await this.redis.ttl(redisKey);
+      }
+
+      // Memory fallback
+      const record = this.memoryStore.get(key);
+      if (!record) return -1;
+      const remaining = Math.ceil((record.resetTime - Date.now()) / 1000);
+      return Math.max(0, remaining);
     } catch (error) {
-      console.error("[RATE_LIMITER] Get TTL error:", error.message);
       return -1;
     }
   }
@@ -94,11 +156,13 @@ class RateLimiter {
    */
   async reset(key) {
     try {
-      const redisKey = `ratelimit:${key}`;
-      await this.redis.del(redisKey);
+      if (this.redis && this.redis.status === "ready") {
+        const redisKey = `ratelimit:${key}`;
+        await this.redis.del(redisKey);
+      }
+      this.memoryStore.delete(key);
       return true;
     } catch (error) {
-      console.error("[RATE_LIMITER] Reset error:", error.message);
       return false;
     }
   }
@@ -107,7 +171,9 @@ class RateLimiter {
    * Disconnect Redis
    */
   async disconnect() {
-    await this.redis.quit();
+    if (this.redis) {
+      await this.redis.quit();
+    }
   }
 }
 
