@@ -11,8 +11,17 @@ const ALLOWED_IMAGE_TYPES = [
   "image/webp",
 ];
 
+// Danh sách các loại file Excel được phép
+const ALLOWED_EXCEL_TYPES = [
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+  "application/vnd.ms-excel", // .xls
+];
+
 // Kích thước file tối đa (5MB)
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+// Kích thước file Excel tối đa (10MB)
+const MAX_EXCEL_FILE_SIZE = 10 * 1024 * 1024;
 
 /**
  * Upload file buffer to Cloudinary
@@ -76,6 +85,26 @@ const fileFilter = (req, file, cb) => {
       new ApiError(
         400,
         "Loại file không được hỗ trợ. Chỉ chấp nhận file JPEG, JPG, PNG, WEBP"
+      ),
+      false
+    );
+  }
+};
+
+/**
+ * Kiểm tra loại file Excel
+ * @param {Object} req - Request object
+ * @param {Object} file - File object từ multer
+ * @param {Function} cb - Callback function
+ */
+const excelFileFilter = (req, file, cb) => {
+  if (ALLOWED_EXCEL_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(
+      new ApiError(
+        400,
+        "Loại file không được hỗ trợ. Chỉ chấp nhận file Excel (.xlsx, .xls)"
       ),
       false
     );
@@ -271,6 +300,29 @@ const uploadMiddleware = {
     "blogs/content",
     "image"
   ),
+
+  /**
+   * Middleware upload file Excel
+   */
+  uploadExcelFile: (req, res, next) => {
+    const storage = createStorage();
+    const upload = multer({
+      storage,
+      limits: {
+        fileSize: MAX_EXCEL_FILE_SIZE,
+        files: 1,
+        fields: 5,
+      },
+      fileFilter: excelFileFilter,
+    }).single("file");
+
+    upload(req, res, (err) => {
+      if (err) {
+        return next(err);
+      }
+      next();
+    });
+  },
 
   /**
    * Middleware xử lý lỗi upload

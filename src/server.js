@@ -5,11 +5,14 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const path = require("path");
+const http = require("http");
 
 // Sử dụng đường dẫn mới theo cấu trúc thư mục trong src
 const connectDB = require("@config/db");
 const errorHandler = require("@middlewares/error.middleware");
 const routes = require("@routes");
+const initializeSocket = require("@config/socket");
+const { chatHandler } = require("./sockets");
 
 // Load biến môi trường từ file .env
 dotenv.config();
@@ -18,6 +21,8 @@ dotenv.config();
 connectDB();
 
 const app = express();
+const server = http.createServer(app);
+const io = initializeSocket(server);
 
 // Các middleware
 app.use(
@@ -47,8 +52,18 @@ if (process.env.NODE_ENV === "production") {
 // Error handler middleware
 app.use(errorHandler);
 
+// Socket.IO Chat Handler
+io.on("connection", (socket) => {
+  console.log(`[SOCKET] Client connected: ${socket.id}`);
+  chatHandler(io, socket);
+
+  socket.on("disconnect", () => {
+    console.log(`[SOCKET] Client disconnected: ${socket.id}`);
+  });
+});
+
 const PORT = process.env.PORT || 5005;
-const server = app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  // console.log("Session cleanup: Middleware-based (on query)");
+  console.log(`Socket.IO ready for real-time chat`);
 });

@@ -14,8 +14,10 @@ const publicCouponRoutes = require("@routes/public/coupon.routes");
 const publicBannerRoutes = require("@routes/public/banner.routes");
 const publicBlogRoutes = require("@routes/public/blog.routes");
 const publicBlogCategoryRoutes = require("@routes/public/blogCategory.routes");
+const publicGeminiRoutes = require("@routes/public/gemini.routes");
 
 // User Routes (Authenticated Users)
+const userChatRoutes = require("@routes/user/chat.routes");
 const userProfileRoutes = require("@routes/user/profile.routes");
 const userWishlistRoutes = require("@routes/user/wishlist.routes");
 const userCouponRoutes = require("@routes/user/coupon.routes");
@@ -56,6 +58,8 @@ const adminSizeGuideRoutes = require("@routes/admin/sizeGuide.routes");
 const adminBlogRoutes = require("@routes/admin/blog.routes");
 const adminBlogCategoryRoutes = require("@routes/admin/blogCategory.routes");
 const adminLoyaltyTierRoutes = require("@routes/admin/loyaltyTier.routes");
+const adminKnowledgeRoutes = require("@routes/admin/knowledge.routes");
+const adminGeminiRoutes = require("@routes/admin/gemini.routes");
 
 // Public Routes (new features)
 const publicSizeGuideRoutes = require("@routes/public/sizeGuide.routes");
@@ -75,6 +79,7 @@ router.use("/banners", publicBannerRoutes);
 // Blog categories MUST come before /blogs to avoid :slug matching "categories"
 router.use("/blogs/categories", publicBlogCategoryRoutes);
 router.use("/blogs", publicBlogRoutes);
+router.use("/public", publicGeminiRoutes); // AI Chatbot
 
 // USER ROUTES (Cần đăng nhập - role: user)
 router.use("/users/profile", userProfileRoutes);
@@ -89,6 +94,7 @@ router.use("/users/loyalty", userLoyaltyRoutes);
 router.use("/users/notifications", userNotificationRoutes);
 router.use("/users/view-history", userViewHistoryRoutes);
 router.use("/users/recommendations", userRecommendationRoutes);
+router.use("/users/chat", userChatRoutes); // Real-time chat
 
 // SHIPPER ROUTES (role: shipper)
 router.use("/shipper", shipperRoutes);
@@ -117,5 +123,7 @@ router.use("/admin/size-guides", adminSizeGuideRoutes);
 router.use("/admin/blogs/categories", adminBlogCategoryRoutes);
 router.use("/admin/blogs", adminBlogRoutes);
 router.use("/admin/loyalty-tiers", adminLoyaltyTierRoutes);
+router.use("/admin/knowledge-base", adminKnowledgeRoutes);
+router.use("/admin/gemini", adminGeminiRoutes); // AI Demo Mode Control
 
 module.exports = router;
