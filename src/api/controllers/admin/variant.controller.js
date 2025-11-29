@@ -70,19 +70,6 @@ const variantController = {
   }),
 
   /**
-   * @desc    Cập nhật số lượng tồn kho của biến thể
-   * @route   PATCH /api/admin/variants/:id/inventory
-   * @access  Staff/Admin
-   */
-  updateInventory: asyncHandler(async (req, res) => {
-    const result = await variantService.updateVariantInventory(
-      req.params.id,
-      req.body.sizes
-    );
-    res.json(result);
-  }),
-
-  /**
    * @desc    Cập nhật trạng thái active của biến thể
    * @route   PATCH /api/admin/variants/:id/status
    * @access  Staff/Admin

@@ -625,69 +625,6 @@ const variantService = {
   },
 
   /**
-   * DEPRECATED: Cập nhật số lượng tồn kho của biến thể theo size
-   *
-   * @deprecated Sử dụng inventoryService.stockIn() hoặc inventoryService.adjustStock() thay thế
-   *
-   * Variant schema không còn lưu trữ quantity - tất cả inventory data được quản lý bởi InventoryItem.
-   * Function này được giữ lại để backward compatibility với API cũ.
-   *
-   * @param {String} id ID biến thể
-   * @param {Array} sizesData Dữ liệu cập nhật số lượng theo kích thước
-   */
-  updateVariantInventory: async (id, sizesData) => {
-    const variant = await Variant.findById(id);
-    if (!variant) {
-      throw new ApiError(404, `Không tìm thấy biến thể với ID: ${id}`);
-    }
-
-    if (!Array.isArray(sizesData) || sizesData.length === 0) {
-      throw new ApiError(400, "Dữ liệu cập nhật tồn kho không hợp lệ");
-    }
-
-    // REDIRECT TO INVENTORY SERVICE
-    // Variant không lưu quantity nữa - phải cập nhật qua InventoryItem
-    const inventoryService = require("@services/inventory.service");
-
-    console.warn(
-      `updateVariantInventory() is DEPRECATED. Use inventoryService.stockIn() or adjustStock() instead.`
-    );
-
-    // Kiểm tra xem size có tồn tại không
-    const sizeIds = sizesData.map((item) => item.sizeId);
-    const sizes = await Size.find({ _id: { $in: sizeIds } });
-    if (sizes.length !== sizeIds.length) {
-      const foundSizeIds = sizes.map((s) => s._id.toString());
-      const missingSizeIds = sizeIds.filter((id) => !foundSizeIds.includes(id));
-      throw new ApiError(
-        404,
-        `Không tìm thấy kích thước: ${missingSizeIds.join(", ")}`
-      );
-    }
-
-    // REMOVED: Không cập nhật variant.sizes[].quantity nữa
-    // Inventory được quản lý hoàn toàn bởi InventoryItem
-    // Cần gọi inventoryService.adjustStock() để update
-
-    // Trả về thông báo hướng dẫn sử dụng API mới
-    return {
-      success: false,
-      deprecated: true,
-      message:
-        "Function này đã DEPRECATED. Vui lòng sử dụng POST /api/inventory/adjust-stock hoặc POST /api/inventory/stock-in để cập nhật tồn kho.",
-      recommendation: {
-        endpoint: "POST /api/inventory/adjust-stock",
-        body: {
-          variant: id,
-          size: "sizeId",
-          newQuantity: 100,
-          reason: "manual_adjustment",
-        },
-      },
-    };
-  },
-
-  /**
    * Cập nhật trạng thái active của biến thể
    * @param {String} id ID biến thể
    * @param {Boolean} isActive Trạng thái active

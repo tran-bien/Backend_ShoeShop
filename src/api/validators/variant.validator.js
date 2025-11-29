@@ -270,59 +270,6 @@ const variantValidator = {
       }),
   ],
 
-  // Kiểm tra dữ liệu cập nhật tồn kho
-  validateInventoryUpdate: [
-    param("id")
-      .notEmpty()
-      .withMessage("ID biến thể không được để trống")
-      .custom((value) => {
-        if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new ApiError(400, "ID biến thể không hợp lệ");
-        }
-        return true;
-      }),
-
-    body("sizes")
-      .isArray()
-      .withMessage("Dữ liệu phải là một mảng các kích thước"),
-
-    body("sizes.*.sizeId")
-      .notEmpty()
-      .withMessage("ID kích thước không được để trống")
-      .custom((value) => {
-        if (!mongoose.Types.ObjectId.isValid(value)) {
-          throw new ApiError(400, "ID kích thước không hợp lệ");
-        }
-        return true;
-      }),
-
-    body("sizes.*.quantity")
-      .isInt({ min: 0 })
-      .withMessage("Số lượng phải là số nguyên không âm"),
-
-    // Kiểm tra trùng lặp sizeId trong cập nhật tồn kho
-    body("sizes").custom((sizes) => {
-      if (!sizes || !Array.isArray(sizes)) return true;
-
-      const sizeIds = [];
-      for (const item of sizes) {
-        if (item && item.sizeId) {
-          sizeIds.push(String(item.sizeId));
-        }
-      }
-
-      const uniqueIds = new Set(sizeIds);
-      if (uniqueIds.size !== sizeIds.length) {
-        throw new ApiError(
-          400,
-          "Mỗi kích thước chỉ được xuất hiện một lần trong cập nhật tồn kho"
-        );
-      }
-
-      return true;
-    }),
-  ],
-
   // Kiểm tra trạng thái active
   validateStatusUpdate: [
     param("id")

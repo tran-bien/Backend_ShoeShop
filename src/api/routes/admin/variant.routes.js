@@ -99,17 +99,6 @@ router.post(
   variantController.restoreVariant
 );
 
-/**
- * @route   PATCH /api/v1/admin/variants/:id/inventory
- * @desc    Cập nhật số lượng tồn kho của biến thể
- * @access  Admin Only
- */
-router.patch(
-  "/:id/inventory",
-  requireStaffOrAdmin,
-  validate(variantValidator.validateInventoryUpdate),
-  variantController.updateInventory
-);
 
 /**
  * @route   PATCH /api/v1/admin/variants/:id/status
