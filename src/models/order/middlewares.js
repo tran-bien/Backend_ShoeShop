@@ -154,6 +154,12 @@ const hasSimilarRecentEntry = (
  * @param {Schema} schema - Mongoose Schema
  */
 const applyMiddlewares = (schema) => {
+  // FIX: Hook để capture original document trước khi save
+  // Dùng init hook để lưu trạng thái gốc khi load từ DB
+  schema.post("init", function () {
+    this._original = this.toObject();
+  });
+
   // Xử lý trước khi lưu Order
   schema.pre("save", async function (next) {
     try {
@@ -191,13 +197,11 @@ const applyMiddlewares = (schema) => {
         }
       }
 
-      // Lưu trạng thái cũ trước khi cập nhật
-      if (this.isModified("status")) {
-        this._previousStatus = this.isNew
-          ? null
-          : this.getOldValue
-          ? this.getOldValue("status")
-          : undefined;
+      // FIX: Lưu trạng thái cũ vào $locals thay vì dùng getOldValue (không tồn tại)
+      if (this.isModified("status") && !this.isNew) {
+        // $locals là cách đúng để truyền data giữa pre và post hooks
+        this.$locals = this.$locals || {};
+        this.$locals.previousStatus = this._original?.status || null;
       }
 
       next();
@@ -209,7 +213,8 @@ const applyMiddlewares = (schema) => {
   // Xử lý sau khi lưu Order
   schema.post("save", async function (doc) {
     try {
-      const previousStatus = this._previousStatus;
+      // FIX: Lấy previousStatus từ $locals thay vì _previousStatus
+      const previousStatus = this.$locals?.previousStatus || null;
       const currentStatus = this.status;
 
       // ============================================================

@@ -117,12 +117,12 @@ const validateUpdateOrderStatus = [
     .withMessage("Trạng thái không được để trống")
     .isIn([
       "confirmed",
-      "shipping",
+      "out_for_delivery", // FIXED Bug #11: Thay 'shipping' thành 'out_for_delivery' để match Order schema
       "delivered",
       "refunded", // Admin có thể hoàn tiền
     ])
     .withMessage(
-      "Trạng thái không hợp lệ (chỉ chấp nhận confirmed, shipping, delivered, refunded)"
+      "Trạng thái không hợp lệ (chỉ chấp nhận confirmed, out_for_delivery, delivered, refunded)"
     ),
   body("note")
     .optional()
@@ -194,6 +194,7 @@ const validateGetUserCancelRequests = [
 
 /**
  * Validate dữ liệu khi xử lý hoàn tiền (admin)
+ * FIX: Sử dụng isInt thay vì isFloat vì VNĐ không có số lẻ
  */
 const validateProcessRefund = [
   param("id")
@@ -204,8 +205,8 @@ const validateProcessRefund = [
   body("amount")
     .notEmpty()
     .withMessage("Số tiền hoàn không được để trống")
-    .isFloat({ min: 0.01 })
-    .withMessage("Số tiền hoàn phải lớn hơn 0"),
+    .isInt({ min: 1 })
+    .withMessage("Số tiền hoàn phải là số nguyên dương (VNĐ)"),
   body("method")
     .notEmpty()
     .withMessage("Phương thức hoàn tiền không được để trống")

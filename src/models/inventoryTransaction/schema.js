@@ -80,16 +80,21 @@ const inventoryTransactionSchema = new mongoose.Schema(
       ],
       default: "manual",
     },
-    // Reference đơn giản - ObjectId tham chiếu đến Order/ReturnRequest
+    // FIX: Reference có thể là Order hoặc ReturnRequest
+    // Sử dụng refPath để dynamic ref based on reason
     reference: {
       type: mongoose.Schema.Types.ObjectId,
       default: null,
+      // Note: Có thể ref đến Order (reason: sale, return) hoặc ReturnRequest (reason: exchange)
+      // Do không có refPath trong Mongoose cho single field, cần query manual
+      // VD: const order = await Order.findById(transaction.reference)
     },
-    // Người thực hiện
+    // Người thực hiện - Optional cho system operations
     performedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false, // FIX: Cho phép null cho system operations
+      default: null,
     },
     notes: {
       type: String,

@@ -100,7 +100,7 @@ const blogValidator = {
       .isString()
       .withMessage("Meta description phải là chuỗi")
       .isLength({ max: 500 })
-      .withMessage("Meta description không được vượt quá 300 ký tự"),
+      .withMessage("Meta description không được vượt quá 500 ký tự"),
 
     body("metaKeywords")
       .optional()
@@ -213,14 +213,14 @@ const blogValidator = {
       .isString()
       .withMessage("Tên danh mục phải là chuỗi")
       .isLength({ min: 2, max: 500 })
-      .withMessage("Tên danh mục phải có từ 2-100 ký tự"),
+      .withMessage("Tên danh mục phải có từ 2-500 ký tự"),
 
     body("description")
       .optional()
       .isString()
       .withMessage("Mô tả phải là chuỗi")
       .isLength({ max: 5000 })
-      .withMessage("Mô tả không được vượt quá 500 ký tự"),
+      .withMessage("Mô tả không được vượt quá 5000 ký tự"),
 
     body("displayOrder")
       .optional()
@@ -240,14 +240,14 @@ const blogValidator = {
       .isString()
       .withMessage("Tên danh mục phải là chuỗi")
       .isLength({ min: 2, max: 500 })
-      .withMessage("Tên danh mục phải có từ 2-100 ký tự"),
+      .withMessage("Tên danh mục phải có từ 2-500 ký tự"),
 
     body("description")
       .optional()
       .isString()
       .withMessage("Mô tả phải là chuỗi")
       .isLength({ max: 5000 })
-      .withMessage("Mô tả không được vượt quá 500 ký tự"),
+      .withMessage("Mô tả không được vượt quá 5000 ký tự"),
 
     body("displayOrder")
       .optional()

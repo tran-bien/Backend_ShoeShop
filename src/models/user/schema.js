@@ -135,6 +135,13 @@ const UserSchema = new mongoose.Schema(
         type: Number,
         default: 0,
         min: 0,
+        // FIX: Thêm validation để đảm bảo points không âm khi decrement
+        validate: {
+          validator: function (v) {
+            return v >= 0;
+          },
+          message: "Điểm loyalty không thể âm",
+        },
       },
       tier: {
         type: mongoose.Schema.Types.ObjectId,

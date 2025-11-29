@@ -141,25 +141,33 @@ class ChatService {
       readBy: [{ userId: senderId, readAt: new Date() }],
     });
 
-    // Update conversation
+    // Update conversation với atomic operation để tránh race condition
     const conversation = await ChatConversation.findById(conversationId);
 
-    conversation.lastMessage = {
-      text: text || "[Hình ảnh]",
-      sentBy: senderId,
-      sentAt: new Date(),
-    };
-
-    // Tăng unread count cho người nhận
+    // Build atomic update for unreadCount
+    const unreadIncrements = {};
     conversation.participants.forEach((p) => {
       const participantId = p.userId.toString();
       if (participantId !== senderId.toString()) {
-        const currentCount = conversation.unreadCount.get(participantId) || 0;
-        conversation.unreadCount.set(participantId, currentCount + 1);
+        unreadIncrements[`unreadCount.${participantId}`] = 1;
       }
     });
 
-    await conversation.save();
+    // Atomic update để tránh race condition
+    await ChatConversation.findByIdAndUpdate(
+      conversationId,
+      {
+        $set: {
+          lastMessage: {
+            text: text || "[Hình ảnh]",
+            sentBy: senderId,
+            sentAt: new Date(),
+          },
+        },
+        $inc: unreadIncrements,
+      },
+      { new: true }
+    );
 
     return message.populate("senderId", "name avatar role");
   }

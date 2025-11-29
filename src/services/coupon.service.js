@@ -241,10 +241,11 @@ const couponService = {
       }
 
       // Check first order only
+      // FIXED Bug #13: Thay 'shipping' thành 'out_for_delivery' để match Order schema
       if (coupon.conditions.firstOrderOnly) {
         const orderCount = await Order.countDocuments({
           user: userId,
-          status: { $in: ["delivered", "confirmed", "shipping"] },
+          status: { $in: ["delivered", "confirmed", "out_for_delivery"] },
         });
         if (orderCount > 0) {
           throw new ApiError(
@@ -556,10 +557,11 @@ const couponService = {
       }
 
       // Check firstOrderOnly
+      // FIXED Bug #13: Thay 'shipping' thành 'out_for_delivery' để match Order schema
       if (conditions.firstOrderOnly) {
         const orderCount = await Order.countDocuments({
           user: userId,
-          status: { $in: ["delivered", "confirmed", "shipping"] },
+          status: { $in: ["delivered", "confirmed", "out_for_delivery"] },
         });
         if (orderCount > 0) {
           return {

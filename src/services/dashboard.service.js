@@ -513,11 +513,12 @@ const dashboardService = {
       }
 
       // FIXED: Tính sản phẩm bán chạy với cost từ InventoryItem
+      // FIXED Bug #13: Thay 'shipping' thành 'out_for_delivery' để match Order schema
       const topProducts = await Order.aggregate([
         {
           $match: {
             createdAt: { $gte: startDate, $lte: now },
-            status: { $in: ["delivered", "shipping", "confirmed"] },
+            status: { $in: ["delivered", "out_for_delivery", "confirmed"] },
             deletedAt: null,
           },
         },

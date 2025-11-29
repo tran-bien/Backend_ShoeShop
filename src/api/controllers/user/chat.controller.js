@@ -189,12 +189,35 @@ const chatController = {
    */
   closeConversation: asyncHandler(async (req, res) => {
     const { conversationId } = req.params;
+    const userId = req.user._id;
 
-    const conversation = await ChatService.closeConversation(conversationId);
+    // Verify participant before closing
+    const conversation = await ChatService.getConversation(conversationId);
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy conversation",
+      });
+    }
+
+    const isParticipant = conversation.participants.some(
+      (p) => p.userId._id.toString() === userId.toString()
+    );
+
+    if (!isParticipant) {
+      return res.status(403).json({
+        success: false,
+        message: "Bạn không có quyền đóng conversation này",
+      });
+    }
+
+    const closedConversation = await ChatService.closeConversation(
+      conversationId
+    );
 
     return res.json({
       success: true,
-      data: conversation,
+      data: closedConversation,
     });
   }),
 };

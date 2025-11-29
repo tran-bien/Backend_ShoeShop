@@ -65,15 +65,14 @@ const updateShipperAvailability = async (shipperId, isAvailable) => {
  * Gán đơn hàng cho shipper
  */
 const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
-  const [order, shipper] = await Promise.all([
-    Order.findById(orderId).populate([
-      {
-        path: "orderItems.variant",
-        select: "product color",
-        populate: { path: "product", select: "_id name" },
-      },
-      { path: "orderItems.size", select: "_id value" },
-    ]),
+  // FIX: Query order riêng, không dùng Promise.all với 1 element
+  const order = await Order.findById(orderId).populate([
+    {
+      path: "orderItems.variant",
+      select: "product color",
+      populate: { path: "product", select: "_id name" },
+    },
+    { path: "orderItems.size", select: "_id value" },
   ]);
 
   if (!order) {
@@ -139,10 +138,8 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
     }
   }
 
-  // Kiểm tra shipper availability
-  if (!updatedShipper.shipper.isAvailable) {
-    throw new ApiError(400, "Shipper hiện không sẵn sàng nhận đơn");
-  }
+  // Kiểm tra shipper availability - FIXED: Không cần check vì atomic query đã check
+  // if (!updatedShipper.shipper.isAvailable) { ... }
 
   // Cập nhật đơn hàng
   order.assignedShipper = shipperId;
@@ -152,14 +149,15 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
     status: "assigned_to_shipper",
     updatedAt: new Date(),
     updatedBy: assignedBy,
-    note: `Đơn hàng được gán cho shipper ${shipper.name}`,
+    // FIX: Dùng updatedShipper.name thay vì shipper.name (shipper undefined)
+    note: `Đơn hàng được gán cho shipper ${updatedShipper.name}`,
   });
 
   await order.save();
 
-  // Cập nhật số đơn của shipper
-  shipper.shipper.activeOrders += 1;
-  await shipper.save();
+  // FIX: XÓA DUPLICATE - activeOrders đã được tăng trong atomic update ở trên
+  // shipper.shipper.activeOrders += 1; // REMOVED - DUPLICATE
+  // await shipper.save(); // REMOVED - DUPLICATE
 
   return order;
 };
@@ -207,37 +205,12 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
     order.payment.paymentStatus = "paid";
     order.payment.paidAt = new Date();
 
-    // Tích điểm loyalty
-    try {
-      const loyaltyService = require("./loyalty.service");
-      const points = loyaltyService.calculatePointsFromOrder(
-        order.totalAfterDiscountAndShipping
-      );
-      await loyaltyService.addPoints(order.user, points, {
-        source: "ORDER",
-        order: order._id,
-        description: `Tích điểm từ đơn hàng ${order.code}`,
-      });
-      console.log(
-        `[Shipper] Đã tích ${points} điểm cho user ${order.user} từ đơn ${order.code}`
-      );
-    } catch (error) {
-      console.error("[Shipper] Lỗi tích điểm loyalty:", error.message);
-    }
+    // REMOVED: Duplicate loyalty points - ĐÃ XỬ LÝ BỞI order/middlewares.js post('save')
+    // Order middleware kiểm tra loyaltyPointsAwarded flag để tránh tích điểm 2 lần
+    // Nên chỉ cần 1 nơi xử lý loyalty points
 
-    // Gửi notification
-    try {
-      const notificationService = require("./notification.service");
-      await notificationService.send(order.user, "ORDER_DELIVERED", {
-        orderCode: order.code,
-        orderId: order._id,
-      });
-      console.log(
-        `[Shipper] Đã gửi notification delivered cho đơn ${order.code}`
-      );
-    } catch (error) {
-      console.error("[Shipper] Lỗi gửi notification:", error.message);
-    }
+    // REMOVED: Duplicate notification - ĐÃ XỬ LÝ BỞI order/middlewares.js post('save')
+    // Order middleware sẽ gửi notification khi status chuyển sang delivered
 
     // Cập nhật user behavior
     try {

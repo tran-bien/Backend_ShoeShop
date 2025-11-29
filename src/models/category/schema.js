@@ -35,4 +35,14 @@ const CategorySchema = new mongoose.Schema(
   }
 );
 
+// ============================================================
+// INDEXES - Tối ưu hiệu suất truy vấn
+// ============================================================
+
+// Compound index cho filter isActive + deletedAt (thường xuyên query)
+CategorySchema.index({ isActive: 1, deletedAt: 1 });
+
+// Index cho sort by createdAt
+CategorySchema.index({ createdAt: -1 });
+
 module.exports = CategorySchema;

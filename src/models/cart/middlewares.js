@@ -191,6 +191,10 @@ const applyMiddlewares = () => {
   });
 
   // Hook để kiểm tra khi cart được truy vấn
+  // FIX CRITICAL: DISABLED N+1 QUERY - Việc check availability đã được xử lý trong cart.service.js
+  // với batch query thay vì loop từng item
+  // Nếu cần enable lại, phải refactor sang batch query pattern
+  /*
   cartSchema.post("findOne", async function (doc, next) {
     if (!doc) return next();
 
@@ -248,6 +252,7 @@ const applyMiddlewares = () => {
       return next(error);
     }
   });
+  */
 };
 
 module.exports = {

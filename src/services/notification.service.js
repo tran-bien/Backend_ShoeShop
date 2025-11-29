@@ -5,12 +5,51 @@ const {
 } = require("@utils/notificationTemplates");
 const ApiError = require("@utils/ApiError");
 
-// FIX BUG #14: In-memory rate limiter cho notification spam protection
+// ============================================================
+// FIX CRITICAL 1.3: In-memory rate limiter với size limit và cleanup
+// ============================================================
 const notificationRateLimiter = new Map();
+const RATE_LIMITER_CONFIG = {
+  limit: 10, // Max notifications per window
+  windowMs: 60000, // 1 minute window
+  maxMapSize: 5000, // Giới hạn kích thước Map để tránh memory leak
+  cleanupIntervalMs: 5 * 60 * 1000, // Cleanup mỗi 5 phút
+};
 
-const checkRateLimit = (userId, limit = 10, windowMs = 60000) => {
+const checkRateLimit = (
+  userId,
+  limit = RATE_LIMITER_CONFIG.limit,
+  windowMs = RATE_LIMITER_CONFIG.windowMs
+) => {
   const now = Date.now();
   const userKey = userId.toString();
+
+  // FIX CRITICAL 1.3: Cleanup khi Map quá lớn
+  if (notificationRateLimiter.size > RATE_LIMITER_CONFIG.maxMapSize) {
+    console.warn(
+      `[NOTIFICATION] Rate limiter Map size exceeded ${RATE_LIMITER_CONFIG.maxMapSize}, forcing cleanup`
+    );
+    const entriesToDelete = [];
+    for (const [key, timestamps] of notificationRateLimiter.entries()) {
+      const validTimestamps = timestamps.filter((ts) => now - ts < windowMs);
+      if (validTimestamps.length === 0) {
+        entriesToDelete.push(key);
+      }
+    }
+    entriesToDelete.forEach((k) => notificationRateLimiter.delete(k));
+
+    // Nếu vẫn còn quá lớn, xóa entries cũ nhất
+    if (notificationRateLimiter.size > RATE_LIMITER_CONFIG.maxMapSize * 0.8) {
+      const sortedEntries = [...notificationRateLimiter.entries()].sort(
+        (a, b) => Math.max(...b[1]) - Math.max(...a[1])
+      );
+      const keepCount = Math.floor(RATE_LIMITER_CONFIG.maxMapSize * 0.5);
+      notificationRateLimiter.clear();
+      sortedEntries
+        .slice(0, keepCount)
+        .forEach(([k, v]) => notificationRateLimiter.set(k, v));
+    }
+  }
 
   if (!notificationRateLimiter.has(userKey)) {
     notificationRateLimiter.set(userKey, []);
@@ -41,20 +80,28 @@ const checkRateLimit = (userId, limit = 10, windowMs = 60000) => {
   return true;
 };
 
-// Cleanup rate limiter mỗi 5 phút
+// FIX CRITICAL 1.3: Improved cleanup với size check
 setInterval(() => {
   const now = Date.now();
-  const fiveMinutes = 5 * 60 * 1000;
 
   for (const [userKey, timestamps] of notificationRateLimiter.entries()) {
-    const validTimestamps = timestamps.filter((ts) => now - ts < fiveMinutes);
+    const validTimestamps = timestamps.filter(
+      (ts) => now - ts < RATE_LIMITER_CONFIG.windowMs
+    );
     if (validTimestamps.length === 0) {
       notificationRateLimiter.delete(userKey);
     } else {
       notificationRateLimiter.set(userKey, validTimestamps);
     }
   }
-}, 5 * 60 * 1000);
+
+  // Log size để monitor
+  if (notificationRateLimiter.size > 1000) {
+    console.log(
+      `[NOTIFICATION] Rate limiter Map size: ${notificationRateLimiter.size}`
+    );
+  }
+}, RATE_LIMITER_CONFIG.cleanupIntervalMs);
 
 const notificationService = {
   /**

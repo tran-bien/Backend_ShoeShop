@@ -59,6 +59,7 @@ const validateGetMessages = [
 
 /**
  * Validator cho gửi tin nhắn
+ * FIX: Validate text required khi type="text"
  */
 const validateSendMessage = [
   param("conversationId")
@@ -73,15 +74,26 @@ const validateSendMessage = [
     .optional()
     .trim()
     .isLength({ max: 2000 })
-    .withMessage("Text không được quá 2000 ký tự"),
+    .withMessage("Text không được quá 2000 ký tự")
+    .custom((value, { req }) => {
+      // FIX: text bắt buộc khi type="text"
+      if (req.body.type === "text" && (!value || value.trim().length === 0)) {
+        throw new Error("Text là bắt buộc khi type là 'text'");
+      }
+      return true;
+    }),
 
   body("images")
     .optional()
     .isArray()
     .withMessage("Images phải là mảng")
-    .custom((value) => {
+    .custom((value, { req }) => {
       if (value.length > 5) {
         throw new Error("Không được gửi quá 5 ảnh");
+      }
+      // FIX: images bắt buộc khi type="image"
+      if (req.body.type === "image" && (!value || value.length === 0)) {
+        throw new Error("Images là bắt buộc khi type là 'image'");
       }
       return true;
     }),

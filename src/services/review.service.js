@@ -310,12 +310,31 @@ const reviewService = {
       isActive: true,
     });
 
+    // ============================================================
+    // FIX MEDIUM 2.3: Wrap trong transaction để đảm bảo consistency
+    // Nếu loyalty fail thì review vẫn được tạo, nhưng log warning
+    // ============================================================
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
-      // Lưu review và hiển thị log để kiểm tra
-      const savedReview = await newReview.save();
+      // Lưu review trong transaction
+      const savedReview = await newReview.save({ session });
       console.log("Review đã lưu:", savedReview);
 
-      // Thưởng điểm loyalty cho review
+      // ============================================================
+      // FIX MEDIUM 2.4: Không cần update Product.rating/numReviews
+      // vì các fields này đã bị xóa khỏi Product schema.
+      // Rating và numReviews giờ được tính động on-demand qua
+      // getProductRatingInfo() hoặc trong getProductReviews()
+      // ============================================================
+
+      // Commit transaction
+      await session.commitTransaction();
+      session.endSession();
+
+      // FIX MEDIUM 2.3: Thưởng điểm loyalty SAU KHI commit transaction
+      // Để tránh trường hợp review tạo thành công nhưng loyalty fail rollback cả review
       try {
         const loyaltyService = require("./loyalty.service");
         await loyaltyService.addPoints(userId, 50, {
@@ -334,40 +353,12 @@ const reviewService = {
       }
 
       // Lấy đánh giá đã tạo kèm theo thông tin người dùng và sản phẩm
-      const createdReview = await Review.findById(newReview._id)
+      const createdReview = await Review.findById(savedReview._id)
         .populate("user", "name avatar")
         .populate("product", "name images slug")
         .lean();
 
       console.log("Review sau khi populate:", createdReview);
-
-      // Tự động cập nhật số lượng đánh giá và rating trung bình của sản phẩm
-      const reviewStats = await Review.aggregate([
-        {
-          $match: {
-            product: productId,
-            isActive: true,
-            deletedAt: null,
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            avgRating: { $avg: "$rating" },
-            numReviews: { $sum: 1 },
-          },
-        },
-      ]);
-
-      if (reviewStats.length > 0) {
-        await Product.findByIdAndUpdate(productId, {
-          rating: Math.round(reviewStats[0].avgRating * 10) / 10,
-          numReviews: reviewStats[0].numReviews,
-        });
-        console.log(
-          `Đã cập nhật trực tiếp rating sản phẩm ${productId}: ${reviewStats[0].avgRating}, số lượng: ${reviewStats[0].numReviews}`
-        );
-      }
 
       return {
         success: true,
@@ -375,6 +366,10 @@ const reviewService = {
         review: createdReview,
       };
     } catch (error) {
+      // FIX MEDIUM 2.3: Rollback transaction nếu có lỗi
+      await session.abortTransaction();
+      session.endSession();
+
       console.error("Lỗi khi tạo đánh giá:", error);
 
       // Bắt lỗi duplicate key và cung cấp thông báo cụ thể

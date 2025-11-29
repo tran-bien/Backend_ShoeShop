@@ -39,4 +39,9 @@ const CancelRequestSchema = new mongoose.Schema(
   }
 );
 
+// FIX: Thêm indexes cho các query thường dùng
+CancelRequestSchema.index({ order: 1 }); // Tìm theo order
+CancelRequestSchema.index({ user: 1, status: 1 }); // Tìm theo user và status
+CancelRequestSchema.index({ status: 1, createdAt: -1 }); // Admin list pending requests
+
 module.exports = CancelRequestSchema;

@@ -8,6 +8,109 @@ const { limitActiveSessions } = require("./session.service");
 const ApiError = require("@utils/ApiError");
 const LoyaltyTransaction = require("../models/loyaltyTransaction");
 
+// ============================================================
+// FIX CRITICAL 1.2: OTP Rate Limiter - Chống brute force attack
+// ============================================================
+const otpRateLimiter = new Map();
+const OTP_RATE_LIMIT = {
+  maxAttempts: 5, // Tối đa 5 lần thử sai
+  windowMs: 15 * 60 * 1000, // Trong 15 phút
+  blockDurationMs: 30 * 60 * 1000, // Block 30 phút nếu vượt quá
+  maxMapSize: 10000, // Giới hạn kích thước Map để tránh memory leak
+};
+
+const checkOTPRateLimit = (identifier) => {
+  const now = Date.now();
+  const key = identifier.toString().toLowerCase();
+
+  // Cleanup nếu Map quá lớn
+  if (otpRateLimiter.size > OTP_RATE_LIMIT.maxMapSize) {
+    const entriesToDelete = [];
+    for (const [k, v] of otpRateLimiter.entries()) {
+      if (now - v.lastAttempt > OTP_RATE_LIMIT.blockDurationMs) {
+        entriesToDelete.push(k);
+      }
+    }
+    entriesToDelete.forEach((k) => otpRateLimiter.delete(k));
+  }
+
+  if (!otpRateLimiter.has(key)) {
+    return { allowed: true };
+  }
+
+  const record = otpRateLimiter.get(key);
+
+  // Kiểm tra đang bị block không
+  if (record.blocked && now < record.blockedUntil) {
+    const remainingSeconds = Math.ceil((record.blockedUntil - now) / 1000);
+    return {
+      allowed: false,
+      blocked: true,
+      remainingSeconds,
+      message: `Quá nhiều lần thử OTP sai. Vui lòng đợi ${Math.ceil(
+        remainingSeconds / 60
+      )} phút`,
+    };
+  }
+
+  // Reset nếu đã hết window hoặc hết block
+  if (now - record.firstAttempt > OTP_RATE_LIMIT.windowMs || record.blocked) {
+    otpRateLimiter.delete(key);
+    return { allowed: true };
+  }
+
+  // Kiểm tra số lần thử
+  if (record.attempts >= OTP_RATE_LIMIT.maxAttempts) {
+    record.blocked = true;
+    record.blockedUntil = now + OTP_RATE_LIMIT.blockDurationMs;
+    otpRateLimiter.set(key, record);
+    return {
+      allowed: false,
+      blocked: true,
+      remainingSeconds: OTP_RATE_LIMIT.blockDurationMs / 1000,
+      message: `Quá nhiều lần thử OTP sai. Tài khoản bị khóa 30 phút`,
+    };
+  }
+
+  return { allowed: true };
+};
+
+const recordOTPAttempt = (identifier, success) => {
+  const now = Date.now();
+  const key = identifier.toString().toLowerCase();
+
+  if (success) {
+    // Xóa record khi verify thành công
+    otpRateLimiter.delete(key);
+    return;
+  }
+
+  // Ghi nhận lần thử thất bại
+  if (!otpRateLimiter.has(key)) {
+    otpRateLimiter.set(key, {
+      attempts: 1,
+      firstAttempt: now,
+      lastAttempt: now,
+      blocked: false,
+    });
+  } else {
+    const record = otpRateLimiter.get(key);
+    record.attempts += 1;
+    record.lastAttempt = now;
+    otpRateLimiter.set(key, record);
+  }
+};
+
+// Cleanup OTP rate limiter mỗi 10 phút
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of otpRateLimiter.entries()) {
+    if (now - record.lastAttempt > OTP_RATE_LIMIT.blockDurationMs) {
+      otpRateLimiter.delete(key);
+    }
+  }
+}, 10 * 60 * 1000);
+
 const authService = {
   /**
    * Tạo mã JWT token
@@ -128,11 +231,13 @@ const authService = {
   },
 
   /**
-   * Tạo mã OTP ngẫu nhiên
+   * Tạo mã OTP ngẫu nhiên an toàn (cryptographically secure)
    * @returns {String} - Mã OTP 6 chữ số
    */
   generateOTP: () => {
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const crypto = require("crypto");
+    // Sử dụng crypto.randomInt thay vì Math.random() để đảm bảo an toàn
+    const otp = crypto.randomInt(100000, 999999).toString();
     return otp;
   },
 
@@ -619,11 +724,20 @@ const authService = {
 
   /**
    * Xác thực OTP
+   * FIX CRITICAL 1.2: Thêm rate limiting để chống brute force
    * @param {Object} data - Dữ liệu xác thực (userId hoặc email và OTP)
    * @returns {Object} - Thông tin người dùng và token
    */
   verifyOTP: async (data) => {
     const { userId, email, otp, req } = data;
+
+    // FIX CRITICAL 1.2: Kiểm tra rate limit trước
+    const identifier = email || userId;
+    const rateLimitCheck = checkOTPRateLimit(identifier);
+
+    if (!rateLimitCheck.allowed) {
+      throw new ApiError(429, rateLimitCheck.message);
+    }
 
     let user;
     // Tìm người dùng
@@ -634,21 +748,37 @@ const authService = {
     }
 
     if (!user) {
+      // Ghi nhận lần thử thất bại
+      recordOTPAttempt(identifier, false);
       throw new ApiError(404, "Người dùng không tồn tại");
     }
 
     // Kiểm tra tài khoản có bị khóa không
     if (!user.isActive || user.blockedAt) {
+      recordOTPAttempt(identifier, false);
       throw new ApiError(403, "Tài khoản đã bị vô hiệu hóa");
     }
 
     if (!user.otp || user.otp.code !== otp) {
+      // Ghi nhận lần thử thất bại
+      recordOTPAttempt(identifier, false);
+
+      // Kiểm tra lại rate limit sau khi ghi nhận
+      const newCheck = checkOTPRateLimit(identifier);
+      if (newCheck.blocked) {
+        throw new ApiError(429, newCheck.message);
+      }
+
       throw new ApiError(400, "Mã OTP không hợp lệ");
     }
 
     if (new Date() > new Date(user.otp.expiredAt)) {
+      recordOTPAttempt(identifier, false);
       throw new ApiError(400, "Mã OTP đã hết hạn");
     }
+
+    // OTP đúng - ghi nhận thành công và reset rate limit
+    recordOTPAttempt(identifier, true);
 
     user.isVerified = true;
     user.otp = undefined;

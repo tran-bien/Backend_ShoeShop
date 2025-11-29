@@ -10,6 +10,64 @@ const ApiError = require("@utils/ApiError");
 const mongoose = require("mongoose");
 
 const cartService = {
+  // ============================================================
+  // FIX MEDIUM 2.2: Helper function để format itemsDetail
+  // Tránh duplicate code trong previewBeforeOrder
+  // ============================================================
+  _formatItemsDetail: async (selectedItems) => {
+    const mongoose = require("mongoose");
+    const Variant = mongoose.model("Variant");
+    const Size = mongoose.model("Size");
+    const Color = mongoose.model("Color");
+
+    // Batch query tất cả variants và sizes cần thiết
+    const variantIds = selectedItems.map((item) =>
+      typeof item.variant === "object" ? item.variant._id : item.variant
+    );
+    const sizeIds = selectedItems.map((item) =>
+      typeof item.size === "object" ? item.size._id : item.size
+    );
+
+    const [variants, sizes] = await Promise.all([
+      Variant.find({ _id: { $in: variantIds } })
+        .populate("product", "_id")
+        .populate("color", "name type code"),
+      Size.find({ _id: { $in: sizeIds } }).select("value description"),
+    ]);
+
+    const variantMap = new Map(variants.map((v) => [v._id.toString(), v]));
+    const sizeMap = new Map(sizes.map((s) => [s._id.toString(), s]));
+
+    return selectedItems.map((item) => {
+      const variantId =
+        typeof item.variant === "object" ? item.variant._id : item.variant;
+      const sizeId = typeof item.size === "object" ? item.size._id : item.size;
+
+      const variantDoc = variantMap.get(variantId.toString());
+      const sizeDoc = sizeMap.get(sizeId.toString());
+
+      return {
+        productId: variantDoc?.product?._id || null,
+        productName: item.productName,
+        variantId: variantDoc?._id || variantId,
+        color: variantDoc?.color
+          ? {
+              name: variantDoc.color.name,
+              type: variantDoc.color.type,
+              code: variantDoc.color.code,
+            }
+          : { name: null, type: null, code: null },
+        sizeId: sizeDoc?._id || sizeId,
+        sizeValue: sizeDoc?.value || null,
+        sizeDescription: sizeDoc?.description || null,
+        price: item.price,
+        quantity: item.quantity,
+        image: item.image,
+        totalPrice: item.price * item.quantity,
+      };
+    });
+  },
+
   getCartByUser: async (userId) => {
     // Tìm giỏ hàng của người dùng
     let cart = await Cart.findOne({ user: userId });
@@ -26,18 +84,59 @@ const cartService = {
       return { success: true, cart };
     }
 
-    // Kiểm tra và cập nhật trạng thái các sản phẩm
+    // ============================================================
+    // FIX MEDIUM 2.1: Batch query InventoryItem để fix N+1 query
+    // ============================================================
     const Variant = mongoose.model("Variant");
-    for (let i = 0; i < cart.cartItems.length; i++) {
-      const item = cart.cartItems[i];
 
-      // Lấy ID thực của variant và size
+    // Bước 1: Thu thập tất cả variantIds và sizeIds cần query
+    const variantIds = [];
+    const itemsToCheck = [];
+
+    for (const item of cart.cartItems) {
       const variantId =
         typeof item.variant === "object" ? item.variant._id : item.variant;
       const sizeId = typeof item.size === "object" ? item.size._id : item.size;
+      variantIds.push(variantId);
+      itemsToCheck.push({ item, variantId, sizeId });
+    }
 
-      // Kiểm tra variant exists
-      const variant = await Variant.findById(variantId).select("product");
+    // Bước 2: Batch query tất cả Variants
+    const variants = await Variant.find({ _id: { $in: variantIds } }).select(
+      "product sizes"
+    );
+    const variantMap = new Map(variants.map((v) => [v._id.toString(), v]));
+
+    // Bước 3: Xây dựng query conditions cho InventoryItem
+    const inventoryConditions = [];
+    for (const { item, variantId, sizeId } of itemsToCheck) {
+      const variant = variantMap.get(variantId.toString());
+      if (variant) {
+        inventoryConditions.push({
+          product: variant.product,
+          variant: variantId,
+          size: sizeId,
+        });
+      }
+    }
+
+    // Bước 4: Batch query tất cả InventoryItems
+    let inventoryItems = [];
+    if (inventoryConditions.length > 0) {
+      inventoryItems = await InventoryItem.find({ $or: inventoryConditions });
+    }
+
+    // Bước 5: Tạo Map để lookup nhanh
+    const inventoryMap = new Map();
+    for (const inv of inventoryItems) {
+      const key = `${inv.variant.toString()}-${inv.size.toString()}`;
+      inventoryMap.set(key, inv);
+    }
+
+    // Bước 6: Kiểm tra và cập nhật trạng thái các sản phẩm
+    for (const { item, variantId, sizeId } of itemsToCheck) {
+      const variant = variantMap.get(variantId.toString());
+
       if (!variant) {
         item.isAvailable = false;
         item.unavailableReason = "Không tìm thấy biến thể sản phẩm";
@@ -45,8 +144,7 @@ const cartService = {
       }
 
       // Kiểm tra size exists trong variant
-      const Variant2 = await Variant.findById(variantId).select("sizes");
-      const sizeExists = Variant2.sizes.some(
+      const sizeExists = variant.sizes.some(
         (s) => s.size && s.size.toString() === sizeId.toString()
       );
 
@@ -56,20 +154,22 @@ const cartService = {
         continue;
       }
 
-      // Kiểm tra tồn kho từ InventoryItem
-      const inventoryItem = await InventoryItem.findOne({
-        product: variant.product,
-        variant: variantId,
-        size: sizeId,
-      });
+      // Kiểm tra tồn kho từ batch query result
+      const inventoryKey = `${variantId.toString()}-${sizeId.toString()}`;
+      const inventoryItem = inventoryMap.get(inventoryKey);
 
-      if (!inventoryItem || inventoryItem.quantity < item.quantity) {
+      // FIX CRITICAL 1.1: Sử dụng availableQuantity (trừ reservedQuantity)
+      const availableQty = inventoryItem
+        ? inventoryItem.quantity - (inventoryItem.reservedQuantity || 0)
+        : 0;
+
+      if (!inventoryItem || availableQty < item.quantity) {
         item.isAvailable = false;
         item.unavailableReason = !inventoryItem
           ? "Sản phẩm hiện không có sẵn"
-          : inventoryItem.quantity === 0
+          : availableQty === 0
           ? "Sản phẩm đã hết hàng"
-          : `Chỉ còn ${inventoryItem.quantity} sản phẩm trong kho`;
+          : `Chỉ còn ${availableQty} sản phẩm trong kho`;
       } else {
         item.isAvailable = true;
         item.unavailableReason = "";
@@ -461,6 +561,7 @@ const cartService = {
 
   /**
    * Xem trước kết quả tính toán đơn hàng bao gồm phí vận chuyển và giảm giá (nếu có)
+   * FIX MEDIUM 2.2: Sử dụng helper function để tránh duplicate code
    * @param {String} userId - ID của người dùng
    * @param {Object} data - Dữ liệu để tính toán (có thể có couponCode hoặc không)
    * @returns {Object} - Kết quả tính toán đơn hàng
@@ -491,43 +592,15 @@ const cartService = {
     const shippingFee =
       subtotalSelected >= SHIPPING_FREE_THRESHOLD ? 0 : DEFAULT_SHIPPING_FEE;
 
+    // FIX MEDIUM 2.2: Sử dụng helper function thay vì duplicate code
+    const itemsDetail = await cartService._formatItemsDetail(selectedItems);
+
     // Khởi tạo kết quả mặc định (không có mã giảm giá)
     const result = {
       success: true,
       preview: {
         items: selectedItems.length,
-        itemsDetail: await Promise.all(
-          selectedItems.map(async (item) => {
-            const mongoose = require("mongoose");
-            const Variant = mongoose.model("Variant");
-            const Size = mongoose.model("Size");
-
-            // Fetch variant details including product reference and color name
-            const variantDoc = await Variant.findById(item.variant)
-              .populate("product", "_id")
-              .populate("color", "name");
-
-            // Fetch size details to get the size value
-            const sizeDoc = await Size.findById(item.size, "value description");
-
-            return {
-              productId: variantDoc?.product?._id || null,
-              productName: item.productName,
-              variantId: variantDoc?._id || item.variant,
-              color: (await mongoose
-                .model("Color")
-                .findById(variantDoc.color, "name type code")
-                .lean()) || { name: null, type: null, code: null },
-              sizeId: sizeDoc?._id || item.size,
-              sizeValue: sizeDoc?.value || null,
-              sizeDescription: sizeDoc?.description || null,
-              price: item.price,
-              quantity: item.quantity,
-              image: item.image,
-              totalPrice: item.price * item.quantity,
-            };
-          })
-        ),
+        itemsDetail,
         totalQuantity: selectedItems.reduce(
           (sum, item) => sum + item.quantity,
           0
@@ -601,41 +674,10 @@ const cartService = {
 
       const totalAfterDiscount = subtotalSelected - totalDiscount;
 
-      // Tạo kết quả với mã giảm giá
+      // Tạo kết quả với mã giảm giá - sử dụng lại itemsDetail đã format
       const previewWithCoupon = {
         items: selectedItems.length,
-        itemsDetail: await Promise.all(
-          selectedItems.map(async (item) => {
-            const mongoose = require("mongoose");
-            const Variant = mongoose.model("Variant");
-            const Size = mongoose.model("Size");
-
-            // Fetch variant details including product reference and color name
-            const variantDoc = await Variant.findById(item.variant)
-              .populate("product", "_id")
-              .populate("color", "name");
-
-            // Fetch size details to get the size value
-            const sizeDoc = await Size.findById(item.size, "value description");
-
-            return {
-              productId: variantDoc?.product?._id || null,
-              productName: item.productName,
-              variantId: variantDoc?._id || item.variant,
-              color: (await mongoose
-                .model("Color")
-                .findById(variantDoc.color, "name type code")
-                .lean()) || { name: null, type: null, code: null },
-              sizeId: sizeDoc?._id || item.size,
-              sizeValue: sizeDoc?.value || null,
-              sizeDescription: sizeDoc?.description || null,
-              price: item.price,
-              quantity: item.quantity,
-              image: item.image,
-              totalPrice: item.price * item.quantity,
-            };
-          })
-        ),
+        itemsDetail, // FIX MEDIUM 2.2: Reuse itemsDetail thay vì format lại
         totalQuantity: selectedItems.reduce(
           (sum, item) => sum + item.quantity,
           0

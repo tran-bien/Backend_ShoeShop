@@ -28,6 +28,14 @@ const inventoryItemSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    // FIX CRITICAL 1.1: Reserved quantity để tránh race condition
+    // Khi tạo order sẽ reserve, khi gán shipper sẽ deduct và release reserve
+    reservedQuantity: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: "Số lượng đã đặt trước cho các đơn hàng pending",
+    },
     costPrice: {
       type: Number,
       required: true,
@@ -90,6 +98,11 @@ inventoryItemSchema.virtual("isLowStock").get(function () {
 
 inventoryItemSchema.virtual("isOutOfStock").get(function () {
   return this.quantity === 0;
+});
+
+// FIX CRITICAL 1.1: Virtual để lấy số lượng thực sự còn có thể bán
+inventoryItemSchema.virtual("availableQuantity").get(function () {
+  return Math.max(0, this.quantity - (this.reservedQuantity || 0));
 });
 
 // Đảm bảo virtuals được include khi convert to JSON

@@ -5,20 +5,6 @@ const { Order } = require("@models");
 const ApiError = require("@utils/ApiError");
 const mongoose = require("mongoose");
 
-// Định nghĩa hàm updateInventory trong payment.service.js
-
-/**
- * DEPRECATED - KHÔNG DÙNG NỮA
- * Inventory giờ được quản lý qua InventoryService.stockOut/stockIn
- * Trừ kho KHI GÁN SHIPPER (assignOrderToShipper), không phải khi payment
- */
-const updateInventory_DEPRECATED = async (orderItem, action) => {
-  // Không sử dụng nữa - giữ lại cho reference
-  console.warn(
-    "updateInventory() is deprecated. Use inventoryService instead."
-  );
-};
-
 /**
  * Sắp xếp đối tượng theo key
  * @param {Object} obj - Đối tượng cần sắp xếp
@@ -47,22 +33,23 @@ const paymentService = {
         throw new ApiError(400, "Đơn hàng này đã được thanh toán");
       }
 
-      // Cấu hình VNPAY
+      // Cấu hình VNPAY - FIX: Lấy từ env thay vì hardcode
       const vnp_TmnCode = process.env.VNP_TMN_CODE;
       const vnp_HashSecret = process.env.VNP_HASH_SECRET;
-      const vnp_Url = process.env.VNP_URL;
+      // FIX: VNP_URL đã được cấu hình trong env (sandbox/production)
+      const vnp_Url =
+        process.env.VNP_URL ||
+        "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
       const vnp_ReturnUrl = returnUrl || process.env.VNP_RETURN_URL;
-      // // Trỏ thẳng đến backend test callback
-      // const vnp_ReturnUrl = "http://localhost:5005/api/v1/orders/vnpay/test-callback"; // Trỏ thẳng đến backend
 
       // Tạo ngày tháng theo định dạng
       const date = new Date();
       const createDate = moment(date).format("YYYYMMDDHHmmss"); // Sử dụng moment.js
 
-      // Tạo mã giao dịch
+      // FIX: Tạo mã giao dịch với entropy cao hơn để tránh trùng lặp
+      const timestamp = Date.now();
       const randomAttempt = Math.floor(100000 + Math.random() * 900000);
-      const vnp_TxnRef = `T${randomAttempt}`; // Đơn giản hóa mã giao dịch
-
+      const vnp_TxnRef = `${order.code}-${timestamp}-${randomAttempt}`;
       // Chuẩn bị tham số với số tiền nhỏ cho test
       const vnp_Params = {
         vnp_Version: "2.0.0",

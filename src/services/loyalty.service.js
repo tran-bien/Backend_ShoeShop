@@ -4,16 +4,57 @@ const LoyaltyTransaction = require("../models/loyaltyTransaction");
 const ApiError = require("@utils/ApiError");
 const paginate = require("@utils/pagination");
 const slugify = require("@utils/slugify");
+const mongoose = require("mongoose"); // FIXED: Thêm import mongoose
 
-// FIX BUG #10: In-memory lock để tránh race condition khi auto-expire
+// ============================================================
+// FIX CRITICAL 1.3: In-memory lock với size limit và cleanup
+// ============================================================
 const expiringLocks = new Map();
+const LOCK_CONFIG = {
+  maxLockDurationMs: 10 * 1000, // Lock tối đa 10 giây
+  maxMapSize: 1000, // Giới hạn kích thước Map
+  cleanupIntervalMs: 10 * 1000, // Cleanup mỗi 10 giây
+};
 
 const acquireExpireLock = (userId) => {
   const userKey = userId.toString();
-  if (expiringLocks.has(userKey)) {
-    return false; // Lock đã được giữ
+  const now = Date.now();
+
+  // FIX CRITICAL 1.3: Cleanup khi Map quá lớn
+  if (expiringLocks.size > LOCK_CONFIG.maxMapSize) {
+    console.warn(
+      `[LOYALTY] Lock Map size exceeded ${LOCK_CONFIG.maxMapSize}, forcing cleanup`
+    );
+    const entriesToDelete = [];
+    for (const [key, timestamp] of expiringLocks.entries()) {
+      if (now - timestamp > LOCK_CONFIG.maxLockDurationMs) {
+        entriesToDelete.push(key);
+      }
+    }
+    entriesToDelete.forEach((k) => expiringLocks.delete(k));
+
+    // Nếu vẫn còn quá lớn, xóa 50% entries cũ nhất
+    if (expiringLocks.size > LOCK_CONFIG.maxMapSize * 0.8) {
+      const sortedEntries = [...expiringLocks.entries()].sort(
+        (a, b) => a[1] - b[1]
+      );
+      const deleteCount = Math.floor(sortedEntries.length * 0.5);
+      sortedEntries
+        .slice(0, deleteCount)
+        .forEach(([k]) => expiringLocks.delete(k));
+    }
   }
-  expiringLocks.set(userKey, Date.now());
+
+  if (expiringLocks.has(userKey)) {
+    const lockTime = expiringLocks.get(userKey);
+    // Auto-release nếu lock quá cũ
+    if (now - lockTime > LOCK_CONFIG.maxLockDurationMs) {
+      expiringLocks.delete(userKey);
+    } else {
+      return false; // Lock đã được giữ
+    }
+  }
+  expiringLocks.set(userKey, now);
   return true;
 };
 
@@ -21,16 +62,20 @@ const releaseExpireLock = (userId) => {
   expiringLocks.delete(userId.toString());
 };
 
-// Cleanup locks cũ hơn 10 giây (expired locks)
+// FIX CRITICAL 1.3: Improved cleanup với size monitoring
 setInterval(() => {
   const now = Date.now();
-  const tenSeconds = 10 * 1000;
   for (const [userKey, timestamp] of expiringLocks.entries()) {
-    if (now - timestamp > tenSeconds) {
+    if (now - timestamp > LOCK_CONFIG.maxLockDurationMs) {
       expiringLocks.delete(userKey);
     }
   }
-}, 10 * 1000);
+
+  // Log size để monitor
+  if (expiringLocks.size > 100) {
+    console.log(`[LOYALTY] Lock Map size: ${expiringLocks.size}`);
+  }
+}, LOCK_CONFIG.cleanupIntervalMs);
 
 const loyaltyService = {
   /**

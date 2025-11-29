@@ -3,6 +3,22 @@ const GeminiService = require("@services/gemini.service");
 const ApiError = require("@utils/ApiError");
 const ExcelTemplateGenerator = require("@utils/excelTemplate");
 const ExcelValidator = require("@utils/excelValidator");
+const mongoose = require("mongoose");
+
+/**
+ * Helper: Validate array of MongoIds
+ */
+const validateMongoIds = (ids, fieldName) => {
+  if (!Array.isArray(ids)) return [];
+
+  const validIds = [];
+  for (const id of ids) {
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      validIds.push(id);
+    }
+  }
+  return validIds;
+};
 
 const knowledgeService = {
   /**
@@ -89,17 +105,34 @@ const knowledgeService = {
   async createDocument(data, userId) {
     const { category, title, content, tags, priority, metadata } = data;
 
+    // Validate và filter MongoIds trong metadata
+    const sanitizedMetadata = {
+      ...metadata,
+      source: "manual",
+      lastUpdatedBy: userId,
+    };
+
+    if (metadata?.relatedProducts) {
+      sanitizedMetadata.relatedProducts = validateMongoIds(
+        metadata.relatedProducts,
+        "relatedProducts"
+      );
+    }
+
+    if (metadata?.relatedCategories) {
+      sanitizedMetadata.relatedCategories = validateMongoIds(
+        metadata.relatedCategories,
+        "relatedCategories"
+      );
+    }
+
     const document = await KnowledgeDocument.create({
       category,
       title,
       content,
       tags: tags || [],
       priority: priority || 1,
-      metadata: {
-        ...metadata,
-        source: "manual",
-        lastUpdatedBy: userId,
-      },
+      metadata: sanitizedMetadata,
       isActive: true,
     });
 
@@ -135,13 +168,30 @@ const knowledgeService = {
       }
     });
 
-    // Update metadata
+    // Update metadata với validation MongoIds
     if (data.metadata) {
-      document.metadata = {
+      const sanitizedMetadata = {
         ...document.metadata,
         ...data.metadata,
         lastUpdatedBy: userId,
       };
+
+      // Validate MongoIds
+      if (data.metadata.relatedProducts) {
+        sanitizedMetadata.relatedProducts = validateMongoIds(
+          data.metadata.relatedProducts,
+          "relatedProducts"
+        );
+      }
+
+      if (data.metadata.relatedCategories) {
+        sanitizedMetadata.relatedCategories = validateMongoIds(
+          data.metadata.relatedCategories,
+          "relatedCategories"
+        );
+      }
+
+      document.metadata = sanitizedMetadata;
     }
 
     await document.save();

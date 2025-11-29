@@ -18,6 +18,26 @@ module.exports = (io, socket) => {
    */
   socket.on("chat:join", async (conversationId, callback) => {
     try {
+      // SECURITY: Verify user is a participant before joining
+      const conversation = await ChatService.getConversation(conversationId);
+      if (!conversation) {
+        return callback({
+          success: false,
+          error: "Conversation không tồn tại",
+        });
+      }
+
+      const isParticipant = conversation.participants.some(
+        (p) => p.userId._id.toString() === userId.toString()
+      );
+
+      if (!isParticipant) {
+        return callback({
+          success: false,
+          error: "Bạn không có quyền truy cập conversation này",
+        });
+      }
+
       socket.join(`conversation:${conversationId}`);
 
       // Mark messages as read
@@ -43,6 +63,49 @@ module.exports = (io, socket) => {
     try {
       const { conversationId, type, text, images } = data;
 
+      // Validate conversationId
+      if (!conversationId) {
+        return callback({
+          success: false,
+          error: "conversationId là bắt buộc",
+        });
+      }
+
+      // Verify user is participant before sending
+      const conversation = await ChatService.getConversation(conversationId);
+      if (!conversation) {
+        return callback({
+          success: false,
+          error: "Conversation không tồn tại",
+        });
+      }
+
+      const isParticipant = conversation.participants.some(
+        (p) => p.userId._id.toString() === userId.toString()
+      );
+
+      if (!isParticipant) {
+        return callback({
+          success: false,
+          error: "Bạn không có quyền gửi tin nhắn trong conversation này",
+        });
+      }
+
+      // Validate message content
+      if (type === "text" && (!text || text.trim().length === 0)) {
+        return callback({
+          success: false,
+          error: "Text là bắt buộc khi type là 'text'",
+        });
+      }
+
+      if (type === "image" && (!images || images.length === 0)) {
+        return callback({
+          success: false,
+          error: "Images là bắt buộc khi type là 'image'",
+        });
+      }
+
       // Save message to DB
       const message = await ChatService.sendMessage({
         conversationId,
@@ -59,7 +122,7 @@ module.exports = (io, socket) => {
       });
 
       // Notify other participants (push notification)
-      const conversation = await ChatService.getConversation(conversationId);
+      // Reuse conversation đã query ở trên
       conversation.participants.forEach((p) => {
         const participantId = p.userId._id.toString();
         if (participantId !== userId.toString()) {

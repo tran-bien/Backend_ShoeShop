@@ -9,9 +9,13 @@ const ReviewSchema = new Schema(
       ref: "User",
       required: true,
     },
+    // FIX: Thêm comment giải thích - orderItem là subdocument ID trong Order.orderItems
+    // Không thể ref vì nó là subdocument, không phải standalone document
     orderItem: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
+      // Note: Đây là _id của subdocument trong Order.orderItems[], không phải standalone collection
+      // Để query, cần dùng Order.aggregate() hoặc Order.findOne({'orderItems._id': orderItem})
     },
     product: {
       type: mongoose.Schema.Types.ObjectId,
@@ -72,5 +76,11 @@ const ReviewSchema = new Schema(
 
 // Tạo chỉ mục mới trên cặp khóa user và orderItem
 ReviewSchema.index({ user: 1, orderItem: 1 }, { unique: true });
+
+// FIX: Thêm indexes cho các query thường dùng
+ReviewSchema.index({ product: 1, isActive: 1, deletedAt: 1 }); // Lấy reviews theo product
+ReviewSchema.index({ user: 1, deletedAt: 1 }); // Lấy reviews của user
+ReviewSchema.index({ createdAt: -1 }); // Sort by newest
+ReviewSchema.index({ rating: 1, product: 1 }); // Filter theo rating
 
 module.exports = ReviewSchema;

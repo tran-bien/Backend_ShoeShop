@@ -39,4 +39,14 @@ const BrandSchema = new mongoose.Schema(
   }
 );
 
+// ============================================================
+// INDEXES - Tối ưu hiệu suất truy vấn
+// ============================================================
+
+// Compound index cho filter isActive + deletedAt (thường xuyên query)
+BrandSchema.index({ isActive: 1, deletedAt: 1 });
+
+// Index cho sort by createdAt
+BrandSchema.index({ createdAt: -1 });
+
 module.exports = BrandSchema;

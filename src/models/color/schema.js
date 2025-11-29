@@ -29,4 +29,8 @@ const ColorSchema = new mongoose.Schema(
   }
 );
 
+// FIX: Thêm indexes cho các query thường dùng
+ColorSchema.index({ type: 1, deletedAt: 1 });
+ColorSchema.index({ createdAt: -1 });
+
 module.exports = ColorSchema;

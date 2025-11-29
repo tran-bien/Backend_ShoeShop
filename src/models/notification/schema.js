@@ -22,6 +22,14 @@ const NotificationSchema = new mongoose.Schema(
         "POINTS_EARNED",
         "POINTS_EXPIRE_SOON",
         "REVIEW_REPLY",
+        // FIX: Thêm các notification types còn thiếu
+        "COUPON_EXPIRING", // Coupon sắp hết hạn
+        "ORDER_PENDING", // Đơn hàng mới chờ xác nhận
+        "RETURN_REQUESTED", // Yêu cầu trả hàng mới
+        "CANCEL_REQUESTED", // Yêu cầu hủy đơn
+        "CANCEL_APPROVED", // Đã hủy đơn hàng
+        "PROMOTION", // Khuyến mãi
+        "SYSTEM", // Thông báo hệ thống
       ],
       required: true,
     },

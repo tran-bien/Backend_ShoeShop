@@ -200,3 +200,44 @@ exports.requireShipper = (req, res, next) => {
 
   next();
 };
+
+/**
+ * Optional Auth Middleware
+ * Attach user to req nếu có valid token, nhưng không bắt buộc
+ * Dùng cho public routes cần personalization (AI chat, recommendations, etc.)
+ */
+exports.optionalAuth = asyncHandler(async (req, res, next) => {
+  const token = req.headers.authorization?.startsWith("Bearer")
+    ? req.headers.authorization.split(" ")[1]
+    : null;
+
+  // Không có token -> tiếp tục như guest
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select("-password");
+
+    if (user && user.isActive && !user.blockedAt) {
+      // Check session
+      const session = await Session.findOne({
+        token,
+        user: user._id,
+        isActive: true,
+      });
+
+      if (session && new Date() < new Date(session.expiresAt)) {
+        req.user = user;
+        req.token = token;
+        req.session = session;
+      }
+    }
+  } catch (error) {
+    // Token invalid/expired -> tiếp tục như guest (không throw error)
+    console.warn("[OPTIONAL_AUTH] Token invalid, continuing as guest");
+  }
+
+  next();
+});

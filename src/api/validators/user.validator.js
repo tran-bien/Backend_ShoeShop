@@ -55,8 +55,8 @@ const validateAddAddress = [
   body("phone")
     .isString()
     .trim()
-    .matches(/^(0[3|5|7|8|9])+([0-9]{8})\b/)
-    .withMessage("Số điện thoại không hợp lệ"),
+    .matches(/^(0[35789])([0-9]{8})$/)
+    .withMessage("Số điện thoại không hợp lệ (VD: 0912345678)"),
 
   body("province")
     .isString()
@@ -107,8 +107,8 @@ const validateUpdateAddress = [
     .optional()
     .isString()
     .trim()
-    .matches(/^(0[3|5|7|8|9])+([0-9]{8})\b/)
-    .withMessage("Số điện thoại không hợp lệ"),
+    .matches(/^(0[35789])([0-9]{8})$/)
+    .withMessage("Số điện thoại không hợp lệ (VD: 0912345678)"),
 
   body("province")
     .optional()

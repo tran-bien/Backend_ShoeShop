@@ -75,4 +75,17 @@ const VariantSchema = new mongoose.Schema(
   }
 );
 
+// ============================================================
+// INDEXES - Tối ưu hiệu suất truy vấn
+// ============================================================
+
+// FIX: Index cho query variants theo product - rất phổ biến
+VariantSchema.index({ product: 1 });
+
+// Index cho filter active variants
+VariantSchema.index({ product: 1, isActive: 1, deletedAt: 1 });
+
+// Index cho color lookup
+VariantSchema.index({ color: 1 });
+
 module.exports = VariantSchema;

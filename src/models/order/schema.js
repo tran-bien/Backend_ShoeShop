@@ -92,7 +92,9 @@ const OrderSchema = new mongoose.Schema(
       phone: {
         type: String,
         required: true,
-        match: /^(0[2-9]|84[2-9])[0-9]{8}$/,
+        // FIX: Regex số điện thoại VN đúng format
+        // Chấp nhận: 0xxx (10 số) hoặc 84xxx (11 số) hoặc +84xxx (12 ký tự)
+        match: /^(0[35789][0-9]{8}|84[35789][0-9]{8}|\+84[35789][0-9]{8})$/,
       },
       province: {
         type: String,

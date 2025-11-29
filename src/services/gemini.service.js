@@ -152,16 +152,20 @@ class GeminiService {
 
   /**
    * Translate order status sang tiếng Việt
+   * SYNC với Order schema status enum
    */
   translateStatus(status) {
     const statusMap = {
       pending: "Chờ xác nhận",
       confirmed: "Đã xác nhận",
-      processing: "Đang xử lý",
-      shipping: "Đang giao hàng",
+      assigned_to_shipper: "Đã giao cho shipper",
+      out_for_delivery: "Đang giao hàng",
       delivered: "Đã giao hàng",
+      delivery_failed: "Giao hàng thất bại",
+      returning_to_warehouse: "Đang trả về kho",
       cancelled: "Đã hủy",
       returned: "Đã hoàn trả",
+      refunded: "Đã hoàn tiền",
     };
     return statusMap[status] || status;
   }

@@ -97,6 +97,17 @@ router.delete(
   knowledgeController.clearExcelTraining
 );
 
+/**
+ * @route   DELETE /api/v1/admin/knowledge-base/clear-all
+ * @desc    Clear ALL knowledge documents (DANGEROUS - Admin Only)
+ * @access  Admin Only
+ */
+router.delete(
+  "/clear-all",
+  requireAdminOnly,
+  knowledgeController.clearAllDocuments
+);
+
 // ============================================================
 // General CRUD Routes (có params - đặt SAU)
 // ============================================================

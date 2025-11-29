@@ -811,10 +811,150 @@ const getProductStockInfo = async (productId) => {
 };
 
 /**
+ * RESERVE INVENTORY KHI TẠO ORDER
+ * - Kiểm tra và đặt trước số lượng tồn kho
+ * - Atomic operation: dùng $inc để tránh race condition
+ * - Tự động rollback nếu fail
+ *
+ * Use case: Khi tạo đơn hàng mới (order.service.js createOrder)
+ *
+ * @param {Array} orderItems - Danh sách items cần reserve
+ * @param {ObjectId} orderId - ID đơn hàng để reference
+ * @returns {Object} { success: true, reservedItems: [...] }
+ * @throws {ApiError} Nếu không đủ hàng
+ */
+const reserveInventoryForOrder = async (orderItems, orderId) => {
+  const reservedItems = [];
+
+  try {
+    for (const item of orderItems) {
+      const productId =
+        item.variant?.product?._id || item.variant?.product || item.productId;
+      const variantId = item.variant?._id || item.variant || item.variantId;
+      const sizeId = item.size?._id || item.size || item.sizeId;
+
+      if (!productId || !variantId || !sizeId) {
+        throw new ApiError(
+          400,
+          `Thiếu thông tin product/variant/size cho item`
+        );
+      }
+
+      // ATOMIC: Dùng findOneAndUpdate với $inc để tránh race condition
+      const result = await InventoryItem.findOneAndUpdate(
+        {
+          product: productId,
+          variant: variantId,
+          size: sizeId,
+          quantity: { $gte: item.quantity }, // Chỉ update nếu đủ hàng
+        },
+        {
+          $inc: {
+            reservedQuantity: item.quantity, // Tăng số lượng đã reserve
+          },
+        },
+        { new: true }
+      );
+
+      if (!result) {
+        // Không đủ hàng hoặc không tìm thấy
+        const existingItem = await InventoryItem.findOne({
+          product: productId,
+          variant: variantId,
+          size: sizeId,
+        });
+
+        const available = existingItem
+          ? existingItem.quantity - (existingItem.reservedQuantity || 0)
+          : 0;
+        throw new ApiError(
+          400,
+          `Không đủ hàng cho "${item.productName || "sản phẩm"}". Cần: ${
+            item.quantity
+          }, Còn: ${available}`
+        );
+      }
+
+      reservedItems.push({
+        inventoryItemId: result._id,
+        productId,
+        variantId,
+        sizeId,
+        quantity: item.quantity,
+      });
+    }
+
+    console.log(
+      `[reserveInventoryForOrder] Đã reserve ${reservedItems.length} items cho order ${orderId}`
+    );
+    return { success: true, reservedItems };
+  } catch (error) {
+    // ROLLBACK: Hủy reserve các items đã thành công
+    console.error(
+      `[reserveInventoryForOrder] Lỗi, rollback ${reservedItems.length} items:`,
+      error.message
+    );
+
+    for (const reserved of reservedItems) {
+      try {
+        await InventoryItem.findByIdAndUpdate(reserved.inventoryItemId, {
+          $inc: { reservedQuantity: -reserved.quantity },
+        });
+      } catch (rollbackError) {
+        console.error(`[CRITICAL] Rollback reserve FAILED:`, rollbackError);
+      }
+    }
+
+    throw error;
+  }
+};
+
+/**
+ * RELEASE INVENTORY RESERVATION
+ * - Hủy đặt trước khi order bị cancel trước khi giao cho shipper
+ * - Gọi khi: Order cancelled mà chưa inventoryDeducted
+ *
+ * @param {Array} orderItems - Danh sách items cần release
+ * @param {ObjectId} orderId - ID đơn hàng để log
+ */
+const releaseInventoryReservation = async (orderItems, orderId) => {
+  for (const item of orderItems) {
+    const productId =
+      item.variant?.product?._id || item.variant?.product || item.productId;
+    const variantId = item.variant?._id || item.variant || item.variantId;
+    const sizeId = item.size?._id || item.size || item.sizeId;
+
+    try {
+      await InventoryItem.findOneAndUpdate(
+        {
+          product: productId,
+          variant: variantId,
+          size: sizeId,
+          reservedQuantity: { $gte: item.quantity },
+        },
+        {
+          $inc: { reservedQuantity: -item.quantity },
+        }
+      );
+    } catch (error) {
+      console.error(
+        `[releaseInventoryReservation] Error releasing item:`,
+        error
+      );
+    }
+  }
+
+  console.log(
+    `[releaseInventoryReservation] Released reservation cho order ${orderId}`
+  );
+};
+
+/**
  * TRỪ KHO CHO TOÀN BỘ ĐÔN HÀNG
  * - Validate payment method (COD hoặc VNPAY đã thanh toán)
  * - Pre-validate tất cả items có đủ hàng
  * - Trừ kho từng item với rollback tự động nếu fail
+ * - Release reservation sau khi trừ kho thành công
  *
  * Use case: Gán shipper cho đơn hàng (shipper.service.js)
  *
@@ -829,10 +969,10 @@ const deductInventoryForOrder = async (order, performedBy) => {
     throw new ApiError(400, "Kho đã được trừ cho đơn hàng này rồi");
   }
 
-  // 2. Validate payment method
+  // 2. Validate payment method - FIXED: Dùng payment.method thay vì payment.paymentMethod
   const shouldDeduct =
-    order.payment.paymentMethod === "COD" ||
-    (order.payment.paymentMethod === "VNPAY" &&
+    order.payment.method === "COD" ||
+    (order.payment.method === "VNPAY" &&
       order.payment.paymentStatus === "paid");
 
   if (!shouldDeduct) {
@@ -1009,5 +1149,7 @@ module.exports = {
   getProductPricing,
   updateProductStockFromInventory,
   getProductStockInfo,
-  deductInventoryForOrder, // NEW: Function trừ kho cho đơn hàng
+  deductInventoryForOrder,
+  reserveInventoryForOrder, // NEW: Reserve inventory khi tạo order
+  releaseInventoryReservation, // NEW: Release khi cancel order chưa giao
 };

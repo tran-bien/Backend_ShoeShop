@@ -55,17 +55,25 @@ const orderService = {
       { $group: { _id: "$status", count: { $sum: 1 } } },
     ]);
 
+    // FIXED: Stats object khớp với Order schema status enum
     const stats = {
       pending: 0,
       confirmed: 0,
-      shipping: 0,
+      assigned_to_shipper: 0,
+      out_for_delivery: 0,
       delivered: 0,
+      delivery_failed: 0,
+      returning_to_warehouse: 0,
       cancelled: 0,
+      returned: 0,
+      refunded: 0,
       total: 0,
     };
 
     orderStatsAgg.forEach(({ _id, count }) => {
-      stats[_id] = count;
+      if (_id in stats) {
+        stats[_id] = count;
+      }
       stats.total += count;
     });
 
@@ -488,17 +496,26 @@ const orderService = {
       console.log("Đã lưu đơn hàng thành công, ID:", savedOrder._id);
 
       // ============================================================
-      // INVENTORY MANAGEMENT - ĐÃ CHUYỂN SANG INVENTORYSERVICE
+      // FIX CRITICAL 1.1: RESERVE INVENTORY KHI TẠO ORDER
       // ============================================================
-      // COD: KHÔNG TRỪ KHO Ở ĐÂY NỮA
-      // VNPAY: KHÔNG TRỪ KHO Ở ĐÂY NỮA
-      //
-      // Inventory sẽ được tự động trừ KHI GÁN SHIPPER
-      // Xem: shipper.service.js -> assignOrderToShipper() -> inventoryService.stockOut()
-      //
-      // Lý do: Đảm bảo tồn kho chỉ bị trừ khi đơn hàng thực sự được xử lý,
-      // tránh trường hợp user tạo đơn rồi không thanh toán (VNPAY) hoặc hủy (COD)
-      // ============================================================
+      // Reserve inventory ngay khi tạo order để tránh race condition
+      // Release khi: cancel order (chưa giao) hoặc deduct khi gán shipper
+      try {
+        const inventoryService = require("@services/inventory.service");
+        await inventoryService.reserveInventoryForOrder(
+          orderItems,
+          savedOrder._id
+        );
+        console.log(`Đã reserve inventory cho ${orderItems.length} items`);
+      } catch (reserveError) {
+        // Rollback: Xóa order vừa tạo nếu không reserve được
+        console.error(
+          "Lỗi reserve inventory, rollback order:",
+          reserveError.message
+        );
+        await Order.findByIdAndDelete(savedOrder._id);
+        throw new ApiError(400, reserveError.message);
+      }
 
       console.log(
         "Đơn hàng được tạo. Inventory sẽ được trừ khi assign shipper."
@@ -642,8 +659,26 @@ const orderService = {
         );
       }
 
-      // Middleware sẽ tự động restore inventory nếu inventoryDeducted = true
+      // FIX CRITICAL 1.1: Release inventory reservation nếu chưa deduct
+      if (!updatedOrder.inventoryDeducted) {
+        try {
+          const inventoryService = require("@services/inventory.service");
+          await inventoryService.releaseInventoryReservation(
+            updatedOrder.orderItems,
+            orderId
+          );
+          console.log(
+            `[cancelOrder] Released inventory reservation cho order ${orderId}`
+          );
+        } catch (releaseError) {
+          console.error(
+            "[cancelOrder] Lỗi release reservation:",
+            releaseError.message
+          );
+        }
+      }
 
+      // Middleware sẽ tự động restore inventory nếu inventoryDeducted = true
       return {
         success: true,
         message: "Đơn hàng đã được hủy thành công",
@@ -737,6 +772,25 @@ const orderService = {
           { _id: order._id },
           { $set: { statusHistory: uniqueHistory } }
         );
+      }
+
+      // FIX CRITICAL 1.1: Release inventory reservation nếu chưa deduct
+      if (!updatedOrder.inventoryDeducted) {
+        try {
+          const inventoryService = require("@services/inventory.service");
+          await inventoryService.releaseInventoryReservation(
+            updatedOrder.orderItems,
+            order._id
+          );
+          console.log(
+            `[processCancelRequest] Released inventory reservation cho order ${order._id}`
+          );
+        } catch (releaseError) {
+          console.error(
+            "[processCancelRequest] Lỗi release reservation:",
+            releaseError.message
+          );
+        }
       }
 
       // Hoàn trả tồn kho nếu đã trừ (logic này sẽ được middleware xử lý tự động)
@@ -984,12 +1038,17 @@ const orderService = {
       throw new ApiError(400, `Đơn hàng đã ở trạng thái ${status}`);
     }
 
-    // Kiểm tra các trạng thái chuyển đổi hợp lệ
+    // FIXED Bug #11: Kiểm tra các trạng thái chuyển đổi hợp lệ - khớp với Order schema status enum
+    // Order schema statuses: pending, confirmed, assigned_to_shipper, out_for_delivery, delivered,
+    //                       delivery_failed, returning_to_warehouse, cancelled, returned, refunded
     const validStatusTransitions = {
       pending: ["confirmed"],
-      confirmed: ["shipping"],
-      shipping: ["delivered"],
+      confirmed: ["assigned_to_shipper", "out_for_delivery"], // Admin có thể chuyển thẳng hoặc qua shipper
+      assigned_to_shipper: ["out_for_delivery"], // Shipper bắt đầu giao
+      out_for_delivery: ["delivered", "delivery_failed"], // Giao thành công hoặc thất bại
       delivered: [],
+      delivery_failed: ["out_for_delivery", "returning_to_warehouse"], // Giao lại hoặc trả về kho
+      returning_to_warehouse: ["cancelled"], // Hàng về kho -> hủy đơn
       cancelled: ["refunded"], // Admin có thể hoàn tiền sau khi hủy
       returned: ["refunded"], // Admin có thể hoàn tiền sau khi nhận hàng trả
       refunded: [],
@@ -1039,9 +1098,15 @@ const orderService = {
     }
 
     // Kiểm tra thanh toán VNPAY: đảm bảo đã thanh toán trước khi chuyển sang các trạng thái tiếp theo
+    // FIXED Bug #11: Thay 'shipping' thành 'out_for_delivery' để match Order schema
     if (
       order.payment.method === "VNPAY" &&
-      ["confirmed", "shipping", "delivered"].includes(status) &&
+      [
+        "confirmed",
+        "assigned_to_shipper",
+        "out_for_delivery",
+        "delivered",
+      ].includes(status) &&
       order.payment.paymentStatus !== "paid"
     ) {
       throw new ApiError(
@@ -1098,7 +1163,8 @@ const orderService = {
           );
         }
         break;
-      case "shipping":
+      case "assigned_to_shipper":
+      case "out_for_delivery": // FIXED Bug #11: Thay 'shipping' thành 'out_for_delivery' để match Order schema
         order.shippingAt = new Date();
         // Gửi notification
         try {
