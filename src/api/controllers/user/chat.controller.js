@@ -1,6 +1,5 @@
 const asyncHandler = require("express-async-handler");
 const ChatService = require("@services/chat.service");
-const { User } = require("@models");
 
 const chatController = {
   /**
@@ -33,40 +32,14 @@ const chatController = {
     const userRole = req.user.role;
     const { targetUserId, orderId, message } = req.body;
 
-    let targetUser;
-    let targetRole;
-
-    if (targetUserId) {
-      targetUser = await User.findById(targetUserId);
-      if (!targetUser) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy người dùng",
-        });
-      }
-      targetRole = targetUser.role;
-    } else {
-      const availableStaff = await User.findOne({
-        role: { $in: ["staff", "admin"] },
-        isActive: true,
-      }).sort({ createdAt: 1 });
-
-      if (!availableStaff) {
-        return res.status(404).json({
-          success: false,
-          message: "Không có nhân viên hỗ trợ khả dụng",
-        });
-      }
-
-      targetUser = availableStaff;
-      targetRole = availableStaff.role;
-    }
+    // Service sẽ throw ApiError nếu không tìm thấy user/staff
+    const targetUser = await ChatService.getTargetUser(targetUserId);
 
     const conversation = await ChatService.getOrCreateConversation(
       userId,
       userRole,
       targetUser._id,
-      targetRole,
+      targetUser.role,
       orderId
     );
 
@@ -94,24 +67,8 @@ const chatController = {
     const { page = 1, limit = 50 } = req.query;
     const userId = req.user._id;
 
-    const conversation = await ChatService.getConversation(conversationId);
-    if (!conversation) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy conversation",
-      });
-    }
-
-    const isParticipant = conversation.participants.some(
-      (p) => p.userId._id.toString() === userId.toString()
-    );
-
-    if (!isParticipant) {
-      return res.status(403).json({
-        success: false,
-        message: "Bạn không có quyền truy cập conversation này",
-      });
-    }
+    // Service sẽ throw ApiError nếu không có quyền
+    await ChatService.verifyConversationAccess(conversationId, userId);
 
     const result = await ChatService.getMessages(conversationId, {
       page: parseInt(page),
@@ -134,24 +91,8 @@ const chatController = {
     const { type, text, images } = req.body;
     const userId = req.user._id;
 
-    const conversation = await ChatService.getConversation(conversationId);
-    if (!conversation) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy conversation",
-      });
-    }
-
-    const isParticipant = conversation.participants.some(
-      (p) => p.userId._id.toString() === userId.toString()
-    );
-
-    if (!isParticipant) {
-      return res.status(403).json({
-        success: false,
-        message: "Bạn không có quyền gửi tin nhắn trong conversation này",
-      });
-    }
+    // Service sẽ throw ApiError nếu không có quyền
+    await ChatService.verifyConversationAccess(conversationId, userId);
 
     const message = await ChatService.sendMessage({
       conversationId,
@@ -191,25 +132,8 @@ const chatController = {
     const { conversationId } = req.params;
     const userId = req.user._id;
 
-    // Verify participant before closing
-    const conversation = await ChatService.getConversation(conversationId);
-    if (!conversation) {
-      return res.status(404).json({
-        success: false,
-        message: "Không tìm thấy conversation",
-      });
-    }
-
-    const isParticipant = conversation.participants.some(
-      (p) => p.userId._id.toString() === userId.toString()
-    );
-
-    if (!isParticipant) {
-      return res.status(403).json({
-        success: false,
-        message: "Bạn không có quyền đóng conversation này",
-      });
-    }
+    // Service sẽ throw ApiError nếu không có quyền
+    await ChatService.verifyConversationAccess(conversationId, userId);
 
     const closedConversation = await ChatService.closeConversation(
       conversationId

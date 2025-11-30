@@ -7,6 +7,7 @@ const {
   KnowledgeDocument,
 } = require("@models");
 const NodeCache = require("node-cache");
+const SessionManager = require("@utils/sessionManager");
 
 /**
  * Gemini AI Service với RAG (Retrieval-Augmented Generation)
@@ -308,6 +309,62 @@ class GeminiService {
    */
   getCacheStats() {
     return this.responseCache.getStats();
+  }
+
+  /**
+   * Validate và generate session ID
+   * @private
+   */
+  _validateAndGenerateSessionId(clientSessionId, userId, clientIp) {
+    let sessionId = clientSessionId;
+
+    if (sessionId) {
+      // Validate format
+      if (!SessionManager.validateSessionId(sessionId)) {
+        sessionId = SessionManager.generateSessionId(userId || clientIp);
+        console.warn(
+          `[GEMINI] Invalid sessionId format, generated new: ${sessionId}`
+        );
+      }
+      // Check expired
+      else if (SessionManager.isExpired(sessionId, 24 * 60 * 60 * 1000)) {
+        sessionId = SessionManager.generateSessionId(userId || clientIp);
+        console.warn(`[GEMINI] Expired sessionId, generated new: ${sessionId}`);
+      }
+    } else {
+      // Generate new session ID
+      sessionId = SessionManager.generateSessionId(userId || clientIp);
+    }
+
+    return sessionId;
+  }
+
+  /**
+   * Chat with validation (wrapper for controller)
+   * Xử lý toàn bộ: session validation + chat
+   */
+  async chatWithValidation(
+    message,
+    { clientSessionId, userId = null, clientIp, history = [] }
+  ) {
+    // Validate và generate session ID
+    const sessionId = this._validateAndGenerateSessionId(
+      clientSessionId,
+      userId,
+      clientIp
+    );
+
+    // Chat với Gemini
+    const result = await this.chat(message, {
+      sessionId,
+      userId,
+      history,
+    });
+
+    return {
+      ...result,
+      sessionId,
+    };
   }
 }
 

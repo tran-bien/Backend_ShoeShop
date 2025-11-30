@@ -107,13 +107,6 @@ const checkExchangeEligibility = asyncHandler(async (req, res) => {
   const { orderId, variantId, sizeId } = req.query;
   const userId = req.user._id;
 
-  if (!orderId || !variantId || !sizeId) {
-    throw new ApiError(
-      400,
-      "Thiếu thông tin: orderId, variantId, sizeId là bắt buộc"
-    );
-  }
-
   const result = await returnService.checkItemExchangeEligibility(
     orderId,
     variantId,

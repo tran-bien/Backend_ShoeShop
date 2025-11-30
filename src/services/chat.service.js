@@ -1,10 +1,60 @@
-const { ChatConversation, ChatMessage } = require("@models");
+const { ChatConversation, ChatMessage, User } = require("@models");
 const cloudinary = require("@config/cloudinary");
+const ApiError = require("@utils/ApiError");
 
 /**
  * Chat Service - Simple version
  */
 class ChatService {
+  /**
+   * Tìm staff/admin khả dụng để hỗ trợ
+   */
+  async findAvailableStaff() {
+    const staff = await User.findOne({
+      role: { $in: ["staff", "admin"] },
+      isActive: true,
+    }).sort({ createdAt: 1 });
+
+    if (!staff) {
+      throw new ApiError(404, "Không có nhân viên hỗ trợ khả dụng");
+    }
+
+    return staff;
+  }
+
+  /**
+   * Lấy target user theo ID hoặc tìm staff khả dụng
+   */
+  async getTargetUser(targetUserId) {
+    if (targetUserId) {
+      const user = await User.findById(targetUserId);
+      if (!user) {
+        throw new ApiError(404, "Không tìm thấy người dùng");
+      }
+      return user;
+    }
+    return this.findAvailableStaff();
+  }
+
+  /**
+   * Kiểm tra quyền truy cập conversation
+   */
+  async verifyConversationAccess(conversationId, userId) {
+    const conversation = await this.getConversation(conversationId);
+    if (!conversation) {
+      throw new ApiError(404, "Không tìm thấy conversation");
+    }
+
+    const isParticipant = conversation.participants.some(
+      (p) => p.userId._id.toString() === userId.toString()
+    );
+
+    if (!isParticipant) {
+      throw new ApiError(403, "Bạn không có quyền truy cập conversation này");
+    }
+
+    return conversation;
+  }
   /**
    * Tạo hoặc lấy conversation giữa 2 users
    */
@@ -115,7 +165,6 @@ class ChatService {
 
       // Nếu không có ảnh nào upload thành công
       if (uploadedImages.length === 0 && type === "image") {
-        const ApiError = require("@utils/ApiError");
         throw new ApiError(500, "Không thể upload ảnh. Vui lòng thử lại.");
       }
 
