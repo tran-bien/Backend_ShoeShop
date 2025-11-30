@@ -19,12 +19,13 @@ const errorHandler = (err, req, res, next) => {
     console.error("Error stack:", err.stack);
   }
 
-  // Chuẩn hóa phản hồi lỗi
+  // FIX Issue #7: Chuẩn hóa phản hồi lỗi - chỉ expose stack trong development
   const response = {
     success: false,
     message: err.message || "Lỗi máy chủ nội bộ",
     ...(err.errors && { errors: err.errors }),
-    ...(process.env.NODE_ENV !== "production" && { stack: err.stack }),
+    // Chỉ expose stack trace trong môi trường development
+    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
   };
 
   res.status(statusCode).json(response);

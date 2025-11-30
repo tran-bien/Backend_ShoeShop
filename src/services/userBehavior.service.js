@@ -104,8 +104,15 @@ const userBehaviorService = {
       console.log(`[UserBehavior] Updated behavior for user ${userId}`);
       return behavior;
     } catch (error) {
+      // FIX Issue #19: Thêm error tracking thay vì chỉ log silent
       console.error("[UserBehavior] Error updating from order:", error.message);
-      // Don't throw, just log
+      console.error(
+        "[UserBehavior] Stack:",
+        error.stack?.split("\n").slice(0, 3).join("\n")
+      );
+      // TODO: Add error tracking service (Sentry, etc.) khi có
+      // errorTracker.capture(error, { userId, orderId: order._id });
+      // Don't throw, just log - để không ảnh hưởng main flow
     }
   },
 
@@ -147,8 +154,13 @@ const userBehaviorService = {
 
       return behavior;
     } catch (error) {
+      // FIX Issue #19: Thêm error tracking thay vì chỉ log silent
       console.error("[UserBehavior] Error updating from view:", error.message);
-      // Don't throw, just log
+      console.error(
+        "[UserBehavior] Stack:",
+        error.stack?.split("\n").slice(0, 3).join("\n")
+      );
+      // Don't throw, just log - để không ảnh hưởng main flow
     }
   },
 };

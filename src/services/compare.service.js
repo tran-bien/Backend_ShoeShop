@@ -384,10 +384,20 @@ async function calculateVariantInventorySummary(variant) {
  * @private
  */
 async function getProductRating(productId) {
+  // FIXED Bug #26: Ensure productId is converted to ObjectId for aggregate
+  const mongoose = require("mongoose");
+  let productObjId;
+  try {
+    productObjId = new mongoose.Types.ObjectId(productId);
+  } catch (err) {
+    console.error(`[getProductRating] Invalid productId: ${productId}`);
+    return { rating: 0, numReviews: 0 };
+  }
+
   const stats = await Review.aggregate([
     {
       $match: {
-        product: productId,
+        product: productObjId,
         isActive: true,
         deletedAt: null,
       },

@@ -34,10 +34,17 @@ class GeminiService {
   async buildContext(userQuery, userId = null) {
     const contextParts = [];
 
+    // FIX Issue #4: Sanitize user input để tránh NoSQL injection và regex DoS
+    const sanitizedQuery = userQuery
+      .replace(/[${}]/g, "") // Remove MongoDB operators
+      .replace(/[\\^$.*+?()[\]|]/g, " ") // Remove regex special chars
+      .slice(0, 500) // Limit length để tránh DoS
+      .trim();
+
     // 1. Search Knowledge Base (MongoDB Text Search)
     const knowledgeDocs = await KnowledgeDocument.find(
       {
-        $text: { $search: userQuery },
+        $text: { $search: sanitizedQuery },
         isActive: true,
       },
       {
@@ -59,12 +66,17 @@ class GeminiService {
     });
 
     // 2. Search sản phẩm liên quan (nếu query về sản phẩm)
-    const productKeywords = this.extractProductKeywords(userQuery);
+    // FIX Issue #4: Sử dụng sanitizedQuery thay vì userQuery để tránh injection
+    const productKeywords = this.extractProductKeywords(sanitizedQuery);
     if (productKeywords.length > 0) {
+      // FIX Issue #4: Escape regex special chars trong keywords
+      const escapedKeywords = productKeywords.map((k) =>
+        k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      );
       const products = await Product.find({
         $or: [
-          { name: { $regex: productKeywords.join("|"), $options: "i" } },
-          { description: { $regex: productKeywords.join("|"), $options: "i" } },
+          { name: { $regex: escapedKeywords.join("|"), $options: "i" } },
+          { description: { $regex: escapedKeywords.join("|"), $options: "i" } },
         ],
         isActive: true,
       })
@@ -200,15 +212,19 @@ class GeminiService {
         };
       }
 
-      // 2. Check cache (NodeCache tự động check TTL)
-      const cacheKey = `${userId || "guest"}_${userMessage.toLowerCase()}`;
+      // 3. Build context TRƯỚC để tránh cache collision (Bug #56)
+      const context = await this.buildContext(userMessage, userId);
+
+      // 2. Check cache - FIXED Bug #56: Thêm hasContext vào cache key để tránh collision
+      // Nếu user A có context cá nhân và user B không có, họ sẽ có cache key khác nhau
+      const contextHash = context ? "ctx" : "noctx";
+      const cacheKey = `${
+        userId || "guest"
+      }_${contextHash}_${userMessage.toLowerCase()}`;
       const cached = this.responseCache.get(cacheKey);
       if (cached) {
         return { response: cached, cached: true };
       }
-
-      // 3. Build context
-      const context = await this.buildContext(userMessage, userId);
 
       // DEMO MODE: Cho phép AI trả lời lung tung khi chưa có KB
       if (!context && !this.demoMode) {
@@ -247,7 +263,17 @@ class GeminiService {
         fullPrompt = userMessage;
       }
 
-      const result = await chat.sendMessage(fullPrompt);
+      // FIX Issue #23: Add timeout để tránh hanging indefinitely
+      const GEMINI_TIMEOUT = 30000; // 30 seconds
+      const result = await Promise.race([
+        chat.sendMessage(fullPrompt),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Gemini API timeout sau 30 giây")),
+            GEMINI_TIMEOUT
+          )
+        ),
+      ]);
       const response = result.response.text();
 
       // 7. Cache response (NodeCache tự động cleanup theo TTL)

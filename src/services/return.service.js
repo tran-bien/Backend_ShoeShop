@@ -473,7 +473,18 @@ const rejectReturnRequest = async (id, approvedBy, rejectionReason) => {
  * FIX Bug #5: Thêm transaction để đảm bảo atomic operations
  */
 const processReturn = async (id, processedBy) => {
-  const request = await ReturnRequest.findById(id).populate([
+  // FIXED Bug #24: Sử dụng findOneAndUpdate với optimistic locking để tránh race condition
+  // Khi 2 request cùng gọi processReturn đồng thời
+  const request = await ReturnRequest.findOneAndUpdate(
+    {
+      _id: id,
+      status: { $in: ["approved"] }, // Chỉ process nếu đang ở trạng thái approved
+    },
+    {
+      $set: { status: "processing" }, // Chuyển sang processing ngay lập tức
+    },
+    { new: true }
+  ).populate([
     { path: "order" },
     {
       path: "items.variant",
@@ -482,10 +493,19 @@ const processReturn = async (id, processedBy) => {
   ]);
 
   if (!request) {
-    throw new ApiError(404, "Không tìm thấy yêu cầu");
+    // Kiểm tra request có tồn tại không
+    const existingRequest = await ReturnRequest.findById(id);
+    if (!existingRequest) {
+      throw new ApiError(404, "Không tìm thấy yêu cầu");
+    }
+    // Request tồn tại nhưng không ở trạng thái approved
+    throw new ApiError(
+      400,
+      `Yêu cầu đang ở trạng thái "${existingRequest.status}", không thể xử lý. Chỉ chấp nhận trạng thái: approved`
+    );
   }
 
-  // VALIDATION: Kiểm tra trạng thái request
+  // VALIDATION: Kiểm tra trạng thái request (redundant nhưng giữ cho backward compatibility)
   if (request.status === "completed") {
     throw new ApiError(400, "Yêu cầu đã được xử lý hoàn tất trước đó");
   }

@@ -80,9 +80,16 @@ setInterval(() => {
 const loyaltyService = {
   /**
    * Tính điểm từ đơn hàng (1 điểm / 1000đ)
+   * FIX Issue #2: Thêm overflow check để tránh integer overflow
    */
   calculatePointsFromOrder: (orderTotal) => {
-    return Math.floor(orderTotal / 1000);
+    const points = Math.floor(orderTotal / 1000);
+    // Check overflow - MAX_SAFE_INTEGER = 9007199254740991
+    if (points > Number.MAX_SAFE_INTEGER || points < 0 || !Number.isFinite(points)) {
+      console.error(`[LOYALTY] Points overflow detected: orderTotal=${orderTotal}, points=${points}`);
+      return 0; // Return 0 để tránh data corruption
+    }
+    return points;
   },
 
   /**

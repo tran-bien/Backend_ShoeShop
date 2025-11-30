@@ -50,7 +50,7 @@ async function cleanSessions() {
 
     return {
       inactiveDeleted: inactiveResult.deletedCount,
-      note: "Expired sessions are auto-deleted by MongoDB TTL index",
+      note: "Session hết hạn được MongoDB TTL index tự động xóa",
     };
   } catch (error) {
     console.error("Lỗi tổng thể khi dọn dẹp session:", error);

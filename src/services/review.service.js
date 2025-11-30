@@ -497,40 +497,44 @@ const reviewService = {
   /**
    * Thích đánh giá (tăng số lượng like)
    * FIXED Bug #37: Ngăn user spam like bằng cách track likedBy
+   * FIXED Bug #52: Single atomic operation để tránh race condition
    * @param {String} userId - ID của người dùng
    * @param {String} reviewId - ID của đánh giá
    * @returns {Object} - Kết quả thích
    */
   likeReview: async (userId, reviewId) => {
-    // Kiểm tra đánh giá tồn tại
-    const review = await Review.findOne({
-      _id: reviewId,
-      isActive: true,
-      deletedAt: null,
-    });
-
-    if (!review) {
-      throw new ApiError(404, "Không tìm thấy đánh giá");
-    }
-
-    // FIXED Bug #37: Kiểm tra user đã like chưa
-    const alreadyLiked = review.likedBy?.some(
-      (id) => id.toString() === userId.toString()
-    );
-
-    if (alreadyLiked) {
-      throw new ApiError(400, "Bạn đã thích đánh giá này rồi");
-    }
-
-    // Atomic update: Tăng like count và thêm userId vào likedBy
-    const updatedReview = await Review.findByIdAndUpdate(
-      reviewId,
+    // FIXED Bug #52: Single atomic operation - check + update trong 1 query
+    // Tránh race condition giữa check và update
+    const updatedReview = await Review.findOneAndUpdate(
+      {
+        _id: reviewId,
+        isActive: true,
+        deletedAt: null,
+        likedBy: { $ne: userId }, // Check user chưa like trong query condition
+      },
       {
         $inc: { numberOfLikes: 1 },
         $addToSet: { likedBy: userId },
       },
       { new: true }
     );
+
+    // Nếu không update được, kiểm tra lý do
+    if (!updatedReview) {
+      // Kiểm tra review có tồn tại không
+      const existingReview = await Review.findOne({
+        _id: reviewId,
+        isActive: true,
+        deletedAt: null,
+      });
+
+      if (!existingReview) {
+        throw new ApiError(404, "Không tìm thấy đánh giá");
+      }
+
+      // Review tồn tại nhưng không update được = user đã like rồi
+      throw new ApiError(400, "Bạn đã thích đánh giá này rồi");
+    }
 
     return {
       success: true,
@@ -864,6 +868,119 @@ const reviewService = {
       rating: Math.round(stats[0].avgRating * 10) / 10, // Làm tròn 1 chữ số thập phân
       numReviews: stats[0].totalReviews,
     };
+  },
+
+  /**
+   * FIX Bug #54: Batch load rating info cho nhiều products để tránh N+1 queries
+   * @param {Array<String>} productIds - Mảng các product IDs
+   * @returns {Object} - Map từ productId -> { rating, numReviews }
+   */
+  getBatchProductRatingInfo: async (productIds) => {
+    if (!productIds || productIds.length === 0) {
+      return {};
+    }
+
+    // Batch load tất cả variants của các products
+    const variants = await Variant.find({
+      product: { $in: productIds },
+    }).select("_id product");
+
+    // Tạo map product -> variantIds
+    const productVariantMap = {};
+    variants.forEach((v) => {
+      const productId = v.product.toString();
+      if (!productVariantMap[productId]) {
+        productVariantMap[productId] = [];
+      }
+      productVariantMap[productId].push(v._id);
+    });
+
+    // Lấy tất cả variant IDs
+    const allVariantIds = variants.map((v) => v._id);
+
+    // Batch load orderItems chứa các variants
+    const orderItemsInfo = await Order.aggregate([
+      { $unwind: "$orderItems" },
+      {
+        $match: {
+          "orderItems.variant": {
+            $in: allVariantIds.map((id) => new mongoose.Types.ObjectId(id)),
+          },
+        },
+      },
+      {
+        $project: {
+          orderItemId: "$orderItems._id",
+          variantId: "$orderItems.variant",
+        },
+      },
+    ]);
+
+    // Tạo map variant -> orderItemIds
+    const variantOrderItemMap = {};
+    orderItemsInfo.forEach((item) => {
+      const variantId = item.variantId.toString();
+      if (!variantOrderItemMap[variantId]) {
+        variantOrderItemMap[variantId] = [];
+      }
+      variantOrderItemMap[variantId].push(item.orderItemId);
+    });
+
+    // Lấy tất cả orderItem IDs
+    const allOrderItemIds = orderItemsInfo.map((item) => item.orderItemId);
+
+    // Batch load reviews và group theo orderItem
+    const reviewStats = await Review.aggregate([
+      {
+        $match: {
+          orderItem: { $in: allOrderItemIds },
+          isActive: true,
+          deletedAt: null,
+        },
+      },
+      {
+        $group: {
+          _id: "$orderItem",
+          avgRating: { $avg: "$rating" },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Tạo map orderItem -> stats
+    const orderItemStatsMap = {};
+    reviewStats.forEach((stat) => {
+      orderItemStatsMap[stat._id.toString()] = stat;
+    });
+
+    // Tính rating cho từng product
+    const result = {};
+    productIds.forEach((productId) => {
+      const variantIds = productVariantMap[productId] || [];
+      let totalRating = 0;
+      let totalReviews = 0;
+
+      variantIds.forEach((variantId) => {
+        const orderItemIds = variantOrderItemMap[variantId.toString()] || [];
+        orderItemIds.forEach((orderItemId) => {
+          const stats = orderItemStatsMap[orderItemId.toString()];
+          if (stats) {
+            totalRating += stats.avgRating * stats.count;
+            totalReviews += stats.count;
+          }
+        });
+      });
+
+      result[productId] = {
+        rating:
+          totalReviews > 0
+            ? Math.round((totalRating / totalReviews) * 10) / 10
+            : 0,
+        numReviews: totalReviews,
+      };
+    });
+
+    return result;
   },
 };
 

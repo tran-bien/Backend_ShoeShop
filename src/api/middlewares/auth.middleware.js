@@ -12,6 +12,18 @@ let isCleanupRunning = false; // Prevent race conditions
 const CLEANUP_INTERVAL = 10 * 60 * 1000; // 10 minutes
 // Reason: TTL handles most cleanup, so we only need to clean inactive sessions less frequently
 
+// FIXED Bug #53: Consecutive failure tracking và alert mechanism
+let consecutiveCleanupFailures = 0;
+const MAX_CONSECUTIVE_FAILURES = 5;
+const alertCleanupFailure = (failureCount, error) => {
+  console.error(
+    `[CLEANUP ALERT] ${failureCount} consecutive failures! Last error:`,
+    error.message
+  );
+  // TODO: Có thể gửi notification cho admin qua email/slack nếu cần
+  // Ví dụ: await notificationService.alertAdmin('CLEANUP_FAILURE', { failureCount, error: error.message });
+};
+
 // Bảo vệ các route yêu cầu đăng nhập
 exports.protect = asyncHandler(async (req, res, next) => {
   // HYBRID CLEANUP: Only clean inactive sessions (TTL handles expired)
@@ -23,7 +35,19 @@ exports.protect = asyncHandler(async (req, res, next) => {
     // NON-BLOCKING: Run cleanup in background, don't await
     // Request continues immediately without waiting for cleanup to finish
     cleanSessions()
-      .catch((err) => console.error("[CLEANUP ERROR]", err.message))
+      .then(() => {
+        // FIXED Bug #53: Reset counter on success
+        consecutiveCleanupFailures = 0;
+      })
+      .catch((err) => {
+        // FIXED Bug #53: Track consecutive failures và alert
+        consecutiveCleanupFailures++;
+        console.error("[CLEANUP ERROR]", err.message);
+        if (consecutiveCleanupFailures >= MAX_CONSECUTIVE_FAILURES) {
+          alertCleanupFailure(consecutiveCleanupFailures, err);
+          consecutiveCleanupFailures = 0; // Reset để tránh spam alert
+        }
+      })
       .finally(() => {
         isCleanupRunning = false;
       });

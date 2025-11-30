@@ -277,12 +277,14 @@ const orderService = {
       }
 
       // Sản phẩm có sẵn, thêm vào danh sách orderItems
+      // FIX Bug #57: Lưu costPrice tại thời điểm đặt hàng để dashboard tính profit chính xác
       orderItems.push({
         variant: variantId,
         size: sizeId,
         productName: item.productName,
         quantity: item.quantity,
         price: item.price,
+        costPrice: inventoryItem.averageCostPrice || 0, // Lưu cost tại thời điểm đặt hàng
         image: item.image || "",
       });
     }

@@ -43,6 +43,12 @@ const OrderSchema = new mongoose.Schema(
           required: true,
           min: 0,
         },
+        // FIX Bug #57: Lưu giá vốn tại thời điểm đặt hàng để tính profit chính xác
+        costPrice: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
         // Lưu ảnh sản phẩm
         image: {
           type: String,
@@ -172,34 +178,46 @@ const OrderSchema = new mongoose.Schema(
     },
 
     // Lịch sử trạng thái
-    statusHistory: [
-      {
-        status: {
-          type: String,
-          enum: [
-            "pending",
-            "confirmed",
-            "assigned_to_shipper",
-            "out_for_delivery",
-            "delivered",
-            "delivery_failed",
-            "returning_to_warehouse",
-            "cancelled",
-            "returned",
-            "refunded",
-          ],
+    // FIX Issue #9: Giới hạn số lượng statusHistory entries để tránh unbounded growth
+    statusHistory: {
+      type: [
+        {
+          status: {
+            type: String,
+            enum: [
+              "pending",
+              "confirmed",
+              "assigned_to_shipper",
+              "out_for_delivery",
+              "delivered",
+              "delivery_failed",
+              "returning_to_warehouse",
+              "cancelled",
+              "returned",
+              "refunded",
+            ],
+          },
+          updatedAt: {
+            type: Date,
+            default: Date.now,
+          },
+          updatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+          },
+          note: String,
         },
-        updatedAt: {
-          type: Date,
-          default: Date.now,
+      ],
+      validate: [
+        {
+          validator: function (v) {
+            return v.length <= 100; // Max 100 status history entries
+          },
+          message:
+            "Lịch sử trạng thái đơn hàng đã đạt giới hạn tối đa (100 entries)",
         },
-        updatedBy: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "User",
-        },
-        note: String,
-      },
-    ],
+      ],
+    },
 
     // Thông tin thanh toán
     payment: {

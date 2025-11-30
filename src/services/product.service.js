@@ -1984,21 +1984,18 @@ const productService = {
    * @param {Number} limit Số lượng sản phẩm trả về
    */
   getFeaturedProducts: async (limit = 20) => {
-    // FIXED: Product.rating/numReviews đã bị xóa - không thể query/sort trực tiếp
-    // Lấy tất cả sản phẩm active, sau đó tính rating động và sort trong memory
+    // FIX Bug #54: Sử dụng batch loading để tránh N+1 queries
     const products = await Product.find({
       isActive: true,
       deletedAt: null,
     })
-      .limit(Number(limit) * 3) // Lấy nhiều hơn để filter sau
-      // EMOVED: .sort({ rating: -1, numReviews: -1 }) - fields không tồn tại
+      .limit(Number(limit) * 3) // Lấy nhiều hơn để filter và sort sau
       .populate("category", "name")
       .populate("brand", "name logo")
       .populate("tags", "name type description")
       .populate({
         path: "variants",
         match: { isActive: true, deletedAt: null },
-        // REMOVED: price, priceFinal, percentDiscount - fields đã xóa - getFeaturedProducts
         select: "color imagesvariant sizes isActive gender",
         populate: [
           { path: "color", select: "name code type colors" },
@@ -2011,18 +2008,24 @@ const productService = {
       (product) => product.variants && product.variants.length > 0
     );
 
-    // Giới hạn số lượng sản phẩm trả về theo limit
-    const limitedProducts = filteredProducts.slice(0, Number(limit));
-
-    // Tính stock info và rating info cho từng sản phẩm
+    // FIX Bug #54: Batch load ratings thay vì N+1 queries
+    const productIds = filteredProducts.map((p) => p._id.toString());
     const inventoryService = require("@services/inventory.service");
     const reviewService = require("@services/review.service");
     const variantService = require("@services/variant.service");
+
+    // Batch load rating info cho tất cả products
+    const ratingInfoMap = await reviewService.getBatchProductRatingInfo(
+      productIds
+    );
+
+    // Transform và enrich products
     const productsWithStockAndRating = await Promise.all(
-      limitedProducts.map(async (product) => {
+      filteredProducts.map(async (product) => {
         const productObj = product.toObject
           ? product.toObject()
           : { ...product };
+        const productIdStr = product._id.toString();
 
         // Tính stock info
         const stockInfo = await inventoryService.getProductStockInfo(
@@ -2031,16 +2034,17 @@ const productService = {
         productObj.totalQuantity = stockInfo.totalQuantity;
         productObj.stockStatus = stockInfo.stockStatus;
 
-        // Tính rating info
-        const ratingInfo = await reviewService.getProductRatingInfo(
-          product._id
-        );
+        // Sử dụng batch-loaded rating info
+        const ratingInfo = ratingInfoMap[productIdStr] || {
+          rating: 0,
+          numReviews: 0,
+        };
         productObj.rating = ratingInfo.rating;
         productObj.numReviews = ratingInfo.numReviews;
         productObj.averageRating = ratingInfo.rating;
         productObj.reviewCount = ratingInfo.numReviews;
 
-        // CRITICAL FIX: Tính inventorySummary cho mỗi variant để có priceRange
+        // Tính inventorySummary cho mỗi variant
         if (productObj.variants && productObj.variants.length > 0) {
           productObj.variants = await Promise.all(
             productObj.variants.map(async (variant) => {
@@ -2058,12 +2062,19 @@ const productService = {
       })
     );
 
-    const result = {
-      success: true,
-      products: productsWithStockAndRating,
-    };
+    // Sort theo rating cao nhất và giới hạn
+    const sortedProducts = productsWithStockAndRating
+      .sort((a, b) => {
+        // Ưu tiên theo rating, sau đó theo số reviews
+        if (b.rating !== a.rating) return b.rating - a.rating;
+        return b.numReviews - a.numReviews;
+      })
+      .slice(0, Number(limit));
 
-    return result;
+    return {
+      success: true,
+      products: sortedProducts,
+    };
   },
 
   /**

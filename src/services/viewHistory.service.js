@@ -156,7 +156,7 @@ const viewHistoryService = {
         const result = await ViewHistory.bulkWrite(bulkOps, { ordered: false });
         mergedCount = result.upsertedCount || 0;
       } catch (error) {
-        // Duplicate key errors are expected and safe to ignore
+        // Lỗi duplicate key được mong đợi và an toàn để bỏ qua
         if (error.code !== 11000) {
           console.error("[VIEW HISTORY] Error during bulk merge:", error);
         }

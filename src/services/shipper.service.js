@@ -183,6 +183,21 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
     throw new ApiError(400, "Trạng thái không hợp lệ");
   }
 
+  // FIXED Bug #27: Validate allowed status transitions từ current status
+  const allowedTransitions = {
+    assigned_to_shipper: ["out_for_delivery"],
+    out_for_delivery: ["delivered", "delivery_failed"],
+    delivery_failed: ["out_for_delivery", "delivery_failed"], // Có thể thử giao lại hoặc fail tiếp
+  };
+
+  const currentAllowed = allowedTransitions[order.status];
+  if (!currentAllowed || !currentAllowed.includes(status)) {
+    throw new ApiError(
+      400,
+      `Không thể chuyển từ trạng thái "${order.status}" sang "${status}"`
+    );
+  }
+
   // Thêm vào lịch sử giao hàng
   order.deliveryAttempts.push({
     time: new Date(),

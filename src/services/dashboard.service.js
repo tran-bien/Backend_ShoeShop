@@ -19,9 +19,8 @@ const dashboardService = {
       // Đếm tổng đơn hàng
       const totalOrders = await Order.countDocuments({ deletedAt: null });
 
-      //  FIXED: Tính cost từ InventoryItem.averageCostPrice
-      // NOTE: Đây là cost TRUNG BÌNH, không phải cost tại thời điểm bán chính xác
-      // Để có cost chính xác 100%, cần lưu costPrice vào OrderItem khi tạo đơn
+      // FIX Bug #57: Ưu tiên dùng costPrice đã lưu trong OrderItem (chính xác nhất)
+      // Fallback: Lookup InventoryItem.averageCostPrice cho đơn hàng cũ chưa có costPrice
       const financialResults = await Order.aggregate([
         {
           $match: {
@@ -32,27 +31,7 @@ const dashboardService = {
         {
           $unwind: "$orderItems",
         },
-        {
-          $lookup: {
-            from: "variants",
-            localField: "orderItems.variant",
-            foreignField: "_id",
-            as: "variantInfo",
-          },
-        },
-        {
-          $unwind: {
-            path: "$variantInfo",
-            preserveNullAndEmptyArrays: true,
-          },
-        },
-        // FIX BUG #9: Filter deleted variants
-        {
-          $match: {
-            "variantInfo.deletedAt": null,
-          },
-        },
-        // Lookup InventoryItem để lấy averageCostPrice
+        // Lookup InventoryItem cho fallback (đơn hàng cũ chưa có costPrice)
         {
           $lookup: {
             from: "inventoryitems",
@@ -67,7 +46,6 @@ const dashboardService = {
                     $and: [
                       { $eq: ["$variant", "$$variantId"] },
                       { $eq: ["$size", "$$sizeId"] },
-                      { $eq: [{ $ifNull: ["$deletedAt", null] }, null] },
                     ],
                   },
                 },
@@ -91,11 +69,16 @@ const dashboardService = {
           $group: {
             _id: null,
             totalRevenue: { $sum: "$totalAfterDiscountAndShipping" },
-            // Sử dụng averageCostPrice từ InventoryItem
+            // FIX Bug #57: Ưu tiên costPrice từ OrderItem, fallback sang InventoryItem
             totalCost: {
               $sum: {
                 $multiply: [
-                  { $ifNull: ["$inventoryInfo.averageCostPrice", 0] },
+                  {
+                    $ifNull: [
+                      "$orderItems.costPrice", // Ưu tiên costPrice đã lưu
+                      { $ifNull: ["$inventoryInfo.averageCostPrice", 0] }, // Fallback
+                    ],
+                  },
                   "$orderItems.quantity",
                 ],
               },
@@ -164,9 +147,9 @@ const dashboardService = {
         : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const end = endDate ? new Date(endDate) : new Date();
 
-      // Thiết lập start về đầu ngày và end về cuối ngày để đảm bảo bao gồm tất cả dữ liệu
-      start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
+      // FIX Issue #16: Sử dụng UTC để đảm bảo nhất quán giữa các timezone
+      start.setUTCHours(0, 0, 0, 0);
+      end.setUTCHours(23, 59, 59, 999);
 
       // Kiểm tra ngày hợp lệ
       if (start > end) {

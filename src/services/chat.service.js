@@ -142,6 +142,24 @@ class ChatService {
     text,
     images = [],
   }) {
+    // FIXED Bug #25: Validate text length để tránh spam/DoS
+    const MAX_TEXT_LENGTH = 5000;
+    if (text && text.length > MAX_TEXT_LENGTH) {
+      throw new ApiError(
+        400,
+        `Tin nhắn không được vượt quá ${MAX_TEXT_LENGTH} ký tự`
+      );
+    }
+
+    // FIXED Bug #25: Validate images count
+    const MAX_IMAGES = 10;
+    if (images && images.length > MAX_IMAGES) {
+      throw new ApiError(
+        400,
+        `Không được gửi quá ${MAX_IMAGES} ảnh trong một tin nhắn`
+      );
+    }
+
     // Upload images nếu có với error handling
     let uploadedImages = [];
     if (type === "image" && images.length > 0) {

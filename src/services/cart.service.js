@@ -342,6 +342,20 @@ const cartService = {
         });
       }
 
+      // FIX Issue #17: Giới hạn số item trong giỏ hàng để tránh DoS
+      const MAX_CART_ITEMS = 100;
+      if (cart.cartItems.length >= MAX_CART_ITEMS) {
+        // Check xem sản phẩm đã có trong giỏ chưa trước khi báo lỗi
+        const existingIndex = cart.cartItems.findIndex(
+          (item) =>
+            item.variant.toString() === variantId &&
+            item.size.toString() === sizeId
+        );
+        if (existingIndex === -1) {
+          throw new ApiError(400, `Giỏ hàng đã đạt giới hạn ${MAX_CART_ITEMS} sản phẩm khác nhau`);
+        }
+      }
+
       // Kiểm tra sản phẩm đã có trong giỏ hàng chưa
       const existingItemIndex = cart.cartItems.findIndex(
         (item) =>

@@ -43,6 +43,24 @@ class RateLimiter {
 
     // In-memory fallback
     this.memoryStore = new Map();
+
+    // FIX Issue #5: Periodic cleanup để tránh memory leak
+    this._cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      let deletedCount = 0;
+      for (const [k, v] of this.memoryStore.entries()) {
+        if (now > v.resetTime) {
+          this.memoryStore.delete(k);
+          deletedCount++;
+        }
+      }
+      // Log nếu có nhiều entries bị xóa (để monitor)
+      if (deletedCount > 100) {
+        console.log(
+          `[RATE_LIMITER] Cleaned up ${deletedCount} expired entries`
+        );
+      }
+    }, 60000); // Cleanup mỗi 60 giây
   }
 
   /**

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 
+// FIX Issue #10: Pre-define compound indexes for better query performance
 const CouponSchema = new mongoose.Schema(
   {
     code: {

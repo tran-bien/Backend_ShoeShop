@@ -155,8 +155,25 @@ const paymentService = {
       console.log("Calculated signature:", calculated);
       console.log("Received signature:", secureHash);
 
-      // So sánh chữ ký
-      if (secureHash === calculated) {
+      // FIX Issue #1: So sánh chữ ký với constant-time comparison để tránh timing attack
+      let signatureValid = false;
+      try {
+        // Đảm bảo cả 2 string có cùng độ dài trước khi so sánh
+        const secureHashBuffer = Buffer.from(secureHash, "utf8");
+        const calculatedBuffer = Buffer.from(calculated, "utf8");
+
+        if (secureHashBuffer.length === calculatedBuffer.length) {
+          signatureValid = crypto.timingSafeEqual(
+            secureHashBuffer,
+            calculatedBuffer
+          );
+        }
+      } catch (e) {
+        // Fallback nếu có lỗi với timingSafeEqual
+        signatureValid = secureHash === calculated;
+      }
+
+      if (signatureValid) {
         // Kiểm tra trạng thái thanh toán
         const responseCode = vnpayParams.vnp_ResponseCode;
         return {
