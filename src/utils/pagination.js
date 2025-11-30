@@ -6,6 +6,10 @@
  * @returns {Promise<Object>} - Kết quả phân trang
  */
 const paginate = async (model, query, options = {}) => {
+  // FIX Bug #9: Thêm giới hạn tối đa cho pagination để tránh DoS
+  const MAX_LIMIT = 100;
+  const DEFAULT_LIMIT = 50;
+
   // Xử lý page - đảm bảo luôn là số nguyên dương
   let page = 1; // Giá trị mặc định
   if (options.page !== undefined) {
@@ -17,14 +21,15 @@ const paginate = async (model, query, options = {}) => {
     }
   }
 
-  // Xử lý limit - đảm bảo luôn là số nguyên dương
-  let limit = 50; // Giá trị mặc định
+  // Xử lý limit - đảm bảo luôn là số nguyên dương và không vượt quá MAX_LIMIT
+  let limit = DEFAULT_LIMIT; // Giá trị mặc định
   if (options.limit !== undefined) {
     // Chuyển đổi sang số
     const parsedLimit = Number(options.limit);
     // Kiểm tra có phải là số hợp lệ không
     if (!isNaN(parsedLimit) && parsedLimit > 0) {
-      limit = Math.floor(parsedLimit); // Đảm bảo là số nguyên
+      // FIX: Giới hạn limit tối đa
+      limit = Math.min(Math.floor(parsedLimit), MAX_LIMIT);
     }
   }
 

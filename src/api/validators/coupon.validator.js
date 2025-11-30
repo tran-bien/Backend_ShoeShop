@@ -51,12 +51,12 @@ const validateGetCoupons = [
     .withMessage("isPublic phải là boolean"),
   query("startDate")
     .optional()
-    .isDate()
-    .withMessage("Ngày bắt đầu không hợp lệ"),
+    .isISO8601()
+    .withMessage("Ngày bắt đầu không hợp lệ (định dạng ISO8601)"),
   query("endDate")
     .optional()
-    .isDate()
-    .withMessage("Ngày kết thúc không hợp lệ"),
+    .isISO8601()
+    .withMessage("Ngày kết thúc không hợp lệ (định dạng ISO8601)"),
 ];
 
 /**

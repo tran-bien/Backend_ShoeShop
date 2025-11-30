@@ -46,6 +46,46 @@ const createReturnRequest = async (data, userId) => {
 
   // VALIDATION: CHỈ ĐỔI 1 LẦN DUY NHẤT - SỬ DỤNG TRANSACTION
   if (type === "EXCHANGE") {
+    // Bug #3 Fix: Pre-validate exchange size availability TRƯỚC khi vào transaction
+    for (const item of items) {
+      if (item.exchangeToVariant && item.exchangeToSize) {
+        // Validate exchangeToSize khác original size
+        if (item.exchangeToSize === item.size) {
+          throw new ApiError(400, "Không thể đổi sang cùng kích thước");
+        }
+
+        // Check inventory availability cho new size
+        const Variant = mongoose.model("Variant");
+        const exchangeVariant = await Variant.findById(
+          item.exchangeToVariant
+        ).select("product");
+
+        if (!exchangeVariant) {
+          throw new ApiError(404, "Không tìm thấy biến thể đổi sang");
+        }
+
+        const newSizeInventory = await InventoryItem.findOne({
+          product: exchangeVariant.product,
+          variant: item.exchangeToVariant,
+          size: item.exchangeToSize,
+        });
+
+        // Kiểm tra availableQuantity (quantity - reservedQuantity)
+        const availableQty = newSizeInventory
+          ? newSizeInventory.quantity - (newSizeInventory.reservedQuantity || 0)
+          : 0;
+
+        if (!newSizeInventory || availableQty < (item.quantity || 1)) {
+          throw new ApiError(
+            400,
+            `Size đổi sang không còn đủ hàng. Cần: ${
+              item.quantity || 1
+            }, Còn: ${availableQty}`
+          );
+        }
+      }
+    }
+
     // Bắt đầu MongoDB Transaction để tránh race condition
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -430,6 +470,7 @@ const rejectReturnRequest = async (id, approvedBy, rejectionReason) => {
 
 /**
  * Xử lý trả hàng (nhận hàng về kho và hoàn tiền)
+ * FIX Bug #5: Thêm transaction để đảm bảo atomic operations
  */
 const processReturn = async (id, processedBy) => {
   const request = await ReturnRequest.findById(id).populate([
@@ -505,25 +546,75 @@ const processReturn = async (id, processedBy) => {
     );
   }
 
-  request.status = "processing";
-  await request.save();
+  // FIX Bug #5: Sử dụng transaction để đảm bảo atomic operations cho order và request
+  // Lưu ý: stockIn không hỗ trợ session vì có logic phức tạp riêng
+  // Nên tách stockIn ra ngoài transaction, và dùng flag inventoryRestored để prevent double-processing
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  // FIXED Bug #5: Dùng costPrice=0, stockIn sẽ tự lấy averageCostPrice
-  for (const item of request.items) {
-    await inventoryService.stockIn(
-      {
-        product: item.variant.product,
-        variant: item.variant._id,
-        size: item.size,
-        quantity: item.quantity,
-        costPrice: 0, // Will use averageCostPrice from InventoryItem
-        reason: "return",
-        notes: `Trả hàng từ đơn ${request.order.code}`,
-      },
-      processedBy
-    );
+  try {
+    // Đánh dấu đang xử lý trong transaction
+    request.status = "processing";
+    await request.save({ session });
+
+    // Cập nhật trạng thái đơn hàng trong transaction TRƯỚC khi stockIn
+    // để đảm bảo flag inventoryRestored được set
+    order.status = "returned";
+    order.inventoryRestored = true; // Đánh dấu để ngăn double restoration
+    order.statusHistory.push({
+      status: "returned",
+      updatedAt: new Date(),
+      updatedBy: processedBy,
+      note: `Khách hàng trả hàng. Lý do: ${request.reason}`,
+    });
+    await order.save({ session });
+
+    // Hoàn thành yêu cầu trong transaction
+    request.status = "completed";
+    request.processedBy = processedBy;
+    request.processedAt = new Date();
+    request.completedAt = new Date();
+    await request.save({ session });
+
+    // Commit transaction TRƯỚC khi stockIn
+    await session.commitTransaction();
+    session.endSession();
+
+    // StockIn được gọi SAU transaction commit
+    // Nếu stockIn fail, order vẫn ở trạng thái returned với inventoryRestored=true
+    // Admin có thể retry stockIn manually
+    try {
+      for (const item of request.items) {
+        await inventoryService.stockIn(
+          {
+            product: item.variant.product,
+            variant: item.variant._id,
+            size: item.size,
+            quantity: item.quantity,
+            costPrice: 0, // Will use averageCostPrice from InventoryItem
+            reason: "return",
+            notes: `Trả hàng từ đơn ${request.order.code}`,
+            reference: request._id.toString(), // Để check duplicate
+          },
+          processedBy
+        );
+      }
+    } catch (stockInError) {
+      // Log error nhưng không rollback order status
+      console.error(
+        `[Return] stockIn failed for return request ${request._id}:`,
+        stockInError.message
+      );
+      // TODO: Có thể gửi notification cho admin để retry manual
+    }
+  } catch (error) {
+    // Rollback nếu có lỗi trong transaction
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
   }
 
+  // Các operations bên ngoài transaction (không critical)
   // Trừ điểm loyalty nếu user đã nhận điểm từ order này
   try {
     const loyaltyService = require("./loyalty.service");
@@ -555,23 +646,6 @@ const processReturn = async (id, processedBy) => {
   } catch (error) {
     console.error("[Return] Lỗi trừ điểm loyalty:", error.message);
   }
-
-  // Cập nhật trạng thái đơn hàng
-  order.status = "returned";
-  order.statusHistory.push({
-    status: "returned",
-    updatedAt: new Date(),
-    updatedBy: processedBy,
-    note: `Khách hàng trả hàng. Lý do: ${request.reason}`,
-  });
-  await order.save();
-
-  // Hoàn thành yêu cầu
-  request.status = "completed";
-  request.processedBy = processedBy;
-  request.processedAt = new Date();
-  request.completedAt = new Date();
-  await request.save();
 
   // Gửi notification
   try {

@@ -94,8 +94,8 @@ const productValidator = {
       .optional()
       .isString()
       .withMessage("Mô tả sản phẩm phải là chuỗi")
-      .isLength({ min: 10, max: 1000 })
-      .withMessage("Mô tả sản phẩm phải có từ 10-1000 ký tự"),
+      .isLength({ min: 10, max: 10000 })
+      .withMessage("Mô tả sản phẩm phải có từ 10-10000 ký tự"),
 
     body("category")
       .optional()

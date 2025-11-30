@@ -105,20 +105,14 @@ const validateLoginInput = [
 ];
 
 // Validator cho admin logout user
+// FIX Bug #6: Loại bỏ async database query trong validator
+// Việc check user tồn tại nên được thực hiện trong service/controller
 const validateAdminLogoutUser = [
   param("userId")
     .notEmpty()
     .withMessage("Vui lòng cung cấp userId")
-    .custom(async (value) => {
-      if (!mongoose.Types.ObjectId.isValid(value)) {
-        throw new ApiError(400, "User ID không hợp lệ");
-      }
-      const user = await User.findById(value);
-      if (!user) {
-        throw new ApiError(404, "User không tồn tại");
-      }
-      return true;
-    }),
+    .isMongoId()
+    .withMessage("User ID không hợp lệ"),
 ];
 
 // Validator cho xác thực OTP

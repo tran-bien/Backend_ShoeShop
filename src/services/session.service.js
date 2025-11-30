@@ -60,6 +60,7 @@ async function cleanSessions() {
 
 /**
  * Xóa session cũ nếu người dùng có quá nhiều session active
+ * FIX Bug #8: Sử dụng atomic operation để tránh race condition
  * @param {String} userId - ID người dùng
  * @param {Number} maxSessions - Số session tối đa cho phép
  */
@@ -73,25 +74,33 @@ async function limitActiveSessions(userId, maxSessions = 5) {
       return;
     }
 
-    // Lấy tất cả session active của user, sắp xếp theo thời gian hoạt động mới nhất
-    const activeSessions = await Session.find({
+    // FIX: Sử dụng aggregation + bulkWrite để atomic hơn
+    // Lấy IDs của các session cần giữ lại (mới nhất)
+    const sessionsToKeep = await Session.find({
       user: userId,
       isActive: true,
-    }).sort({ lastActive: -1 });
+    })
+      .sort({ lastActive: -1 })
+      .limit(maxSessions)
+      .select("_id");
 
-    // Nếu số lượng session vượt quá giới hạn
-    if (activeSessions.length > maxSessions) {
-      // Lấy các session cũ để vô hiệu hóa
-      const oldestSessions = activeSessions.slice(maxSessions);
+    const keepIds = sessionsToKeep.map((s) => s._id);
 
-      // Vô hiệu hóa các session cũ
-      for (const session of oldestSessions) {
-        session.isActive = false;
-        await session.save();
+    // Vô hiệu hóa tất cả session khác trong một atomic operation
+    const result = await Session.updateMany(
+      {
+        user: userId,
+        isActive: true,
+        _id: { $nin: keepIds },
+      },
+      {
+        $set: { isActive: false },
       }
+    );
 
+    if (result.modifiedCount > 0) {
       console.log(
-        `Đã vô hiệu hóa ${oldestSessions.length} session cũ của user ${userId}`
+        `Đã vô hiệu hóa ${result.modifiedCount} session cũ của user ${userId}`
       );
     }
   } catch (error) {

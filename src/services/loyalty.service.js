@@ -790,10 +790,32 @@ const adminLoyaltyTierService = {
     Object.assign(tier, tierData);
     await tier.save();
 
-    // Trigger re-calculation cho tất cả users trong tier này
-    const users = await User.find({ "loyalty.tier": tierId });
-    for (const user of users) {
-      await loyaltyService.updateUserTier(user._id);
+    // FIX Bug #11: Batch processing với pagination để tránh memory issues
+    const BATCH_SIZE = 100;
+    const userCount = await User.countDocuments({ "loyalty.tier": tierId });
+    const totalBatches = Math.ceil(userCount / BATCH_SIZE);
+
+    console.log(
+      `[LOYALTY] Re-calculating tier for ${userCount} users in ${totalBatches} batches`
+    );
+
+    for (let batch = 0; batch < totalBatches; batch++) {
+      const users = await User.find({ "loyalty.tier": tierId })
+        .skip(batch * BATCH_SIZE)
+        .limit(BATCH_SIZE)
+        .select("_id");
+
+      // Process batch in parallel with limited concurrency
+      const updatePromises = users.map((user) =>
+        loyaltyService.updateUserTier(user._id).catch((err) => {
+          console.error(`[LOYALTY] Failed to update tier for user ${user._id}:`, err.message);
+        })
+      );
+      await Promise.all(updatePromises);
+
+      console.log(
+        `[LOYALTY] Processed batch ${batch + 1}/${totalBatches} (${users.length} users)`
+      );
     }
 
     return {

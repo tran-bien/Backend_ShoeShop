@@ -34,6 +34,22 @@ require("dotenv").config();
  * ================================================================================================
  */
 
+// ============================================================
+// FIX Bug #10: Helper function để escape HTML tránh XSS
+// ============================================================
+const escapeHtml = (str) => {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+// Export helper function
+module.exports.escapeHtml = escapeHtml;
+
 // Kiểm tra biến môi trường
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
   console.error(
@@ -94,19 +110,22 @@ const createEmailWrapper = (content) => `
 
 /**
  * Template 1: Email xác nhận OTP
+ * FIX Bug #10: Sử dụng escapeHtml để tránh XSS
  */
 exports.verificationEmailTemplate = (name, otp) => {
+  const safeName = escapeHtml(name);
+  const safeOtp = escapeHtml(otp);
   const content = `
     <div style="${baseStyles.content}">
       <h2 style="${baseStyles.title}">Xác nhận tài khoản</h2>
-      <p style="${baseStyles.text}">Xin chào <strong>${name}</strong>,</p>
+      <p style="${baseStyles.text}">Xin chào <strong>${safeName}</strong>,</p>
       <p style="${baseStyles.text}">
         Cảm ơn bạn đã đăng ký tài khoản tại Shoe Shop. Để hoàn tất quá trình đăng ký, 
         vui lòng sử dụng mã OTP bên dưới:
       </p>
       <div style="${baseStyles.codeBox}">
         <p style="margin: 0 0 10px 0; font-size: 12px; color: #2C2C2C; letter-spacing: 2px; text-transform: uppercase;">Mã xác nhận</p>
-        <div style="${baseStyles.code}">${otp}</div>
+        <div style="${baseStyles.code}">${safeOtp}</div>
       </div>
       <p style="${baseStyles.text}">Mã OTP này sẽ <strong>hết hạn sau 10 phút</strong>.</p>
       <p style="${baseStyles.text}">Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này.</p>
@@ -117,12 +136,15 @@ exports.verificationEmailTemplate = (name, otp) => {
 
 /**
  * Template 2: Email đặt lại mật khẩu
+ * FIX Bug #10: Sử dụng escapeHtml để tránh XSS
  */
 exports.resetPasswordEmailTemplate = (name, resetUrl) => {
+  const safeName = escapeHtml(name);
+  // URL không cần escape trong attribute href
   const content = `
     <div style="${baseStyles.content}">
       <h2 style="${baseStyles.title}">Đặt lại mật khẩu</h2>
-      <p style="${baseStyles.text}">Xin chào <strong>${name}</strong>,</p>
+      <p style="${baseStyles.text}">Xin chào <strong>${safeName}</strong>,</p>
       <p style="${baseStyles.text}">
         Bạn đã yêu cầu đặt lại mật khẩu cho tài khoản tại Shoe Shop. 
         Vui lòng nhấp vào nút bên dưới để thiết lập mật khẩu mới:
@@ -142,14 +164,20 @@ exports.resetPasswordEmailTemplate = (name, resetUrl) => {
 
 /**
  * Template 3A: Email xác nhận đơn hàng (ORDER_CONFIRMED)
+ * FIX Bug #10: Sử dụng escapeHtml để tránh XSS
  */
 exports.orderConfirmedEmailTemplate = (userName, order, frontendUrl) => {
+  const safeUserName = escapeHtml(userName);
   const content = `
     <div style="${baseStyles.content}">
       <h2 style="${baseStyles.title}">✅ Đơn hàng đã được xác nhận</h2>
-      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
+      <p style="${
+        baseStyles.text
+      }">Xin chào <strong>${safeUserName}</strong>,</p>
       <p style="${baseStyles.text}">
-        Đơn hàng <strong>${
+        Đơn hàng <strong>${escapeHtml(
+          order?.code
+        )}</strong> của bạn đã được xác nhận và đang được chuẩn bị.
           order.code
         }</strong> của bạn đã được xác nhận và đang được chuẩn bị.
       </p>

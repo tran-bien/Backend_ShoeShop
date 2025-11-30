@@ -598,106 +598,137 @@ const orderService = {
       throw new ApiError(400, "Vui lòng cung cấp lý do hủy đơn hàng");
     }
 
-    // Tạo yêu cầu hủy đơn
-    const cancelRequest = new CancelRequest({
-      order: orderId,
-      user: userId,
-      reason,
-      status: "pending",
-    });
+    // FIX Bug #4: Sử dụng transaction để đảm bảo atomic operations
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Lưu yêu cầu hủy
-    await cancelRequest.save();
+    try {
+      // Tạo yêu cầu hủy đơn
+      const cancelRequest = new CancelRequest({
+        order: orderId,
+        user: userId,
+        reason,
+        status: "pending",
+      });
 
-    // Nếu đơn hàng đang ở trạng thái PENDING → Cho phép hủy ngay (tự động)
-    if (order.status === "pending") {
-      // Cập nhật yêu cầu hủy thành đã duyệt
-      cancelRequest.status = "approved";
-      cancelRequest.resolvedAt = new Date();
-      cancelRequest.adminResponse = "Tự động duyệt cho đơn hàng pending";
-      await cancelRequest.save();
+      // Lưu yêu cầu hủy trong transaction
+      await cancelRequest.save({ session });
 
-      // Tạo bản ghi lịch sử mới
-      const newHistoryEntry = {
-        status: "cancelled",
-        updatedAt: new Date(),
-        note: `Đơn hàng bị hủy tự động. Lý do: ${reason}`,
-      };
+      // Nếu đơn hàng đang ở trạng thái PENDING → Cho phép hủy ngay (tự động)
+      if (order.status === "pending") {
+        // Cập nhật yêu cầu hủy thành đã duyệt
+        cancelRequest.status = "approved";
+        cancelRequest.resolvedAt = new Date();
+        cancelRequest.adminResponse = "Tự động duyệt cho đơn hàng pending";
+        await cancelRequest.save({ session });
 
-      // Cập nhật trạng thái đơn hàng
-      const updatedOrder = await Order.findOneAndUpdate(
-        { _id: orderId },
-        {
-          $set: {
-            status: "cancelled",
-            cancelledAt: new Date(),
-            cancelReason: reason,
-            cancelRequestId: cancelRequest._id,
-            hasCancelRequest: false,
-          },
-          $addToSet: { statusHistory: newHistoryEntry },
-        },
-        { new: true }
-      );
+        // Tạo bản ghi lịch sử mới
+        const newHistoryEntry = {
+          status: "cancelled",
+          updatedAt: new Date(),
+          note: `Đơn hàng bị hủy tự động. Lý do: ${reason}`,
+        };
 
-      // Xóa duplicate statusHistory nếu có
-      const cancelledEntries = updatedOrder.statusHistory.filter(
-        (entry) => entry.status === "cancelled"
-      );
-
-      if (cancelledEntries.length > 1) {
-        const latestCancelledEntry =
-          cancelledEntries[cancelledEntries.length - 1];
-
-        const uniqueHistory = updatedOrder.statusHistory.filter((entry) => {
-          return (
-            entry.status !== "cancelled" ||
-            entry._id.toString() === latestCancelledEntry._id.toString()
-          );
-        });
-
-        await Order.updateOne(
+        // Cập nhật trạng thái đơn hàng
+        const updatedOrder = await Order.findOneAndUpdate(
           { _id: orderId },
-          { $set: { statusHistory: uniqueHistory } }
+          {
+            $set: {
+              status: "cancelled",
+              cancelledAt: new Date(),
+              cancelReason: reason,
+              cancelRequestId: cancelRequest._id,
+              hasCancelRequest: false,
+            },
+            $addToSet: { statusHistory: newHistoryEntry },
+          },
+          { new: true, session }
         );
-      }
 
-      // FIX CRITICAL 1.1: Release inventory reservation nếu chưa deduct
-      if (!updatedOrder.inventoryDeducted) {
-        try {
-          const inventoryService = require("@services/inventory.service");
-          await inventoryService.releaseInventoryReservation(
-            updatedOrder.orderItems,
-            orderId
-          );
-          console.log(
-            `[cancelOrder] Released inventory reservation cho order ${orderId}`
-          );
-        } catch (releaseError) {
-          console.error(
-            "[cancelOrder] Lỗi release reservation:",
-            releaseError.message
+        // Xóa duplicate statusHistory nếu có
+        const cancelledEntries = updatedOrder.statusHistory.filter(
+          (entry) => entry.status === "cancelled"
+        );
+
+        if (cancelledEntries.length > 1) {
+          const latestCancelledEntry =
+            cancelledEntries[cancelledEntries.length - 1];
+
+          const uniqueHistory = updatedOrder.statusHistory.filter((entry) => {
+            return (
+              entry.status !== "cancelled" ||
+              entry._id.toString() === latestCancelledEntry._id.toString()
+            );
+          });
+
+          await Order.updateOne(
+            { _id: orderId },
+            { $set: { statusHistory: uniqueHistory } },
+            { session }
           );
         }
+
+        // FIX CRITICAL 1.1: Release inventory reservation nếu chưa deduct
+        if (!updatedOrder.inventoryDeducted) {
+          try {
+            const inventoryService = require("@services/inventory.service");
+            await inventoryService.releaseInventoryReservation(
+              updatedOrder.orderItems,
+              orderId,
+              session
+            );
+            console.log(
+              `[cancelOrder] Released inventory reservation cho order ${orderId}`
+            );
+          } catch (releaseError) {
+            console.error(
+              "[cancelOrder] Lỗi release reservation:",
+              releaseError.message
+            );
+            // Không throw error, vẫn cho phép cancel
+          }
+        }
+
+        // Commit transaction
+        await session.commitTransaction();
+
+        // Middleware sẽ tự động restore inventory nếu inventoryDeducted = true
+        return {
+          success: true,
+          message: "Đơn hàng đã được hủy thành công",
+          cancelRequest,
+        };
+      } else {
+        // Nếu đơn hàng đã CONFIRMED → Cần admin duyệt
+        await Order.updateOne(
+          { _id: orderId },
+          {
+            $set: {
+              hasCancelRequest: true,
+              cancelRequestId: cancelRequest._id,
+            },
+          },
+          { session }
+        );
+
+        // Commit transaction
+        await session.commitTransaction();
+
+        return {
+          success: true,
+          message: "Yêu cầu hủy đơn hàng đã được gửi và đang chờ xử lý",
+          cancelRequest: await cancelRequest.populate(
+            "user",
+            "name email phone"
+          ),
+        };
       }
-
-      // Middleware sẽ tự động restore inventory nếu inventoryDeducted = true
-      return {
-        success: true,
-        message: "Đơn hàng đã được hủy thành công",
-        cancelRequest,
-      };
-    } else {
-      // Nếu đơn hàng đã CONFIRMED → Cần admin duyệt
-      order.hasCancelRequest = true;
-      order.cancelRequestId = cancelRequest._id;
-      await order.save();
-
-      return {
-        success: true,
-        message: "Yêu cầu hủy đơn hàng đã được gửi và đang chờ xử lý",
-        cancelRequest: await cancelRequest.populate("user", "name email phone"),
-      };
+    } catch (error) {
+      // Rollback transaction nếu có lỗi
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
     }
   },
 

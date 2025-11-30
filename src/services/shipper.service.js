@@ -200,6 +200,17 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
 
   // Cập nhật trạng thái đơn hàng
   if (status === "delivered") {
+    // FIX Bug #3: Kiểm tra inventoryDeducted trước khi cho phép delivered
+    if (!order.inventoryDeducted) {
+      console.error(
+        `[Shipper] CRITICAL: Order ${order.code} chưa được trừ kho nhưng đang cố gắng mark delivered`
+      );
+      throw new ApiError(
+        400,
+        "Đơn hàng chưa được xử lý xuất kho. Vui lòng liên hệ admin."
+      );
+    }
+
     order.status = "delivered";
     order.deliveredAt = new Date();
     order.payment.paymentStatus = "paid";
