@@ -321,10 +321,14 @@ const cartService = {
         throw new ApiError(422, "Sản phẩm hiện không có sẵn trong kho");
       }
 
-      if (inventoryItem.quantity < quantity) {
+      // FIXED Bug #43: Sử dụng availableQuantity (quantity - reservedQuantity) để nhất quán với getCartByUser
+      const availableQuantity =
+        inventoryItem.quantity - (inventoryItem.reservedQuantity || 0);
+
+      if (availableQuantity < quantity) {
         throw new ApiError(
           400,
-          `Sản phẩm đã hết hàng hoặc không đủ số lượng. Hiện chỉ còn ${inventoryItem.quantity} sản phẩm.`
+          `Sản phẩm đã hết hàng hoặc không đủ số lượng. Hiện chỉ còn ${availableQuantity} sản phẩm.`
         );
       }
 
@@ -362,11 +366,9 @@ const cartService = {
         // Nếu sản phẩm đã có trong giỏ hàng, cập nhật số lượng
         cart.cartItems[existingItemIndex].quantity += quantity;
 
-        // Kiểm tra số lượng không vượt quá tồn kho
-        if (
-          cart.cartItems[existingItemIndex].quantity > inventoryItem.quantity
-        ) {
-          cart.cartItems[existingItemIndex].quantity = inventoryItem.quantity;
+        // FIXED Bug #43: Sử dụng availableQuantity thay vì quantity
+        if (cart.cartItems[existingItemIndex].quantity > availableQuantity) {
+          cart.cartItems[existingItemIndex].quantity = availableQuantity;
         }
 
         // Cập nhật các thông tin khác nếu cần
@@ -377,10 +379,11 @@ const cartService = {
         cart.cartItems[existingItemIndex].unavailableReason = "";
       } else {
         // Nếu sản phẩm chưa có trong giỏ hàng, thêm mới
+        // FIXED Bug #43: Sử dụng availableQuantity thay vì quantity
         cart.cartItems.push({
           variant: variantId,
           size: sizeId,
-          quantity: Math.min(quantity, inventoryItem.quantity),
+          quantity: Math.min(quantity, availableQuantity),
           price: price,
           productName: product.name,
           image: imageUrl,
@@ -469,13 +472,17 @@ const cartService = {
       throw new ApiError(422, "Sản phẩm hiện không có sẵn trong kho");
     }
 
+    // FIXED Bug #43: Sử dụng availableQuantity (quantity - reservedQuantity)
+    const availableQuantity =
+      inventoryItem.quantity - (inventoryItem.reservedQuantity || 0);
+
     // Cập nhật số lượng và kiểm tra tồn kho
     let exceededInventory = false;
     let updatedQuantity = quantity;
 
-    if (quantity > inventoryItem.quantity) {
+    if (quantity > availableQuantity) {
       exceededInventory = true;
-      updatedQuantity = inventoryItem.quantity;
+      updatedQuantity = availableQuantity;
     }
 
     // Sử dụng updateOne thay vì save() để cập nhật trực tiếp
@@ -488,11 +495,11 @@ const cartService = {
         $set: {
           "cartItems.$.quantity": updatedQuantity,
           "cartItems.$.isAvailable":
-            exceededInventory && inventoryItem.quantity === 0 ? false : true,
+            exceededInventory && availableQuantity === 0 ? false : true,
           "cartItems.$.unavailableReason": exceededInventory
-            ? inventoryItem.quantity === 0
+            ? availableQuantity === 0
               ? "Sản phẩm đã hết hàng"
-              : `Chỉ còn ${inventoryItem.quantity} sản phẩm trong kho`
+              : `Chỉ còn ${availableQuantity} sản phẩm trong kho`
             : "",
           "cartItems.$.updatedAt": new Date(),
         },
@@ -508,7 +515,7 @@ const cartService = {
     return {
       success: true,
       message: exceededInventory
-        ? `Số lượng yêu cầu (${quantity}) vượt quá tồn kho, đã điều chỉnh về tối đa ${inventoryItem.quantity} sản phẩm`
+        ? `Số lượng yêu cầu (${quantity}) vượt quá tồn kho, đã điều chỉnh về tối đa ${availableQuantity} sản phẩm`
         : "Đã cập nhật số lượng sản phẩm",
       updatedItem: updatedCart.cartItems[0],
       productInfo: {
@@ -517,7 +524,7 @@ const cartService = {
         requestedQuantity: quantity,
         adjustedQuantity: updatedQuantity,
         exceededInventory,
-        availableQuantity: inventoryItem.quantity,
+        availableQuantity: availableQuantity,
       },
     };
   },
@@ -624,14 +631,17 @@ const cartService = {
 
     // Xử lý trường hợp có mã giảm giá
     try {
-      // Tìm mã giảm giá
+      // Tìm mã giảm giá với populate các trường cần thiết cho scope validation
       const coupon = await Coupon.findOne({
         code: couponCode.toUpperCase(),
         status: "active",
         startDate: { $lte: new Date() },
         endDate: { $gte: new Date() },
         $or: [{ isPublic: true }, { users: userId }],
-      });
+      })
+        .populate("applicableProducts")
+        .populate("applicableVariants")
+        .populate("applicableCategories");
 
       if (!coupon) {
         return {
@@ -660,18 +670,51 @@ const cartService = {
         };
       }
 
-      // Tính toán giảm giá tổng thể
-      let totalDiscount = 0;
-      if (coupon.type === "percent") {
-        totalDiscount = (subtotalSelected * coupon.value) / 100;
-        if (coupon.maxDiscount) {
-          totalDiscount = Math.min(totalDiscount, coupon.maxDiscount);
-        }
-      } else {
-        // fixed
-        totalDiscount = Math.min(coupon.value, subtotalSelected);
+      // FIXED Bug #40: Thêm validation advanced coupon conditions (scope, tier, firstOrder, maxUsesPerUser)
+      // Populate orderItems với đầy đủ thông tin cho validation
+      const Variant = mongoose.model("Variant");
+      const populatedOrderItems = await Promise.all(
+        selectedItems.map(async (item) => {
+          const variantId =
+            typeof item.variant === "object" ? item.variant._id : item.variant;
+          const variant = await Variant.findById(variantId)
+            .populate("product")
+            .populate({
+              path: "product",
+              populate: { path: "category" },
+            });
+
+          return {
+            ...(item.toObject ? item.toObject() : item),
+            variant: variant,
+          };
+        })
+      );
+
+      // Validate advanced coupon conditions (scope, tier, firstOrder, maxUsesPerUser)
+      const couponService = require("@services/coupon.service");
+      const validation = await couponService.validateAdvancedCoupon(
+        coupon,
+        userId,
+        populatedOrderItems
+      );
+
+      if (!validation.isValid) {
+        return {
+          success: false,
+          message: validation.message,
+          preview: result.preview,
+        };
       }
 
+      // Calculate discount dựa trên scope (ALL/PRODUCTS/VARIANTS/CATEGORIES)
+      const discountResult = couponService.calculateApplicableDiscount(
+        coupon,
+        populatedOrderItems,
+        subtotalSelected
+      );
+
+      const totalDiscount = discountResult.discountAmount;
       const totalAfterDiscount = subtotalSelected - totalDiscount;
 
       // Tạo kết quả với mã giảm giá - sử dụng lại itemsDetail đã format
@@ -692,6 +735,8 @@ const cartService = {
           type: coupon.type,
           value: coupon.value,
           maxDiscount: coupon.maxDiscount || null,
+          scope: coupon.scope,
+          applicableSubtotal: discountResult.applicableSubtotal,
         },
       };
 

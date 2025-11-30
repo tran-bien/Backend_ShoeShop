@@ -774,6 +774,7 @@ const productService = {
 
     // Lấy thông tin tồn kho cho từng sản phẩm
     const inventoryService = require("@services/inventory.service");
+    const variantService = require("@services/variant.service");
 
     const productsWithStock = await Promise.all(
       results.data.map(async (product) => {
@@ -795,6 +796,20 @@ const productService = {
         );
         productObj.rating = ratingInfo.rating;
         productObj.numReviews = ratingInfo.numReviews;
+
+        // ✅ BUG #47 FIX: Tính inventorySummary cho mỗi variant trước khi tạo variantSummary
+        if (productObj.variants && productObj.variants.length > 0) {
+          productObj.variants = await Promise.all(
+            productObj.variants.map(async (variant) => {
+              const inventorySummary =
+                await variantService.calculateInventorySummary(variant);
+              return {
+                ...variant,
+                inventorySummary,
+              };
+            })
+          );
+        }
 
         // Thêm thông tin tóm tắt về variants
         productObj.variantSummary = createVariantSummary(productObj.variants);
@@ -2370,10 +2385,54 @@ const productService = {
     // 3. Giới hạn số lượng sản phẩm trả về
     const limitedProducts = filteredProducts.slice(0, Number(limit));
 
-    // 4. Chuyển đổi và trả về kết quả
+    // 4. Chuyển đổi và trả về kết quả - BUG #46 FIX: Thêm tính inventorySummary
+    const inventoryService = require("@services/inventory.service");
+    const reviewService = require("@services/review.service");
+    const variantService = require("@services/variant.service");
+
+    const transformedProducts = await Promise.all(
+      limitedProducts.map(async (product) => {
+        const productObj = product.toObject
+          ? product.toObject()
+          : { ...product };
+
+        // Tính stock info
+        const stockInfo = await inventoryService.getProductStockInfo(
+          product._id
+        );
+        productObj.totalQuantity = stockInfo.totalQuantity;
+        productObj.stockStatus = stockInfo.stockStatus;
+
+        // Tính rating info
+        const ratingInfo = await reviewService.getProductRatingInfo(
+          product._id
+        );
+        productObj.rating = ratingInfo.rating;
+        productObj.numReviews = ratingInfo.numReviews;
+        productObj.averageRating = ratingInfo.rating;
+        productObj.reviewCount = ratingInfo.numReviews;
+
+        // BUG #46 FIX: Tính inventorySummary cho mỗi variant để có priceRange
+        if (productObj.variants && productObj.variants.length > 0) {
+          productObj.variants = await Promise.all(
+            productObj.variants.map(async (variant) => {
+              const inventorySummary =
+                await variantService.calculateInventorySummary(variant);
+              return {
+                ...variant,
+                inventorySummary,
+              };
+            })
+          );
+        }
+
+        return transformProductForPublicList(productObj);
+      })
+    );
+
     const result = {
       success: true,
-      products: limitedProducts.map(transformProductForPublicList),
+      products: transformedProducts,
     };
 
     return result;

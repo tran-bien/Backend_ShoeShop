@@ -70,4 +70,15 @@ router.post(
   reviewController.likeReview
 );
 
+/**
+ * @route   DELETE /api/v1/users/reviews/:reviewId/like
+ * @desc    Bỏ thích đánh giá
+ * @access  Private
+ */
+router.delete(
+  "/:reviewId/like",
+  validate(reviewValidator.validateLikeReview),
+  reviewController.unlikeReview
+);
+
 module.exports = router;

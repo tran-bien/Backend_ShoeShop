@@ -64,10 +64,12 @@ const approveReturnRequest = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { note } = req.body;
 
-  const returnRequest = await returnService.approveReturnRequest(id, {
-    approvedBy: req.user._id,
-    note,
-  });
+  // FIXED Bug #42: Service signature là (id, approvedBy, staffNotes)
+  const returnRequest = await returnService.approveReturnRequest(
+    id,
+    req.user._id,
+    note
+  );
 
   res.status(200).json({
     success: true,
@@ -85,10 +87,12 @@ const rejectReturnRequest = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { reason } = req.body;
 
-  const returnRequest = await returnService.rejectReturnRequest(id, {
-    rejectedBy: req.user._id,
-    reason,
-  });
+  // FIXED Bug #42: Service signature là (id, approvedBy, rejectionReason)
+  const returnRequest = await returnService.rejectReturnRequest(
+    id,
+    req.user._id,
+    reason
+  );
 
   res.status(200).json({
     success: true,
@@ -104,12 +108,9 @@ const rejectReturnRequest = asyncHandler(async (req, res) => {
  */
 const processReturn = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { note } = req.body;
 
-  const result = await returnService.processReturn(id, {
-    processedBy: req.user._id,
-    note,
-  });
+  // FIXED Bug #42: Service signature là (id, processedBy)
+  const result = await returnService.processReturn(id, req.user._id);
 
   res.status(200).json({
     success: true,
@@ -125,12 +126,9 @@ const processReturn = asyncHandler(async (req, res) => {
  */
 const processExchange = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { note } = req.body;
 
-  const result = await returnService.processExchange(id, {
-    processedBy: req.user._id,
-    note,
-  });
+  // FIXED Bug #42: Service signature là (id, processedBy)
+  const result = await returnService.processExchange(id, req.user._id);
 
   res.status(200).json({
     success: true,

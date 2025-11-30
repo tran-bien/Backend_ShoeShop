@@ -337,10 +337,11 @@ const couponService = {
         { new: true, session }
       );
 
-      // Kiểm tra xem user có thực sự được thêm không (nếu đã tồn tại thì $addToSet không thêm)
-      const wasAlreadyCollected = coupon.users.some(
-        (u) => u.toString() === userId.toString()
-      );
+      // FIXED Bug #33: Kiểm tra xem user có thực sự được thêm không
+      // So sánh số lượng users trước và sau $addToSet để biết có thêm mới hay không
+      const previousUserCount = coupon.users.length;
+      const wasAlreadyCollected =
+        updatedCoupon.users.length === previousUserCount;
 
       if (wasAlreadyCollected) {
         await session.abortTransaction();

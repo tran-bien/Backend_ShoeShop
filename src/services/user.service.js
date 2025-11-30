@@ -273,7 +273,7 @@ const userService = {
       .select("wishlist")
       .populate({
         path: "wishlist.product",
-        select: "name slug images category brand rating numReviews isActive",
+        select: "name slug images category brand isActive",
         populate: [
           { path: "category", select: "name" },
           { path: "brand", select: "name" },
@@ -281,7 +281,7 @@ const userService = {
       })
       .populate({
         path: "wishlist.variant",
-        select: "color gender imagesvariant", // FIXED: Removed price/percentDiscount/priceFinal
+        select: "color gender imagesvariant",
         populate: { path: "color", select: "name code type colors" },
       });
 
@@ -294,9 +294,38 @@ const userService = {
       return item.product && item.product.isActive;
     });
 
+    // FIXED Bug #36: Thêm pricing từ InventoryItem cho wishlist
+    const inventoryService = require("@services/inventory.service");
+    const wishlistWithPricing = await Promise.all(
+      validWishlist.map(async (item) => {
+        const itemObj = item.toObject ? item.toObject() : { ...item };
+
+        // Nếu có variant, lấy pricing từ InventoryItem
+        if (itemObj.variant && itemObj.variant._id) {
+          try {
+            const pricingData = await inventoryService.getVariantPricing(
+              itemObj.variant._id
+            );
+            itemObj.variant.price = pricingData.pricing.calculatedPrice || 0;
+            itemObj.variant.priceFinal =
+              pricingData.pricing.calculatedPriceFinal || 0;
+            itemObj.variant.percentDiscount =
+              pricingData.pricing.percentDiscount || 0;
+          } catch (error) {
+            // Nếu không lấy được giá, set default
+            itemObj.variant.price = 0;
+            itemObj.variant.priceFinal = 0;
+            itemObj.variant.percentDiscount = 0;
+          }
+        }
+
+        return itemObj;
+      })
+    );
+
     return {
       success: true,
-      wishlist: validWishlist,
+      wishlist: wishlistWithPricing,
     };
   },
 

@@ -72,6 +72,20 @@ const likeReview = asyncHandler(async (req, res) => {
 });
 
 /**
+ * @desc    Bỏ thích đánh giá
+ * @route   DELETE /api/users/reviews/:reviewId/like
+ * @access  Private
+ */
+const unlikeReview = asyncHandler(async (req, res) => {
+  const result = await reviewService.unlikeReview(
+    req.user._id,
+    req.params.reviewId
+  );
+
+  res.status(200).json(result);
+});
+
+/**
  * @desc    Lấy danh sách sản phẩm có thể đánh giá
  * @route   GET /api/users/reviews/reviewable-products
  * @access  Private
@@ -96,5 +110,6 @@ module.exports = {
   updateReview,
   deleteReview,
   likeReview,
+  unlikeReview,
   getReviewableProducts,
 };

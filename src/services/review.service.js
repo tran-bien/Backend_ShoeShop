@@ -496,6 +496,7 @@ const reviewService = {
 
   /**
    * Thích đánh giá (tăng số lượng like)
+   * FIXED Bug #37: Ngăn user spam like bằng cách track likedBy
    * @param {String} userId - ID của người dùng
    * @param {String} reviewId - ID của đánh giá
    * @returns {Object} - Kết quả thích
@@ -511,11 +512,22 @@ const reviewService = {
     if (!review) {
       throw new ApiError(404, "Không tìm thấy đánh giá");
     }
-    //tăng số lượng like
+
+    // FIXED Bug #37: Kiểm tra user đã like chưa
+    const alreadyLiked = review.likedBy?.some(
+      (id) => id.toString() === userId.toString()
+    );
+
+    if (alreadyLiked) {
+      throw new ApiError(400, "Bạn đã thích đánh giá này rồi");
+    }
+
+    // Atomic update: Tăng like count và thêm userId vào likedBy
     const updatedReview = await Review.findByIdAndUpdate(
       reviewId,
       {
         $inc: { numberOfLikes: 1 },
+        $addToSet: { likedBy: userId },
       },
       { new: true }
     );
@@ -524,6 +536,49 @@ const reviewService = {
       success: true,
       message: "Đã thích đánh giá",
       numberOfLikes: updatedReview.numberOfLikes,
+    };
+  },
+
+  /**
+   * Bỏ thích đánh giá
+   * @param {String} userId - ID của người dùng
+   * @param {String} reviewId - ID của đánh giá
+   * @returns {Object} - Kết quả bỏ thích
+   */
+  unlikeReview: async (userId, reviewId) => {
+    const review = await Review.findOne({
+      _id: reviewId,
+      isActive: true,
+      deletedAt: null,
+    });
+
+    if (!review) {
+      throw new ApiError(404, "Không tìm thấy đánh giá");
+    }
+
+    // Kiểm tra user đã like chưa
+    const hasLiked = review.likedBy?.some(
+      (id) => id.toString() === userId.toString()
+    );
+
+    if (!hasLiked) {
+      throw new ApiError(400, "Bạn chưa thích đánh giá này");
+    }
+
+    // Atomic update: Giảm like count và xóa userId khỏi likedBy
+    const updatedReview = await Review.findByIdAndUpdate(
+      reviewId,
+      {
+        $inc: { numberOfLikes: -1 },
+        $pull: { likedBy: userId },
+      },
+      { new: true }
+    );
+
+    return {
+      success: true,
+      message: "Đã bỏ thích đánh giá",
+      numberOfLikes: Math.max(0, updatedReview.numberOfLikes),
     };
   },
 

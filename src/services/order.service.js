@@ -248,16 +248,19 @@ const orderService = {
         size: sizeId,
       });
 
+      // FIX Bug #44: Dùng availableQuantity (quantity - reservedQuantity) thay vì quantity
+      // Để tránh user đặt hàng sản phẩm đã được reserved bởi đơn khác
+      const availableQuantity = inventoryItem
+        ? inventoryItem.quantity - (inventoryItem.reservedQuantity || 0)
+        : 0;
+
       console.log(
         `- Trong kho (InventoryItem): ${inventoryItem?.quantity || 0}`
       );
-      console.log(
-        `- Có sẵn: ${
-          inventoryItem && inventoryItem.quantity > 0 ? "Có" : "Không"
-        }`
-      );
+      console.log(`- Đã reserved: ${inventoryItem?.reservedQuantity || 0}`);
+      console.log(`- Có sẵn (availableQuantity): ${availableQuantity}`);
 
-      if (!inventoryItem || inventoryItem.quantity === 0) {
+      if (!inventoryItem || availableQuantity === 0) {
         unavailableItems.push({
           productName: item.productName,
           reason: "Sản phẩm hiện không có sẵn trong kho",
@@ -265,10 +268,10 @@ const orderService = {
         continue;
       }
 
-      if (inventoryItem.quantity < item.quantity) {
+      if (availableQuantity < item.quantity) {
         unavailableItems.push({
           productName: item.productName,
-          reason: `Không đủ tồn kho. Hiện còn ${inventoryItem.quantity} sản phẩm.`,
+          reason: `Không đủ tồn kho. Hiện còn ${availableQuantity} sản phẩm có thể đặt.`,
         });
         continue;
       }

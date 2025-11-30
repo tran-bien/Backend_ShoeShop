@@ -174,18 +174,19 @@ const createReturnRequest = async (data, userId) => {
   if (type === "EXCHANGE") {
     // Tính chênh lệch giá giữa sản phẩm cũ và mới
     for (const item of validatedItems) {
-      if (item.exchangeToVariant) {
-        const Variant = mongoose.model("Variant");
-        const Product = mongoose.model("Product");
+      if (item.exchangeToVariant && item.exchangeToSize) {
+        const inventoryService = require("./inventory.service");
 
-        // Lấy giá sản phẩm mới
-        const newVariant = await Variant.findById(
-          item.exchangeToVariant
-        ).populate("product");
-        const newProduct = newVariant ? newVariant.product : null;
+        // FIXED Bug #41: Lấy giá từ InventoryItem thay vì Product.price (đã bị xóa)
+        // InventoryItem là single source of truth cho pricing
+        const pricing = await inventoryService.getVariantSizePricing(
+          item.exchangeToVariant,
+          item.exchangeToSize
+        );
 
-        if (newProduct) {
-          const newPrice = newProduct.price || 0;
+        if (pricing) {
+          // Sử dụng priceFinal (giá đã giảm) hoặc price (giá gốc)
+          const newPrice = pricing.priceFinal || pricing.price || 0;
           const oldPrice = item.priceAtPurchase;
           const priceDiff = (newPrice - oldPrice) * item.quantity;
 

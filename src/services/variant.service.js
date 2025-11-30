@@ -520,13 +520,13 @@ const variantService = {
     // Lưu lại thông tin productId để cập nhật sau
     const productId = variant.product;
 
-    // Kiểm tra xem biến thể có được sử dụng trong đơn hàng không
-    const hasOrderItems = await Order.exists({
+    // FIXED Bug #35: Sử dụng countDocuments thay vì exists để đếm số đơn hàng
+    const orderCount = await Order.countDocuments({
       "orderItems.variant": id,
     });
 
     // Vô hiệu hóa nếu liên quan đến đơn hàng
-    if (hasOrderItems) {
+    if (orderCount > 0) {
       // Vô hiệu hóa thay vì xóa mềm
       variant.isActive = false;
       await variant.save();
@@ -541,7 +541,7 @@ const variantService = {
 
       return {
         success: true,
-        message: `Biến thể ${variant._id} đang được sử dụng trong ${hasOrderItems.length} đơn hàng nên đã được vô hiệu hóa`,
+        message: `Biến thể ${variant._id} đang được sử dụng trong ${orderCount} đơn hàng nên đã được vô hiệu hóa`,
         variant: {
           variant: variant,
           isDeactivated: true,

@@ -9,6 +9,7 @@ const {
   requireStaff,
   requireStaffOrAdmin,
   requireStaffReadOnly,
+  requireAdminOnly,
 } = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
@@ -93,7 +94,7 @@ router.post(
  */
 router.post(
   "/:id/force-confirm-payment",
-  requireStaff,
+  requireAdminOnly, // FIXED Bug #34: Chỉ Admin mới được force confirm payment
   orderController.forceConfirmPayment
 );
 

@@ -120,13 +120,18 @@ const updateCartItemInfo = async (cartItem) => {
       return cartItem;
     }
 
+    // FIX Bug #45: Dùng availableQuantity (quantity - reservedQuantity) thay vì quantity
+    // Để hiển thị chính xác số lượng có thể đặt
+    const availableQuantity =
+      inventoryItem.quantity - (inventoryItem.reservedQuantity || 0);
+
     // Kiểm tra tồn kho đủ không
-    if (inventoryItem.quantity < cartItem.quantity) {
+    if (availableQuantity < cartItem.quantity) {
       cartItem.isAvailable = false;
       cartItem.unavailableReason =
-        inventoryItem.quantity === 0
+        availableQuantity === 0
           ? "Sản phẩm đã hết hàng"
-          : `Chỉ còn ${inventoryItem.quantity} sản phẩm trong kho`;
+          : `Chỉ còn ${availableQuantity} sản phẩm có thể đặt`;
       return cartItem;
     }
 

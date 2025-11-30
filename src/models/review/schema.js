@@ -41,6 +41,13 @@ const ReviewSchema = new Schema(
       type: Number,
       default: 0,
     },
+    // FIXED Bug #37: Track users đã like để ngăn spam like
+    likedBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
     // Trả lời từ admin/staff (1-1 relationship)
     reply: {
       content: {
