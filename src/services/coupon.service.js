@@ -59,6 +59,8 @@ const couponService = {
         { $skip: skip },
         { $limit: limitNum },
         {
+          // FIXED Bug #33: Không mix inclusion và exclusion projection
+          // Xóa priorityValue bằng cách không include nó
           $project: {
             code: 1,
             description: 1,
@@ -72,7 +74,7 @@ const couponService = {
             pointCost: 1,
             maxRedeemPerUser: 1,
             priority: 1,
-            priorityValue: 0, // Exclude virtual field
+            // priorityValue bị loại bỏ vì không include
           },
         },
       ]),
