@@ -1032,6 +1032,14 @@ const deductInventoryForOrder = async (order, performedBy) => {
       deductedItems.push(item);
     }
 
+    // FIXED Bug #51: Release reservation sau khi trừ kho thành công
+    // Khi tạo order, inventory đã được reserve (reservedQuantity tăng)
+    // Sau khi trừ kho (quantity giảm), cần release reservation để availableQuantity đúng
+    await releaseInventoryReservation(order.orderItems, order._id);
+    console.log(
+      `[deductInventoryForOrder] Đã release reservation cho order ${order.code}`
+    );
+
     console.log(
       `[deductInventoryForOrder] Đã trừ kho thành công cho ${deductedItems.length} items của đơn ${order.code}`
     );
