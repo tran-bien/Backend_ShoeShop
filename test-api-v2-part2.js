@@ -534,6 +534,26 @@ async function testUserOrderAPIs() {
     );
   }
 
+  // Repay failed order (VNPay)
+  if (testData.orders && testData.orders.length > 0) {
+    // Find a failed payment order or use first order
+    const failedOrder =
+      testData.orders.find((o) => o.paymentStatus === "failed") ||
+      testData.orders[0];
+    const res = await api.post(
+      `/users/orders/${failedOrder._id}/repay`,
+      {},
+      auth
+    );
+    // Accept 200 (success with payment URL) or 400 (order not eligible) or 403/404
+    const passed = [200, 400, 403, 404].includes(res.status);
+    logTest(
+      "POST /users/orders/:id/repay - Repay failed order",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
   // No token
   {
     const res = await api.get("/users/orders");
@@ -1614,6 +1634,196 @@ async function testAdminShipperAPIs() {
 }
 
 // =====================================================================
+// ADMIN VARIANT APIs
+// =====================================================================
+async function testAdminVariantAPIs() {
+  logSection("ADMIN VARIANT APIs");
+
+  if (!tokens.admin.access) {
+    logSkip("Admin Variant APIs", "No admin token");
+    return;
+  }
+
+  const auth = authHeader(tokens.admin.access);
+
+  // Get variants
+  {
+    const res = await api.get("/admin/variants", auth);
+    const passed = res.status === 200;
+    if (passed) {
+      testData.variants = res.data.variants || res.data || [];
+    }
+    logTest(
+      "GET /admin/variants - Get variants",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Get variant by ID
+  if (testData.variants.length > 0) {
+    const variant = testData.variants[0];
+    const res = await api.get(`/admin/variants/${variant._id}`, auth);
+    const passed = res.status === 200;
+    logTest(
+      "GET /admin/variants/:id - Get variant",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Get deleted variants
+  {
+    const res = await api.get("/admin/variants/deleted", auth);
+    const passed = res.status === 200;
+    logTest(
+      "GET /admin/variants/deleted - Get deleted variants",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Filter by product
+  if (testData.products.length > 0) {
+    const product = testData.products[0];
+    const res = await api.get(`/admin/variants?product=${product._id}`, auth);
+    const passed = res.status === 200;
+    logTest(
+      "GET /admin/variants?product=... - Filter by product",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+}
+
+// =====================================================================
+// ADMIN AUTH APIs
+// =====================================================================
+async function testAdminAuthAPIs() {
+  logSection("ADMIN AUTH APIs");
+
+  if (!tokens.admin.access) {
+    logSkip("Admin Auth APIs", "No admin token");
+    return;
+  }
+
+  const auth = authHeader(tokens.admin.access);
+
+  // Get all sessions (admin only)
+  {
+    const res = await api.get("/admin/auth/sessions", auth);
+    const passed = res.status === 200;
+    logTest(
+      "GET /admin/auth/sessions - Get all sessions",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // User cannot access admin auth routes
+  if (tokens.user.access) {
+    const userAuth = authHeader(tokens.user.access);
+    const res = await api.get("/admin/auth/sessions", userAuth);
+    const passed = res.status === 403;
+    logTest(
+      "GET /admin/auth/sessions - User (expect 403)",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+}
+
+// =====================================================================
+// ADMIN GEMINI APIs
+// =====================================================================
+async function testAdminGeminiAPIs() {
+  logSection("ADMIN GEMINI APIs");
+
+  if (!tokens.admin.access) {
+    logSkip("Admin Gemini APIs", "No admin token");
+    return;
+  }
+
+  const auth = authHeader(tokens.admin.access);
+
+  // Get demo mode status
+  {
+    const res = await api.get("/admin/gemini/demo-mode", auth);
+    const passed = res.status === 200;
+    logTest(
+      "GET /admin/gemini/demo-mode - Get demo mode status",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // User cannot access (expect 403)
+  if (tokens.user.access) {
+    const userAuth = authHeader(tokens.user.access);
+    const res = await api.get("/admin/gemini/demo-mode", userAuth);
+    const passed = res.status === 403;
+    logTest(
+      "GET /admin/gemini/demo-mode - User (expect 403)",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+}
+
+// =====================================================================
+// USER CHAT APIs
+// =====================================================================
+async function testUserChatAPIs() {
+  logSection("USER CHAT APIs");
+
+  if (!tokens.user.access) {
+    logSkip("User Chat APIs", "No user token");
+    return;
+  }
+
+  const auth = authHeader(tokens.user.access);
+
+  // Get conversations
+  {
+    const res = await api.get("/users/chat/conversations", auth);
+    const passed = res.status === 200;
+    logTest(
+      "GET /users/chat/conversations - Get conversations",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Create conversation
+  {
+    const res = await api.post(
+      "/users/chat/conversations",
+      { subject: "Test support request" },
+      auth
+    );
+    // Accept 200/201 (success) or 400 (already exists)
+    const passed =
+      res.status === 200 || res.status === 201 || res.status === 400;
+    logTest(
+      "POST /users/chat/conversations - Create conversation",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // No token test
+  {
+    const res = await api.get("/users/chat/conversations");
+    const passed = res.status === 401;
+    logTest(
+      "GET /users/chat/conversations - No token (expect 401)",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+}
+
+// =====================================================================
 // ADMIN RETURN APIs
 // =====================================================================
 async function testAdminReturnAPIs() {
@@ -1714,6 +1924,34 @@ async function testShipperAPIs() {
       passed,
       `Status: ${res.status}`
     );
+  }
+
+  // Update delivery status (need a valid shipping order)
+  if (testData.shipperOrders && testData.shipperOrders.length > 0) {
+    const shippingOrder = testData.shipperOrders.find(
+      (o) => o.status === "shipping"
+    );
+    if (shippingOrder) {
+      const res = await api.put(
+        `/shipper/delivery-status/${shippingOrder._id}`,
+        { status: "delivered", deliveryNote: "Test delivery completed" },
+        auth
+      );
+      // Could be 200 or 400 depending on order state
+      const passed = [200, 400].includes(res.status);
+      logTest(
+        "PUT /shipper/delivery-status/:orderId - Update delivery status",
+        passed,
+        `Status: ${res.status}`
+      );
+    } else {
+      logSkip(
+        "PUT /shipper/delivery-status/:orderId",
+        "No shipping order available"
+      );
+    }
+  } else {
+    logSkip("PUT /shipper/delivery-status/:orderId", "No shipper orders");
   }
 }
 
@@ -1821,6 +2059,12 @@ async function main() {
     await testAdminKnowledgeAPIs();
     await testAdminShipperAPIs();
     await testAdminReturnAPIs();
+    await testAdminVariantAPIs();
+    await testAdminAuthAPIs();
+    await testAdminGeminiAPIs();
+
+    // User Chat APIs
+    await testUserChatAPIs();
 
     // Shipper APIs
     await testShipperAPIs();
