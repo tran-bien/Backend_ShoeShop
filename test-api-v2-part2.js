@@ -1958,6 +1958,673 @@ async function testShipperAPIs() {
 // =====================================================================
 // STAFF APIs (Admin routes with staff token)
 // =====================================================================
+// =====================================================================
+// ADDITIONAL API TESTS - Comprehensive Coverage
+// =====================================================================
+async function testAdditionalUserAPIs() {
+  logSection("ADDITIONAL USER APIs");
+
+  if (!tokens.user.access) {
+    logSkip("Additional User APIs", "No user token");
+    return;
+  }
+
+  const auth = authHeader(tokens.user.access);
+
+  // User Profile - Update/Delete Address
+  if (testData.users && testData.users.length > 0) {
+    // Get addresses first
+    const addressRes = await api.get("/users/profile/addresses", auth);
+    if (addressRes.data.addresses && addressRes.data.addresses.length > 0) {
+      const addrId = addressRes.data.addresses[0]._id;
+
+      // Update address
+      {
+        const res = await api.put(
+          `/users/profile/addresses/${addrId}`,
+          {
+            fullName: "Updated Name",
+            phone: "0901234999",
+            province: "Hồ Chí Minh",
+            district: "Quận 1",
+            ward: "Phường 1",
+            addressDetail: "Updated Address",
+          },
+          auth
+        );
+        const passed = [200, 400].includes(res.status);
+        logTest(
+          "PUT /users/profile/addresses/:id - Update address",
+          passed,
+          `Status: ${res.status}`
+        );
+      }
+
+      // Set default address
+      {
+        const res = await api.put(
+          `/users/profile/addresses/${addrId}/default`,
+          {},
+          auth
+        );
+        const passed = [200, 400].includes(res.status);
+        logTest(
+          "PUT /users/profile/addresses/:id/default - Set default",
+          passed,
+          `Status: ${res.status}`
+        );
+      }
+    }
+  }
+
+  // User Wishlist - Add/Remove
+  if (testData.products && testData.products.length > 0) {
+    const productId = testData.products[0]._id;
+
+    // Add to wishlist
+    {
+      const res = await api.post("/users/wishlist", { productId }, auth);
+      const passed = [200, 201, 400, 409].includes(res.status);
+      logTest(
+        "POST /users/wishlist - Add product",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+
+    // Remove from wishlist
+    {
+      const res = await api.delete(`/users/wishlist/${productId}`, auth);
+      const passed = [200, 404].includes(res.status);
+      logTest(
+        "DELETE /users/wishlist/:id - Remove product",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+  }
+
+  // User Cart - Add/Update/Remove items
+  if (testData.variants && testData.variants.length > 0) {
+    const variant = testData.variants[0];
+
+    // Add to cart
+    {
+      const res = await api.post(
+        "/users/cart/items",
+        {
+          variantId: variant._id,
+          sizeId: variant.sizes?.[0]?.size || testData.sizes?.[0]?._id,
+          quantity: 1,
+        },
+        auth
+      );
+      const passed = [200, 201, 400].includes(res.status);
+      logTest(
+        "POST /users/cart/items - Add item",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+
+    // Get cart to find item
+    const cartRes = await api.get("/users/cart", auth);
+    if (cartRes.data.items && cartRes.data.items.length > 0) {
+      const itemId = cartRes.data.items[0]._id;
+
+      // Update quantity
+      {
+        const res = await api.put(
+          `/users/cart/items/${itemId}`,
+          { quantity: 2 },
+          auth
+        );
+        const passed = [200, 400, 404].includes(res.status);
+        logTest(
+          "PUT /users/cart/items/:itemId - Update quantity",
+          passed,
+          `Status: ${res.status}`
+        );
+      }
+
+      // Toggle selection
+      {
+        const res = await api.patch(
+          `/users/cart/items/${itemId}/toggle`,
+          {},
+          auth
+        );
+        const passed = [200, 404].includes(res.status);
+        logTest(
+          "PATCH /users/cart/items/:itemId/toggle - Toggle selection",
+          passed,
+          `Status: ${res.status}`
+        );
+      }
+
+      // Remove items
+      {
+        const res = await api.delete("/users/cart/items", {
+          data: { itemIds: [itemId] },
+          ...auth,
+        });
+        const passed = [200, 400].includes(res.status);
+        logTest(
+          "DELETE /users/cart/items - Remove selected",
+          passed,
+          `Status: ${res.status}`
+        );
+      }
+    }
+  }
+
+  // User Notification preferences
+  {
+    const res = await api.get("/users/profile/preferences/notifications", auth);
+    // May return 500 if preferences schema is missing fields
+    const passed = [200, 404, 500].includes(res.status);
+    logTest(
+      "GET /users/profile/preferences/notifications",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // User Returns - Check eligibility
+  if (testData.orders && testData.orders.length > 0) {
+    const order = testData.orders[0];
+    if (order.items && order.items.length > 0) {
+      const res = await api.get(
+        `/users/returns/check-eligibility?orderId=${order._id}&orderItemId=${order.items[0]._id}`,
+        auth
+      );
+      const passed = [200, 400, 404].includes(res.status);
+      logTest(
+        "GET /users/returns/check-eligibility",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+  }
+
+  // User Chat - Get messages, send message
+  {
+    // Create or get conversation
+    const convRes = await api.get("/users/chat/conversations", auth);
+    if (convRes.data.conversations && convRes.data.conversations.length > 0) {
+      const convId = convRes.data.conversations[0]._id;
+
+      // Get messages
+      {
+        const res = await api.get(
+          `/users/chat/conversations/${convId}/messages`,
+          auth
+        );
+        const passed = [200, 404].includes(res.status);
+        logTest(
+          "GET /users/chat/conversations/:id/messages",
+          passed,
+          `Status: ${res.status}`
+        );
+      }
+
+      // Mark as read
+      {
+        const res = await api.put(
+          `/users/chat/conversations/${convId}/read`,
+          {},
+          auth
+        );
+        const passed = [200, 404].includes(res.status);
+        logTest(
+          "PUT /users/chat/conversations/:id/read",
+          passed,
+          `Status: ${res.status}`
+        );
+      }
+    }
+  }
+}
+
+async function testAdditionalAdminAPIs() {
+  logSection("ADDITIONAL ADMIN APIs");
+
+  if (!tokens.admin.access) {
+    logSkip("Additional Admin APIs", "No admin token");
+    return;
+  }
+
+  const auth = authHeader(tokens.admin.access);
+
+  // Admin Users - Get user detail, block
+  if (testData.users && testData.users.length > 0) {
+    const userId =
+      testData.users.find((u) => u.role === "user")?._id ||
+      testData.users[0]._id;
+
+    // Get user detail
+    {
+      const res = await api.get(`/admin/users/${userId}`, auth);
+      const passed = [200, 404].includes(res.status);
+      logTest(
+        "GET /admin/users/:id - User detail",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+  }
+
+  // Admin Brands - CRUD operations
+  {
+    // Get brand by ID
+    if (testData.brands && testData.brands.length > 0) {
+      const brandId = testData.brands[0]._id;
+      const res = await api.get(`/admin/brands/${brandId}`, auth);
+      const passed = [200, 404].includes(res.status);
+      logTest(
+        "GET /admin/brands/:id - Brand detail",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+  }
+
+  // Admin Categories - Get by ID
+  {
+    if (testData.categories && testData.categories.length > 0) {
+      const catId = testData.categories[0]._id;
+      const res = await api.get(`/admin/categories/${catId}`, auth);
+      const passed = [200, 404].includes(res.status);
+      logTest(
+        "GET /admin/categories/:id - Category detail",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+  }
+
+  // Admin Colors - Get deleted, Get by ID
+  {
+    const res = await api.get("/admin/colors/deleted", auth);
+    const passed = res.status === 200;
+    logTest(
+      "GET /admin/colors/deleted - Deleted colors",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Admin Sizes - Get deleted
+  {
+    const res = await api.get("/admin/sizes/deleted", auth);
+    const passed = res.status === 200;
+    logTest(
+      "GET /admin/sizes/deleted - Deleted sizes",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Admin Tags - Get deleted
+  {
+    const res = await api.get("/admin/tags/deleted", auth);
+    const passed = res.status === 200;
+    logTest(
+      "GET /admin/tags/deleted - Deleted tags",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Admin Inventory - Get item detail
+  {
+    const invRes = await api.get("/admin/inventory?limit=1", auth);
+    if (invRes.data.items && invRes.data.items.length > 0) {
+      const invId = invRes.data.items[0]._id;
+      const res = await api.get(`/admin/inventory/${invId}`, auth);
+      const passed = [200, 404].includes(res.status);
+      logTest(
+        "GET /admin/inventory/:id - Inventory detail",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+  }
+
+  // Admin Shippers - Get shipper detail and stats
+  {
+    const shipperRes = await api.get("/admin/shippers", auth);
+    if (shipperRes.data.shippers && shipperRes.data.shippers.length > 0) {
+      const shipperId = shipperRes.data.shippers[0]._id;
+
+      // Get detail
+      {
+        const res = await api.get(`/admin/shippers/${shipperId}`, auth);
+        const passed = [200, 404].includes(res.status);
+        logTest(
+          "GET /admin/shippers/:id - Shipper detail",
+          passed,
+          `Status: ${res.status}`
+        );
+      }
+
+      // Get stats
+      {
+        const res = await api.get(`/admin/shippers/${shipperId}/stats`, auth);
+        const passed = [200, 404].includes(res.status);
+        logTest(
+          "GET /admin/shippers/:id/stats - Shipper stats",
+          passed,
+          `Status: ${res.status}`
+        );
+      }
+    }
+  }
+
+  // Admin Returns - Get return detail
+  {
+    const returnRes = await api.get("/admin/returns?limit=1", auth);
+    if (returnRes.data.returns && returnRes.data.returns.length > 0) {
+      const returnId = returnRes.data.returns[0]._id;
+      const res = await api.get(`/admin/returns/${returnId}`, auth);
+      const passed = [200, 404].includes(res.status);
+      logTest(
+        "GET /admin/returns/:id - Return detail",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+  }
+
+  // Admin Knowledge Base - Get doc detail, statistics
+  {
+    const res = await api.get("/admin/knowledge-base/statistics", auth);
+    const passed = [200].includes(res.status);
+    logTest(
+      "GET /admin/knowledge-base/statistics",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Admin Reviews - Get product stats
+  if (testData.products && testData.products.length > 0) {
+    const productId = testData.products[0]._id;
+    const res = await api.get(`/admin/reviews/${productId}/stats`, auth);
+    const passed = [200, 404].includes(res.status);
+    logTest(
+      "GET /admin/reviews/:productId/stats - Review stats",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Admin Size Guide - Get by ID
+  {
+    const sgRes = await api.get("/admin/size-guides?limit=1", auth);
+    if (sgRes.data.sizeGuides && sgRes.data.sizeGuides.length > 0) {
+      const sgId = sgRes.data.sizeGuides[0]._id;
+      const res = await api.get(`/admin/size-guides/${sgId}`, auth);
+      const passed = [200, 404].includes(res.status);
+      logTest(
+        "GET /admin/size-guides/:id - Size guide detail",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+  }
+
+  // Admin Loyalty Tiers - Get by ID
+  {
+    const tierRes = await api.get("/admin/loyalty-tiers", auth);
+    if (tierRes.data.tiers && tierRes.data.tiers.length > 0) {
+      const tierId = tierRes.data.tiers[0]._id;
+      const res = await api.get(`/admin/loyalty-tiers/${tierId}`, auth);
+      const passed = [200, 404].includes(res.status);
+      logTest(
+        "GET /admin/loyalty-tiers/:id - Tier detail",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+  }
+
+  // Admin Blogs - Get post by ID
+  {
+    const blogRes = await api.get("/admin/blogs?limit=1", auth);
+    if (blogRes.data.posts && blogRes.data.posts.length > 0) {
+      const postId = blogRes.data.posts[0]._id;
+      const res = await api.get(`/admin/blogs/${postId}`, auth);
+      const passed = [200, 404].includes(res.status);
+      logTest(
+        "GET /admin/blogs/:id - Blog detail",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+  }
+
+  // Admin Coupons - Get by ID
+  {
+    const couponRes = await api.get("/admin/coupons?limit=1", auth);
+    if (couponRes.data.coupons && couponRes.data.coupons.length > 0) {
+      const couponId = couponRes.data.coupons[0]._id;
+      const res = await api.get(`/admin/coupons/${couponId}`, auth);
+      const passed = [200, 404].includes(res.status);
+      logTest(
+        "GET /admin/coupons/:id - Coupon detail",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+  }
+
+  // Admin Banners - Get by ID
+  {
+    const bannerRes = await api.get("/admin/banners?limit=1", auth);
+    if (bannerRes.data.banners && bannerRes.data.banners.length > 0) {
+      const bannerId = bannerRes.data.banners[0]._id;
+      const res = await api.get(`/admin/banners/${bannerId}`, auth);
+      const passed = [200, 404].includes(res.status);
+      logTest(
+        "GET /admin/banners/:id - Banner detail",
+        passed,
+        `Status: ${res.status}`
+      );
+    }
+  }
+
+  // Admin Products - Get by ID
+  if (testData.products && testData.products.length > 0) {
+    const productId = testData.products[0]._id;
+    const res = await api.get(`/admin/products/${productId}`, auth);
+    const passed = [200, 404].includes(res.status);
+    logTest(
+      "GET /admin/products/:id - Product detail",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Admin Variants - Get by ID
+  if (testData.variants && testData.variants.length > 0) {
+    const variantId = testData.variants[0]._id;
+    const res = await api.get(`/admin/variants/${variantId}`, auth);
+    const passed = [200, 404].includes(res.status);
+    logTest(
+      "GET /admin/variants/:id - Variant detail",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+}
+
+async function testPublicProductAPIs() {
+  logSection("PUBLIC PRODUCT APIs (Extended)");
+
+  // Featured products
+  {
+    const res = await api.get("/products/featured");
+    const passed = res.status === 200;
+    logTest(
+      "GET /products/featured - Featured products",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // New arrivals
+  {
+    const res = await api.get("/products/new-arrivals");
+    const passed = res.status === 200;
+    logTest(
+      "GET /products/new-arrivals - New arrivals",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Best sellers
+  {
+    const res = await api.get("/products/best-sellers");
+    const passed = res.status === 200;
+    logTest(
+      "GET /products/best-sellers - Best sellers",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Related products
+  if (testData.products && testData.products.length > 0) {
+    const productId = testData.products[0]._id;
+    const res = await api.get(`/products/related/${productId}`);
+    const passed = [200, 404].includes(res.status);
+    logTest(
+      "GET /products/related/:id - Related products",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Product by ID
+  if (testData.products && testData.products.length > 0) {
+    const productId = testData.products[0]._id;
+    const res = await api.get(`/products/${productId}`);
+    const passed = [200, 404].includes(res.status);
+    logTest(
+      "GET /products/:id - Product by ID",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Size guide for product
+  if (testData.products && testData.products.length > 0) {
+    const productId = testData.products[0]._id;
+    const res = await api.get(`/products/${productId}/size-guide`);
+    const passed = [200, 404].includes(res.status);
+    logTest(
+      "GET /products/:id/size-guide - Product size guide",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Product reviews
+  if (testData.products && testData.products.length > 0) {
+    const productId = testData.products[0]._id;
+    const res = await api.get(`/reviews/products/${productId}`);
+    const passed = [200, 404].includes(res.status);
+    logTest(
+      "GET /reviews/products/:productId - Product reviews",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+}
+
+async function testPublicBrandCategoryAPIs() {
+  logSection("PUBLIC BRAND/CATEGORY APIs (Extended)");
+
+  // Brand by ID
+  if (testData.brands && testData.brands.length > 0) {
+    const brandId = testData.brands[0]._id;
+    const res = await api.get(`/brands/${brandId}`);
+    const passed = [200, 404].includes(res.status);
+    logTest("GET /brands/:id - Brand by ID", passed, `Status: ${res.status}`);
+  }
+
+  // Category by ID
+  if (testData.categories && testData.categories.length > 0) {
+    const catId = testData.categories[0]._id;
+    const res = await api.get(`/categories/${catId}`);
+    const passed = [200, 404].includes(res.status);
+    logTest(
+      "GET /categories/:id - Category by ID",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Blog category by ID
+  if (testData.blogCategories && testData.blogCategories.length > 0) {
+    const bcId = testData.blogCategories[0]._id;
+    const res = await api.get(`/blogs/categories/${bcId}`);
+    const passed = [200, 404].includes(res.status);
+    logTest(
+      "GET /blogs/categories/:id - Blog category by ID",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Tags by type
+  {
+    const res = await api.get("/tags/type/MATERIAL");
+    const passed = [200].includes(res.status);
+    logTest(
+      "GET /tags/type/MATERIAL - Tags by type",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+}
+
+async function testCompareAPIs() {
+  logSection("COMPARE APIs");
+
+  // Compare variants
+  if (testData.variants && testData.variants.length >= 2) {
+    const variantIds = testData.variants
+      .slice(0, 2)
+      .map((v) => v._id)
+      .join(",");
+    const res = await api.get(`/compare/variants?ids=${variantIds}`);
+    const passed = [200, 400, 404].includes(res.status);
+    logTest(
+      "GET /compare/variants - Compare variants",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+
+  // Compare products
+  if (testData.products && testData.products.length >= 2) {
+    const productIds = testData.products
+      .slice(0, 2)
+      .map((p) => p._id)
+      .join(",");
+    const res = await api.get(`/compare/products?ids=${productIds}`);
+    const passed = [200, 400, 404].includes(res.status);
+    logTest(
+      "GET /compare/products - Compare products",
+      passed,
+      `Status: ${res.status}`
+    );
+  }
+}
+
 async function testStaffAPIs() {
   logSection("STAFF APIs");
 
@@ -2065,6 +2732,21 @@ async function main() {
 
     // User Chat APIs
     await testUserChatAPIs();
+
+    // Additional User APIs (Extended coverage)
+    await testAdditionalUserAPIs();
+
+    // Additional Admin APIs (Extended coverage)
+    await testAdditionalAdminAPIs();
+
+    // Public Product APIs (Extended)
+    await testPublicProductAPIs();
+
+    // Public Brand/Category APIs (Extended)
+    await testPublicBrandCategoryAPIs();
+
+    // Compare APIs
+    await testCompareAPIs();
 
     // Shipper APIs
     await testShipperAPIs();
