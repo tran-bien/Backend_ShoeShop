@@ -169,12 +169,12 @@ const orderService = {
 
     // Ánh xạ từ cấu trúc địa chỉ User sang cấu trúc địa chỉ Order
     const shippingAddress = {
-      name: address.fullName,
+      name: address.name,
       phone: address.phone,
       province: address.province,
       district: address.district,
       ward: address.ward,
-      detail: address.addressDetail,
+      detail: address.detail,
     };
 
     // Lấy giỏ hàng hiện tại

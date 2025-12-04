@@ -25,7 +25,8 @@ class GeminiService {
     // DEMO MODE: Cho phép AI trả lời lung tung khi chưa có KB
     // Set = false để bật strict mode (production)
     // Set = true để demo AI trả lời sai khi chưa train (demo purpose)
-    this.demoMode = process.env.GEMINI_DEMO_MODE === "true" || false;
+    // Default to true for development/demo purposes
+    this.demoMode = process.env.GEMINI_DEMO_MODE !== "false";
   }
 
   /**

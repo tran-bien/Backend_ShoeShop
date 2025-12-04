@@ -994,12 +994,12 @@ async function testUserAPIs() {
     async () => {
       try {
         const result = await userService.addUserAddress(userId, {
-          fullName: "Test User",
+          name: "Test User",
           phone: "0123456789",
           province: "Hồ Chí Minh",
           district: "Quận 1",
           ward: "Phường Bến Nghé",
-          streetAddress: "123 Nguyễn Huệ",
+          detail: "123 Nguyễn Huệ",
           isDefault: false,
         });
       } catch (e) {

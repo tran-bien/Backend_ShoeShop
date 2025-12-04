@@ -198,12 +198,12 @@ async function seedTestData() {
         isVerified: true,
         addresses: [
           {
-            fullName: "Test User",
+            name: "Test User",
             phone: "0901234568",
             province: "Hồ Chí Minh",
             district: "Quận 1",
             ward: "Phường Bến Nghé",
-            addressDetail: "123 Nguyễn Huệ",
+            detail: "123 Nguyễn Huệ",
             isDefault: true,
           },
         ],

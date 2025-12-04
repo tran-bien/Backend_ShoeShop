@@ -505,7 +505,7 @@ const processReturn = async (id, processedBy) => {
     );
   }
 
-  // VALIDATION: Kiểm tra trạng thái request (redundant nhưng giữ cho backward compatibility)
+  // VALIDATION: Kiểm tra trạng thái request
   if (request.status === "completed") {
     throw new ApiError(400, "Yêu cầu đã được xử lý hoàn tất trước đó");
   }

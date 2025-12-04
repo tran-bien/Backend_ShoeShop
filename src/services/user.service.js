@@ -158,12 +158,12 @@ const userService = {
     // Cập nhật địa chỉ
     const existingAddress = user.addresses[addressIndex];
     const fields = [
-      "fullName",
+      "name",
       "phone",
       "province",
       "district",
       "ward",
-      "addressDetail",
+      "detail",
       "isDefault",
     ];
 

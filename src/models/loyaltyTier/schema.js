@@ -28,20 +28,6 @@ const LoyaltyTierSchema = new mongoose.Schema(
       comment: "Doanh số tối đa (null = không giới hạn)",
     },
 
-    // Giữ lại minPoints cho backward compatibility và tier benefits
-    minPoints: {
-      type: Number,
-      min: 0,
-      default: 0,
-      comment: "Điểm tối thiểu (không dùng để tính tier, chỉ để reference)",
-    },
-
-    maxPoints: {
-      type: Number,
-      min: 0,
-      comment: "Điểm tối đa (không dùng để tính tier, chỉ để reference)",
-    },
-
     benefits: {
       pointsMultiplier: {
         type: Number,
@@ -76,7 +62,6 @@ const LoyaltyTierSchema = new mongoose.Schema(
 
 // Index
 LoyaltyTierSchema.index({ minSpending: 1 });
-LoyaltyTierSchema.index({ minPoints: 1 }); // Backward compatibility
 LoyaltyTierSchema.index({ displayOrder: 1 });
 
 module.exports = LoyaltyTierSchema;

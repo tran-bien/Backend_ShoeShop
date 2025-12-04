@@ -291,12 +291,12 @@ async function testUserProfileAPIs() {
     const res = await api.post(
       "/users/profile/addresses",
       {
-        fullName: "Test Address",
+        name: "Test Address",
         phone: "0912345678",
         province: "Hồ Chí Minh",
         district: "Quận 1",
         ward: "Phường 1",
-        addressDetail: "123 Test Street", // Fixed: streetAddress → addressDetail
+        detail: "123 Test Street",
         isDefault: false,
       },
       auth
@@ -1983,12 +1983,12 @@ async function testAdditionalUserAPIs() {
         const res = await api.put(
           `/users/profile/addresses/${addrId}`,
           {
-            fullName: "Updated Name",
+            name: "Updated Name",
             phone: "0901234999",
             province: "Hồ Chí Minh",
             district: "Quận 1",
             ward: "Phường 1",
-            addressDetail: "Updated Address",
+            detail: "Updated Address",
           },
           auth
         );

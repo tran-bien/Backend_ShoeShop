@@ -100,7 +100,7 @@ const adminValidators = {
       .trim(),
 
     query("type")
-      .optional()
+      .optional({ values: "falsy" })
       .isIn(["MATERIAL", "USECASE", "CUSTOM"])
       .withMessage("Type phải là MATERIAL, USECASE hoặc CUSTOM")
       .toUpperCase(),

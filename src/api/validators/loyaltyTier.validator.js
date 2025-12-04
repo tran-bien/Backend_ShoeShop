@@ -72,17 +72,6 @@ const loyaltyTierValidator = {
         return true;
       }),
 
-    // Giữ lại minPoints/maxPoints cho backward compatibility (optional)
-    body("minPoints")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Điểm tối thiểu phải là số nguyên không âm"),
-
-    body("maxPoints")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Điểm tối đa phải là số nguyên không âm"),
-
     body("benefits.pointsMultiplier")
       .optional()
       .isFloat({ min: 1, max: 5 })
@@ -137,16 +126,6 @@ const loyaltyTierValidator = {
       .optional()
       .isInt({ min: 0 })
       .withMessage("Doanh số tối đa phải là số nguyên không âm"),
-
-    body("minPoints")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Điểm tối thiểu phải là số nguyên không âm"),
-
-    body("maxPoints")
-      .optional()
-      .isInt({ min: 0 })
-      .withMessage("Điểm tối đa phải là số nguyên không âm"),
 
     body("benefits.pointsMultiplier")
       .optional()

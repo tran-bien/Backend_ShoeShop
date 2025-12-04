@@ -44,7 +44,7 @@ const validateUpdateProfile = [
  * Validator cho API thêm địa chỉ mới
  */
 const validateAddAddress = [
-  body("fullName")
+  body("name")
     .isString()
     .trim()
     .notEmpty()
@@ -76,7 +76,7 @@ const validateAddAddress = [
     .notEmpty()
     .withMessage("Phường/Xã không được để trống"),
 
-  body("addressDetail")
+  body("detail")
     .isString()
     .trim()
     .notEmpty()
@@ -94,7 +94,7 @@ const validateAddAddress = [
 const validateUpdateAddress = [
   param("id").isMongoId().withMessage("ID địa chỉ không hợp lệ"),
 
-  body("fullName")
+  body("name")
     .optional()
     .isString()
     .trim()
@@ -131,7 +131,7 @@ const validateUpdateAddress = [
     .notEmpty()
     .withMessage("Phường/Xã không được để trống"),
 
-  body("addressDetail")
+  body("detail")
     .optional()
     .isString()
     .trim()
