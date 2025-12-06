@@ -652,6 +652,118 @@ const couponService = {
       discountAmount: Math.round(discountAmount),
     };
   },
+
+  /**
+   * Xác thực mã giảm giá theo code
+   * @param {String} userId - ID của người dùng
+   * @param {String} code - Mã giảm giá
+   * @param {Number} subTotal - Tổng tiền đơn hàng
+   * @returns {Object} - Kết quả xác thực và thông tin discount
+   */
+  verifyCouponByCode: async (userId, code, subTotal = 0) => {
+    // Tìm coupon theo code
+    const coupon = await Coupon.findOne({
+      code: code.toUpperCase(),
+    });
+
+    if (!coupon) {
+      return {
+        isValid: false,
+        message: "Mã giảm giá không tồn tại",
+      };
+    }
+
+    // Kiểm tra trạng thái coupon
+    if (coupon.status !== "active") {
+      return {
+        isValid: false,
+        message: "Mã giảm giá không còn hoạt động",
+      };
+    }
+
+    // Kiểm tra thời gian hiệu lực
+    const now = new Date();
+    if (now < new Date(coupon.startDate)) {
+      return {
+        isValid: false,
+        message: "Mã giảm giá chưa có hiệu lực",
+      };
+    }
+
+    if (now > new Date(coupon.endDate)) {
+      return {
+        isValid: false,
+        message: "Mã giảm giá đã hết hạn",
+      };
+    }
+
+    // Kiểm tra số lượng sử dụng tối đa
+    if (coupon.maxUses && coupon.currentUses >= coupon.maxUses) {
+      return {
+        isValid: false,
+        message: "Mã giảm giá đã hết lượt sử dụng",
+      };
+    }
+
+    // Kiểm tra người dùng đã thu thập coupon chưa (nếu coupon không public)
+    if (!coupon.isPublic && !coupon.users.includes(userId)) {
+      return {
+        isValid: false,
+        message: "Bạn chưa thu thập mã giảm giá này",
+      };
+    }
+
+    // Kiểm tra giá trị đơn hàng tối thiểu
+    if (coupon.minOrderValue && subTotal < coupon.minOrderValue) {
+      return {
+        isValid: false,
+        message: `Đơn hàng cần tối thiểu ${coupon.minOrderValue.toLocaleString(
+          "vi-VN"
+        )}đ để áp dụng mã này`,
+      };
+    }
+
+    // Kiểm tra số lần sử dụng của user
+    if (coupon.conditions?.maxUsagePerUser) {
+      const usageCount =
+        coupon.userUsage?.find((u) => u.user?.toString() === userId?.toString())
+          ?.usageCount || 0;
+      if (usageCount >= coupon.conditions.maxUsagePerUser) {
+        return {
+          isValid: false,
+          message: `Bạn đã sử dụng mã này ${usageCount}/${coupon.conditions.maxUsagePerUser} lần`,
+        };
+      }
+    }
+
+    // Tính toán discount
+    let discountAmount = 0;
+    if (coupon.type === "percent") {
+      discountAmount = (subTotal * coupon.value) / 100;
+      if (coupon.maxDiscount && discountAmount > coupon.maxDiscount) {
+        discountAmount = coupon.maxDiscount;
+      }
+    } else if (coupon.type === "fixed") {
+      discountAmount = Math.min(coupon.value, subTotal);
+    }
+
+    return {
+      isValid: true,
+      message: "Mã giảm giá hợp lệ",
+      coupon: {
+        _id: coupon._id,
+        code: coupon.code,
+        description: coupon.description,
+        type: coupon.type,
+        value: coupon.value,
+        maxDiscount: coupon.maxDiscount,
+        minOrderValue: coupon.minOrderValue,
+        startDate: coupon.startDate,
+        endDate: coupon.endDate,
+      },
+      discount: Math.round(discountAmount),
+    };
+  },
 };
 
 /**

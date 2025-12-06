@@ -22,6 +22,13 @@ router.get("/", couponController.getPublicCoupons);
 router.get("/collected", couponController.getUserCoupons);
 
 /**
+ * @route   POST /api/v1/users/coupons/verify
+ * @desc    Xác thực mã giảm giá cho giỏ hàng
+ * @access  Private - User
+ */
+router.post("/verify", couponController.verifyCoupon);
+
+/**
  * @route   POST /api/v1/users/coupons/:id/collect
  * @desc    Thu thập mã giảm giá
  * @access  Private - User

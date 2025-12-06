@@ -40,8 +40,27 @@ const collectCoupon = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Xác thực mã giảm giá
+ * @route   POST /api/v1/users/coupons/verify
+ * @access  Private - User
+ */
+const verifyCoupon = asyncHandler(async (req, res) => {
+  const { code, subTotal } = req.body;
+  const result = await couponService.verifyCouponByCode(
+    req.user._id,
+    code,
+    subTotal
+  );
+  return res.status(200).json({
+    success: true,
+    ...result,
+  });
+});
+
 module.exports = {
   getPublicCoupons,
   getUserCoupons,
   collectCoupon,
+  verifyCoupon,
 };
