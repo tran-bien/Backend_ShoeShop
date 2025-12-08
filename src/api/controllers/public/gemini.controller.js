@@ -22,7 +22,7 @@ const geminiController = {
 
     // Rate limit info được set trong header bởi middleware
     return res.json({
-      success: true,
+      success: !result.error, // false nếu có lỗi
       data: {
         response: result.response,
         sessionId: result.sessionId,
@@ -30,23 +30,9 @@ const geminiController = {
         cached: result.cached || false,
         noKnowledge: result.noKnowledge || false,
         demoMode: result.demoMode || false,
+        rateLimited: result.rateLimited || false, // Thông báo bị rate limit
+        quotaExhausted: result.quotaExhausted || false, // Quota hết (cần chờ reset)
       },
-    });
-  }),
-
-  /**
-   * @route POST /api/v1/public/ai-chat/feedback
-   * @desc Feedback cho AI response
-   */
-  feedback: asyncHandler(async (req, res) => {
-    const { sessionId, helpful, comment } = req.body;
-
-    // TODO: Lưu feedback vào DB để cải thiện AI
-    // await AIFeedback.create({ sessionId, helpful, comment });
-
-    return res.json({
-      success: true,
-      message: "Cảm ơn phản hồi của bạn!",
     });
   }),
 };

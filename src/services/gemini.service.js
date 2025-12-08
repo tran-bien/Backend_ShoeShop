@@ -289,7 +289,45 @@ class GeminiService {
     } catch (error) {
       console.error("[GEMINI] Chat error:", error);
 
-      // Fallback response
+      // Xử lý các loại lỗi cụ thể
+      const errorStatus = error.status || error.statusCode;
+
+      if (errorStatus === 429) {
+        // Kiểm tra xem có phải hết quota ngày không (limit: 0)
+        const quotaExhausted = error.message?.includes("limit: 0");
+        const retryMatch = error.message?.match(/retry in (\d+)/i);
+        const retrySeconds = retryMatch ? retryMatch[1] : "vài";
+
+        if (quotaExhausted) {
+          // Hết quota ngày - cần chờ reset hoặc đổi API key
+          return {
+            response: `Hệ thống AI đã hết lượt sử dụng hôm nay. Vui lòng chat với nhân viên hỗ trợ hoặc gọi hotline 1900 xxxx để được tư vấn nhé!`,
+            error: true,
+            rateLimited: true,
+            quotaExhausted: true,
+            errorDetails: "Gemini API daily quota exhausted",
+          };
+        }
+
+        return {
+          response: `AI đang bận, vui lòng thử lại sau ${retrySeconds} giây hoặc chat với nhân viên hỗ trợ nhé!`,
+          error: true,
+          rateLimited: true,
+          quotaExhausted: false,
+          errorDetails: "Gemini API rate limit exceeded",
+        };
+      }
+
+      if (errorStatus === 404) {
+        return {
+          response:
+            "🔧 Hệ thống AI đang bảo trì. Vui lòng chat với nhân viên hỗ trợ hoặc gọi hotline 1900 xxxx.",
+          error: true,
+          errorDetails: "Gemini model not available",
+        };
+      }
+
+      // Fallback response cho các lỗi khác
       return {
         response:
           "Xin lỗi, tôi đang gặp sự cố kỹ thuật. Vui lòng chat với nhân viên hỗ trợ hoặc gọi hotline 1900 xxxx. 🙏",

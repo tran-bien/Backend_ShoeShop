@@ -2,7 +2,8 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 /**
  * Gemini Configuration
- * Model: gemini-2.0-flash-exp (FREE unlimited until Feb 2026)
+ * Model: gemini-2.5-flash (FREE tier - Model mới nhất, quota riêng)
+ * Note: gemini-2.0-flash có thể hết quota, dùng 2.5-flash làm fallback
  */
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -29,8 +30,10 @@ QUY TẮC QUAN TRỌNG NHẤT:
 
 CÁCH TRẢ LỜI:
 - Thân thiện, chuyên nghiệp
-- Ngắn gọn (2-4 câu)
+- Trả lời đầy đủ thông tin, có thể dài hơn nếu cần thiết
 - Dùng emoji phù hợp (👟 🎁 ✨)
+- TUYỆT ĐỐI KHÔNG dùng ký tự markdown như *, **, ***, #, ##, - (gạch đầu dòng). Thay vào đó dùng emoji hoặc số thứ tự
+- Nếu liệt kê, dùng số: 1. 2. 3. hoặc emoji: ✅ ❌ 👉
 - Nếu không chắc chắn, hướng dẫn liên hệ hotline: 1900 xxxx hoặc chat với nhân viên
 
 VÍ DỤ:
@@ -44,13 +47,13 @@ Bot (có thông tin trong NGỮ CẢNH): "✨ Shop hỗ trợ đổi trả trong
 
 // Model configuration
 const chatModel = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash-exp",
+  model: "gemini-2.5-flash", // Model mới nhất, quota riêng với 2.0
   systemInstruction: SYSTEM_INSTRUCTION,
   generationConfig: {
     temperature: 0.7,
     topP: 0.95,
     topK: 40,
-    maxOutputTokens: 300, // Giới hạn độ dài response
+    maxOutputTokens: 1024, // Tăng lên để trả lời đầy đủ
     candidateCount: 1,
   },
   safetySettings: [

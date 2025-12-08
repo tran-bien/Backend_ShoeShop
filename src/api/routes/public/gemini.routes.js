@@ -4,10 +4,7 @@ const geminiController = require("@controllers/public/gemini.controller");
 const validateRequest = require("@middlewares/validateRequest");
 const { optionalAuth } = require("@middlewares/auth.middleware");
 const { rateLimitMiddleware } = require("@utils/rateLimiter");
-const {
-  validateChatWithAI,
-  validateAIFeedback,
-} = require("@validators/gemini.validator");
+const { validateChatWithAI } = require("@validators/gemini.validator");
 
 /**
  * @route   POST /api/v1/public/ai-chat
@@ -21,18 +18,6 @@ router.post(
   validateChatWithAI,
   validateRequest,
   geminiController.chatWithAI
-);
-
-/**
- * @route   POST /api/v1/public/ai-chat/feedback
- * @desc    Gửi feedback cho AI response
- * @access  Public
- */
-router.post(
-  "/ai-chat/feedback",
-  validateAIFeedback,
-  validateRequest,
-  geminiController.feedback
 );
 
 module.exports = router;

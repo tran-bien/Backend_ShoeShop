@@ -53,22 +53,6 @@ const validateChatWithAI = [
 ];
 
 /**
- * Validator cho API feedback AI
- */
-const validateAIFeedback = [
-  body("sessionId").notEmpty().withMessage("Session ID không được để trống"),
-
-  body("helpful").isBoolean().withMessage("Helpful phải là boolean"),
-
-  body("comment")
-    .optional()
-    .isString()
-    .withMessage("Comment phải là chuỗi")
-    .isLength({ max: 500 })
-    .withMessage("Comment không được quá 500 ký tự"),
-];
-
-/**
  * Validator cho API toggle demo mode (Admin)
  */
 const validateToggleDemoMode = [
@@ -81,6 +65,5 @@ const validateToggleDemoMode = [
 
 module.exports = {
   validateChatWithAI,
-  validateAIFeedback,
   validateToggleDemoMode,
 };
