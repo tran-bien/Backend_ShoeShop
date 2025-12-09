@@ -10,10 +10,11 @@ const KnowledgeDocumentSchema = new mongoose.Schema(
     category: {
       type: String,
       enum: [
-        "product_catalog", // Danh mục sản phẩm
+        "category_info", // Danh mục sản phẩm
         "policy", // Chính sách (đổi trả, vận chuyển, thanh toán)
         "faq", // Câu hỏi thường gặp
         "brand_info", // Thông tin thương hiệu
+        "product_info", // Thông tin sản phẩm
         "how_to_size", // Hướng dẫn chọn size
       ],
       required: true,
@@ -59,18 +60,6 @@ const KnowledgeDocumentSchema = new mongoose.Schema(
         enum: ["manual", "excel_import"],
         default: "manual",
       },
-      relatedProducts: [
-        {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
-        },
-      ],
-      relatedCategories: [
-        {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Category",
-        },
-      ],
       lastUpdatedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",

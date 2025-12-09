@@ -6,10 +6,11 @@ const ApiError = require("@utils/ApiError");
  */
 class ExcelValidator {
   static VALID_CATEGORIES = [
-    "product_catalog",
+    "category_info",
     "policy",
     "faq",
     "brand_info",
+    "product_info",
     "how_to_size",
   ];
 
@@ -78,22 +79,6 @@ class ExcelValidator {
               .filter((t) => t)
           : [];
 
-        // Parse related products
-        const relatedProducts = row["Related Products (IDs, phân cách ;)"]
-          ? row["Related Products (IDs, phân cách ;)"]
-              .split(";")
-              .map((id) => id.trim())
-              .filter((id) => id)
-          : [];
-
-        // Parse related categories
-        const relatedCategories = row["Related Categories (IDs, phân cách ;)"]
-          ? row["Related Categories (IDs, phân cách ;)"]
-              .split(";")
-              .map((id) => id.trim())
-              .filter((id) => id)
-          : [];
-
         validDocuments.push({
           category: row["Category (*)"],
           title: row["Title (*)"],
@@ -102,10 +87,6 @@ class ExcelValidator {
           priority: row["Priority (1-10)"]
             ? parseInt(row["Priority (1-10)"])
             : 1,
-          metadata: {
-            relatedProducts,
-            relatedCategories,
-          },
         });
 
         // Warnings
@@ -171,20 +152,6 @@ class ExcelValidator {
               .filter((t) => t)
           : [];
 
-        const relatedProducts = row["Related Products (IDs, phân cách ;)"]
-          ? row["Related Products (IDs, phân cách ;)"]
-              .split(";")
-              .map((id) => id.trim())
-              .filter((id) => id)
-          : [];
-
-        const relatedCategories = row["Related Categories (IDs, phân cách ;)"]
-          ? row["Related Categories (IDs, phân cách ;)"]
-              .split(";")
-              .map((id) => id.trim())
-              .filter((id) => id)
-          : [];
-
         const priority = row["Priority (1-10)"]
           ? parseInt(row["Priority (1-10)"])
           : 1;
@@ -198,10 +165,6 @@ class ExcelValidator {
           content: row["Content (*)"],
           tags,
           priority,
-          metadata: {
-            relatedProducts,
-            relatedCategories,
-          },
         });
       } catch (error) {
         errors.push({

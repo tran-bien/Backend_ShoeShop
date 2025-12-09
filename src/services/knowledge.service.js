@@ -48,11 +48,7 @@ const knowledgeService = {
       sort: search
         ? { score: { $meta: "textScore" } }
         : { priority: -1, createdAt: -1 },
-      populate: [
-        { path: "metadata.relatedProducts", select: "name price" },
-        { path: "metadata.relatedCategories", select: "name" },
-        { path: "metadata.lastUpdatedBy", select: "name email" },
-      ],
+      populate: [{ path: "metadata.lastUpdatedBy", select: "name email" }],
     };
 
     if (search) {
@@ -84,10 +80,10 @@ const knowledgeService = {
    * Lấy chi tiết knowledge document theo ID
    */
   async getDocumentById(id) {
-    const document = await KnowledgeDocument.findById(id)
-      .populate("metadata.relatedProducts", "name price")
-      .populate("metadata.relatedCategories", "name")
-      .populate("metadata.lastUpdatedBy", "name email");
+    const document = await KnowledgeDocument.findById(id).populate(
+      "metadata.lastUpdatedBy",
+      "name email"
+    );
 
     if (!document) {
       throw new ApiError(404, "Không tìm thấy knowledge document");
@@ -105,26 +101,11 @@ const knowledgeService = {
   async createDocument(data, userId) {
     const { category, title, content, tags, priority, metadata } = data;
 
-    // Validate và filter MongoIds trong metadata
+    // Tạo metadata
     const sanitizedMetadata = {
-      ...metadata,
       source: "manual",
       lastUpdatedBy: userId,
     };
-
-    if (metadata?.relatedProducts) {
-      sanitizedMetadata.relatedProducts = validateMongoIds(
-        metadata.relatedProducts,
-        "relatedProducts"
-      );
-    }
-
-    if (metadata?.relatedCategories) {
-      sanitizedMetadata.relatedCategories = validateMongoIds(
-        metadata.relatedCategories,
-        "relatedCategories"
-      );
-    }
 
     const document = await KnowledgeDocument.create({
       category,
@@ -168,31 +149,11 @@ const knowledgeService = {
       }
     });
 
-    // Update metadata với validation MongoIds
-    if (data.metadata) {
-      const sanitizedMetadata = {
-        ...document.metadata,
-        ...data.metadata,
-        lastUpdatedBy: userId,
-      };
-
-      // Validate MongoIds
-      if (data.metadata.relatedProducts) {
-        sanitizedMetadata.relatedProducts = validateMongoIds(
-          data.metadata.relatedProducts,
-          "relatedProducts"
-        );
-      }
-
-      if (data.metadata.relatedCategories) {
-        sanitizedMetadata.relatedCategories = validateMongoIds(
-          data.metadata.relatedCategories,
-          "relatedCategories"
-        );
-      }
-
-      document.metadata = sanitizedMetadata;
-    }
+    // Update metadata
+    document.metadata = {
+      ...document.metadata,
+      lastUpdatedBy: userId,
+    };
 
     await document.save();
 

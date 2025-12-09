@@ -9,13 +9,11 @@ const geminiController = {
    */
   chatWithAI: asyncHandler(async (req, res) => {
     const { message, sessionId: clientSessionId, history = [] } = req.body;
-    const userId = req.user?._id;
     const clientIp = req.ip;
 
     // Service xử lý toàn bộ logic: session validation, chat, response
     const result = await GeminiService.chatWithValidation(message, {
       clientSessionId,
-      userId,
       clientIp,
       history: history.slice(-10), // Chỉ lấy 10 tin nhắn gần nhất
     });

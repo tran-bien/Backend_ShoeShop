@@ -6,7 +6,14 @@ const { body, param, query } = require("express-validator");
 const validateGetAllDocuments = [
   query("category")
     .optional()
-    .isIn(["product_catalog", "policy", "faq", "brand_info", "how_to_size"])
+    .isIn([
+      "category_info",
+      "policy",
+      "faq",
+      "brand_info",
+      "product_info",
+      "how_to_size",
+    ])
     .withMessage("Category không hợp lệ"),
 
   query("isActive")
@@ -43,9 +50,16 @@ const validateGetDocumentById = [
  */
 const validateCreateDocument = [
   body("category")
-    .isIn(["product_catalog", "policy", "faq", "brand_info", "how_to_size"])
+    .isIn([
+      "category_info",
+      "policy",
+      "faq",
+      "brand_info",
+      "product_info",
+      "how_to_size",
+    ])
     .withMessage(
-      "Category phải là: product_catalog, policy, faq, brand_info, how_to_size"
+      "Category phải là: category_info, policy, faq, brand_info, product_info, how_to_size"
     ),
 
   body("title")
@@ -74,16 +88,6 @@ const validateCreateDocument = [
     .optional()
     .isInt({ min: 1, max: 10 })
     .withMessage("Priority phải từ 1-10"),
-
-  body("metadata.relatedProducts")
-    .optional()
-    .isArray()
-    .withMessage("Related products phải là mảng"),
-
-  body("metadata.relatedCategories")
-    .optional()
-    .isArray()
-    .withMessage("Related categories phải là mảng"),
 ];
 
 /**
@@ -94,7 +98,14 @@ const validateUpdateDocument = [
 
   body("category")
     .optional()
-    .isIn(["product_catalog", "policy", "faq", "brand_info", "how_to_size"])
+    .isIn([
+      "category_info",
+      "policy",
+      "faq",
+      "brand_info",
+      "product_info",
+      "how_to_size",
+    ])
     .withMessage("Category không hợp lệ"),
 
   body("title")
