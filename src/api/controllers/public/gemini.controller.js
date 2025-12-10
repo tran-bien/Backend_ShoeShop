@@ -6,6 +6,10 @@ const geminiController = {
    * @route POST /api/v1/public/ai-chat
    * @desc Chat với Gemini AI (Public)
    * @note Rate limiting được xử lý bởi middleware trong routes
+   *
+   * LOGIC:
+   * - trained=false: AI chưa được train, trả lời bất cứ gì
+   * - trained=true: AI đã được train, chỉ trả lời trong phạm vi KB
    */
   chatWithAI: asyncHandler(async (req, res) => {
     const { message, sessionId: clientSessionId, history = [] } = req.body;
@@ -18,19 +22,34 @@ const geminiController = {
       history: history.slice(-10), // Chỉ lấy 10 tin nhắn gần nhất
     });
 
-    // Rate limit info được set trong header bởi middleware
     return res.json({
-      success: !result.error, // false nếu có lỗi
+      success: !result.error,
       data: {
         response: result.response,
         sessionId: result.sessionId,
-        outOfScope: result.outOfScope || false,
+        // Training status
+        trained: result.trained || false, // AI đã được train chưa
+        hasContext: result.hasContext || false, // Có tìm thấy context từ KB không
+        // Error flags
+        outOfScope: result.outOfScope || false, // Câu hỏi ngoài phạm vi (chỉ khi trained=true)
+        noContext: result.noContext || false, // Không tìm thấy context liên quan
         cached: result.cached || false,
-        noKnowledge: result.noKnowledge || false,
-        demoMode: result.demoMode || false,
-        rateLimited: result.rateLimited || false, // Thông báo bị rate limit
-        quotaExhausted: result.quotaExhausted || false, // Quota hết (cần chờ reset)
+        rateLimited: result.rateLimited || false,
+        quotaExhausted: result.quotaExhausted || false,
       },
+    });
+  }),
+
+  /**
+   * @route GET /api/v1/public/ai-chat/status
+   * @desc Lấy trạng thái training của AI
+   */
+  getTrainingStatus: asyncHandler(async (req, res) => {
+    const status = await GeminiService.getTrainingStatus();
+
+    return res.json({
+      success: true,
+      data: status,
     });
   }),
 };

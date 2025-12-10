@@ -6,12 +6,20 @@ const SessionManager = require("@utils/sessionManager");
 /**
  * Gemini AI Service với RAG (Retrieval-Augmented Generation)
  *
- * Logic hoạt động:
- * 1. User gửi câu hỏi → isInScope() kiểm tra phạm vi
- * 2. buildContext() tìm kiếm Knowledge Base (MongoDB Text Search)
- * 3. Nếu tìm thấy KB → inject vào prompt để AI trả lời chính xác
- * 4. Nếu không có KB → tùy demoMode mà từ chối hoặc trả lời lung tung
- * 5. Response được cache để tối ưu performance
+ * LOGIC HOẠT ĐỘNG:
+ *
+ * 1. CHƯA TRAIN (KB rỗng):
+ *    - AI có thể trả lời BẤT CỨ GÌ (không chặn scope)
+ *    - Dùng để demo khả năng AI "lung tung" khi chưa được train
+ *
+ * 2. ĐÃ TRAIN (có KB):
+ *    - AI CHỈ trả lời trong phạm vi dữ liệu được train
+ *    - Chặn các câu hỏi nhạy cảm (chính trị, y tế, pháp luật...)
+ *    - Nếu câu hỏi không liên quan đến KB → từ chối trả lời
+ *
+ * 3. SERVICE XÓA DỮ LIỆU:
+ *    - clearAllDocuments(): Xóa toàn bộ KB → AI quay lại trạng thái "chưa train"
+ *    - clearExcelTraining(): Xóa dữ liệu import từ Excel
  */
 class GeminiService {
   constructor() {
@@ -23,10 +31,35 @@ class GeminiService {
       useClones: false, // Performance optimization
     });
 
-    // DEMO MODE:
-    // - true: AI trả lời bằng kiến thức chung khi chưa có KB (có thể sai)
-    // - false: AI từ chối trả lời khi không có KB (production mode)
-    this.demoMode = process.env.GEMINI_DEMO_MODE !== "false";
+    // Cache trạng thái KB để tránh query liên tục
+    this._kbStatusCache = {
+      hasKnowledge: null,
+      lastCheck: 0,
+      ttl: 60000, // 1 phút
+    };
+  }
+
+  /**
+   * Kiểm tra xem KB có dữ liệu không (có cache)
+   * @returns {Promise<boolean>}
+   */
+  async hasKnowledgeBase() {
+    const now = Date.now();
+
+    // Check cache
+    if (
+      this._kbStatusCache.hasKnowledge !== null &&
+      now - this._kbStatusCache.lastCheck < this._kbStatusCache.ttl
+    ) {
+      return this._kbStatusCache.hasKnowledge;
+    }
+
+    // Query DB
+    const count = await KnowledgeDocument.countDocuments({ isActive: true });
+    this._kbStatusCache.hasKnowledge = count > 0;
+    this._kbStatusCache.lastCheck = now;
+
+    return this._kbStatusCache.hasKnowledge;
   }
 
   /**
@@ -34,12 +67,6 @@ class GeminiService {
    *
    * @param {string} userQuery - Câu hỏi của user
    * @returns {string|null} - Context string hoặc null nếu không tìm thấy KB
-   *
-   * Flow:
-   * 1. Sanitize input để tránh injection
-   * 2. Full-text search trong KnowledgeDocument
-   * 3. Sort theo textScore + priority
-   * 4. Trả về top 3 docs dưới dạng context string
    */
   async buildContext(userQuery) {
     // Sanitize user input để tránh NoSQL injection và regex DoS
@@ -61,19 +88,19 @@ class GeminiService {
       }
     )
       .sort({ score: { $meta: "textScore" }, priority: -1 })
-      .limit(3);
+      .limit(5); // Tăng lên 5 để có context phong phú hơn
 
-    // Không có knowledge → return null để chat() xử lý
     if (knowledgeDocs.length === 0) {
       return null;
     }
 
     // Build context string từ các KB docs tìm được
-    const contextParts = ["📚 KIẾN THỨC TỪ HỆ THỐNG:"];
+    const contextParts = [];
 
     knowledgeDocs.forEach((doc) => {
-      contextParts.push(`\n[${doc.category.toUpperCase()}] ${doc.title}`);
+      contextParts.push(`[${doc.category.toUpperCase()}] ${doc.title}`);
       contextParts.push(doc.content);
+      contextParts.push("---");
     });
 
     return contextParts.join("\n");
@@ -81,15 +108,17 @@ class GeminiService {
 
   /**
    * Validate câu hỏi có trong phạm vi cho phép không
-   * Ngăn chặn các câu hỏi nhạy cảm/ngoài phạm vi shop giày
+   * CHỈ CHẠY KHI ĐÃ CÓ KB (đã train)
    */
   isInScope(userQuery) {
     const outOfScopePatterns = [
-      /chính trị|tổng thống|bầu cử/i,
-      /thuốc|bệnh|y tế|điều trị|khám bệnh/i,
-      /luật|pháp luật|kiện|tòa án/i,
-      /tôn giáo|phật giáo|công giáo/i,
-      /hack|crack|phần mềm lậu/i,
+      /chính trị|tổng thống|bầu cử|đảng|quốc hội/i,
+      /thuốc|bệnh|y tế|điều trị|khám bệnh|ung thư|covid/i,
+      /luật|pháp luật|kiện|tòa án|hình sự|dân sự/i,
+      /tôn giáo|phật giáo|công giáo|hồi giáo|chúa/i,
+      /hack|crack|phần mềm lậu|virus|malware/i,
+      /cách làm bom|vũ khí|ma túy|cần sa/i,
+      /khiêu dâm|sex|18\+|người lớn/i,
     ];
 
     return !outOfScopePatterns.some((pattern) => pattern.test(userQuery));
@@ -98,73 +127,84 @@ class GeminiService {
   /**
    * Chat with Gemini AI
    *
-   * @param {string} userMessage - Câu hỏi của user
-   * @param {Object} options - { sessionId, history }
-   * @returns {Object} - { response, cached?, noKnowledge?, demoMode? }
-   *
-   * Flow:
-   * 1. Kiểm tra câu hỏi có trong phạm vi (isInScope)
-   * 2. Build context từ Knowledge Base
-   * 3. Check cache → nếu có thì trả về luôn
-   * 4. Gửi prompt (context + câu hỏi) → Gemini API
-   * 5. Cache response và trả về
+   * LOGIC:
+   * - Chưa train (KB rỗng): AI trả lời tự do, không chặn scope
+   * - Đã train (có KB): AI chỉ trả lời trong phạm vi KB, chặn câu hỏi nhạy cảm
    */
   async chat(userMessage, { sessionId, history = [] }) {
     try {
-      // 1. Validate scope - Chặn câu hỏi ngoài phạm vi
-      if (!this.isInScope(userMessage)) {
+      // 1. Kiểm tra KB có dữ liệu không
+      const hasKB = await this.hasKnowledgeBase();
+
+      // 2. NẾU ĐÃ CÓ KB → Chặn câu hỏi nhạy cảm
+      if (hasKB && !this.isInScope(userMessage)) {
         return {
           response:
             "Xin lỗi, tôi chỉ có thể hỗ trợ về sản phẩm giày và dịch vụ của shop. Bạn có câu hỏi nào khác không? 😊",
           outOfScope: true,
+          trained: true,
         };
       }
 
-      // 2. Build context từ Knowledge Base
+      // 3. Build context từ Knowledge Base
       const context = await this.buildContext(userMessage);
 
-      // 3. Check cache - Tránh gọi API Gemini nhiều lần cho cùng câu hỏi
-      const contextHash = context ? "ctx" : "noctx";
-      const cacheKey = `${contextHash}_${userMessage.toLowerCase()}`;
+      // 4. Check cache
+      const contextHash = context ? "trained" : "untrained";
+      const cacheKey = `${contextHash}_${userMessage
+        .toLowerCase()
+        .slice(0, 100)}`;
       const cached = this.responseCache.get(cacheKey);
       if (cached) {
-        return { response: cached, cached: true };
+        return { response: cached, cached: true, trained: hasKB };
       }
 
-      // 4. Xử lý khi không có Knowledge Base
-      if (!context && !this.demoMode) {
-        // Production mode: Từ chối trả lời khi không có KB
-        return {
-          response:
-            "Xin lỗi, tôi không có đủ thông tin để trả lời câu hỏi này. Vui lòng chat với nhân viên hỗ trợ hoặc gọi hotline 1900 xxxx. 🙏",
-          noKnowledge: true,
-        };
-      }
-
-      if (!context && this.demoMode) {
-        // Demo mode: Cảnh báo AI đang trả lời không dựa trên KB
-        console.warn(
-          "[GEMINI DEMO MODE] AI đang trả lời KHÔNG dựa trên KB - có thể SAI thông tin!"
-        );
-      }
-
-      // 5. Prepare chat history cho multi-turn conversation
+      // 5. Prepare chat history
       const chatHistory = history.map((msg) => ({
         role: msg.role === "user" ? "user" : "model",
         parts: [{ text: msg.text }],
       }));
 
-      // 6. Create chat session với Gemini
+      // 6. Create chat session
       const chat = chatModel.startChat({
         history: chatHistory,
       });
 
-      // 7. Build prompt và gửi tới Gemini
-      const fullPrompt = context
-        ? `NGỮ CẢNH:\n${context}\n\n---\n\nCÂU HỎI KHÁCH HÀNG: ${userMessage}`
-        : userMessage; // Demo mode: gửi trực tiếp
+      // 7. Build prompt dựa trên trạng thái KB
+      let fullPrompt;
 
-      // Timeout 30s để tránh hanging
+      if (hasKB && context) {
+        // ĐÃ TRAIN + TÌM THẤY CONTEXT → Trả lời dựa trên KB
+        fullPrompt = `Bạn là trợ lý AI của shop giày. Hãy trả lời câu hỏi của khách hàng DỰA TRÊN THÔNG TIN SAU:
+
+📚 KIẾN THỨC CỦA SHOP:
+${context}
+
+⚠️ QUY TẮC:
+- CHỈ trả lời dựa trên thông tin được cung cấp ở trên
+- Nếu thông tin không có trong kiến thức, hãy nói "Tôi không có thông tin về vấn đề này. Vui lòng liên hệ hotline 1900 xxxx để được tư vấn."
+- Trả lời ngắn gọn, thân thiện, bằng tiếng Việt
+- Không bịa thông tin
+
+❓ CÂU HỎI KHÁCH HÀNG: ${userMessage}`;
+      } else if (hasKB && !context) {
+        // ĐÃ TRAIN + KHÔNG TÌM THẤY CONTEXT → Từ chối lịch sự
+        return {
+          response:
+            "Xin lỗi, tôi không tìm thấy thông tin liên quan đến câu hỏi của bạn trong hệ thống. Vui lòng liên hệ hotline 1900 xxxx hoặc chat với nhân viên hỗ trợ để được tư vấn chi tiết hơn nhé! 🙏",
+          noContext: true,
+          trained: true,
+        };
+      } else {
+        // CHƯA TRAIN → AI trả lời tự do (demo mode)
+        fullPrompt = `Bạn là một AI assistant thông minh. Hãy trả lời câu hỏi sau một cách hữu ích và chính xác bằng tiếng Việt:
+
+${userMessage}
+
+Lưu ý: Trả lời ngắn gọn, dễ hiểu.`;
+      }
+
+      // 8. Gửi tới Gemini với timeout
       const GEMINI_TIMEOUT = 30000;
       const result = await Promise.race([
         chat.sendMessage(fullPrompt),
@@ -177,92 +217,92 @@ class GeminiService {
       ]);
       const response = result.response.text();
 
-      // 8. Cache response
+      // 9. Cache response
       this.responseCache.set(cacheKey, response);
 
       return {
         response,
-        hasContext: context ? context.length > 100 : false,
-        noKnowledge: !context, // Flag để frontend biết AI đang trả lời không có KB
-        demoMode: this.demoMode,
+        trained: hasKB,
+        hasContext: !!context,
       };
     } catch (error) {
       console.error("[GEMINI] Chat error:", error);
-
-      // Xử lý các loại lỗi cụ thể
-      const errorStatus = error.status || error.statusCode;
-
-      if (errorStatus === 429) {
-        // Kiểm tra xem có phải hết quota ngày không (limit: 0)
-        const quotaExhausted = error.message?.includes("limit: 0");
-        const retryMatch = error.message?.match(/retry in (\d+)/i);
-        const retrySeconds = retryMatch ? retryMatch[1] : "vài";
-
-        if (quotaExhausted) {
-          // Hết quota ngày - cần chờ reset hoặc đổi API key
-          return {
-            response: `Hệ thống AI đã hết lượt sử dụng hôm nay. Vui lòng chat với nhân viên hỗ trợ hoặc gọi hotline 1900 xxxx để được tư vấn nhé!`,
-            error: true,
-            rateLimited: true,
-            quotaExhausted: true,
-            errorDetails: "Gemini API daily quota exhausted",
-          };
-        }
-
-        return {
-          response: `AI đang bận, vui lòng thử lại sau ${retrySeconds} giây hoặc chat với nhân viên hỗ trợ nhé!`,
-          error: true,
-          rateLimited: true,
-          quotaExhausted: false,
-          errorDetails: "Gemini API rate limit exceeded",
-        };
-      }
-
-      if (errorStatus === 404) {
-        return {
-          response:
-            "🔧 Hệ thống AI đang bảo trì. Vui lòng chat với nhân viên hỗ trợ hoặc gọi hotline 1900 xxxx.",
-          error: true,
-          errorDetails: "Gemini model not available",
-        };
-      }
-
-      // Fallback response cho các lỗi khác
-      return {
-        response:
-          "Xin lỗi, tôi đang gặp sự cố kỹ thuật. Vui lòng chat với nhân viên hỗ trợ hoặc gọi hotline 1900 xxxx. 🙏",
-        error: true,
-        errorDetails: error.message,
-      };
+      return this._handleError(error);
     }
   }
 
   /**
-   * Toggle Demo Mode (runtime)
+   * Xử lý lỗi từ Gemini API
+   * @private
    */
-  setDemoMode(enabled) {
-    this.demoMode = enabled;
-    console.log(`[GEMINI] Demo Mode ${enabled ? "ENABLED" : "DISABLED"}`);
-    return this.demoMode;
-  }
+  _handleError(error) {
+    const errorStatus = error.status || error.statusCode;
 
-  /**
-   * Get Demo Mode status
-   */
-  getDemoMode() {
+    if (errorStatus === 429) {
+      const quotaExhausted = error.message?.includes("limit: 0");
+      const retryMatch = error.message?.match(/retry in (\d+)/i);
+      const retrySeconds = retryMatch ? retryMatch[1] : "vài";
+
+      if (quotaExhausted) {
+        return {
+          response:
+            "Hệ thống AI đã hết lượt sử dụng hôm nay. Vui lòng chat với nhân viên hỗ trợ hoặc gọi hotline 1900 xxxx để được tư vấn nhé!",
+          error: true,
+          rateLimited: true,
+          quotaExhausted: true,
+        };
+      }
+
+      return {
+        response: `AI đang bận, vui lòng thử lại sau ${retrySeconds} giây hoặc chat với nhân viên hỗ trợ nhé!`,
+        error: true,
+        rateLimited: true,
+      };
+    }
+
+    if (errorStatus === 404) {
+      return {
+        response:
+          "🔧 Hệ thống AI đang bảo trì. Vui lòng chat với nhân viên hỗ trợ hoặc gọi hotline 1900 xxxx.",
+        error: true,
+      };
+    }
+
     return {
-      enabled: this.demoMode,
-      description: this.demoMode
-        ? "AI sẽ trả lời lung tung khi không có KB (dùng kiến thức chung)"
-        : "AI từ chối trả lời khi không có KB (production mode)",
+      response:
+        "Xin lỗi, tôi đang gặp sự cố kỹ thuật. Vui lòng chat với nhân viên hỗ trợ hoặc gọi hotline 1900 xxxx. 🙏",
+      error: true,
+      errorDetails: error.message,
     };
   }
 
   /**
-   * Clear cache (để admin có thể clear khi update knowledge base)
+   * Lấy trạng thái training của AI
+   */
+  async getTrainingStatus() {
+    const hasKB = await this.hasKnowledgeBase();
+    const totalDocs = await KnowledgeDocument.countDocuments({
+      isActive: true,
+    });
+
+    return {
+      trained: hasKB,
+      totalDocuments: totalDocs,
+      description: hasKB
+        ? `AI đã được train với ${totalDocs} documents. Chỉ trả lời trong phạm vi dữ liệu.`
+        : "AI CHƯA được train. Có thể trả lời bất cứ gì (demo mode).",
+    };
+  }
+
+  /**
+   * Clear cache (khi update/delete knowledge base)
    */
   clearCache() {
     this.responseCache.flushAll();
+    // Reset KB status cache để force recheck
+    this._kbStatusCache.hasKnowledge = null;
+    this._kbStatusCache.lastCheck = 0;
+
     return {
       message: "Cache cleared successfully",
       stats: this.responseCache.getStats(),
@@ -284,20 +324,12 @@ class GeminiService {
     let sessionId = clientSessionId;
 
     if (sessionId) {
-      // Validate format
       if (!SessionManager.validateSessionId(sessionId)) {
         sessionId = SessionManager.generateSessionId(clientIp);
-        console.warn(
-          `[GEMINI] Invalid sessionId format, generated new: ${sessionId}`
-        );
-      }
-      // Check expired (24 hours)
-      else if (SessionManager.isExpired(sessionId, 24 * 60 * 60 * 1000)) {
+      } else if (SessionManager.isExpired(sessionId, 24 * 60 * 60 * 1000)) {
         sessionId = SessionManager.generateSessionId(clientIp);
-        console.warn(`[GEMINI] Expired sessionId, generated new: ${sessionId}`);
       }
     } else {
-      // Generate new session ID
       sessionId = SessionManager.generateSessionId(clientIp);
     }
 
@@ -306,22 +338,16 @@ class GeminiService {
 
   /**
    * Chat with validation (wrapper for controller)
-   * Xử lý toàn bộ: session validation + chat
-   *
-   * @param {string} message - Câu hỏi của user
-   * @param {Object} options - { clientSessionId, clientIp, history }
    */
   async chatWithValidation(
     message,
     { clientSessionId, clientIp, history = [] }
   ) {
-    // Validate và generate session ID
     const sessionId = this._validateAndGenerateSessionId(
       clientSessionId,
       clientIp
     );
 
-    // Chat với Gemini
     const result = await this.chat(message, {
       sessionId,
       history,
