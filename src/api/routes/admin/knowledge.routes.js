@@ -28,13 +28,6 @@ router.use(protect);
 // ============================================================
 
 /**
- * @route   POST /api/v1/admin/knowledge-base/clear-cache
- * @desc    Clear Gemini response cache
- * @access  Admin Only
- */
-router.post("/clear-cache", requireAdminOnly, knowledgeController.clearCache);
-
-/**
  * @route   GET /api/v1/admin/knowledge-base/statistics
  * @desc    Get Knowledge Base statistics
  * @access  Admin/Staff

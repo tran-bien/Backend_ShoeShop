@@ -138,15 +138,6 @@ const knowledgeController = {
     const result = await knowledgeService.getStatistics();
     return res.json(result);
   }),
-
-  /**
-   * @route POST /api/v1/admin/knowledge-base/clear-cache
-   * @desc Clear Gemini cache
-   */
-  clearCache: asyncHandler(async (req, res) => {
-    const result = knowledgeService.clearCache();
-    return res.json(result);
-  }),
 };
 
 module.exports = knowledgeController;

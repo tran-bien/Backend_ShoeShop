@@ -66,12 +66,14 @@ const knowledgeService = {
 
     return {
       success: true,
-      data: documents,
-      pagination: {
-        page: options.page,
-        limit: options.limit,
-        total,
-        pages: Math.ceil(total / options.limit),
+      data: {
+        data: documents,
+        pagination: {
+          page: options.page,
+          limit: options.limit,
+          total,
+          pages: Math.ceil(total / options.limit),
+        },
       },
     };
   },
@@ -116,6 +118,9 @@ const knowledgeService = {
       metadata: sanitizedMetadata,
       isActive: true,
     });
+
+    // Clear Gemini cache
+    GeminiService.clearCache();
 
     return {
       success: true,
@@ -349,18 +354,6 @@ const knowledgeService = {
         bySource,
         recentUpdates,
       },
-    };
-  },
-
-  /**
-   * Clear Gemini cache
-   */
-  clearCache() {
-    const result = GeminiService.clearCache();
-    return {
-      success: true,
-      message: "Đã xóa cache thành công",
-      data: result,
     };
   },
 };
