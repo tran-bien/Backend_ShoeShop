@@ -13,7 +13,8 @@ const profileController = {
 
     res.json({
       success: true,
-      user: result.user,
+      message: "Lấy thông tin người dùng thành công",
+      data: result.user,
     });
   }),
 
@@ -31,7 +32,7 @@ const profileController = {
     res.json({
       success: true,
       message: result.message,
-      user: result.user,
+      data: result.user,
     });
   }),
 
@@ -46,7 +47,8 @@ const profileController = {
 
     res.json({
       success: true,
-      addresses: result.addresses,
+      message: "Lấy danh sách địa chỉ thành công",
+      data: result.addresses,
     });
   }),
 
@@ -64,7 +66,7 @@ const profileController = {
     res.status(201).json({
       success: true,
       message: result.message,
-      address: result.address,
+      data: { address: result.address },
     });
   }),
 
@@ -87,7 +89,7 @@ const profileController = {
     res.json({
       success: true,
       message: result.message,
-      address: result.address,
+      data: { address: result.address },
     });
   }),
 
@@ -136,7 +138,8 @@ const profileController = {
 
     res.json({
       success: true,
-      preferences: result.preferences,
+      message: "Lấy tùy chọn thông báo thành công",
+      data: result.preferences,
     });
   }),
 
@@ -157,7 +160,7 @@ const profileController = {
     res.json({
       success: true,
       message: result.message,
-      preferences: result.preferences,
+      data: result.preferences,
     });
   }),
 };

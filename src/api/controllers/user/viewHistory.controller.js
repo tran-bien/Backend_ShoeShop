@@ -37,7 +37,14 @@ const viewHistoryController = {
       req.query
     );
 
-    return res.json(result);
+    return res.json({
+      success: true,
+      message: "Lấy lịch sử xem thành công",
+      data: {
+        viewHistory: result.history,
+        pagination: result.pagination,
+      },
+    });
   }),
 
   /**

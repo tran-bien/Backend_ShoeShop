@@ -51,6 +51,25 @@ const userController = {
       message: result.message,
     });
   }),
+
+  /**
+   * @route   PUT /api/admin/users/:id/role
+   * @desc    Chuyển đổi role người dùng (CHỈ ADMIN)
+   * @access  Admin Only
+   */
+  changeUserRole: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { role } = req.body;
+    const adminId = req.user._id.toString();
+
+    const result = await userService.adminUserService.changeUserRole(
+      id,
+      role,
+      adminId
+    );
+
+    res.json(result);
+  }),
 };
 
 module.exports = userController;

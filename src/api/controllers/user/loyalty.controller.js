@@ -10,7 +10,12 @@ const loyaltyController = {
   getLoyaltyStats: asyncHandler(async (req, res) => {
     const result = await loyaltyService.getUserLoyaltyStats(req.user._id);
 
-    return res.json(result);
+    // Transform response to match FE expected format
+    return res.json({
+      success: result.success,
+      message: "Lấy thông tin điểm thưởng thành công",
+      data: result.loyalty,
+    });
   }),
 
   /**
@@ -24,9 +29,15 @@ const loyaltyController = {
       req.query
     );
 
-    return res.json(result);
+    return res.json({
+      success: result.success,
+      message: "Lấy lịch sử giao dịch thành công",
+      data: {
+        transactions: result.transactions,
+        pagination: result.pagination,
+      },
+    });
   }),
 };
 
 module.exports = loyaltyController;
-

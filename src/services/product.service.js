@@ -1875,7 +1875,7 @@ const productService = {
 
         // Lưu thông tin biến thể với sizes đầy đủ
         variantsInfo[key] = {
-          id: variantId,
+          _id: variantId, // Changed from 'id' to '_id' for FE consistency
           colorId: colorId,
           colorName: variant.color?.name || "",
           colorCode: variant.color?.code,

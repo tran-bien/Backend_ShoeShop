@@ -828,12 +828,23 @@ const reserveInventoryForOrder = async (orderItems, orderId) => {
 
   try {
     for (const item of orderItems) {
+      // Support multiple formats for productId extraction
       const productId =
-        item.variant?.product?._id || item.variant?.product || item.productId;
+        item.product?._id ||
+        item.product ||
+        item.variant?.product?._id ||
+        item.variant?.product ||
+        item.productId;
       const variantId = item.variant?._id || item.variant || item.variantId;
       const sizeId = item.size?._id || item.size || item.sizeId;
 
       if (!productId || !variantId || !sizeId) {
+        console.error(`[reserveInventoryForOrder] Missing info:`, {
+          productId,
+          variantId,
+          sizeId,
+          item: JSON.stringify(item, null, 2),
+        });
         throw new ApiError(
           400,
           `Thiếu thông tin product/variant/size cho item`

@@ -17,6 +17,12 @@ const viewHistoryService = {
       deviceInfo,
     } = data;
 
+    console.log(`[ViewHistory] trackView called:`, {
+      productId,
+      userId,
+      sessionId,
+    });
+
     // Validate
     if (!productId) {
       throw new ApiError(400, "Product ID là bắt buộc");
@@ -57,6 +63,12 @@ const viewHistoryService = {
       deviceInfo: deviceInfo || "",
     });
 
+    console.log(`[ViewHistory] Created view history:`, {
+      id: viewHistory._id,
+      user: viewHistory.user,
+      product: viewHistory.product,
+    });
+
     // Cập nhật user behavior nếu có userId
     if (userId) {
       try {
@@ -81,6 +93,10 @@ const viewHistoryService = {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    console.log(
+      `[ViewHistory] Getting history for user: ${userId}, page: ${page}, limit: ${limit}`
+    );
+
     const [history, total] = await Promise.all([
       ViewHistory.find({ user: userId })
         .sort({ createdAt: -1 })
@@ -91,17 +107,28 @@ const viewHistoryService = {
       ViewHistory.countDocuments({ user: userId }),
     ]);
 
+    console.log(`[ViewHistory] Found ${history.length} items, total: ${total}`);
+
     // Filter out deleted products
     const validHistory = history.filter((h) => h.product && h.product.isActive);
+
+    console.log(
+      `[ViewHistory] Valid items after filter: ${validHistory.length}`
+    );
+
+    const totalPages = Math.ceil(total / parseInt(limit));
+    const currentPage = parseInt(page);
 
     return {
       success: true,
       history: validHistory,
       pagination: {
-        page: parseInt(page),
+        page: currentPage,
         limit: parseInt(limit),
         total,
-        totalPages: Math.ceil(total / parseInt(limit)),
+        totalPages,
+        hasNext: currentPage < totalPages,
+        hasPrev: currentPage > 1,
       },
     };
   },

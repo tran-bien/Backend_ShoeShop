@@ -122,7 +122,9 @@ const orderService = {
     }
 
     // Kiểm tra người dùng có quyền xem đơn hàng này không
-    if (order.user._id.toString() !== userId) {
+    // FIX: order.user có thể là populated object hoặc ObjectId
+    const orderUserId = order.user?._id || order.user;
+    if (orderUserId.toString() !== userId.toString()) {
       throw new ApiError(403, "Bạn không có quyền xem đơn hàng này");
     }
 
@@ -278,7 +280,9 @@ const orderService = {
 
       // Sản phẩm có sẵn, thêm vào danh sách orderItems
       // FIX Bug #57: Lưu costPrice tại thời điểm đặt hàng để dashboard tính profit chính xác
+      // FIX: Thêm productId để reserveInventoryForOrder hoạt động đúng
       orderItems.push({
+        product: variant.product, // Thêm productId cho reserveInventory
         variant: variantId,
         size: sizeId,
         productName: item.productName,

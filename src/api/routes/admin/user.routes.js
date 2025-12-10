@@ -35,4 +35,15 @@ router.put(
   userController.toggleUserBlock
 );
 
+/**
+ * @route   PUT /api/v1/admin/users/:id/role
+ * @desc    Chuyển đổi role người dùng
+ * @access  Admin Only
+ */
+router.put(
+  "/:id/role",
+  validate(userValidator.validateChangeUserRole),
+  userController.changeUserRole
+);
+
 module.exports = router;

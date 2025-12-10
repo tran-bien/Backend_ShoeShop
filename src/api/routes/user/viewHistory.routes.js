@@ -1,16 +1,17 @@
 const express = require("express");
 const router = express.Router();
 const viewHistoryController = require("@controllers/user/viewHistory.controller");
-const { protect } = require("@middlewares/auth.middleware");
+const { protect, optionalAuth } = require("@middlewares/auth.middleware");
 const viewHistoryValidator = require("@validators/viewHistory.validator");
 const validate = require("@utils/validatehelper");
 
 /**
  * @route POST /api/users/view-history
- * @desc Track product view (không cần login)
+ * @desc Track product view (không bắt buộc login, nhưng lấy user nếu có token)
  */
 router.post(
   "/",
+  optionalAuth, // FIX: Lấy user nếu có token để lưu đúng userId
   validate(viewHistoryValidator.validateTrackView),
   viewHistoryController.trackView
 );

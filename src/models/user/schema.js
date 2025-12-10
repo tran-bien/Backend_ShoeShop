@@ -182,6 +182,7 @@ const UserSchema = new mongoose.Schema(
         comment: "Nhận thông báo trong app",
       },
     },
+    
   },
   {
     timestamps: true,

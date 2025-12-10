@@ -110,11 +110,15 @@ const authController = {
    * @access  Private
    */
   getCurrentSessions: asyncHandler(async (req, res) => {
-    const result = await authService.getCurrentSessions(
+    const sessions = await authService.getCurrentSessions(
       req.user._id,
       req.token
     );
-    res.json(result);
+    res.json({
+      success: true,
+      message: "Lấy danh sách phiên thành công",
+      data: sessions,
+    });
   }),
 
   /**
@@ -140,13 +144,13 @@ const authController = {
    * @access  Private
    */
   logoutAllOtherSessions: asyncHandler(async (req, res) => {
-    const result = await authService.logoutOtherSessions(
+    const result = await authService.logoutAllOtherSessions(
       req.user._id,
       req.token
     );
     res.json({
       success: true,
-      message: `Đã đăng xuất khỏi ${result.count} phiên khác`,
+      message: `Đã đăng xuất khỏi ${result} phiên khác`,
     });
   }),
 

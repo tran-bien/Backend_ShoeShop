@@ -471,6 +471,76 @@ const userService = {
   getCouponDetails: async (userId, couponId) => {
     return await couponService.getCouponDetails(userId, couponId);
   },
+
+  /**
+   * Cập nhật tùy chọn thông báo của người dùng
+   * @param {String} userId - ID của người dùng
+   * @param {Object} preferences - Tùy chọn thông báo
+   * @returns {Object} - Thông tin cập nhật
+   */
+  updateNotificationPreferences: async (userId, preferences) => {
+    const user = await User.findById(userId);
+
+    if (!user) {
+      throw new ApiError(404, "Không tìm thấy người dùng");
+    }
+
+    // Khởi tạo preferences nếu chưa có
+    if (!user.preferences) {
+      user.preferences = {
+        emailNotifications: {
+          orderUpdates: true,
+        },
+        inAppNotifications: true,
+      };
+    }
+
+    // Cập nhật từng field nếu có
+    if (preferences.emailNotifications) {
+      if (preferences.emailNotifications.orderUpdates !== undefined) {
+        user.preferences.emailNotifications.orderUpdates =
+          preferences.emailNotifications.orderUpdates;
+      }
+    }
+
+    if (preferences.inAppNotifications !== undefined) {
+      user.preferences.inAppNotifications = preferences.inAppNotifications;
+    }
+
+    await user.save();
+
+    return {
+      success: true,
+      message: "Cập nhật tùy chọn thông báo thành công",
+      preferences: user.preferences,
+    };
+  },
+
+  /**
+   * Lấy tùy chọn thông báo hiện tại
+   * @param {String} userId - ID của người dùng
+   * @returns {Object} - Tùy chọn thông báo
+   */
+  getNotificationPreferences: async (userId) => {
+    const user = await User.findById(userId).select("preferences");
+
+    if (!user) {
+      throw new ApiError(404, "Không tìm thấy người dùng");
+    }
+
+    // Trả về preferences mặc định nếu chưa có
+    const defaultPreferences = {
+      emailNotifications: {
+        orderUpdates: true,
+      },
+      inAppNotifications: true,
+    };
+
+    return {
+      success: true,
+      preferences: user.preferences || defaultPreferences,
+    };
+  },
 };
 
 /**
@@ -552,76 +622,6 @@ const adminUserService = {
   },
 
   /**
-   * Cập nhật tùy chọn thông báo của người dùng
-   * @param {String} userId - ID của người dùng
-   * @param {Object} preferences - Tùy chọn thông báo
-   * @returns {Object} - Thông tin cập nhật
-   */
-  updateNotificationPreferences: async (userId, preferences) => {
-    const user = await User.findById(userId);
-
-    if (!user) {
-      throw new ApiError(404, "Không tìm thấy người dùng");
-    }
-
-    // Khởi tạo preferences nếu chưa có
-    if (!user.preferences) {
-      user.preferences = {
-        emailNotifications: {
-          orderUpdates: true,
-        },
-        inAppNotifications: true,
-      };
-    }
-
-    // Cập nhật từng field nếu có
-    if (preferences.emailNotifications) {
-      if (preferences.emailNotifications.orderUpdates !== undefined) {
-        user.preferences.emailNotifications.orderUpdates =
-          preferences.emailNotifications.orderUpdates;
-      }
-    }
-
-    if (preferences.inAppNotifications !== undefined) {
-      user.preferences.inAppNotifications = preferences.inAppNotifications;
-    }
-
-    await user.save();
-
-    return {
-      success: true,
-      message: "Cập nhật tùy chọn thông báo thành công",
-      preferences: user.preferences,
-    };
-  },
-
-  /**
-   * Lấy tùy chọn thông báo hiện tại
-   * @param {String} userId - ID của người dùng
-   * @returns {Object} - Tùy chọn thông báo
-   */
-  getNotificationPreferences: async (userId) => {
-    const user = await User.findById(userId).select("preferences");
-
-    if (!user) {
-      throw new ApiError(404, "Không tìm thấy người dùng");
-    }
-
-    // Trả về preferences mặc định nếu chưa có
-    const defaultPreferences = {
-      emailNotifications: {
-        orderUpdates: true,
-      },
-      inAppNotifications: true,
-    };
-
-    return {
-      success: true,
-      preferences: user.preferences || defaultPreferences,
-    };
-  },
-
-  /**
    * Khóa/mở khóa tài khoản người dùng
    * @param {String} userId - ID của người dùng
    * @param {Boolean} isBlock - True để khóa, false để mở khóa
@@ -665,6 +665,67 @@ const adminUserService = {
     return {
       success: true,
       message: `Đã ${action} tài khoản thành công`,
+    };
+  },
+
+  /**
+   * Chuyển đổi role của người dùng (CHỈ ADMIN)
+   * @param {String} userId - ID của người dùng cần đổi role
+   * @param {String} newRole - Role mới (user, staff, admin)
+   * @param {String} adminId - ID của admin thực hiện
+   * @returns {Object} - Kết quả chuyển đổi role
+   */
+  changeUserRole: async (userId, newRole, adminId) => {
+    const validRoles = ["user", "staff", "admin", "shipper"];
+    if (!validRoles.includes(newRole)) {
+      throw new ApiError(
+        400,
+        "Role không hợp lệ. Chỉ hỗ trợ: user, staff, admin, shipper"
+      );
+    }
+
+    const user = await User.findById(userId);
+    if (!user) throw new ApiError(404, "Không tìm thấy người dùng");
+
+    if (userId === adminId) {
+      throw new ApiError(403, "Không thể thay đổi role của chính mình");
+    }
+
+    // Ngăn admin thường hạ cấp admin khác (chỉ superadmin mới được)
+    if (user.role === "admin" && newRole !== "admin") {
+      throw new ApiError(403, "Không thể hạ cấp role của admin khác");
+    }
+
+    const oldRole = user.role;
+    user.role = newRole;
+    await user.save();
+
+    // Các role được coi là “quản trị cao quyền”
+    const highPrivilegeRoles = ["admin", "staff"];
+    // Các role thấp quyền (phải đăng nhập lại nếu bị hạ xuống)
+    const lowerPrivilegeRoles = ["user", "shipper"];
+
+    // Nếu hạ từ cao xuống thấp -> khóa session
+    if (
+      highPrivilegeRoles.includes(oldRole) &&
+      lowerPrivilegeRoles.includes(newRole)
+    ) {
+      const Session = mongoose.model("Session");
+      await Session.updateMany(
+        { user: userId, isActive: true },
+        { isActive: false }
+      );
+    }
+
+    return {
+      success: true,
+      message: `Đã chuyển role từ ${oldRole} sang ${newRole}`,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
     };
   },
 };

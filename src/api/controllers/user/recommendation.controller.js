@@ -15,9 +15,16 @@ const recommendationController = {
       algorithm
     );
 
-    return res.json(result);
+    // Return in format that FE expects
+    return res.json({
+      success: true,
+      message: "Lấy gợi ý sản phẩm thành công",
+      data: {
+        products: result.products || [],
+      },
+      fromCache: result.fromCache || false,
+    });
   }),
 };
 
 module.exports = recommendationController;
-

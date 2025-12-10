@@ -205,6 +205,19 @@ const validateUpdateNotificationPreferences = [
     .withMessage("inAppNotifications phải là boolean"),
 ];
 
+/**
+ * Validator cho API chuyển đổi role người dùng
+ */
+const validateChangeUserRole = [
+  param("id").isMongoId().withMessage("ID người dùng không hợp lệ"),
+
+  body("role")
+    .notEmpty()
+    .withMessage("Role không được để trống")
+    .isIn(["user", "staff", "admin", "shipper"])
+    .withMessage("Role không hợp lệ. Chỉ hỗ trợ: user, staff, admin, shipper"),
+];
+
 module.exports = {
   validateUpdateProfile,
   validateAddAddress,
@@ -213,4 +226,5 @@ module.exports = {
   validateCollectCoupon,
   validateToggleUserBlock,
   validateUpdateNotificationPreferences,
+  validateChangeUserRole,
 };
