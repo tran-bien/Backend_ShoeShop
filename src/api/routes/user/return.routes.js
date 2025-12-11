@@ -7,31 +7,19 @@ const {
   validateCreateReturnRequest,
   validateGetReturns,
   validateReturnId,
-  validateCheckEligibility,
 } = require("@validators/return.validator");
 
 /**
  * USER RETURN ROUTES
- * Chỉ dành cho user thao tác với return requests của chính họ
+ * Chỉ dành cho user thao tác với yêu cầu trả hàng của chính họ
+ * (Đã loại bỏ logic đổi hàng - chỉ có trả hàng/hoàn tiền)
  */
 
 router.use(protect); // Tất cả routes cần đăng nhập
 
 /**
- * @route   GET /api/v1/users/returns/check-eligibility
- * @desc    Kiểm tra sản phẩm có thể đổi hàng không
- * @access  Authenticated User
- * @query   orderId, variantId, sizeId
- */
-router.get(
-  "/check-eligibility",
-  validate(validateCheckEligibility),
-  returnController.checkExchangeEligibility
-);
-
-/**
  * @route   GET /api/v1/users/returns
- * @desc    Lấy danh sách yêu cầu đổi trả của chính mình
+ * @desc    Lấy danh sách yêu cầu trả hàng của chính mình
  * @access  Authenticated User
  */
 router.get(
@@ -42,7 +30,7 @@ router.get(
 
 /**
  * @route   POST /api/v1/users/returns
- * @desc    Tạo yêu cầu đổi trả
+ * @desc    Tạo yêu cầu trả hàng
  * @access  Authenticated User
  */
 router.post(
@@ -53,7 +41,7 @@ router.post(
 
 /**
  * @route   GET /api/v1/users/returns/:id
- * @desc    Lấy chi tiết yêu cầu đổi trả của chính mình
+ * @desc    Lấy chi tiết yêu cầu trả hàng của chính mình
  * @access  Authenticated User
  */
 router.get(
@@ -64,7 +52,7 @@ router.get(
 
 /**
  * @route   DELETE /api/v1/users/returns/:id
- * @desc    Hủy yêu cầu đổi trả (chỉ khi còn pending)
+ * @desc    Hủy yêu cầu trả hàng (chỉ khi còn pending)
  * @access  Authenticated User
  */
 router.delete(

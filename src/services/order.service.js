@@ -585,8 +585,15 @@ const orderService = {
       throw new ApiError(404, "Không tìm thấy đơn hàng");
     }
 
-    // Kiểm tra quyền hủy đơn hàng
-    if (order.user.toString() !== userId) {
+    // Kiểm tra quyền hủy đơn hàng - FIX: Convert cả 2 về string để so sánh
+    const orderUserId = order.user._id
+      ? order.user._id.toString()
+      : order.user.toString();
+    const requestUserId = userId._id
+      ? userId._id.toString()
+      : userId.toString();
+
+    if (orderUserId !== requestUserId) {
       throw new ApiError(403, "Bạn không có quyền hủy đơn hàng này");
     }
 

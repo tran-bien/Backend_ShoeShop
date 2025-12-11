@@ -3,48 +3,49 @@ const returnService = require("@services/return.service");
 
 /**
  * USER RETURN CONTROLLER
- * Chứa các endpoints dành cho User/Customer quản lý đổi trả hàng của chính họ
+ * Chứa các endpoints dành cho User/Customer quản lý trả hàng/hoàn tiền
+ * (Đã loại bỏ logic đổi hàng - chỉ có trả hàng/hoàn tiền toàn bộ đơn)
  */
 
 /**
- * TẠO YÊU CẦU ĐỔI/TRẢ HÀNG
+ * TẠO YÊU CẦU TRẢ HÀNG/HOÀN TIỀN
  * @access  Authenticated User
  * @route   POST /api/v1/returns
  */
 const createReturnRequest = asyncHandler(async (req, res) => {
-  const { orderId, items, type, reason, refundMethod, bankInfo } = req.body;
+  const { orderId, reason, reasonDetail, refundMethod, bankInfo } = req.body;
   const customerId = req.user._id;
 
-  const returnRequest = await returnService.createReturnRequest({
-    orderId,
-    customerId,
-    items,
-    type,
-    reason,
-    refundMethod,
-    bankInfo,
-  });
+  const returnRequest = await returnService.createReturnRequest(
+    {
+      orderId,
+      reason,
+      reasonDetail,
+      refundMethod,
+      bankInfo,
+    },
+    customerId
+  );
 
   res.status(201).json({
     success: true,
-    message: "Tạo yêu cầu đổi trả thành công",
+    message: "Tạo yêu cầu trả hàng thành công",
     data: returnRequest,
   });
 });
 
 /**
- * LẤY DANH SÁCH YÊU CẦU ĐỔI/TRẢ HÀNG CỦA USER
+ * LẤY DANH SÁCH YÊU CẦU TRẢ HÀNG CỦA USER
  * @access  Authenticated User (isAuthenticated middleware)
- * @route   GET /api/v1/returns?page=1&limit=20&status=pending&type=RETURN
+ * @route   GET /api/v1/returns?page=1&limit=20&status=pending
  */
 const getReturnRequests = asyncHandler(async (req, res) => {
-  const { page, limit, status, type } = req.query;
+  const { page, limit, status } = req.query;
 
   const filters = {
     page: parseInt(page) || 1,
     limit: parseInt(limit) || 20,
     status,
-    type,
     customerId: req.user._id, // Only get user's own requests
   };
 
@@ -57,14 +58,14 @@ const getReturnRequests = asyncHandler(async (req, res) => {
 });
 
 /**
- * LẤY CHI TIẾT YÊU CẦU ĐỔI/TRẢ
+ * LẤY CHI TIẾT YÊU CẦU TRẢ HÀNG
  * @access  Authenticated User (isAuthenticated middleware)
  * @route   GET /api/v1/returns/:id
  */
 const getReturnRequestDetail = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const userId = req.user._id;
-  const isAdmin = false; // User is not admin
+  const isAdmin = false;
 
   const returnRequest = await returnService.getReturnRequestById(
     id,
@@ -79,7 +80,7 @@ const getReturnRequestDetail = asyncHandler(async (req, res) => {
 });
 
 /**
- * HUỶ YÊU CẦU ĐỔI/TRẢ HÀNG (CHỈ CUSTOMER)
+ * HUỶ YÊU CẦU TRẢ HÀNG (CHỈ KHI CÒN PENDING)
  * @access  Authenticated User (isAuthenticated middleware)
  * @route   DELETE /api/v1/returns/:id
  */
@@ -93,30 +94,8 @@ const cancelReturnRequest = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    message: "Hủy yêu cầu đổi trả thành công",
+    message: "Hủy yêu cầu trả hàng thành công",
     data: returnRequest,
-  });
-});
-
-/**
- * KIỂM TRA SẢN PHẨM CÓ THỂ ĐỔI HÀNG KHÔNG
- * @access  Authenticated User
- * @route   GET /api/v1/returns/check-eligibility?orderId=xxx&variantId=xxx&sizeId=xxx
- */
-const checkExchangeEligibility = asyncHandler(async (req, res) => {
-  const { orderId, variantId, sizeId } = req.query;
-  const userId = req.user._id;
-
-  const result = await returnService.checkItemExchangeEligibility(
-    orderId,
-    variantId,
-    sizeId,
-    userId
-  );
-
-  res.status(200).json({
-    success: true,
-    data: result,
   });
 });
 
@@ -125,5 +104,4 @@ module.exports = {
   getReturnRequests,
   getReturnRequestDetail,
   cancelReturnRequest,
-  checkExchangeEligibility,
 };

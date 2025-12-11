@@ -494,7 +494,8 @@ const authService = {
       req
     );
 
-    return {
+    // Build response object
+    const response = {
       _id: user._id,
       name: user.name,
       email: user.email,
@@ -505,6 +506,18 @@ const authService = {
       token,
       refreshToken,
     };
+
+    // Include shipper info for shipper role
+    if (user.role === "shipper" && user.shipper) {
+      response.shipper = {
+        isAvailable: user.shipper.isAvailable,
+        activeOrders: user.shipper.activeOrders,
+        maxOrders: user.shipper.maxOrders,
+        deliveryStats: user.shipper.deliveryStats,
+      };
+    }
+
+    return response;
   },
 
   /**

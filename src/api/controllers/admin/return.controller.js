@@ -3,22 +3,22 @@ const returnService = require("@services/return.service");
 
 /**
  * ADMIN RETURN CONTROLLER
- * Chứa các endpoints dành cho Admin/Staff quản lý đổi trả hàng
+ * Chứa các endpoints dành cho Admin/Staff quản lý trả hàng/hoàn tiền
+ * (Đã loại bỏ logic đổi hàng - chỉ có trả hàng/hoàn tiền)
  */
 
 /**
- * LẤY DANH SÁCH YÊU CẦU ĐỔI/TRẢ HÀNG (ADMIN)
+ * LẤY DANH SÁCH YÊU CẦU TRẢ HÀNG (ADMIN)
  * @access  Staff/Admin (requireStaffOrAdmin middleware)
  * @route   GET /api/v1/admin/returns?page=1&limit=20&status=pending
  */
 const getReturnRequests = asyncHandler(async (req, res) => {
-  const { page, limit, status, type, customerId } = req.query;
+  const { page, limit, status, customerId } = req.query;
 
   const filters = {
     page: parseInt(page) || 1,
     limit: parseInt(limit) || 20,
     status,
-    type,
   };
 
   if (customerId) {
@@ -34,14 +34,14 @@ const getReturnRequests = asyncHandler(async (req, res) => {
 });
 
 /**
- * LẤY CHI TIẾT YÊU CẦU ĐỔI/TRẢ (ADMIN)
+ * LẤY CHI TIẾT YÊU CẦU TRẢ HÀNG (ADMIN)
  * @access  Staff/Admin (requireStaffOrAdmin middleware)
  * @route   GET /api/v1/admin/returns/:id
  */
 const getReturnRequestDetail = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const userId = req.user._id;
-  const isAdmin = true; // Admin always has access
+  const isAdmin = true;
 
   const returnRequest = await returnService.getReturnRequestById(
     id,
@@ -56,7 +56,7 @@ const getReturnRequestDetail = asyncHandler(async (req, res) => {
 });
 
 /**
- * DUYỆT YÊU CẦU ĐỔI/TRẢ HÀNG
+ * DUYỆT YÊU CẦU TRẢ HÀNG
  * @access  Staff/Admin (requireStaffOrAdmin middleware)
  * @route   PATCH /api/v1/admin/returns/:id/approve
  */
@@ -64,7 +64,6 @@ const approveReturnRequest = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { note } = req.body;
 
-  // FIXED Bug #42: Service signature là (id, approvedBy, staffNotes)
   const returnRequest = await returnService.approveReturnRequest(
     id,
     req.user._id,
@@ -73,13 +72,13 @@ const approveReturnRequest = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    message: "Phê duyệt yêu cầu đổi trả thành công",
+    message: "Phê duyệt yêu cầu trả hàng thành công",
     data: returnRequest,
   });
 });
 
 /**
- * TỪ CHỐI YÊU CẦU ĐỔI/TRẢ HÀNG
+ * TỪ CHỐI YÊU CẦU TRẢ HÀNG
  * @access  Staff/Admin (requireStaffOrAdmin middleware)
  * @route   PATCH /api/v1/admin/returns/:id/reject
  */
@@ -87,7 +86,6 @@ const rejectReturnRequest = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { reason } = req.body;
 
-  // FIXED Bug #42: Service signature là (id, approvedBy, rejectionReason)
   const returnRequest = await returnService.rejectReturnRequest(
     id,
     req.user._id,
@@ -96,49 +94,57 @@ const rejectReturnRequest = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    message: "Từ chối yêu cầu đổi trả",
+    message: "Từ chối yêu cầu trả hàng",
     data: returnRequest,
   });
 });
 
 /**
- * XỬ LÝ TRẢ HÀNG (HOÀN TIỀN)
+ * PHÂN CÔNG SHIPPER LẤY HÀNG TRẢ
  * @access  Staff/Admin (requireStaffOrAdmin middleware)
- * @route   POST /api/v1/admin/returns/:id/process-return
+ * @route   PATCH /api/v1/admin/returns/:id/assign-shipper
  */
-const processReturn = asyncHandler(async (req, res) => {
+const assignShipperForReturn = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { shipperId } = req.body;
 
-  // FIXED Bug #42: Service signature là (id, processedBy)
-  const result = await returnService.processReturn(id, req.user._id);
+  const result = await returnService.assignShipperForReturn(
+    id,
+    shipperId,
+    req.user._id
+  );
 
   res.status(200).json({
     success: true,
-    message: "Xử lý hoàn trả thành công",
+    message: "Đã phân công shipper lấy hàng trả",
     data: result,
   });
 });
 
 /**
- * XỬ LÝ ĐỔI HÀNG
+ * XÁC NHẬN ĐÃ CHUYỂN KHOẢN HOÀN TIỀN (BANK_TRANSFER)
  * @access  Staff/Admin (requireStaffOrAdmin middleware)
- * @route   POST /api/v1/admin/returns/:id/process-exchange
+ * @route   PATCH /api/v1/admin/returns/:id/confirm-transfer
  */
-const processExchange = asyncHandler(async (req, res) => {
+const confirmBankTransfer = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { note } = req.body;
 
-  // FIXED Bug #42: Service signature là (id, processedBy)
-  const result = await returnService.processExchange(id, req.user._id);
+  const result = await returnService.adminConfirmBankTransfer(
+    id,
+    req.user._id,
+    note
+  );
 
   res.status(200).json({
     success: true,
-    message: "Xử lý đổi hàng thành công",
+    message: "Đã xác nhận chuyển khoản hoàn tiền",
     data: result,
   });
 });
 
 /**
- * LẤY THỐNG KÊ YÊU CẦU ĐỔI/TRẢ HÀNG
+ * LẤY THỐNG KÊ YÊU CẦU TRẢ HÀNG
  * @access  Staff/Admin (requireStaffOrAdmin middleware)
  * @route   GET /api/v1/admin/returns/stats/summary
  */
@@ -156,7 +162,7 @@ module.exports = {
   getReturnRequestDetail,
   approveReturnRequest,
   rejectReturnRequest,
-  processReturn,
-  processExchange,
+  assignShipperForReturn,
+  confirmBankTransfer,
   getReturnStats,
 };

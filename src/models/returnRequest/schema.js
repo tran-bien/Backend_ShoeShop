@@ -1,11 +1,17 @@
 const mongoose = require("mongoose");
 
+/**
+ * ReturnRequest Schema - CHỈ HỖ TRỢ TRẢ HÀNG/HOÀN TIỀN
+ * - Trả toàn bộ đơn hàng (không chọn từng sản phẩm)
+ * - Phí trả hàng: 30.000đ (khách trả)
+ * - Hoàn tiền qua: cash (shipper thu) hoặc bank_transfer
+ */
 const returnRequestSchema = new mongoose.Schema(
   {
     code: {
       type: String,
       unique: true,
-      comment: "Mã yêu cầu đổi/trả, VD: RET-001, EXC-001",
+      comment: "Mã yêu cầu trả hàng, VD: RET-001",
     },
     order: {
       type: mongoose.Schema.Types.ObjectId,
@@ -17,48 +23,8 @@ const returnRequestSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    type: {
-      type: String,
-      enum: ["RETURN", "EXCHANGE"],
-      required: true,
-    },
-    items: [
-      {
-        product: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
-          required: true,
-        },
-        variant: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Variant",
-          required: true,
-        },
-        size: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Size",
-          required: true,
-        },
-        quantity: {
-          type: Number,
-          required: true,
-          min: 1,
-        },
-        priceAtPurchase: {
-          type: Number,
-          required: true,
-        },
-        // Chỉ dành cho EXCHANGE
-        exchangeToVariant: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Variant",
-        },
-        exchangeToSize: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Size",
-        },
-      },
-    ],
+
+    // Lý do trả hàng
     reason: {
       type: String,
       enum: [
@@ -67,7 +33,6 @@ const returnRequestSchema = new mongoose.Schema(
         "defective", // Sản phẩm lỗi/hư hỏng
         "not_as_described", // Không giống mô tả
         "changed_mind", // Đổi ý (không muốn nữa)
-        "exchange", // Đổi hàng (sang size/màu khác)
         "other", // Lý do khác
       ],
       required: true,
@@ -75,85 +40,99 @@ const returnRequestSchema = new mongoose.Schema(
     reasonDetail: {
       type: String,
       trim: true,
+      comment: "Chi tiết lý do (tùy chọn)",
     },
-    images: [
-      {
-        type: String,
-      },
-    ],
-    // Phương thức hoàn tiền (chỉ cho RETURN - TẤT CẢ ĐỀU THỦ CÔNG)
-    // Không có tự động hoàn tiền qua VNPAY - Admin xử lý thủ công
+
+    // Phương thức hoàn tiền
     refundMethod: {
       type: String,
       enum: ["cash", "bank_transfer"],
+      required: true,
       comment:
-        "cash=Tiền mặt tại cửa hàng, bank_transfer=Chuyển khoản (cần bankInfo)",
+        "cash=Shipper thu tiền mặt hoàn cho khách, bank_transfer=Chuyển khoản",
     },
+
+    // Số tiền hoàn (tổng đơn hàng - phí ship trả hàng 30k)
     refundAmount: {
       type: Number,
       min: 0,
+      required: true,
     },
+
     // Thông tin chuyển khoản (nếu bank_transfer)
-    // Khách nhập → Admin xem → Chuyển khoản thủ công → Đánh dấu completed
     bankInfo: {
       bankName: String,
       accountNumber: String,
       accountName: String,
     },
 
-    // SHIPPING FEE HANDLING - Xử lý phí ship
-    shippingFee: {
-      customerPay: {
-        type: Number,
-        default: 0,
-        min: 0,
-        comment: "Phí ship khách hàng trả khi gửi hàng về",
-      },
-      refundShippingFee: {
-        type: Boolean,
-        default: false,
-        comment: "Có hoàn lại phí ship ban đầu không (nếu lỗi shop)",
-      },
-      originalShippingFee: {
-        type: Number,
-        default: 0,
-        min: 0,
-        comment: "Phí ship ban đầu của đơn hàng",
-      },
+    // PHÍ TRẢ HÀNG - Mặc định 30.000đ
+    returnShippingFee: {
+      type: Number,
+      default: 30000,
+      comment: "Phí ship trả hàng, khách hàng trả",
     },
 
-    // PRICE DIFFERENCE - Chênh lệch giá khi đổi hàng
-    priceDifference: {
-      amount: {
-        type: Number,
-        default: 0,
-        comment: "Số tiền chênh lệch (+ hoặc -)",
-      },
-      direction: {
-        type: String,
-        enum: ["customer_pay", "refund_to_customer", "equal"],
-        default: "equal",
-        comment: "Hướng thanh toán",
-      },
-      isPaid: {
+    // SHIPPER THU TIỀN HOÀN (nếu refundMethod = cash)
+    refundCollectedByShipper: {
+      collected: {
         type: Boolean,
         default: false,
-        comment: "Đã thanh toán chênh lệch chưa",
+        comment: "Shipper đã giao tiền hoàn cho khách chưa",
       },
+      collectedAt: Date,
+      shipperId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      note: String,
     },
 
     status: {
       type: String,
       enum: [
-        "pending",
-        "approved",
-        "processing",
-        "completed",
-        "rejected",
-        "canceled",
+        "pending", // Chờ duyệt
+        "approved", // Đã duyệt - chờ gán shipper
+        "shipping", // Shipper đang lấy hàng
+        "received", // Đã nhận hàng về kho
+        "refunded", // Đã hoàn tiền
+        "completed", // Hoàn tất
+        "rejected", // Từ chối
+        "canceled", // Khách hủy
       ],
       default: "pending",
     },
+
+    // Tracking
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    approvedAt: Date,
+
+    // Shipper được gán lấy hàng trả
+    assignedShipper: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    assignedAt: Date,
+
+    // Khi shipper lấy được hàng về kho
+    receivedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    receivedAt: Date,
+
+    // Hoàn tất
+    completedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    completedAt: Date,
+
+    rejectionReason: String,
+    staffNotes: String,
 
     // AUTO-REJECT - Tự động từ chối nếu quá hạn
     autoRejectedAt: Date,
@@ -161,20 +140,6 @@ const returnRequestSchema = new mongoose.Schema(
       type: Date,
       comment: "Hết hạn xử lý sau 7 ngày kể từ khi tạo",
     },
-    // Tracking
-    approvedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
-    approvedAt: Date,
-    processedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
-    processedAt: Date,
-    completedAt: Date,
-    rejectionReason: String,
-    staffNotes: String,
   },
   {
     timestamps: true,
@@ -185,17 +150,8 @@ const returnRequestSchema = new mongoose.Schema(
 returnRequestSchema.index({ order: 1 });
 returnRequestSchema.index({ customer: 1, createdAt: -1 });
 returnRequestSchema.index({ status: 1, createdAt: -1 });
-returnRequestSchema.index({ expiresAt: 1, status: 1 }); // For auto-reject cronjob
-// Add compound index for type + status queries
-returnRequestSchema.index({ type: 1, status: 1, createdAt: -1 });
-// ADDED: Compound index để optimize duplicate exchange request check
-returnRequestSchema.index({
-  order: 1,
-  type: 1,
-  status: 1,
-  "items.variant": 1,
-  "items.size": 1,
-});
+returnRequestSchema.index({ assignedShipper: 1, status: 1 });
+returnRequestSchema.index({ expiresAt: 1, status: 1 }); // For auto-reject
 
 // Apply middleware (auto-generate code, expiresAt, email notifications, loyalty points)
 const applyReturnRequestMiddleware = require("./middlewares");

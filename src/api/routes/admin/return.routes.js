@@ -9,14 +9,16 @@ const validate = require("@utils/validatehelper");
 const {
   validateApproveReturn,
   validateRejectReturn,
-  validateProcessReturn,
   validateGetReturns,
   validateReturnId,
+  validateAssignShipper,
+  validateAdminConfirmTransfer,
 } = require("@validators/return.validator");
 
 /**
  * ADMIN RETURN ROUTES
- * Chỉ dành cho Admin/Staff quản lý return requests
+ * Chỉ dành cho Admin/Staff quản lý yêu cầu trả hàng
+ * (Đã loại bỏ logic đổi hàng - chỉ có trả hàng/hoàn tiền)
  */
 
 router.use(protect);
@@ -24,14 +26,14 @@ router.use(requireStaffOrAdmin);
 
 /**
  * @route   GET /api/v1/admin/returns/stats/summary
- * @desc    Lấy thống kê đổi trả
+ * @desc    Lấy thống kê trả hàng
  * @access  Staff/Admin
  */
 router.get("/stats/summary", returnController.getReturnStats);
 
 /**
  * @route   GET /api/v1/admin/returns
- * @desc    Lấy tất cả yêu cầu đổi trả (admin view)
+ * @desc    Lấy tất cả yêu cầu trả hàng (admin view)
  * @access  Staff/Admin
  */
 router.get(
@@ -42,7 +44,7 @@ router.get(
 
 /**
  * @route   GET /api/v1/admin/returns/:id
- * @desc    Lấy chi tiết yêu cầu đổi trả
+ * @desc    Lấy chi tiết yêu cầu trả hàng
  * @access  Staff/Admin
  */
 router.get(
@@ -53,7 +55,7 @@ router.get(
 
 /**
  * @route   PATCH /api/v1/admin/returns/:id/approve
- * @desc    Phê duyệt yêu cầu đổi trả
+ * @desc    Phê duyệt yêu cầu trả hàng
  * @access  Staff/Admin
  */
 router.patch(
@@ -64,7 +66,7 @@ router.patch(
 
 /**
  * @route   PATCH /api/v1/admin/returns/:id/reject
- * @desc    Từ chối yêu cầu đổi trả
+ * @desc    Từ chối yêu cầu trả hàng
  * @access  Staff/Admin
  */
 router.patch(
@@ -74,25 +76,25 @@ router.patch(
 );
 
 /**
- * @route   POST /api/v1/admin/returns/:id/process-return
- * @desc    Xử lý hoàn trả
+ * @route   PATCH /api/v1/admin/returns/:id/assign-shipper
+ * @desc    Phân công shipper lấy hàng trả
  * @access  Staff/Admin
  */
-router.post(
-  "/:id/process-return",
-  validate(validateProcessReturn),
-  returnController.processReturn
+router.patch(
+  "/:id/assign-shipper",
+  validate(validateAssignShipper),
+  returnController.assignShipperForReturn
 );
 
 /**
- * @route   POST /api/v1/admin/returns/:id/process-exchange
- * @desc    Xử lý đổi hàng
+ * @route   PATCH /api/v1/admin/returns/:id/confirm-transfer
+ * @desc    Xác nhận đã chuyển khoản hoàn tiền (bank_transfer)
  * @access  Staff/Admin
  */
-router.post(
-  "/:id/process-exchange",
-  validate(validateProcessReturn),
-  returnController.processExchange
+router.patch(
+  "/:id/confirm-transfer",
+  validate(validateAdminConfirmTransfer),
+  returnController.confirmBankTransfer
 );
 
 module.exports = router;

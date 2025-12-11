@@ -8,14 +8,21 @@ const {
   validateUpdateAvailability,
   validateGetShipperOrders,
 } = require("@validators/shipper.validator");
+const {
+  validateReturnId,
+  validateShipperConfirm,
+} = require("@validators/return.validator");
 
 /**
  * SHIPPER ROUTES
  * Cho shipper quản lý đơn hàng được gán và cập nhật trạng thái giao hàng
+ * + Quản lý trả hàng/hoàn tiền
  */
 
 router.use(protect);
 router.use(requireShipper);
+
+// ==================== ORDER DELIVERY ====================
 
 /**
  * @route   GET /api/v1/shipper/my-orders
@@ -48,6 +55,48 @@ router.patch(
   "/availability",
   validate(validateUpdateAvailability),
   shipperController.updateAvailability
+);
+
+// ==================== RETURN HANDLING ====================
+
+/**
+ * @route   GET /api/v1/shipper/returns
+ * @desc    Lấy danh sách yêu cầu trả hàng được giao cho shipper
+ * @access  Shipper
+ */
+router.get("/returns", shipperController.getShipperReturns);
+
+/**
+ * @route   GET /api/v1/shipper/returns/:id
+ * @desc    Lấy chi tiết yêu cầu trả hàng
+ * @access  Shipper
+ */
+router.get(
+  "/returns/:id",
+  validate(validateReturnId),
+  shipperController.getReturnDetail
+);
+
+/**
+ * @route   PATCH /api/v1/shipper/returns/:id/confirm-received
+ * @desc    Xác nhận đã nhận hàng trả từ khách
+ * @access  Shipper
+ */
+router.patch(
+  "/returns/:id/confirm-received",
+  validate(validateShipperConfirm),
+  shipperController.confirmReturnReceived
+);
+
+/**
+ * @route   PATCH /api/v1/shipper/returns/:id/confirm-refund-delivered
+ * @desc    Xác nhận đã giao tiền hoàn cho khách (cash refund)
+ * @access  Shipper
+ */
+router.patch(
+  "/returns/:id/confirm-refund-delivered",
+  validate(validateShipperConfirm),
+  shipperController.confirmRefundDelivered
 );
 
 module.exports = router;

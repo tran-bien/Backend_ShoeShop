@@ -2,7 +2,9 @@ const { body, param, query } = require("express-validator");
 const mongoose = require("mongoose");
 
 /**
- * Validator cho tạo yêu cầu đổi/trả
+ * Validator cho tạo yêu cầu trả hàng
+ * - Trả toàn bộ đơn hàng (không chọn sản phẩm)
+ * - Chỉ cần lý do + phương thức hoàn tiền
  */
 exports.validateCreateReturnRequest = [
   body("orderId")
@@ -15,136 +17,58 @@ exports.validateCreateReturnRequest = [
       return true;
     }),
 
-  body("type")
-    .notEmpty()
-    .withMessage("Loại yêu cầu không được để trống")
-    .isIn(["RETURN", "EXCHANGE"])
-    .withMessage("Loại phải là: RETURN hoặc EXCHANGE"),
-
-  body("items")
-    .notEmpty()
-    .withMessage("Danh sách sản phẩm không được để trống")
-    .isArray({ min: 1 })
-    .withMessage("Phải có ít nhất 1 sản phẩm"),
-
-  body("items.*.variant")
-    .notEmpty()
-    .withMessage("Variant ID không được để trống")
-    .isMongoId()
-    .withMessage("Variant ID không hợp lệ"),
-
-  body("items.*.size")
-    .notEmpty()
-    .withMessage("Size ID không được để trống")
-    .isMongoId()
-    .withMessage("Size ID không hợp lệ"),
-
-  body("items.*.quantity")
-    .notEmpty()
-    .withMessage("Số lượng không được để trống")
-    .isInt({ min: 1 })
-    .withMessage("Số lượng phải là số nguyên dương")
-    .custom((value, { req }) => {
-      // Nếu là EXCHANGE, chỉ cho phép quantity = 1
-      if (req.body.type === "EXCHANGE" && value !== 1) {
-        throw new Error("Đổi hàng chỉ được phép đổi 1 sản phẩm mỗi lần");
-      }
-      return true;
-    }),
-
-  body("items.*.reason")
-    .notEmpty()
-    .withMessage("Lý do không được để trống")
-    .isString(),
-
-  body("items.*.images")
-    .optional()
-    .isArray()
-    .withMessage("Images phải là array"),
-
-  body("items.*.exchangeToVariant")
-    .optional()
-    .isMongoId()
-    .withMessage("Exchange Variant ID không hợp lệ"),
-
-  body("items.*.exchangeToSize")
-    .optional()
-    .isMongoId()
-    .withMessage("Exchange Size ID không hợp lệ"),
-
-  // FIXED: Validate toàn bộ items array cùng lúc
-  body("items").custom((items, { req }) => {
-    if (req.body.type !== "EXCHANGE") {
-      return true; // Chỉ validate cho EXCHANGE
-    }
-
-    if (!Array.isArray(items)) {
-      throw new Error("Items phải là một mảng");
-    }
-
-    // Validate từng item
-    items.forEach((item, index) => {
-      // Check exchangeToVariant required
-      if (!item.exchangeToVariant) {
-        throw new Error(`Item thứ ${index + 1}: Phải chọn variant để đổi sang`);
-      }
-
-      // Check exchangeToSize required
-      if (!item.exchangeToSize) {
-        throw new Error(`Item thứ ${index + 1}: Phải chọn size để đổi sang`);
-      }
-
-      // Check exchangeToVariant phải GIỐNG với variant gốc (chỉ đổi size)
-      if (item.exchangeToVariant.toString() !== item.variant.toString()) {
-        throw new Error(
-          `Item thứ ${
-            index + 1
-          }: Chỉ được đổi sang size khác, không được đổi màu sắc hoặc sản phẩm`
-        );
-      }
-
-      // Check exchangeToSize phải KHÁC với size gốc
-      if (item.exchangeToSize.toString() === item.size.toString()) {
-        throw new Error(
-          `Item thứ ${index + 1}: Size đổi sang phải khác với size hiện tại`
-        );
-      }
-    });
-
-    return true;
-  }),
-
   body("reason")
     .notEmpty()
-    .withMessage("Lý do chung không được để trống")
-    .isString(),
+    .withMessage("Lý do trả hàng không được để trống")
+    .isIn([
+      "wrong_size",
+      "wrong_product",
+      "defective",
+      "not_as_described",
+      "changed_mind",
+      "other",
+    ])
+    .withMessage("Lý do không hợp lệ"),
+
+  body("reasonDetail")
+    .optional()
+    .isString()
+    .isLength({ max: 500 })
+    .withMessage("Chi tiết lý do tối đa 500 ký tự"),
 
   body("refundMethod")
-    .optional()
+    .notEmpty()
+    .withMessage("Phương thức hoàn tiền không được để trống")
     .isIn(["cash", "bank_transfer"])
     .withMessage(
-      "Phương thức hoàn tiền không hợp lệ (chỉ chấp nhận: cash, bank_transfer)"
+      "Phương thức hoàn tiền không hợp lệ (cash hoặc bank_transfer)"
     ),
 
+  // Validate bankInfo nếu refundMethod = bank_transfer
   body("bankInfo")
-    .optional()
+    .if(body("refundMethod").equals("bank_transfer"))
+    .notEmpty()
+    .withMessage("Thông tin ngân hàng không được để trống khi chuyển khoản")
     .isObject()
     .withMessage("Thông tin ngân hàng phải là object"),
 
   body("bankInfo.bankName")
-    .optional()
-    .isString()
-    .withMessage("Tên ngân hàng không được để trống"),
+    .if(body("refundMethod").equals("bank_transfer"))
+    .notEmpty()
+    .withMessage("Tên ngân hàng không được để trống")
+    .isString(),
 
   body("bankInfo.accountNumber")
-    .optional()
-    .isString()
-    .withMessage("Số tài khoản không được để trống"),
+    .if(body("refundMethod").equals("bank_transfer"))
+    .notEmpty()
+    .withMessage("Số tài khoản không được để trống")
+    .isString(),
 
   body("bankInfo.accountName")
-    .optional()
-    .isString()
-    .withMessage("Tên chủ tài khoản không được để trống"),
+    .if(body("refundMethod").equals("bank_transfer"))
+    .notEmpty()
+    .withMessage("Tên chủ tài khoản không được để trống")
+    .isString(),
 ];
 
 /**
@@ -179,16 +103,46 @@ exports.validateRejectReturn = [
 ];
 
 /**
- * Validator cho xử lý trả hàng
+ * Validator cho gán shipper lấy hàng trả
  */
-exports.validateProcessReturn = [
+exports.validateAssignShipper = [
   param("id")
     .notEmpty()
     .withMessage("Return Request ID không được để trống")
     .isMongoId()
     .withMessage("Return Request ID không hợp lệ"),
 
-  body("note").optional().isString(),
+  body("shipperId")
+    .notEmpty()
+    .withMessage("Shipper ID không được để trống")
+    .isMongoId()
+    .withMessage("Shipper ID không hợp lệ"),
+];
+
+/**
+ * Validator cho shipper xác nhận
+ */
+exports.validateShipperConfirm = [
+  param("id")
+    .notEmpty()
+    .withMessage("Return Request ID không được để trống")
+    .isMongoId()
+    .withMessage("Return Request ID không hợp lệ"),
+
+  body("note").optional().isString().isLength({ max: 500 }),
+];
+
+/**
+ * Validator cho admin xác nhận chuyển khoản
+ */
+exports.validateAdminConfirmTransfer = [
+  param("id")
+    .notEmpty()
+    .withMessage("Return Request ID không được để trống")
+    .isMongoId()
+    .withMessage("Return Request ID không hợp lệ"),
+
+  body("note").optional().isString().isLength({ max: 500 }),
 ];
 
 /**
@@ -210,17 +164,14 @@ exports.validateGetReturns = [
     .isIn([
       "pending",
       "approved",
-      "rejected",
-      "processing",
+      "shipping",
+      "received",
+      "refunded",
       "completed",
-      "cancelled",
+      "rejected",
+      "canceled",
     ])
     .withMessage("Trạng thái không hợp lệ"),
-
-  query("type")
-    .optional()
-    .isIn(["RETURN", "EXCHANGE"])
-    .withMessage("Loại phải là: RETURN hoặc EXCHANGE"),
 
   query("customerId")
     .optional()
@@ -237,27 +188,4 @@ exports.validateReturnId = [
     .withMessage("Return Request ID không được để trống")
     .isMongoId()
     .withMessage("Return Request ID không hợp lệ"),
-];
-
-/**
- * Validator cho check exchange eligibility
- */
-exports.validateCheckEligibility = [
-  query("orderId")
-    .notEmpty()
-    .withMessage("Order ID không được để trống")
-    .isMongoId()
-    .withMessage("Order ID không hợp lệ"),
-
-  query("variantId")
-    .notEmpty()
-    .withMessage("Variant ID không được để trống")
-    .isMongoId()
-    .withMessage("Variant ID không hợp lệ"),
-
-  query("sizeId")
-    .notEmpty()
-    .withMessage("Size ID không được để trống")
-    .isMongoId()
-    .withMessage("Size ID không hợp lệ"),
 ];

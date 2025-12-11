@@ -226,7 +226,15 @@ const reviewService = {
     }
 
     // Kiểm tra xem người dùng có phải là chủ đơn hàng không
-    if (order.user.toString() !== userId) {
+    // Fix: Handle cả trường hợp order.user là ObjectId hoặc populated object
+    const orderUserId = order.user._id
+      ? order.user._id.toString()
+      : order.user.toString();
+    const requestUserId = userId._id
+      ? userId._id.toString()
+      : userId.toString();
+
+    if (orderUserId !== requestUserId) {
       throw new ApiError(
         403,
         "Bạn không có quyền đánh giá đơn hàng này vì bạn không phải chủ sở hữu"

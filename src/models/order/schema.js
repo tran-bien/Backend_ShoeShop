@@ -454,7 +454,7 @@ const OrderSchema = new mongoose.Schema(
         },
         status: {
           type: String,
-          enum: ["success", "failed", "partial"],
+          enum: ["success", "failed", "out_for_delivery"],
         },
         note: String,
         shipper: {
