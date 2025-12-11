@@ -19,6 +19,21 @@ const loyaltyController = {
   }),
 
   /**
+   * @route GET /api/users/loyalty/tiers
+   * @desc Lấy danh sách các tier (cho user xem)
+   * @access Private
+   */
+  getTiers: asyncHandler(async (req, res) => {
+    const result = await loyaltyService.getAllTiers({ isActive: true });
+
+    return res.json({
+      success: result.success,
+      message: "Lấy danh sách cấp độ thành viên thành công",
+      data: result.tiers,
+    });
+  }),
+
+  /**
    * @route GET /api/users/loyalty/transactions
    * @desc Lấy lịch sử giao dịch điểm
    * @access Private

@@ -1,4 +1,11 @@
-const { Order, Cart, CancelRequest, User, InventoryItem } = require("@models");
+const {
+  Order,
+  Cart,
+  CancelRequest,
+  User,
+  InventoryItem,
+  ReturnRequest,
+} = require("@models");
 const mongoose = require("mongoose");
 const paginate = require("@utils/pagination");
 const ApiError = require("@utils/ApiError");
@@ -77,8 +84,31 @@ const orderService = {
       stats.total += count;
     });
 
+    // FIXED: Lookup return request status for delivered orders
+    const orderIds = result.data.map((o) => o._id);
+    const returnRequests = await ReturnRequest.find({
+      order: { $in: orderIds },
+    }).select("order status");
+
+    // Create a map of orderId -> return request status
+    const returnRequestMap = {};
+    returnRequests.forEach((rr) => {
+      returnRequestMap[rr.order.toString()] = rr.status;
+    });
+
+    // Add return request info to orders
+    const ordersWithReturnInfo = result.data.map((order) => {
+      const orderObj = order.toObject ? order.toObject() : order;
+      const returnStatus = returnRequestMap[orderObj._id.toString()];
+      return {
+        ...orderObj,
+        hasReturnRequest: !!returnStatus,
+        returnRequestStatus: returnStatus || null,
+      };
+    });
+
     return {
-      orders: result.data,
+      orders: ordersWithReturnInfo,
       pagination: {
         page: result.currentPage,
         limit: parseInt(limit),
@@ -128,7 +158,16 @@ const orderService = {
       throw new ApiError(403, "Bạn không có quyền xem đơn hàng này");
     }
 
-    return order;
+    // FIXED: Lookup return request status for this order
+    const returnRequest = await ReturnRequest.findOne({
+      order: orderId,
+    }).select("status");
+
+    return {
+      ...order,
+      hasReturnRequest: !!returnRequest,
+      returnRequestStatus: returnRequest?.status || null,
+    };
   },
 
   /**

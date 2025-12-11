@@ -14,6 +14,12 @@ router.use(protect);
 router.get("/stats", loyaltyController.getLoyaltyStats);
 
 /**
+ * @route GET /api/users/loyalty/tiers
+ * @desc Lấy danh sách các tier loyalty (cho user xem)
+ */
+router.get("/tiers", loyaltyController.getTiers);
+
+/**
  * @route GET /api/users/loyalty/transactions
  * @desc Lấy lịch sử giao dịch điểm
  */

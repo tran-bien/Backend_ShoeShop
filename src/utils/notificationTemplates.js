@@ -45,7 +45,7 @@ const templates = {
   RETURN_REQUEST_APPROVED: {
     title: "Yêu cầu {{type}} đã được chấp nhận",
     message:
-      "Yêu cầu đổi/trả hàng #{{returnRequestCode}} đã được chấp nhận. Vui lòng làm theo hướng dẫn.",
+      "Yêu cầu trả hàng/hoàn tiền #{{returnRequestCode}} đã được chấp nhận. Vui lòng làm theo hướng dẫn.",
     actionText: "Xem chi tiết",
     actionUrl: "/account/return-requests/{{returnRequestId}}",
   },
@@ -80,16 +80,17 @@ const templates = {
   },
 
   RETURN_REJECTED: {
-    title: "Yêu cầu đổi/trả hàng bị từ chối",
+    title: "Yêu cầu trả hàng/hoàn tiền bị từ chối",
     message:
-      "Yêu cầu đổi/trả cho đơn {{orderCode}} bị từ chối. Lý do: {{reason}}",
+      "Yêu cầu trả hàng/hoàn tiền cho đơn {{orderCode}} bị từ chối. Lý do: {{reason}}",
     actionText: "Xem chi tiết",
     actionUrl: "/returns/{{returnRequestId}}",
   },
 
   RETURN_COMPLETED: {
-    title: "Đổi/trả hàng hoàn tất",
-    message: "Yêu cầu đổi/trả cho đơn {{orderCode}} đã được xử lý xong.",
+    title: "Trả hàng/hoàn tiền hoàn tất",
+    message:
+      "Yêu cầu trả hàng/hoàn tiền cho đơn {{orderCode}} đã được xử lý xong.",
     actionText: "Xem chi tiết",
     actionUrl: "/returns/{{returnRequestId}}",
   },

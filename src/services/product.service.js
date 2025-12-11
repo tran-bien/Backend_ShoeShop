@@ -1387,23 +1387,13 @@ const productService = {
       },
     });
 
-    // Stage 3: Filter theo các điều kiện variant (lọc nâng cao)
-    if (
-      minPrice !== undefined ||
-      maxPrice !== undefined ||
-      colors ||
-      sizes ||
-      gender
-    ) {
+    // Stage 3: Filter theo các điều kiện variant (lọc nâng cao - KHÔNG bao gồm giá)
+    // NOTE: Lọc giá được xử lý riêng ở Stage 7 sau khi đã lookup InventoryItem
+    if (colors || sizes || gender) {
       let variantMatch = { $and: [] };
 
-      // Lọc theo giá
-      if (minPrice !== undefined || maxPrice !== undefined) {
-        const priceFilter = {};
-        if (minPrice !== undefined) priceFilter.$gte = Number(minPrice);
-        if (maxPrice !== undefined) priceFilter.$lte = Number(maxPrice);
-        variantMatch.$and.push({ priceFinal: priceFilter });
-      }
+      // REMOVED: Lọc theo giá không còn ở đây nữa
+      // Price filtering được xử lý ở Stage 7 thông qua InventoryItem.finalPrice
 
       // Lọc theo màu
       if (colors) {
@@ -1445,12 +1435,7 @@ const productService = {
                     // Chuyển đổi điều kiện cho $filter
                     return Object.entries(condition).reduce(
                       (result, [key, value]) => {
-                        if (key === "priceFinal") {
-                          // REMOVED: variant.priceFinal không tồn tại
-                          // Price filtering được xử lý riêng thông qua InventoryItem
-                          // Skip price condition trong variant filter
-                          // (Price range filter được handle bởi filter.service.js)
-                        } else if (key === "color") {
+                        if (key === "color") {
                           result = {
                             ...result,
                             $in: ["$$variant.color", value.$in],
@@ -1531,6 +1516,21 @@ const productService = {
         },
       },
     });
+
+    // Stage 6.5: FIX - Lọc theo khoảng giá sử dụng minPrice/maxPrice từ InventoryItem
+    // Sản phẩm phù hợp nếu khoảng giá của nó overlap với khoảng giá filter
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      const priceMatch = {};
+      // Product matches if its price range overlaps with filter range
+      // Product minPrice <= filter maxPrice AND Product maxPrice >= filter minPrice
+      if (minPrice !== undefined) {
+        priceMatch.maxPrice = { $gte: Number(minPrice) };
+      }
+      if (maxPrice !== undefined) {
+        priceMatch.minPrice = { $lte: Number(maxPrice) };
+      }
+      pipeline.push({ $match: priceMatch });
+    }
 
     // Stage 7: Project để giữ các trường cần thiết
     pipeline.push({

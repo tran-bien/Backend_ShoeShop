@@ -681,48 +681,49 @@ exports.orderConfirmationEmailTemplate = (userName, order, frontendUrl) => {
 };
 
 /**
- * Template 5: Email yêu cầu đổi/trả hàng
+ * Template 5: Email yêu cầu trả hàng/hoàn tiền
  */
 exports.returnRequestEmailTemplate = (userName, returnRequest, frontendUrl) => {
   // Thông tin status
   const statusMessages = {
     pending: {
-      title: "Đã nhận yêu cầu đổi/trả hàng",
+      title: "Đã nhận yêu cầu trả hàng/hoàn tiền",
       message:
-        "Chúng tôi đã nhận được yêu cầu đổi/trả hàng của bạn và đang xem xét.",
+        "Chúng tôi đã nhận được yêu cầu trả hàng/hoàn tiền của bạn và đang xem xét.",
       color: "#2C2C2C",
     },
     approved: {
       title: "Yêu cầu đã được chấp nhận",
       message:
-        "Yêu cầu đổi/trả hàng của bạn đã được chấp nhận. Vui lòng làm theo hướng dẫn bên dưới.",
+        "Yêu cầu trả hàng/hoàn tiền của bạn đã được chấp nhận. Vui lòng làm theo hướng dẫn bên dưới.",
       color: "#000000",
     },
     processing: {
       title: "Đang xử lý yêu cầu",
-      message: "Chúng tôi đang xử lý yêu cầu đổi/trả hàng của bạn.",
+      message: "Chúng tôi đang xử lý yêu cầu trả hàng/hoàn tiền của bạn.",
       color: "#2C2C2C",
     },
     completed: {
-      title: "Hoàn tất đổi/trả hàng",
-      message: "Yêu cầu đổi/trả hàng của bạn đã được xử lý thành công.",
+      title: "Hoàn tất trả hàng/hoàn tiền",
+      message: "Yêu cầu trả hàng/hoàn tiền của bạn đã được xử lý thành công.",
       color: "#000000",
     },
     rejected: {
       title: "Yêu cầu bị từ chối",
-      message: "Rất tiếc, yêu cầu đổi/trả hàng của bạn không được chấp nhận.",
+      message:
+        "Rất tiếc, yêu cầu trả hàng/hoàn tiền của bạn không được chấp nhận.",
       color: "#2C2C2C",
     },
     canceled: {
       title: "Yêu cầu đã bị hủy",
-      message: "Yêu cầu đổi/trả hàng của bạn đã bị hủy.",
+      message: "Yêu cầu trả hàng/hoàn tiền của bạn đã bị hủy.",
       color: "#2C2C2C",
     },
   };
 
   const statusInfo =
     statusMessages[returnRequest.status] || statusMessages.pending;
-  const typeText = returnRequest.type === "RETURN" ? "Trả hàng" : "Đổi hàng";
+  const typeText = returnRequest.type === "RETURN" ? "Trả hàng" : "Hoàn tiền";
 
   const content = `
     <div style="${baseStyles.content}">

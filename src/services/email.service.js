@@ -231,15 +231,15 @@ const emailService = {
 
     if (!emailEnabled) {
       console.log(
-        `[EMAIL] User ${user.email} đã tắt email notification, skip email đổi/trả hàng`
+        `[EMAIL] User ${user.email} đã tắt email notification, skip email trả hàng/hoàn tiền`
       );
       return { success: false, reason: "User disabled email notifications" };
     }
 
     const mailOptions = {
-      from: `"Shoe Shop - Đổi/Trả Hàng" <${process.env.EMAIL_USER}>`,
+      from: `"Shoe Shop - Trả Hàng/Hoàn Tiền" <${process.env.EMAIL_USER}>`,
       to: user.email,
-      subject: `[Shoe Shop] Cập nhật yêu cầu đổi/trả hàng #${returnRequest.code}`,
+      subject: `[Shoe Shop] Cập nhật yêu cầu trả hàng/hoàn tiền #${returnRequest.code}`,
       html: emailTemplates.returnRequestEmailTemplate(
         user.name,
         returnRequest,
@@ -251,12 +251,12 @@ const emailService = {
       // FIX BUG #13: Sử dụng retry logic
       const result = await sendEmailWithRetry(mailOptions);
       console.log(
-        `[EMAIL] Đã gửi email đổi/trả hàng cho ${user.email} - Mã: ${returnRequest.code}`
+        `[EMAIL] Đã gửi email trả hàng/hoàn tiền cho ${user.email} - Mã: ${returnRequest.code}`
       );
       return result;
     } catch (error) {
-      console.error("Lỗi gửi email đổi/trả hàng sau khi retry:", error);
-      throw new ApiError(500, "Không thể gửi email đổi/trả hàng");
+      console.error("Lỗi gửi email trả hàng/hoàn tiền sau khi retry:", error);
+      throw new ApiError(500, "Không thể gửi email trả hàng/hoàn tiền");
     }
   },
 };
