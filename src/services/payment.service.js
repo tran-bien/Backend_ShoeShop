@@ -22,7 +22,7 @@ const sortObject = (obj) => {
 const paymentService = {
   createVnpayPaymentUrl: async (paymentData) => {
     try {
-      const { orderId, amount, returnUrl } = paymentData;
+      const { orderId, amount, returnUrl, ipAddr } = paymentData;
 
       // Kiểm tra đơn hàng trước
       const order = await Order.findById(orderId);
@@ -46,11 +46,22 @@ const paymentService = {
       const date = new Date();
       const createDate = moment(date).format("YYYYMMDDHHmmss"); // Sử dụng moment.js
 
-      // FIX: Tạo mã giao dịch với entropy cao hơn để tránh trùng lặp
-      const timestamp = Date.now();
+      // FIX: Tạo mã giao dịch đơn giản như code cũ hoạt động được
+      // VNPAY yêu cầu vnp_TxnRef ngắn gọn
       const randomAttempt = Math.floor(100000 + Math.random() * 900000);
-      const vnp_TxnRef = `${order.code}-${timestamp}-${randomAttempt}`;
-      // Chuẩn bị tham số với số tiền nhỏ cho test
+      const vnp_TxnRef = `T${randomAttempt}`; // Đơn giản hóa mã giao dịch giống code cũ
+
+      // FIX: VNPAY chỉ chấp nhận IPv4, convert IPv6 localhost sang IPv4
+      let clientIp = ipAddr || "127.0.0.1";
+      // Convert IPv6 localhost "::1" hoặc "::ffff:127.0.0.1" sang IPv4
+      if (clientIp === "::1" || clientIp === "::ffff:127.0.0.1") {
+        clientIp = "127.0.0.1";
+      } else if (clientIp.startsWith("::ffff:")) {
+        // Strip IPv6 prefix từ IPv4-mapped address
+        clientIp = clientIp.replace("::ffff:", "");
+      }
+
+      // Chuẩn bị tham số - GIỐNG CODE CŨ HOẠT ĐỘNG ĐƯỢC
       const vnp_Params = {
         vnp_Version: "2.0.0",
         vnp_Command: "pay",
@@ -62,9 +73,15 @@ const paymentService = {
         vnp_OrderType: "other",
         vnp_Amount: amount * 100,
         vnp_ReturnUrl: vnp_ReturnUrl,
-        vnp_IpAddr: "127.0.0.1",
+        vnp_IpAddr: clientIp,
         vnp_CreateDate: createDate,
       };
+
+      // Log để debug
+      console.log(
+        "VNPAY Params before signing:",
+        JSON.stringify(vnp_Params, null, 2)
+      );
 
       // Sắp xếp các tham số theo thứ tự ABC
       const sortedParams = {};
@@ -74,16 +91,20 @@ const paymentService = {
           sortedParams[key] = vnp_Params[key];
         });
 
-      // Tạo chuỗi ký
+      // Tạo chuỗi ký - QUAN TRỌNG: không encode URL ở đây
       let signData = "";
       Object.keys(sortedParams).forEach((key, index) => {
         if (index > 0) signData += "&";
         signData += `${key}=${sortedParams[key]}`;
       });
 
+      console.log("Sign data:", signData);
+
       // Tạo chữ ký
       const hmac = crypto.createHmac("sha512", vnp_HashSecret);
       const signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
+
+      console.log("Signed hash:", signed);
 
       // Tạo URL đầy đủ thủ công
       let finalUrl = vnp_Url + "?";
