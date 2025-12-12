@@ -102,7 +102,10 @@ const variantService = {
 
     const results = await paginate(Variant, filter, options);
 
-    // Bổ sung thông tin tổng hợp tồn kho cho mỗi biến thể
+    // Import inventoryService for pricing
+    const inventoryService = require("@services/inventory.service");
+
+    // Bổ sung thông tin tổng hợp tồn kho và giá cho mỗi biến thể
     results.data = await Promise.all(
       results.data.map(async (variant) => {
         const variantObj = variant.toObject
@@ -114,9 +117,18 @@ const variantService = {
           variant
         );
 
+        // Lấy thông tin giá từ inventory
+        const pricingData = await inventoryService.getVariantPricing(
+          variant._id
+        );
+
         return {
           ...variantObj,
           inventorySummary,
+          // Thêm thông tin giá
+          price: pricingData.pricing.calculatedPrice || 0,
+          priceFinal: pricingData.pricing.calculatedPriceFinal || 0,
+          percentDiscount: pricingData.pricing.percentDiscount || 0,
         };
       })
     );
