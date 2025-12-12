@@ -709,6 +709,7 @@ const productService = {
       page = 1,
       limit = 50,
       name,
+      search, // FE gửi param search thay vì name
       category,
       brand,
       stockStatus,
@@ -717,9 +718,10 @@ const productService = {
     } = query;
 
     const filter = { deletedAt: null }; // Mặc định chỉ lấy chưa xóa
-    // Lọc theo tên
-    if (name) {
-      filter.name = { $regex: name, $options: "i" };
+    // Lọc theo tên (hỗ trợ cả name và search param)
+    const searchTerm = name || search;
+    if (searchTerm) {
+      filter.name = { $regex: searchTerm, $options: "i" };
     }
     // Lọc theo danh mục
     if (category) {
@@ -756,20 +758,12 @@ const productService = {
         { path: "category", select: "name" },
         { path: "brand", select: "name logo" },
         { path: "tags", select: "name type description" },
-        // Populate variants với các trường cần thiết cho thông tin tóm tắt
-        {
-          path: "variants",
-          select:
-            "color sizes isActive price priceFinal percentDiscount gender",
-          populate: [
-            { path: "color", select: "name code type colors" },
-            { path: "sizes.size", select: "value" },
-          ],
-        },
+        // REMOVED: Không populate variants từ Product.variants[] vì array có thể rỗng
+        // Sẽ query Variant collection trực tiếp bằng product._id
       ],
     };
 
-    // Lấy kết quả từ database với variants được populate
+    // Lấy kết quả từ database
     const results = await paginate(Product, filter, options);
 
     // Lấy thông tin tồn kho cho từng sản phẩm
@@ -781,6 +775,17 @@ const productService = {
         const productObj = product.toObject
           ? product.toObject()
           : { ...product };
+
+        // FIX: Query Variant collection trực tiếp thay vì dùng Product.variants[]
+        const variants = await Variant.find({
+          product: product._id,
+          deletedAt: null,
+        })
+          .populate("color", "name code type colors")
+          .populate("sizes.size", "value")
+          .lean();
+
+        productObj.variants = variants;
 
         // Tính toán stock info động
         const stockInfo = await inventoryService.getProductStockInfo(

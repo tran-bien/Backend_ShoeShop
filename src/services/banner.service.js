@@ -186,30 +186,28 @@ const bannerService = {
         throw new ApiError(400, "Vị trí hiển thị phải từ 1 đến 5");
       }
 
-      // Kiểm tra nếu vị trí không thay đổi
-      if (updateData.displayOrder === banner.displayOrder) {
-        throw new ApiError(400, "Banner đã ở vị trí này rồi!");
-      }
+      // Chỉ kiểm tra xung đột nếu vị trí THỰC SỰ thay đổi
+      if (updateData.displayOrder !== banner.displayOrder) {
+        // Kiểm tra xung đột vị trí nếu banner active hoặc sẽ active
+        const willBeActive =
+          updateData.isActive !== undefined
+            ? updateData.isActive
+            : banner.isActive;
 
-      // Kiểm tra xung đột vị trí nếu banner active hoặc sẽ active
-      const willBeActive =
-        updateData.isActive !== undefined
-          ? updateData.isActive
-          : banner.isActive;
+        if (willBeActive) {
+          const existingBanner = await Banner.findOne({
+            displayOrder: updateData.displayOrder,
+            isActive: true,
+            deletedAt: null,
+            _id: { $ne: bannerId },
+          });
 
-      if (willBeActive) {
-        const existingBanner = await Banner.findOne({
-          displayOrder: updateData.displayOrder,
-          isActive: true,
-          deletedAt: null,
-          _id: { $ne: bannerId },
-        });
-
-        if (existingBanner) {
-          throw new ApiError(
-            409,
-            `Vị trí ${updateData.displayOrder} đã được sử dụng bởi banner "${existingBanner.title}"`
-          );
+          if (existingBanner) {
+            throw new ApiError(
+              409,
+              `Vị trí ${updateData.displayOrder} đã được sử dụng bởi banner "${existingBanner.title}"`
+            );
+          }
         }
       }
     }

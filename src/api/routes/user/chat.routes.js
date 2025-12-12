@@ -18,6 +18,13 @@ const {
 router.use(protect);
 
 /**
+ * @route   GET /api/v1/user/chat/users
+ * @desc    Lấy danh sách users có thể chat (cho admin/staff)
+ * @access  Private (Admin/Staff)
+ */
+router.get("/users", chatController.getAvailableUsers);
+
+/**
  * @route   GET /api/v1/user/chat/conversations
  * @desc    Lấy danh sách conversations của user
  * @access  Private (User/Staff/Admin/Shipper)
@@ -87,6 +94,16 @@ router.put(
   validateCloseConversation,
   validateRequest,
   chatController.closeConversation
+);
+
+/**
+ * @route   PUT /api/v1/user/chat/conversations/:conversationId/reopen
+ * @desc    Mở lại conversation đã đóng
+ * @access  Private (Participant only)
+ */
+router.put(
+  "/conversations/:conversationId/reopen",
+  chatController.reopenConversation
 );
 
 module.exports = router;

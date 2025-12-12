@@ -48,6 +48,7 @@ const variantService = {
       gender,
       isActive,
       sort,
+      search, // FE gửi param search để tìm theo tên sản phẩm
     } = query;
 
     const filter = { deletedAt: null }; // Mặc định chỉ lấy chưa xóa
@@ -57,6 +58,22 @@ const variantService = {
       filter.product = mongoose.Types.ObjectId.isValid(productId)
         ? new mongoose.Types.ObjectId(String(productId))
         : null;
+    }
+
+    // Tìm kiếm theo tên sản phẩm - cần query Product trước rồi lấy ID
+    let productIdsFromSearch = null;
+    if (search) {
+      const matchingProducts = await Product.find(
+        { name: { $regex: search, $options: "i" }, deletedAt: null },
+        { _id: 1 }
+      );
+      productIdsFromSearch = matchingProducts.map((p) => p._id);
+      if (productIdsFromSearch.length > 0) {
+        filter.product = { $in: productIdsFromSearch };
+      } else {
+        // Không có sản phẩm nào khớp, trả về rỗng
+        filter.product = null;
+      }
     }
 
     // Lọc theo màu sắc

@@ -3,7 +3,7 @@ const LoyaltyTier = require("../models/loyaltyTier");
 const LoyaltyTransaction = require("../models/loyaltyTransaction");
 const ApiError = require("@utils/ApiError");
 const paginate = require("@utils/pagination");
-const slugify = require("@utils/slugify");
+const { createSlug } = require("@utils/slugify");
 const mongoose = require("mongoose"); // FIXED: Thêm import mongoose
 
 // ============================================================
@@ -85,8 +85,14 @@ const loyaltyService = {
   calculatePointsFromOrder: (orderTotal) => {
     const points = Math.floor(orderTotal / 1000);
     // Check overflow - MAX_SAFE_INTEGER = 9007199254740991
-    if (points > Number.MAX_SAFE_INTEGER || points < 0 || !Number.isFinite(points)) {
-      console.error(`[LOYALTY] Points overflow detected: orderTotal=${orderTotal}, points=${points}`);
+    if (
+      points > Number.MAX_SAFE_INTEGER ||
+      points < 0 ||
+      !Number.isFinite(points)
+    ) {
+      console.error(
+        `[LOYALTY] Points overflow detected: orderTotal=${orderTotal}, points=${points}`
+      );
       return 0; // Return 0 để tránh data corruption
     }
     return points;
@@ -689,7 +695,7 @@ const adminLoyaltyTierService = {
     }
 
     // Tự động tạo slug
-    tierData.slug = slugify(tierData.name);
+    tierData.slug = createSlug(tierData.name);
 
     // Set default benefits nếu không có
     if (!tierData.benefits) {
@@ -815,13 +821,18 @@ const adminLoyaltyTierService = {
       // Process batch in parallel with limited concurrency
       const updatePromises = users.map((user) =>
         loyaltyService.updateUserTier(user._id).catch((err) => {
-          console.error(`[LOYALTY] Failed to update tier for user ${user._id}:`, err.message);
+          console.error(
+            `[LOYALTY] Failed to update tier for user ${user._id}:`,
+            err.message
+          );
         })
       );
       await Promise.all(updatePromises);
 
       console.log(
-        `[LOYALTY] Processed batch ${batch + 1}/${totalBatches} (${users.length} users)`
+        `[LOYALTY] Processed batch ${batch + 1}/${totalBatches} (${
+          users.length
+        } users)`
       );
     }
 

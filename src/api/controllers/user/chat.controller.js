@@ -18,8 +18,7 @@ const chatController = {
 
     return res.json({
       success: true,
-      data: result.conversations,
-      pagination: result.pagination,
+      data: result,
     });
   }),
 
@@ -30,7 +29,7 @@ const chatController = {
   createConversation: asyncHandler(async (req, res) => {
     const userId = req.user._id;
     const userRole = req.user.role;
-    const { targetUserId, orderId, message } = req.body;
+    const { targetUserId, orderId, message, initialMessage } = req.body;
 
     // Service sẽ throw ApiError nếu không tìm thấy user/staff
     const targetUser = await ChatService.getTargetUser(targetUserId);
@@ -43,18 +42,41 @@ const chatController = {
       orderId
     );
 
-    if (message && message.trim().length > 0) {
+    // Hỗ trợ cả message và initialMessage
+    const messageText = message || initialMessage;
+    if (messageText && messageText.trim().length > 0) {
       await ChatService.sendMessage({
         conversationId: conversation._id,
         senderId: userId,
         type: "text",
-        text: message,
+        text: messageText,
       });
     }
 
     return res.status(201).json({
       success: true,
       data: conversation,
+    });
+  }),
+
+  /**
+   * @route GET /api/v1/user/chat/users
+   * @desc Lấy danh sách users có thể chat (cho admin/staff)
+   */
+  getAvailableUsers: asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+    const { role, search, page = 1, limit = 20 } = req.query;
+
+    const result = await ChatService.getAvailableUsers(userId, {
+      role,
+      search,
+      page: parseInt(page),
+      limit: parseInt(limit),
+    });
+
+    return res.json({
+      success: true,
+      data: result,
     });
   }),
 
@@ -77,8 +99,7 @@ const chatController = {
 
     return res.json({
       success: true,
-      data: result.messages,
-      pagination: result.pagination,
+      data: result,
     });
   }),
 
@@ -142,6 +163,27 @@ const chatController = {
     return res.json({
       success: true,
       data: closedConversation,
+    });
+  }),
+
+  /**
+   * @route PUT /api/v1/user/chat/conversations/:conversationId/reopen
+   * @desc Mở lại conversation đã đóng
+   */
+  reopenConversation: asyncHandler(async (req, res) => {
+    const { conversationId } = req.params;
+    const userId = req.user._id;
+
+    // Service sẽ throw ApiError nếu không có quyền
+    await ChatService.verifyConversationAccess(conversationId, userId);
+
+    const reopenedConversation = await ChatService.reopenConversation(
+      conversationId
+    );
+
+    return res.json({
+      success: true,
+      data: reopenedConversation,
     });
   }),
 };

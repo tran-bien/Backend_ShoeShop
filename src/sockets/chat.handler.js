@@ -91,26 +91,38 @@ module.exports = (io, socket) => {
         });
       }
 
-      // Validate message content
-      if (type === "text" && (!text || text.trim().length === 0)) {
+      // FIXED: Kiểm tra conversation status - không cho gửi nếu đã đóng
+      if (conversation.status === "closed") {
         return callback({
           success: false,
-          error: "Text là bắt buộc khi type là 'text'",
+          error: "Cuộc hội thoại đã đóng. Vui lòng tạo cuộc hội thoại mới.",
         });
       }
 
-      if (type === "image" && (!images || images.length === 0)) {
+      // Validate message content - cần có text hoặc images
+      const hasText = text && text.trim().length > 0;
+      const hasImages = images && images.length > 0;
+
+      if (!hasText && !hasImages) {
         return callback({
           success: false,
-          error: "Images là bắt buộc khi type là 'image'",
+          error: "Tin nhắn phải có nội dung text hoặc hình ảnh",
         });
+      }
+
+      // Xác định type - service sẽ handle chi tiết
+      let messageType = "text";
+      if (hasImages && hasText) {
+        messageType = "mixed";
+      } else if (hasImages) {
+        messageType = "image";
       }
 
       // Save message to DB
       const message = await ChatService.sendMessage({
         conversationId,
         senderId: userId,
-        type,
+        type: messageType,
         text,
         images,
       });
