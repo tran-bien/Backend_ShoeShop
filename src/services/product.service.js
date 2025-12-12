@@ -1984,47 +1984,61 @@ const productService = {
    * @param {Number} limit Số lượng sản phẩm trả về
    */
   getFeaturedProducts: async (limit = 20) => {
-    // FIX Bug #54: Sử dụng batch loading để tránh N+1 queries
-    const products = await Product.find({
-      isActive: true,
-      deletedAt: null,
-    })
-      .limit(Number(limit) * 3) // Lấy nhiều hơn để filter và sort sau
-      .populate("category", "name")
-      .populate("brand", "name logo")
-      .populate("tags", "name type description")
-      .populate({
-        path: "variants",
-        match: { isActive: true, deletedAt: null },
-        select: "color imagesvariant sizes isActive gender",
-        populate: [
-          { path: "color", select: "name code type colors" },
-          { path: "sizes.size", select: "value description" },
-        ],
-      });
-
-    // Lọc bỏ các sản phẩm không có variants hợp lệ
-    const filteredProducts = products.filter(
-      (product) => product.variants && product.variants.length > 0
-    );
-
-    // FIX Bug #54: Batch load ratings thay vì N+1 queries
-    const productIds = filteredProducts.map((p) => p._id.toString());
+    // FIX: Sử dụng $lookup thay vì .populate() vì Product.variants array có thể rỗng
+    // Variants được liên kết thông qua Variant.product field, không phải Product.variants array
     const inventoryService = require("@services/inventory.service");
     const reviewService = require("@services/review.service");
     const variantService = require("@services/variant.service");
 
+    // Lấy products cơ bản
+    const products = await Product.find({
+      isActive: true,
+      deletedAt: null,
+    })
+      .limit(Number(limit) * 3)
+      .populate("category", "name")
+      .populate("brand", "name logo")
+      .populate("tags", "name type description")
+      .lean();
+
+    // Lookup variants trực tiếp từ Variant model (giống getPublicProducts)
+    const activeVariants = await Variant.find({
+      product: { $in: products.map((p) => p._id) },
+      isActive: true,
+      deletedAt: null,
+    })
+      .populate("color", "name code type colors")
+      .populate("sizes.size", "value description")
+      .lean();
+
+    // Gom variants theo productId
+    const variantsByProduct = {};
+    activeVariants.forEach((variant) => {
+      const productId = variant.product.toString();
+      if (!variantsByProduct[productId]) {
+        variantsByProduct[productId] = [];
+      }
+      variantsByProduct[productId].push(variant);
+    });
+
+    // Gán variants vào products và filter products có variants
+    const productsWithVariants = products
+      .map((product) => ({
+        ...product,
+        variants: variantsByProduct[product._id.toString()] || [],
+      }))
+      .filter((product) => product.variants.length > 0);
+
     // Batch load rating info cho tất cả products
+    const productIds = productsWithVariants.map((p) => p._id.toString());
     const ratingInfoMap = await reviewService.getBatchProductRatingInfo(
       productIds
     );
 
     // Transform và enrich products
     const productsWithStockAndRating = await Promise.all(
-      filteredProducts.map(async (product) => {
-        const productObj = product.toObject
-          ? product.toObject()
-          : { ...product };
+      productsWithVariants.map(async (product) => {
+        const productObj = { ...product };
         const productIdStr = product._id.toString();
 
         // Tính stock info
@@ -2082,44 +2096,58 @@ const productService = {
    * @param {Number} limit Số lượng sản phẩm trả về
    */
   getNewArrivals: async (limit = 20) => {
+    // FIX: Sử dụng lookup từ Variant model thay vì .populate() vì Product.variants array có thể rỗng
+    const inventoryService = require("@services/inventory.service");
+    const reviewService = require("@services/review.service");
+    const variantService = require("@services/variant.service");
+
     // Lấy sản phẩm mới nhất đang active và không bị xóa mềm
     const products = await Product.find({
       isActive: true,
       deletedAt: null,
     })
       .sort({ createdAt: -1 })
-      .limit(Number(limit)) // Lấy nhiều hơn để lọc nếu không đủ sau khi filter
+      .limit(Number(limit) * 2)
       .populate("category", "name")
       .populate("brand", "name logo")
       .populate("tags", "name type description")
-      .populate({
-        path: "variants",
-        match: { isActive: true, deletedAt: null },
-        // REMOVED: price, priceFinal, percentDiscount - fields đã xóa - getNewArrivals
-        select: "color imagesvariant sizes isActive gender",
-        populate: [
-          { path: "color", select: "name code type colors" },
-          { path: "sizes.size", select: "value description" },
-        ],
-      });
+      .lean();
 
-    // Lọc bỏ các sản phẩm không có variants hợp lệ
-    const filteredProducts = products.filter(
-      (product) => product.variants && product.variants.length > 0
-    );
+    // Lookup variants trực tiếp từ Variant model
+    const activeVariants = await Variant.find({
+      product: { $in: products.map((p) => p._id) },
+      isActive: true,
+      deletedAt: null,
+    })
+      .populate("color", "name code type colors")
+      .populate("sizes.size", "value description")
+      .lean();
+
+    // Gom variants theo productId
+    const variantsByProduct = {};
+    activeVariants.forEach((variant) => {
+      const productId = variant.product.toString();
+      if (!variantsByProduct[productId]) {
+        variantsByProduct[productId] = [];
+      }
+      variantsByProduct[productId].push(variant);
+    });
+
+    // Gán variants vào products và filter products có variants
+    const productsWithVariants = products
+      .map((product) => ({
+        ...product,
+        variants: variantsByProduct[product._id.toString()] || [],
+      }))
+      .filter((product) => product.variants.length > 0);
 
     // Giới hạn số lượng sản phẩm trả về theo limit
-    const limitedProducts = filteredProducts.slice(0, Number(limit));
+    const limitedProducts = productsWithVariants.slice(0, Number(limit));
 
     // Tính stock info và rating info cho từng sản phẩm
-    const inventoryService = require("@services/inventory.service");
-    const reviewService = require("@services/review.service");
-    const variantService = require("@services/variant.service");
     const productsWithStockAndRating = await Promise.all(
       limitedProducts.map(async (product) => {
-        const productObj = product.toObject
-          ? product.toObject()
-          : { ...product };
+        const productObj = { ...product };
 
         // Tính stock info
         const stockInfo = await inventoryService.getProductStockInfo(
@@ -2137,7 +2165,7 @@ const productService = {
         productObj.averageRating = ratingInfo.rating;
         productObj.reviewCount = ratingInfo.numReviews;
 
-        // CRITICAL FIX: Tính inventorySummary cho mỗi variant để có priceRange
+        // Tính inventorySummary cho mỗi variant để có priceRange
         if (productObj.variants && productObj.variants.length > 0) {
           productObj.variants = await Promise.all(
             productObj.variants.map(async (variant) => {
@@ -2155,12 +2183,10 @@ const productService = {
       })
     );
 
-    const result = {
+    return {
       success: true,
       products: productsWithStockAndRating,
     };
-
-    return result;
   },
 
   /**
@@ -2169,57 +2195,50 @@ const productService = {
    */
   getBestSellers: async (limit = 20) => {
     try {
+      const inventoryService = require("@services/inventory.service");
+      const reviewService = require("@services/review.service");
+      const variantService = require("@services/variant.service");
+
       // 1. Tính tổng số lượng biến thể đã bán từ các đơn hàng đã giao thành công
       const variantSales = await Order.aggregate([
-        // Chỉ lấy đơn hàng đã giao thành công (trạng thái delivered)
         {
           $match: {
-            status: "delivered", // Chỉ tính đơn hàng hoàn tất giao dịch
+            status: "delivered",
           },
         },
-        // Tách mỗi sản phẩm trong orderItems thành một document riêng
         { $unwind: "$orderItems" },
-        // Nhóm theo variant và tính tổng số lượng đã bán
         {
           $group: {
-            _id: "$orderItems.variant", // Thay đổi từ product sang variant
+            _id: "$orderItems.variant",
             totalSold: { $sum: "$orderItems.quantity" },
           },
         },
-        // Sắp xếp theo số lượng bán giảm dần
         { $sort: { totalSold: -1 } },
-        // Giới hạn số lượng kết quả
-        { $limit: Number(limit) * 2 }, // Lấy nhiều hơn để lọc sản phẩm không hợp lệ
+        { $limit: Number(limit) * 2 },
       ]);
 
       if (variantSales.length === 0) {
-        // Nếu không có dữ liệu bán hàng, lấy sản phẩm mới nhất thay thế
         return await productService.getNewArrivals(limit);
       }
 
       // 2. Lấy thông tin product từ variant
-      const Variant = mongoose.model("Variant");
       const variantIds = variantSales
         .filter((item) => item._id !== null && item._id !== undefined)
         .map((item) => item._id);
 
-      // Lấy thông tin variant kèm product
       const variants = await Variant.find({
         _id: { $in: variantIds },
         isActive: true,
         deletedAt: null,
       }).select("product");
 
-      // Tạo map lưu tổng số lượng bán của từng variant
       const variantSalesMap = {};
       variantSales.forEach((item) => {
         if (item._id) {
-          // Kiểm tra null/undefined
           variantSalesMap[item._id.toString()] = item.totalSold;
         }
       });
 
-      // Tạo map từ variant sang product và tính tổng số lượng bán cho mỗi product
       const productSalesMap = {};
       variants.forEach((variant) => {
         if (variant.product) {
@@ -2234,7 +2253,6 @@ const productService = {
         }
       });
 
-      // Chuyển map thành mảng để sắp xếp
       const productSales = Object.entries(productSalesMap).map(
         ([productId, totalSold]) => ({
           _id: productId,
@@ -2242,16 +2260,13 @@ const productService = {
         })
       );
 
-      // Sắp xếp theo số lượng bán giảm dần
       productSales.sort((a, b) => b.totalSold - a.totalSold);
 
-      // Lấy danh sách ID product - SỬA DÒNG GÂY LỖI Ở ĐÂY
       const productIds = productSales.map(
         (item) => new mongoose.Types.ObjectId(item._id)
       );
 
       if (productIds.length === 0) {
-        // Nếu không có sản phẩm hợp lệ, trả về danh sách trống
         return { success: true, products: [] };
       }
 
@@ -2264,51 +2279,56 @@ const productService = {
         .populate("category", "name")
         .populate("brand", "name logo")
         .populate("tags", "name type description")
-        .populate({
-          path: "variants",
-          match: { isActive: true, deletedAt: null },
-          // REMOVED: price, priceFinal, percentDiscount - fields đã xóa - getBestSellingProducts
-          select: "color imagesvariant sizes isActive gender",
-          populate: [
-            { path: "color", select: "name code type colors" },
-            { path: "sizes.size", select: "value description" },
-          ],
-        });
+        .lean();
 
-      // Lọc bỏ các sản phẩm không có variants hợp lệ
-      const filteredProducts = products.filter(
-        (product) => product.variants && product.variants.length > 0
-      );
+      // FIX: Lookup variants từ Variant model thay vì dùng populate
+      const activeVariants = await Variant.find({
+        product: { $in: productIds },
+        isActive: true,
+        deletedAt: null,
+      })
+        .populate("color", "name code type colors")
+        .populate("sizes.size", "value description")
+        .lean();
+
+      // Gom variants theo productId
+      const variantsByProduct = {};
+      activeVariants.forEach((variant) => {
+        const productId = variant.product.toString();
+        if (!variantsByProduct[productId]) {
+          variantsByProduct[productId] = [];
+        }
+        variantsByProduct[productId].push(variant);
+      });
+
+      // Gán variants vào products và filter products có variants
+      const productsWithVariants = products
+        .map((product) => ({
+          ...product,
+          variants: variantsByProduct[product._id.toString()] || [],
+        }))
+        .filter((product) => product.variants.length > 0);
 
       // 4. Sắp xếp lại đúng thứ tự theo số lượng bán
-      const sortedProducts = filteredProducts.sort((a, b) => {
+      const sortedProducts = productsWithVariants.sort((a, b) => {
         const aSold = productSalesMap[a._id.toString()] || 0;
         const bSold = productSalesMap[b._id.toString()] || 0;
         return bSold - aSold;
       });
 
-      // Giới hạn số lượng sản phẩm trả về theo limit
       const limitedProducts = sortedProducts.slice(0, Number(limit));
 
       // 5. Chuyển đổi và trả về kết quả
-      const inventoryService = require("@services/inventory.service");
-      const reviewService = require("@services/review.service");
-      const variantService = require("@services/variant.service");
-
       const transformedProducts = await Promise.all(
         limitedProducts.map(async (product) => {
-          const productObj = product.toObject
-            ? product.toObject()
-            : { ...product };
+          const productObj = { ...product };
 
-          // Tính stock info
           const stockInfo = await inventoryService.getProductStockInfo(
             product._id
           );
           productObj.totalQuantity = stockInfo.totalQuantity;
           productObj.stockStatus = stockInfo.stockStatus;
 
-          // Tính rating info
           const ratingInfo = await reviewService.getProductRatingInfo(
             product._id
           );
@@ -2317,7 +2337,6 @@ const productService = {
           productObj.averageRating = ratingInfo.rating;
           productObj.reviewCount = ratingInfo.numReviews;
 
-          // ✅ CRITICAL FIX: Tính inventorySummary cho mỗi variant để có priceRange
           if (productObj.variants && productObj.variants.length > 0) {
             productObj.variants = await Promise.all(
               productObj.variants.map(async (variant) => {
@@ -2332,19 +2351,16 @@ const productService = {
           }
 
           const transformedProduct = transformProductForPublicList(productObj);
-          // Thêm thông tin số lượng đã bán vào kết quả để frontend có thể hiển thị
           transformedProduct.totalSold =
             productSalesMap[product._id.toString()] || 0;
           return transformedProduct;
         })
       );
 
-      const result = {
+      return {
         success: true,
         products: transformedProducts,
       };
-
-      return result;
     } catch (error) {
       console.error("Lỗi khi lấy sản phẩm bán chạy:", error);
       return {
@@ -2366,55 +2382,66 @@ const productService = {
       throw new ApiError(404, `Không tìm thấy sản phẩm`);
     }
 
-    // 1. Lấy các sản phẩm cùng danh mục, sắp xếp theo rating
+    const inventoryService = require("@services/inventory.service");
+    const reviewService = require("@services/review.service");
+    const variantService = require("@services/variant.service");
+
+    // 1. Lấy các sản phẩm cùng danh mục
     const relatedProducts = await Product.find({
       category: product.category,
       _id: { $ne: id },
       isActive: true,
       deletedAt: null,
     })
-      .sort({ rating: -1 })
+      .sort({ createdAt: -1 })
+      .limit(Number(limit) * 2)
       .populate("category", "name")
       .populate("brand", "name logo")
       .populate("tags", "name type description")
-      .populate({
-        path: "variants",
-        match: { isActive: true, deletedAt: null },
-        // REMOVED: price, priceFinal, percentDiscount - fields đã xóa - getRelatedProducts
-        select: "color imagesvariant sizes isActive gender",
-        populate: [
-          { path: "color", select: "name code type colors" },
-          { path: "sizes.size", select: "value description" },
-        ],
-      });
+      .lean();
 
-    // 2. Chỉ giữ các sản phẩm có ít nhất một biến thể hoạt động
-    const filteredProducts = relatedProducts.filter(
-      (p) => Array.isArray(p.variants) && p.variants.length > 0
-    );
+    // FIX: Lookup variants từ Variant model thay vì dùng populate
+    const activeVariants = await Variant.find({
+      product: { $in: relatedProducts.map((p) => p._id) },
+      isActive: true,
+      deletedAt: null,
+    })
+      .populate("color", "name code type colors")
+      .populate("sizes.size", "value description")
+      .lean();
+
+    // Gom variants theo productId
+    const variantsByProduct = {};
+    activeVariants.forEach((variant) => {
+      const productId = variant.product.toString();
+      if (!variantsByProduct[productId]) {
+        variantsByProduct[productId] = [];
+      }
+      variantsByProduct[productId].push(variant);
+    });
+
+    // 2. Gán variants và chỉ giữ các sản phẩm có ít nhất một biến thể hoạt động
+    const productsWithVariants = relatedProducts
+      .map((p) => ({
+        ...p,
+        variants: variantsByProduct[p._id.toString()] || [],
+      }))
+      .filter((p) => p.variants.length > 0);
 
     // 3. Giới hạn số lượng sản phẩm trả về
-    const limitedProducts = filteredProducts.slice(0, Number(limit));
+    const limitedProducts = productsWithVariants.slice(0, Number(limit));
 
-    // 4. Chuyển đổi và trả về kết quả - BUG #46 FIX: Thêm tính inventorySummary
-    const inventoryService = require("@services/inventory.service");
-    const reviewService = require("@services/review.service");
-    const variantService = require("@services/variant.service");
-
+    // 4. Chuyển đổi và trả về kết quả
     const transformedProducts = await Promise.all(
       limitedProducts.map(async (product) => {
-        const productObj = product.toObject
-          ? product.toObject()
-          : { ...product };
+        const productObj = { ...product };
 
-        // Tính stock info
         const stockInfo = await inventoryService.getProductStockInfo(
           product._id
         );
         productObj.totalQuantity = stockInfo.totalQuantity;
         productObj.stockStatus = stockInfo.stockStatus;
 
-        // Tính rating info
         const ratingInfo = await reviewService.getProductRatingInfo(
           product._id
         );
@@ -2423,7 +2450,6 @@ const productService = {
         productObj.averageRating = ratingInfo.rating;
         productObj.reviewCount = ratingInfo.numReviews;
 
-        // BUG #46 FIX: Tính inventorySummary cho mỗi variant để có priceRange
         if (productObj.variants && productObj.variants.length > 0) {
           productObj.variants = await Promise.all(
             productObj.variants.map(async (variant) => {
@@ -2441,12 +2467,10 @@ const productService = {
       })
     );
 
-    const result = {
+    return {
       success: true,
       products: transformedProducts,
     };
-
-    return result;
   },
 };
 

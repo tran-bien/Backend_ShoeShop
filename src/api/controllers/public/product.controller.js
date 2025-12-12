@@ -52,8 +52,7 @@ const productController = {
     const limit = req.query.limit || 20;
     const result = await productService.getBestSellers(limit);
     res.json(result);
-  }
-  ),
+  }),
 
   /**
    * @desc    Lấy danh sách sản phẩm mới nhất
