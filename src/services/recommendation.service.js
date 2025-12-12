@@ -268,6 +268,10 @@ const recommendationService = {
         recommendationService.getTrendingProducts().catch(() => []),
       ]);
 
+      console.log(
+        `[HYBRID] collaborative: ${collaborative.length}, contentBased: ${contentBased.length}, trending: ${trending.length}`
+      );
+
       // Merge với trọng số
       const scores = {};
 
@@ -287,13 +291,32 @@ const recommendationService = {
       });
 
       // Sort và lấy top 10
-      const recommendations = Object.entries(scores)
+      let recommendations = Object.entries(scores)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10)
         .map(([productId, score]) => ({
           product: productId,
           score,
         }));
+
+      // FALLBACK: Nếu không có recommendations, lấy sản phẩm mới nhất
+      if (recommendations.length === 0) {
+        console.log(
+          `[HYBRID] No recommendations found, falling back to newest products`
+        );
+        const newestProducts = await Product.find({
+          isActive: true,
+          deletedAt: null,
+        })
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .select("_id");
+
+        recommendations = newestProducts.map((p, i) => ({
+          product: p._id.toString(),
+          score: 10 - i,
+        }));
+      }
 
       return recommendations;
     } catch (error) {
@@ -314,11 +337,27 @@ const recommendationService = {
 
     if (cached && cached.products.length > 0) {
       console.log(`[RECOMMENDATION CACHE HIT] User ${userId}, ${algorithm}`);
-      return {
-        success: true,
-        products: cached.products,
-        fromCache: true,
-      };
+
+      // FIX: Enrich products từ cache (cache chỉ lưu ObjectIds)
+      const products = await recommendationService._enrichProducts(
+        cached.products
+      );
+
+      // FIX: Nếu cache có products nhưng không tìm thấy active products, regenerate
+      if (products.length === 0) {
+        console.log(
+          `[RECOMMENDATION] Cache products không còn active, regenerating...`
+        );
+        // Xóa cache cũ
+        await RecommendationCache.deleteOne({ user: userId, algorithm });
+        // Fall through để regenerate
+      } else {
+        return {
+          success: true,
+          products,
+          fromCache: true,
+        };
+      }
     }
 
     console.log(`[RECOMMENDATION CACHE MISS] User ${userId}, ${algorithm}`);
@@ -330,10 +369,24 @@ const recommendationService = {
       case "COLLABORATIVE":
         recommendations =
           await recommendationService.getCollaborativeRecommendations(userId);
+        // Fallback: nếu không có kết quả collaborative (user chưa mua hàng), dùng trending
+        if (recommendations.length === 0) {
+          console.log(
+            `[RECOMMENDATION] COLLABORATIVE empty, falling back to TRENDING`
+          );
+          recommendations = await recommendationService.getTrendingProducts();
+        }
         break;
       case "CONTENT_BASED":
         recommendations =
           await recommendationService.getContentBasedRecommendations(userId);
+        // Fallback: nếu không có kết quả content-based, dùng trending
+        if (recommendations.length === 0) {
+          console.log(
+            `[RECOMMENDATION] CONTENT_BASED empty, falling back to TRENDING`
+          );
+          recommendations = await recommendationService.getTrendingProducts();
+        }
         break;
       case "TRENDING":
         recommendations = await recommendationService.getTrendingProducts();
@@ -365,6 +418,35 @@ const recommendationService = {
       typeof r.product === "string" ? r.product : r.product._id
     );
 
+    let products = await recommendationService._enrichProducts(productIds);
+
+    // FALLBACK: Nếu enrichProducts trả về rỗng (do products không có variants), fallback
+    if (products.length === 0 && productIds.length > 0) {
+      console.log(
+        `[RECOMMENDATION] Enriched products empty, falling back to featured products`
+      );
+      const productService = require("@services/product.service");
+      const featuredResult = await productService.getFeaturedProducts(10);
+      products = featuredResult.products || [];
+    }
+
+    return {
+      success: true,
+      products,
+      fromCache: false,
+    };
+  },
+
+  /**
+   * Helper: Enrich products với variants, inventory, rating info
+   * Giống như getFeaturedProducts trong product.service.js
+   */
+  _enrichProducts: async (productIds) => {
+    const inventoryService = require("@services/inventory.service");
+    const reviewService = require("@services/review.service");
+    const variantService = require("@services/variant.service");
+
+    // Lấy products cơ bản
     const products = await Product.find({
       _id: { $in: productIds },
       isActive: true,
@@ -372,12 +454,223 @@ const recommendationService = {
     })
       .populate("category", "name")
       .populate("brand", "name logo")
-      .limit(10);
+      .populate("tags", "name type description")
+      .lean();
+
+    if (products.length === 0) {
+      return [];
+    }
+
+    // Lookup variants từ Variant model
+    const activeVariants = await Variant.find({
+      product: { $in: productIds },
+      isActive: true,
+      deletedAt: null,
+    })
+      .populate("color", "name code type colors")
+      .populate("sizes.size", "value description")
+      .lean();
+
+    // Gom variants theo productId
+    const variantsByProduct = {};
+    activeVariants.forEach((variant) => {
+      const productId = variant.product.toString();
+      if (!variantsByProduct[productId]) {
+        variantsByProduct[productId] = [];
+      }
+      variantsByProduct[productId].push(variant);
+    });
+
+    // Gán variants vào products
+    const productsWithVariants = products
+      .map((product) => ({
+        ...product,
+        variants: variantsByProduct[product._id.toString()] || [],
+      }))
+      .filter((product) => product.variants.length > 0);
+
+    // Batch load rating info
+    const productIdStrs = productsWithVariants.map((p) => p._id.toString());
+    const ratingInfoMap = await reviewService.getBatchProductRatingInfo(
+      productIdStrs
+    );
+
+    // Transform và enrich products
+    const enrichedProducts = await Promise.all(
+      productsWithVariants.map(async (product) => {
+        const productObj = { ...product };
+        const productIdStr = product._id.toString();
+
+        // Tính stock info
+        const stockInfo = await inventoryService.getProductStockInfo(
+          product._id
+        );
+        productObj.totalQuantity = stockInfo.totalQuantity;
+        productObj.stockStatus = stockInfo.stockStatus;
+
+        // Rating info
+        const ratingInfo = ratingInfoMap[productIdStr] || {
+          rating: 0,
+          numReviews: 0,
+        };
+        productObj.rating = ratingInfo.rating;
+        productObj.numReviews = ratingInfo.numReviews;
+        productObj.averageRating = ratingInfo.rating;
+        productObj.reviewCount = ratingInfo.numReviews;
+
+        // Tính inventorySummary cho mỗi variant
+        if (productObj.variants && productObj.variants.length > 0) {
+          productObj.variants = await Promise.all(
+            productObj.variants.map(async (variant) => {
+              const inventorySummary =
+                await variantService.calculateInventorySummary(variant);
+              return {
+                ...variant,
+                inventorySummary,
+              };
+            })
+          );
+        }
+
+        // Transform for public list
+        return recommendationService._transformProductForPublicList(productObj);
+      })
+    );
+
+    return enrichedProducts;
+  },
+
+  /**
+   * Helper: Transform product for public list (copy từ product.service.js)
+   */
+  _transformProductForPublicList: (product) => {
+    const productObj = { ...product };
+
+    // Build priceRange from variants
+    let minPrice = null;
+    let maxPrice = null;
+
+    if (productObj.variants && productObj.variants.length > 0) {
+      productObj.variants.forEach((variant) => {
+        const pricing = variant.inventorySummary?.pricing || {};
+        const vMin = pricing.minPrice || 0;
+        const vMax = pricing.maxPrice || vMin;
+
+        if (vMin > 0 && (minPrice === null || vMin < minPrice)) minPrice = vMin;
+        if (vMax > 0 && (maxPrice === null || vMax > maxPrice)) maxPrice = vMax;
+      });
+    }
+
+    // Build variantSummary
+    const colorSet = new Set();
+    const sizeSet = new Set();
+    const colors = [];
+
+    if (productObj.variants && productObj.variants.length > 0) {
+      productObj.variants.forEach((variant) => {
+        if (variant.color && variant.color._id) {
+          const colorId = variant.color._id.toString();
+          if (!colorSet.has(colorId)) {
+            colorSet.add(colorId);
+            colors.push({
+              _id: variant.color._id,
+              name: variant.color.name,
+              code: variant.color.code,
+              hexCode: variant.color.code || null,
+              type: variant.color.type,
+              colors: variant.color.colors || [],
+            });
+          }
+        }
+
+        if (variant.sizes && Array.isArray(variant.sizes)) {
+          variant.sizes.forEach((sizeObj) => {
+            if (sizeObj.size && sizeObj.size._id) {
+              sizeSet.add(sizeObj.size._id.toString());
+            }
+          });
+        }
+      });
+    }
+
+    // Get main image
+    let mainImage = "";
+    if (productObj.images && productObj.images.length > 0) {
+      const main =
+        productObj.images.find((img) => img.isMain) || productObj.images[0];
+      mainImage = main?.url || "";
+    } else if (productObj.variants && productObj.variants.length > 0) {
+      const variantWithImages = productObj.variants.find(
+        (v) => v.imagesvariant && v.imagesvariant.length > 0
+      );
+      if (variantWithImages) {
+        const main =
+          variantWithImages.imagesvariant.find((img) => img.isMain) ||
+          variantWithImages.imagesvariant[0];
+        mainImage = main?.url || "";
+      }
+    }
 
     return {
-      success: true,
-      products,
-      fromCache: false,
+      _id: productObj._id,
+      name: productObj.name,
+      slug: productObj.slug,
+      description: productObj.description,
+      category: productObj.category
+        ? { _id: productObj.category._id, name: productObj.category.name }
+        : { _id: "", name: "Chưa phân loại" },
+      brand: productObj.brand
+        ? {
+            _id: productObj.brand._id,
+            name: productObj.brand.name,
+            logo: productObj.brand.logo,
+          }
+        : { _id: "", name: "Chưa có thương hiệu" },
+      tags: Array.isArray(productObj.tags)
+        ? productObj.tags.map((tag) => ({
+            _id: tag._id,
+            name: tag.name,
+            type: tag.type,
+            description: tag.description,
+          }))
+        : [],
+      images: productObj.images || [],
+      rating: productObj.rating || 0,
+      numReviews: productObj.numReviews || 0,
+      averageRating: productObj.rating || 0,
+      reviewCount: productObj.numReviews || 0,
+      stockStatus: productObj.stockStatus || "out_of_stock",
+      totalQuantity: productObj.totalQuantity || 0,
+      isActive: productObj.isActive,
+      createdAt: productObj.createdAt,
+      isNew: false,
+      price: minPrice || 0,
+      originalPrice: maxPrice || 0,
+      discountPercent: 0,
+      hasDiscount: false,
+      maxDiscountPercent: 0,
+      salePercentage: 0,
+      priceRange: {
+        min: minPrice || 0,
+        max: maxPrice || 0,
+        isSinglePrice: minPrice === maxPrice,
+      },
+      mainImage,
+      variantSummary: {
+        total: productObj.variants?.length || 0,
+        active:
+          productObj.variants?.filter((v) => v.isActive !== false).length || 0,
+        colors,
+        colorCount: colorSet.size,
+        sizeCount: sizeSet.size,
+        priceRange: {
+          min: minPrice || 0,
+          max: maxPrice || 0,
+          isSinglePrice: minPrice === maxPrice,
+        },
+        discount: { hasDiscount: false, maxPercent: 0 },
+      },
+      totalInventory: 0,
     };
   },
 };
