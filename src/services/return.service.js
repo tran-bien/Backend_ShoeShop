@@ -24,7 +24,10 @@ const createReturnRequest = async (data, userId) => {
   });
 
   if (!order) {
-    throw new ApiError(404, "Không tìm thấy đơn hàng hoặc đơn hàng chưa được giao");
+    throw new ApiError(
+      404,
+      "Không tìm thấy đơn hàng hoặc đơn hàng chưa được giao"
+    );
   }
 
   // Kiểm tra thời hạn đổi trả (7 ngày)
@@ -53,14 +56,20 @@ const createReturnRequest = async (data, userId) => {
 
   // Nếu chuyển khoản, phải có thông tin ngân hàng
   if (refundMethod === "bank_transfer") {
-    if (!bankInfo || !bankInfo.bankName || !bankInfo.accountNumber || !bankInfo.accountName) {
+    if (
+      !bankInfo ||
+      !bankInfo.bankName ||
+      !bankInfo.accountNumber ||
+      !bankInfo.accountName
+    ) {
       throw new ApiError(400, "Vui lòng nhập đầy đủ thông tin ngân hàng");
     }
   }
 
   // Tính số tiền hoàn = tổng đơn hàng - phí ship trả hàng 30k
   // totalAfterDiscountAndShipping đã bao gồm giá sản phẩm + ship ban đầu - discount
-  const refundAmount = order.totalAfterDiscountAndShipping - RETURN_SHIPPING_FEE;
+  const refundAmount =
+    order.totalAfterDiscountAndShipping - RETURN_SHIPPING_FEE;
 
   if (refundAmount < 0) {
     throw new ApiError(400, "Số tiền hoàn không hợp lệ");
@@ -129,7 +138,22 @@ const getReturnRequests = async (filter = {}, options = {}) => {
 
   const [requests, total] = await Promise.all([
     ReturnRequest.find(query)
-      .populate("order")
+      .populate({
+        path: "order",
+        populate: [
+          {
+            path: "orderItems.variant",
+            populate: [
+              { path: "product", select: "name images slug" },
+              { path: "color", select: "name code" },
+            ],
+          },
+          {
+            path: "orderItems.size",
+            select: "value",
+          },
+        ],
+      })
       .populate("customer", "name email phone")
       .populate("approvedBy", "name")
       .populate("assignedShipper", "name phone")
@@ -161,8 +185,20 @@ const getReturnRequestById = async (id, userId, isAdmin = false) => {
   }
 
   const request = await ReturnRequest.findOne(query)
-    .populate("order")
-    .populate("customer", "name email phone")
+    .populate({
+      path: "order",
+      populate: [
+        {
+          path: "orderItems.variant",
+          populate: [
+            { path: "product", select: "name images slug" },
+            { path: "color", select: "name code" },
+          ],
+        },
+        { path: "orderItems.size", select: "value" },
+      ],
+    })
+    .populate("customer", "name email phone avatar")
     .populate("approvedBy", "name")
     .populate("assignedShipper", "name phone shipper")
     .populate("receivedBy", "name")
@@ -201,7 +237,9 @@ const approveReturnRequest = async (id, approvedBy, staffNotes) => {
   // Gửi notification
   try {
     const notificationService = require("./notification.service");
-    const populatedRequest = await ReturnRequest.findById(request._id).populate("order");
+    const populatedRequest = await ReturnRequest.findById(request._id).populate(
+      "order"
+    );
     await notificationService.send(request.customer, "RETURN_APPROVED", {
       type: "trả hàng",
       orderCode: populatedRequest.order?.code || "",
@@ -243,7 +281,9 @@ const rejectReturnRequest = async (id, approvedBy, rejectionReason) => {
   // Gửi notification
   try {
     const notificationService = require("./notification.service");
-    const populatedRequest = await ReturnRequest.findById(request._id).populate("order");
+    const populatedRequest = await ReturnRequest.findById(request._id).populate(
+      "order"
+    );
     await notificationService.send(request.customer, "RETURN_REJECTED", {
       type: "trả hàng",
       orderCode: populatedRequest.order?.code || "",
@@ -433,11 +473,15 @@ const shipperConfirmRefundDelivered = async (id, shipperId, note) => {
     });
 
     if (earnTransaction && earnTransaction.points > 0) {
-      await loyaltyService.deductPoints(request.customer, earnTransaction.points, {
-        type: "DEDUCT",
-        source: "RETURN",
-        description: `Trừ điểm do trả hàng #${request.code}`,
-      });
+      await loyaltyService.deductPoints(
+        request.customer,
+        earnTransaction.points,
+        {
+          type: "DEDUCT",
+          source: "RETURN",
+          description: `Trừ điểm do trả hàng #${request.code}`,
+        }
+      );
     }
   } catch (error) {
     console.error("[Return] Lỗi trừ điểm loyalty:", error.message);
@@ -461,7 +505,10 @@ const adminConfirmBankTransfer = async (id, adminId, note) => {
   });
 
   if (!request) {
-    throw new ApiError(404, "Không tìm thấy yêu cầu hoặc trạng thái không hợp lệ");
+    throw new ApiError(
+      404,
+      "Không tìm thấy yêu cầu hoặc trạng thái không hợp lệ"
+    );
   }
 
   request.status = "completed";
@@ -498,11 +545,15 @@ const adminConfirmBankTransfer = async (id, adminId, note) => {
     });
 
     if (earnTransaction && earnTransaction.points > 0) {
-      await loyaltyService.deductPoints(request.customer, earnTransaction.points, {
-        type: "DEDUCT",
-        source: "RETURN",
-        description: `Trừ điểm do trả hàng #${request.code}`,
-      });
+      await loyaltyService.deductPoints(
+        request.customer,
+        earnTransaction.points,
+        {
+          type: "DEDUCT",
+          source: "RETURN",
+          description: `Trừ điểm do trả hàng #${request.code}`,
+        }
+      );
     }
   } catch (error) {
     console.error("[Return] Lỗi trừ điểm loyalty:", error.message);
@@ -529,7 +580,10 @@ const cancelReturnRequest = async (id, userId) => {
   }
 
   if (!["pending", "approved"].includes(request.status)) {
-    throw new ApiError(400, "Chỉ có thể hủy yêu cầu đang chờ xử lý hoặc đã duyệt");
+    throw new ApiError(
+      400,
+      "Chỉ có thể hủy yêu cầu đang chờ xử lý hoặc đã duyệt"
+    );
   }
 
   request.status = "canceled";
