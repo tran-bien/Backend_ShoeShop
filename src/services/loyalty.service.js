@@ -585,6 +585,29 @@ const loyaltyService = {
       },
     };
   },
+
+  /**
+   * Lấy danh sách tiers cho user (chỉ hiển thị tiers active)
+   */
+  getAllTiers: async (query = {}) => {
+    const { isActive = true } = query;
+
+    const filter = {};
+    if (isActive !== undefined) {
+      filter.isActive = isActive === "true" || isActive === true;
+    }
+
+    const tiers = await LoyaltyTier.find(filter)
+      .select(
+        "name slug minSpending maxSpending benefits displayOrder icon color description isActive"
+      )
+      .sort({ displayOrder: 1, minSpending: 1 });
+
+    return {
+      success: true,
+      tiers,
+    };
+  },
 };
 
 /**
@@ -606,7 +629,7 @@ const adminLoyaltyTierService = {
     const options = {
       page: parseInt(page, 10),
       limit: parseInt(limit, 10),
-      sort: { displayOrder: 1, minPoints: 1 },
+      sort: { displayOrder: 1, minSpending: 1 },
       select: "-__v",
     };
 
