@@ -11,7 +11,7 @@ const sizeGuideService = {
     const { page = 1, limit = 20, isActive } = query;
 
     const filter = {
-      deletedAt: null,
+      deletedAt: null,  
     };
 
     if (isActive !== undefined) {
