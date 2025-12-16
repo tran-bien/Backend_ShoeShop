@@ -352,7 +352,10 @@ const cartService = {
             item.size.toString() === sizeId
         );
         if (existingIndex === -1) {
-          throw new ApiError(400, `Giỏ hàng đã đạt giới hạn ${MAX_CART_ITEMS} sản phẩm khác nhau`);
+          throw new ApiError(
+            400,
+            `Giỏ hàng đã đạt giới hạn ${MAX_CART_ITEMS} sản phẩm khác nhau`
+          );
         }
       }
 
@@ -654,7 +657,6 @@ const cartService = {
         $or: [{ isPublic: true }, { users: userId }],
       })
         .populate("applicableProducts")
-        .populate("applicableVariants")
         .populate("applicableCategories");
 
       if (!coupon) {
@@ -721,7 +723,7 @@ const cartService = {
         };
       }
 
-      // Calculate discount dựa trên scope (ALL/PRODUCTS/VARIANTS/CATEGORIES)
+      // Calculate discount dựa trên scope (ALL/PRODUCTS/CATEGORIES)
       const discountResult = couponService.calculateApplicableDiscount(
         coupon,
         populatedOrderItems,

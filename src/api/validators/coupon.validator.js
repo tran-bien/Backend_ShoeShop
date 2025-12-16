@@ -169,7 +169,7 @@ const validateCreateCoupon = [
   // Advanced scope validation
   body("scope")
     .optional()
-    .isIn(["ALL", "PRODUCTS", "VARIANTS", "CATEGORIES"])
+    .isIn(["ALL", "PRODUCTS", "CATEGORIES"])
     .withMessage("Scope không hợp lệ"),
 
   body("applicableProducts")
@@ -181,16 +181,6 @@ const validateCreateCoupon = [
     .optional()
     .isMongoId()
     .withMessage("Product ID không hợp lệ"),
-
-  body("applicableVariants")
-    .optional()
-    .isArray()
-    .withMessage("applicableVariants phải là array"),
-
-  body("applicableVariants.*")
-    .optional()
-    .isMongoId()
-    .withMessage("Variant ID không hợp lệ"),
 
   body("applicableCategories")
     .optional()
@@ -337,18 +327,13 @@ const validateUpdateCoupon = [
   // Advanced scope validation (for UPDATE)
   body("scope")
     .optional()
-    .isIn(["ALL", "PRODUCTS", "VARIANTS", "CATEGORIES"])
+    .isIn(["ALL", "PRODUCTS", "CATEGORIES"])
     .withMessage("Scope không hợp lệ"),
 
   body("applicableProducts")
     .optional()
     .isArray()
     .withMessage("applicableProducts phải là array"),
-
-  body("applicableVariants")
-    .optional()
-    .isArray()
-    .withMessage("applicableVariants phải là array"),
 
   body("applicableCategories")
     .optional()

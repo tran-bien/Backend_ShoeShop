@@ -87,18 +87,11 @@ const CouponSchema = new mongoose.Schema(
       comment: "Giới hạn số lần đổi/user (optional)",
     },
 
-    // COUPON NÂNG CAO - Áp dụng cho sản phẩm/variant/category cụ thể
+    // COUPON NÂNG CAO - Áp dụng cho sản phẩm/danh mục cụ thể
     applicableProducts: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Product",
-      },
-    ],
-
-    applicableVariants: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Variant",
       },
     ],
 
@@ -112,7 +105,7 @@ const CouponSchema = new mongoose.Schema(
     // Scope của coupon
     scope: {
       type: String,
-      enum: ["ALL", "PRODUCTS", "VARIANTS", "CATEGORIES"],
+      enum: ["ALL", "PRODUCTS", "CATEGORIES"],
       default: "ALL",
     },
 

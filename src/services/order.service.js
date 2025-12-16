@@ -371,7 +371,6 @@ const orderService = {
         $or: [{ isPublic: true }, { users: userId }],
       })
         .populate("applicableProducts")
-        .populate("applicableVariants")
         .populate("applicableCategories");
 
       if (!coupon) {
@@ -423,7 +422,7 @@ const orderService = {
         throw new ApiError(422, validation.message);
       }
 
-      // Calculate discount dựa trên scope (ALL/PRODUCTS/VARIANTS/CATEGORIES)
+      // Calculate discount dựa trên scope (ALL/PRODUCTS/CATEGORIES)
       const discountResult = couponService.calculateApplicableDiscount(
         coupon,
         populatedOrderItems,

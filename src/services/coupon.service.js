@@ -10,7 +10,12 @@ const couponService = {
    * @returns {Object} - Danh sách coupon phân trang
    */
   getPublicCoupons: async (query = {}) => {
-    const { page = 1, limit = 10, sort = "createdAt_desc" } = query;
+    const {
+      page = 1,
+      limit = 10,
+      sort = "createdAt_desc",
+      isRedeemable,
+    } = query;
 
     // Xây dựng điều kiện lọc - chỉ lấy coupon công khai và còn hoạt động
     const filter = {
@@ -19,6 +24,11 @@ const couponService = {
       startDate: { $lte: new Date() },
       endDate: { $gte: new Date() },
     };
+
+    // Filter by isRedeemable (for loyalty redeem page)
+    if (isRedeemable !== undefined) {
+      filter.isRedeemable = isRedeemable === "true" || isRedeemable === true;
+    }
 
     // FIXED Bug #32: Dùng aggregate với priorityValue mapping để sort đúng
     const pageNum = parseInt(page);
@@ -454,21 +464,6 @@ const couponService = {
           }
         }
 
-        // Check applicable variants
-        if (
-          coupon.scope === "VARIANTS" &&
-          coupon.applicableVariants?.length > 0
-        ) {
-          if (
-            coupon.applicableVariants.some(
-              (v) => v.toString() === item.variant?._id?.toString()
-            )
-          ) {
-            hasApplicableItem = true;
-            break;
-          }
-        }
-
         // Check applicable categories
         if (
           coupon.scope === "CATEGORIES" &&
@@ -606,16 +601,6 @@ const couponService = {
           if (productId) {
             isApplicable = coupon.applicableProducts.some(
               (p) => p.toString() === productId.toString()
-            );
-          }
-        } else if (
-          coupon.scope === "VARIANTS" &&
-          coupon.applicableVariants?.length > 0
-        ) {
-          const variantId = item.variant?._id;
-          if (variantId) {
-            isApplicable = coupon.applicableVariants.some(
-              (v) => v.toString() === variantId.toString()
             );
           }
         } else if (
@@ -776,12 +761,28 @@ const adminCouponService = {
    * @returns {Object} - Danh sách mã giảm giá phân trang
    */
   getAllCoupons: async (query = {}) => {
-    const { page = 1, limit = 50, code, type, status, isPublic } = query;
+    const {
+      page = 1,
+      limit = 10,
+      code,
+      search,
+      type,
+      status,
+      isPublic,
+      isRedeemable,
+      scope,
+    } = query;
 
     // Xây dựng điều kiện lọc
     const filter = {};
 
-    if (code) {
+    // Search by code or description
+    if (search) {
+      filter.$or = [
+        { code: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+      ];
+    } else if (code) {
       filter.code = { $regex: code, $options: "i" };
     }
 
@@ -798,6 +799,16 @@ const adminCouponService = {
 
     if (isPublic !== undefined) {
       filter.isPublic = isPublic === "true" || isPublic === true;
+    }
+
+    // Filter by isRedeemable
+    if (isRedeemable !== undefined) {
+      filter.isRedeemable = isRedeemable === "true" || isRedeemable === true;
+    }
+
+    // Filter by scope
+    if (scope && ["ALL", "PRODUCTS", "CATEGORIES"].includes(scope)) {
+      filter.scope = scope;
     }
 
     // FIXED Bug #32: Dùng aggregate với priorityValue mapping
@@ -872,6 +883,12 @@ const adminCouponService = {
       hasNextPage: pageNum < totalPages,
       hasPrevPage: pageNum > 1,
       data: coupons,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: countResult,
+        totalPages,
+      },
     };
   },
 
@@ -882,8 +899,15 @@ const adminCouponService = {
    */
   getCouponById: async (couponId) => {
     const coupon = await Coupon.findById(couponId)
-      .populate({ path: "createdBy", select: "name" })
-      .populate({ path: "updatedBy", select: "name" });
+      .populate({ path: "createdBy", select: "name email" })
+      .populate({ path: "updatedBy", select: "name email" })
+      .populate({ path: "applicableProducts", select: "name slug" })
+      .populate({ path: "applicableCategories", select: "name slug" })
+      .populate({
+        path: "conditions.requiredTiers",
+        select: "name displayOrder",
+      })
+      .populate({ path: "users", select: "name email" });
 
     if (!coupon) {
       throw new ApiError(404, "Không tìm thấy mã giảm giá");
@@ -891,6 +915,7 @@ const adminCouponService = {
 
     return {
       success: true,
+      data: coupon,
       coupon,
     };
   },
@@ -926,16 +951,6 @@ const adminCouponService = {
           throw new ApiError(
             400,
             "Coupon với scope PRODUCTS phải chọn ít nhất 1 sản phẩm"
-          );
-        }
-      } else if (couponData.scope === "VARIANTS") {
-        if (
-          !couponData.applicableVariants ||
-          couponData.applicableVariants.length === 0
-        ) {
-          throw new ApiError(
-            400,
-            "Coupon với scope VARIANTS phải chọn ít nhất 1 variant"
           );
         }
       } else if (couponData.scope === "CATEGORIES") {
@@ -1004,17 +1019,6 @@ const adminCouponService = {
           throw new ApiError(
             400,
             "Coupon với scope PRODUCTS phải chọn ít nhất 1 sản phẩm"
-          );
-        }
-      } else if (finalScope === "VARIANTS") {
-        const variants =
-          couponData.applicableVariants !== undefined
-            ? couponData.applicableVariants
-            : coupon.applicableVariants;
-        if (!variants || variants.length === 0) {
-          throw new ApiError(
-            400,
-            "Coupon với scope VARIANTS phải chọn ít nhất 1 variant"
           );
         }
       } else if (finalScope === "CATEGORIES") {
