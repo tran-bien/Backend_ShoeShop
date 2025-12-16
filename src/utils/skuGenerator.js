@@ -12,22 +12,104 @@
  * @param {Number} length - Độ dài code
  * @returns {String} - Code đã chuẩn hóa
  */
+// Remove Vietnamese diacritics and map to ASCII equivalents
+const removeVietnameseDiacritics = (str) => {
+  if (!str) return "";
+
+  const map = {
+    // Upper
+    À: "A",
+    Á: "A",
+    Â: "A",
+    Ã: "A",
+    Ä: "A",
+    Ă: "A",
+    Ắ: "A",
+    Ằ: "A",
+    Ẳ: "A",
+    Ẵ: "A",
+    Ặ: "A",
+    Đ: "D",
+    È: "E",
+    É: "E",
+    Ê: "E",
+    Ë: "E",
+    Ì: "I",
+    Í: "I",
+    Î: "I",
+    Ï: "I",
+    Ò: "O",
+    Ó: "O",
+    Ô: "O",
+    Õ: "O",
+    Ö: "O",
+    Ơ: "O",
+    Ù: "U",
+    Ú: "U",
+    Û: "U",
+    Ü: "U",
+    Ư: "U",
+    Ý: "Y",
+    // Lower
+    à: "a",
+    á: "a",
+    â: "a",
+    ã: "a",
+    ä: "a",
+    ă: "a",
+    ắ: "a",
+    ằ: "a",
+    ẳ: "a",
+    ẵ: "a",
+    ặ: "a",
+    đ: "d",
+    è: "e",
+    é: "e",
+    ê: "e",
+    ë: "e",
+    ì: "i",
+    í: "i",
+    î: "i",
+    ï: "i",
+    ò: "o",
+    ó: "o",
+    ô: "o",
+    õ: "o",
+    ö: "o",
+    ơ: "o",
+    ù: "u",
+    ú: "u",
+    û: "u",
+    ü: "u",
+    ư: "u",
+    ý: "y",
+    ỳ: "y",
+    ỵ: "y",
+    ỷ: "y",
+    ỹ: "y",
+  };
+
+  // First decompose unicode to separate base characters and combining marks,
+  // then map precomposed Vietnamese letters and remove remaining marks.
+  const decomposed = str.normalize("NFD");
+  const mapped = decomposed
+    .split("")
+    .map((ch) => map[ch] || ch)
+    .join("")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  return mapped;
+};
+
 const normalizeToCode = (str, length = 3) => {
   if (!str) return "XXX".substring(0, length);
 
-  // Xóa dấu tiếng Việt
-  const normalized = str
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+  const cleaned = removeVietnameseDiacritics(str)
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "");
 
-  if (normalized.length >= length) {
-    return normalized.substring(0, length);
-  }
-
-  // Nếu quá ngắn, pad với X
-  return normalized.padEnd(length, "X");
+  if (cleaned.length >= length) return cleaned.substring(0, length);
+  return cleaned.padEnd(length, "X");
 };
 
 /**
