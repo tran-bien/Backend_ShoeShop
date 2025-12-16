@@ -409,6 +409,7 @@ const getInventoryList = async (filter = {}, options = {}) => {
     sortBy = "updatedAt",
     sortOrder = "desc",
     product,
+    variant,
     lowStock,
     outOfStock,
   } = options;
@@ -417,6 +418,10 @@ const getInventoryList = async (filter = {}, options = {}) => {
 
   if (product) {
     query.product = product;
+  }
+
+  if (variant) {
+    query.variant = variant;
   }
 
   if (lowStock) {

@@ -671,16 +671,16 @@ const adminUserService = {
   /**
    * Chuyển đổi role của người dùng (CHỈ ADMIN)
    * @param {String} userId - ID của người dùng cần đổi role
-   * @param {String} newRole - Role mới (user, staff, admin)
+   * @param {String} newRole - Role mới (user, staff, shipper)
    * @param {String} adminId - ID của admin thực hiện
    * @returns {Object} - Kết quả chuyển đổi role
    */
   changeUserRole: async (userId, newRole, adminId) => {
-    const validRoles = ["user", "staff", "admin", "shipper"];
+    const validRoles = ["user", "staff", "shipper"];
     if (!validRoles.includes(newRole)) {
       throw new ApiError(
         400,
-        "Role không hợp lệ. Chỉ hỗ trợ: user, staff, admin, shipper"
+        "Role không hợp lệ. Chỉ hỗ trợ: user, staff, shipper"
       );
     }
 
@@ -691,14 +691,15 @@ const adminUserService = {
       throw new ApiError(403, "Không thể thay đổi role của chính mình");
     }
 
-    // Ngăn admin thường hạ cấp admin khác (chỉ superadmin mới được)
-    if (user.role === "admin" && newRole !== "admin") {
-      throw new ApiError(403, "Không thể hạ cấp role của admin khác");
+    // Không cho phép thay đổi role của admin
+    if (user.role === "admin") {
+      throw new ApiError(403, "Không thể thay đổi role của admin");
     }
 
     const oldRole = user.role;
     user.role = newRole;
-    await user.save();
+    // Sử dụng validateModifiedOnly để tránh lỗi validation addresses
+    await user.save({ validateModifiedOnly: true });
 
     // Các role được coi là “quản trị cao quyền”
     const highPrivilegeRoles = ["admin", "staff"];

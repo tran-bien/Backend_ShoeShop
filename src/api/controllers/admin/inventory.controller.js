@@ -99,11 +99,19 @@ const adjustStock = asyncHandler(async (req, res) => {
 /**
  * Lấy danh sách tồn kho với filter
  * @access Staff/Admin (requireStaffOrAdmin middleware)
- * @route GET /api/v1/admin/inventory?page=1&limit=20&productId=...&lowStock=true
+ * @route GET /api/v1/admin/inventory?page=1&limit=20&productId=...&variantId=...&lowStock=true
  */
 const getInventoryList = asyncHandler(async (req, res) => {
-  const { page, limit, productId, lowStock, outOfStock, sortBy, sortOrder } =
-    req.query;
+  const {
+    page,
+    limit,
+    productId,
+    variantId,
+    lowStock,
+    outOfStock,
+    sortBy,
+    sortOrder,
+  } = req.query;
 
   const result = await inventoryService.getInventoryList(
     {},
@@ -111,6 +119,7 @@ const getInventoryList = asyncHandler(async (req, res) => {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 20,
       product: productId,
+      variant: variantId,
       lowStock: lowStock === "true",
       outOfStock: outOfStock === "true",
       sortBy,

@@ -843,9 +843,12 @@ const productService = {
 
   /**
    * [ADMIN] Lấy chi tiết sản phẩm theo ID (kèm variants kể cả đã xóa)
+   * Bao gồm thông tin inventory: số lượng, giá vốn, giá bán, giảm giá, lợi nhuận cho từng size
    * @param {String} id ID của sản phẩm
    */
   getAdminProductById: async (id) => {
+    const { InventoryItem } = require("../models");
+
     // Đầu tiên tìm sản phẩm, bao gồm cả đã xóa mềm
     const product = await Product.findById(id)
       .populate("category", "name")
@@ -865,8 +868,82 @@ const productService = {
       .populate("deletedBy", "firstName lastName email")
       .setOptions({ includeDeleted: true });
 
-    // Gán variants vào product
-    product.variants = variants;
+    // Lấy tất cả InventoryItem của product này để tính toán inventory info
+    const inventoryItems = await InventoryItem.find({ product: id });
+    const inventoryMap = new Map();
+    inventoryItems.forEach((item) => {
+      const key = `${item.variant}_${item.size}`;
+      inventoryMap.set(key, item);
+    });
+
+    // Gán variants vào product và tính toán inventory cho từng variant
+    const variantsWithInventory = await Promise.all(
+      variants.map(async (variant) => {
+        const variantDoc = variant._doc || variant;
+        let variantTotalQuantity = 0;
+        let variantTotalValue = 0;
+
+        // Tính inventory cho từng size
+        const sizesWithInventory = (variantDoc.sizes || []).map((sizeObj) => {
+          const sizeId = sizeObj.size?._id || sizeObj.size;
+          const key = `${variant._id}_${sizeId}`;
+          const invItem = inventoryMap.get(key);
+
+          const quantity = invItem?.quantity || 0;
+          const costPrice =
+            invItem?.averageCostPrice || invItem?.costPrice || 0;
+          const sellingPrice = invItem?.sellingPrice || 0;
+          const finalPrice = invItem?.finalPrice || sellingPrice;
+          const discountPercent = invItem?.discountPercent || 0;
+          const profitPerItem = finalPrice > 0 ? finalPrice - costPrice : 0;
+
+          variantTotalQuantity += quantity;
+          variantTotalValue += costPrice * quantity;
+
+          return {
+            ...sizeObj._doc,
+            inventory: {
+              quantity,
+              costPrice,
+              sellingPrice,
+              finalPrice,
+              discountPercent,
+              profitPerItem,
+              totalValue: costPrice * quantity,
+            },
+          };
+        });
+
+        // Tính giá trung bình cho variant
+        const avgCostPrice =
+          variantTotalQuantity > 0
+            ? Math.round(variantTotalValue / variantTotalQuantity)
+            : 0;
+
+        // Lấy giá bán từ inventory item đầu tiên có giá
+        const firstInvWithPrice = inventoryItems.find(
+          (inv) =>
+            inv.variant.toString() === variant._id.toString() &&
+            inv.finalPrice > 0
+        );
+
+        return {
+          ...variantDoc,
+          sizes: sizesWithInventory,
+          inventorySummary: {
+            totalQuantity: variantTotalQuantity,
+            totalValue: variantTotalValue,
+            avgCostPrice,
+            sellingPrice: firstInvWithPrice?.sellingPrice || 0,
+            finalPrice: firstInvWithPrice?.finalPrice || 0,
+            discountPercent: firstInvWithPrice?.discountPercent || 0,
+          },
+        };
+      })
+    );
+
+    // Gán variants đã có inventory vào product
+    product.variants = variantsWithInventory;
 
     // Tạo thống kê về variants
     const variantStats = {
@@ -881,7 +958,7 @@ const productService = {
       if (variant.deletedAt) {
         variantStats.deleted++;
 
-        // Thêm thông tin người xóa c
+        // Thêm thông tin người xóa
         if (variant.deletedBy) {
           variant._doc.deletedByInfo = {
             name: variant.deletedBy.name,
@@ -898,6 +975,7 @@ const productService = {
     // Chuyển đổi product và thêm thống kê
     const productData = transformProductForAdmin(product);
     productData.variantStats = variantStats;
+    productData.variants = variantsWithInventory;
 
     // Thêm trạng thái xóa
     productData.isDeleted = !!product.deletedAt;

@@ -214,8 +214,8 @@ const validateChangeUserRole = [
   body("role")
     .notEmpty()
     .withMessage("Role không được để trống")
-    .isIn(["user", "staff", "admin", "shipper"])
-    .withMessage("Role không hợp lệ. Chỉ hỗ trợ: user, staff, admin, shipper"),
+    .isIn(["user", "staff", "shipper"])
+    .withMessage("Role không hợp lệ. Chỉ hỗ trợ: user, staff, shipper"),
 ];
 
 module.exports = {
