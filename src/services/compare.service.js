@@ -153,6 +153,12 @@ const compareService = {
       );
     }
 
+    // Create a map for fast product lookup by ID
+    const productMap = new Map();
+    products.forEach((product) => {
+      productMap.set(product._id.toString(), product);
+    });
+
     // FIXED Bug #3: Batch load all InventoryItems for all products upfront
     const allInventoryItems = await require("@models")
       .InventoryItem.find({
@@ -168,9 +174,12 @@ const compareService = {
       inventoryMapByProduct.set(key, item);
     });
 
-    // Lấy variants cho mỗi sản phẩm
+    // Lấy variants cho mỗi sản phẩm - GIỮA ĐÚNG THỨ TỰ của productIds
     const compareData = await Promise.all(
-      products.map(async (product) => {
+      productIds.map(async (productId) => {
+        const product = productMap.get(productId.toString());
+        if (!product) return null; // Skip if product not found
+
         const variants = await Variant.find({
           product: product._id,
           isActive: true,
@@ -187,6 +196,7 @@ const compareService = {
         let maxDiscount = 0;
         const availableColors = [];
         const availableSizes = new Set();
+        const sizeQuantityMap = new Map(); // Map để lưu số lượng theo size
 
         for (const variant of variants) {
           // Tính inventory summary
@@ -236,17 +246,21 @@ const compareService = {
             });
           }
 
-          // Thu thập sizes (sử dụng inventoryMapByProduct để check stock - O(1) lookup)
+          // Thu thập sizes với quantity (sử dụng inventoryMapByProduct để check stock - O(1) lookup)
           for (const s of variant.sizes) {
             if (s.size && s.size.value) {
               // Check nếu size có stock trong inventoryMapByProduct
               const key = `${product._id}_${variant._id}_${
                 s.size._id || s.size
               }`;
-              const hasStock = inventoryMapByProduct.has(key);
+              const inventoryItem = inventoryMapByProduct.get(key);
+              const quantity = inventoryItem ? inventoryItem.quantity : 0;
 
-              if (hasStock) {
+              if (quantity > 0) {
                 availableSizes.add(s.size.value);
+                // Cộng dồn số lượng theo size value
+                const currentQty = sizeQuantityMap.get(s.size.value) || 0;
+                sizeQuantityMap.set(s.size.value, currentQty + quantity);
               }
             }
           }
@@ -254,14 +268,6 @@ const compareService = {
 
         // Lấy rating
         const productRating = await getProductRating(product._id);
-
-        // Xác định stock status
-        let stockStatus = "out_of_stock";
-        if (totalQuantity > 100) {
-          stockStatus = "in_stock";
-        } else if (totalQuantity > 0) {
-          stockStatus = "low_stock";
-        }
 
         return {
           _id: product._id,
@@ -276,11 +282,15 @@ const compareService = {
             total: variants.length,
             colors: availableColors,
             colorCount: availableColors.length,
-            sizes: Array.from(availableSizes).sort(),
+            // Trả về sizes dạng object với value và quantity
+            sizes: Array.from(availableSizes)
+              .sort((a, b) => parseFloat(a) - parseFloat(b))
+              .map((sizeValue) => ({
+                value: sizeValue,
+                quantity: sizeQuantityMap.get(sizeValue) || 0,
+              })),
             sizeCount: availableSizes.size,
           },
-          totalQuantity,
-          stockStatus,
           priceRange: {
             min: minPrice,
             max: maxPrice,
@@ -296,7 +306,8 @@ const compareService = {
       })
     );
 
-    return compareData;
+    // Filter out null values (products not found)
+    return compareData.filter(Boolean);
   },
 };
 

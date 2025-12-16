@@ -449,18 +449,29 @@ const couponService = {
       let hasApplicableItem = false;
 
       for (const item of cartItems) {
+        // Lấy productId từ cart item - hỗ trợ cả dạng populated và non-populated
+        const itemProductId =
+          item.variant?.product?._id?.toString() ||
+          item.variant?.product?.toString() ||
+          null;
+
         // Check applicable products
         if (
           coupon.scope === "PRODUCTS" &&
           coupon.applicableProducts?.length > 0
         ) {
-          if (
-            coupon.applicableProducts.some(
-              (p) => p.toString() === item.variant?.product?._id?.toString()
-            )
-          ) {
-            hasApplicableItem = true;
-            break;
+          if (itemProductId) {
+            // FIXED: Hỗ trợ cả trường hợp applicableProducts được populate và không được populate
+            const isApplicable = coupon.applicableProducts.some((p) => {
+              // Nếu p là object (đã populate), lấy _id
+              const productId = p._id?.toString() || p.toString();
+              return productId === itemProductId;
+            });
+
+            if (isApplicable) {
+              hasApplicableItem = true;
+              break;
+            }
           }
         }
 
@@ -469,15 +480,23 @@ const couponService = {
           coupon.scope === "CATEGORIES" &&
           coupon.applicableCategories?.length > 0
         ) {
-          if (
-            coupon.applicableCategories.some(
-              (c) =>
-                c.toString() ===
-                item.variant?.product?.category?._id?.toString()
-            )
-          ) {
-            hasApplicableItem = true;
-            break;
+          // Lấy categoryId từ cart item - hỗ trợ cả dạng populated và non-populated
+          const itemCategoryId =
+            item.variant?.product?.category?._id?.toString() ||
+            item.variant?.product?.category?.toString() ||
+            null;
+
+          if (itemCategoryId) {
+            // FIXED: Hỗ trợ cả trường hợp applicableCategories được populate và không được populate
+            const isApplicable = coupon.applicableCategories.some((c) => {
+              const categoryId = c._id?.toString() || c.toString();
+              return categoryId === itemCategoryId;
+            });
+
+            if (isApplicable) {
+              hasApplicableItem = true;
+              break;
+            }
           }
         }
       }
@@ -593,25 +612,39 @@ const couponService = {
       for (const item of cartItems) {
         let isApplicable = false;
 
+        // Lấy productId từ cart item - hỗ trợ cả dạng populated và non-populated
+        const itemProductId =
+          item.variant?.product?._id?.toString() ||
+          item.variant?.product?.toString() ||
+          null;
+
         if (
           coupon.scope === "PRODUCTS" &&
           coupon.applicableProducts?.length > 0
         ) {
-          const productId = item.variant?.product?._id;
-          if (productId) {
-            isApplicable = coupon.applicableProducts.some(
-              (p) => p.toString() === productId.toString()
-            );
+          if (itemProductId) {
+            // FIXED: Hỗ trợ cả trường hợp applicableProducts được populate và không được populate
+            isApplicable = coupon.applicableProducts.some((p) => {
+              const productId = p._id?.toString() || p.toString();
+              return productId === itemProductId;
+            });
           }
         } else if (
           coupon.scope === "CATEGORIES" &&
           coupon.applicableCategories?.length > 0
         ) {
-          const categoryId = item.variant?.product?.category?._id;
-          if (categoryId) {
-            isApplicable = coupon.applicableCategories.some(
-              (c) => c.toString() === categoryId.toString()
-            );
+          // Lấy categoryId từ cart item - hỗ trợ cả dạng populated và non-populated
+          const itemCategoryId =
+            item.variant?.product?.category?._id?.toString() ||
+            item.variant?.product?.category?.toString() ||
+            null;
+
+          if (itemCategoryId) {
+            // FIXED: Hỗ trợ cả trường hợp applicableCategories được populate và không được populate
+            isApplicable = coupon.applicableCategories.some((c) => {
+              const categoryId = c._id?.toString() || c.toString();
+              return categoryId === itemCategoryId;
+            });
           }
         }
 
