@@ -263,11 +263,51 @@ const variantService = {
       populate: [
         { path: "color", select: "name code type colors" },
         { path: "sizes.size", select: "value description" },
-        { path: "product", select: "name category brand" },
+        {
+          path: "product",
+          select: "name category brand",
+          populate: [
+            { path: "category", select: "name" },
+            { path: "brand", select: "name" },
+          ],
+        },
       ],
     };
 
-    return await paginateDeleted(Variant, filter, options);
+    const results = await paginateDeleted(Variant, filter, options);
+
+    // Import inventoryService for pricing - giống getAdminVariants
+    const inventoryService = require("@services/inventory.service");
+
+    // Bổ sung thông tin tồn kho và giá cho biến thể đã xóa (nếu còn inventory)
+    results.data = await Promise.all(
+      results.data.map(async (variant) => {
+        const variantObj = variant.toObject
+          ? variant.toObject()
+          : { ...variant };
+
+        // Tính tổng hợp tồn kho từ InventoryItem
+        const inventorySummary = await variantService.calculateInventorySummary(
+          variant
+        );
+
+        // Lấy thông tin giá từ inventory (nếu còn)
+        const pricingData = await inventoryService.getVariantPricing(
+          variant._id
+        );
+
+        return {
+          ...variantObj,
+          inventorySummary,
+          // Thêm thông tin giá (có thể là 0 nếu inventory đã bị xóa)
+          price: pricingData.pricing.calculatedPrice || 0,
+          priceFinal: pricingData.pricing.calculatedPriceFinal || 0,
+          percentDiscount: pricingData.pricing.percentDiscount || 0,
+        };
+      })
+    );
+
+    return results;
   },
 
   /**

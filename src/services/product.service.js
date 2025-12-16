@@ -1022,27 +1022,79 @@ const productService = {
       collation: collation,
       populate: [
         { path: "category", select: "name" },
-        { path: "brand", select: "name" },
-        { path: "deletedBy", select: "name email" },
+        { path: "brand", select: "name logo" },
+        { path: "deletedBy", select: "firstName lastName email" },
       ],
     };
 
     const results = await paginateDeleted(Product, filter, options);
 
-    // Xử lý thông tin tóm tắt cho các sản phẩm đã xóa
-    results.data = results.data.map((product) => {
-      const productObj = product.toObject ? product.toObject() : { ...product };
+    // Import services để tính toán thông tin tồn kho và giá
+    const inventoryService = require("@services/inventory.service");
+    const variantService = require("@services/variant.service");
 
-      // Thêm thông tin về người xóa nếu có
-      if (productObj.deletedBy) {
-        productObj.deletedByName = `${productObj.deletedBy.firstName || ""} ${
-          productObj.deletedBy.lastName || ""
-        }`.trim();
-        productObj.deletedByEmail = productObj.deletedBy.email;
-      }
+    // Xử lý thông tin tóm tắt cho các sản phẩm đã xóa - giống getAdminProducts
+    results.data = await Promise.all(
+      results.data.map(async (product) => {
+        const productObj = product.toObject
+          ? product.toObject()
+          : { ...product };
 
-      return productObj;
-    });
+        // Thêm thông tin về người xóa nếu có
+        if (productObj.deletedBy) {
+          productObj.deletedByName = `${productObj.deletedBy.firstName || ""} ${
+            productObj.deletedBy.lastName || ""
+          }`.trim();
+          productObj.deletedByEmail = productObj.deletedBy.email;
+        }
+
+        // Query Variant collection bao gồm cả variants đã xóa
+        const variants = await Variant.find({ product: product._id })
+          .populate("color", "name code type colors")
+          .populate("sizes.size", "value")
+          .setOptions({ includeDeleted: true })
+          .lean();
+
+        productObj.variants = variants;
+
+        // Tính toán stock info động (nếu còn inventory)
+        const stockInfo = await inventoryService.getProductStockInfo(
+          product._id
+        );
+        productObj.totalQuantity = stockInfo.totalQuantity;
+        productObj.stockStatus = stockInfo.stockStatus;
+
+        // Tính toán rating info động
+        const reviewService = require("@services/review.service");
+        const ratingInfo = await reviewService.getProductRatingInfo(
+          product._id
+        );
+        productObj.rating = ratingInfo.rating;
+        productObj.numReviews = ratingInfo.numReviews;
+
+        // Tính inventorySummary cho mỗi variant
+        if (productObj.variants && productObj.variants.length > 0) {
+          productObj.variants = await Promise.all(
+            productObj.variants.map(async (variant) => {
+              const inventorySummary =
+                await variantService.calculateInventorySummary(variant);
+              return {
+                ...variant,
+                inventorySummary,
+              };
+            })
+          );
+        }
+
+        // Thêm thông tin tóm tắt về variants (bao gồm priceRange)
+        productObj.variantSummary = createVariantSummary(productObj.variants);
+
+        // Xóa chi tiết variants để giảm dung lượng dữ liệu
+        delete productObj.variants;
+
+        return productObj;
+      })
+    );
 
     return results;
   },

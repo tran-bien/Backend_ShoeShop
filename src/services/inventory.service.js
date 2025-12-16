@@ -443,7 +443,7 @@ const getInventoryList = async (filter = {}, options = {}) => {
       })
       .populate({
         path: "variant",
-        select: "color imagesvariant",
+        select: "color gender imagesvariant",
         populate: {
           path: "color",
           select: "name hexCode",
@@ -484,7 +484,7 @@ const getInventoryById = async (id) => {
     })
     .populate({
       path: "variant",
-      select: "color imagesvariant",
+      select: "color gender imagesvariant",
       populate: {
         path: "color",
         select: "name hexCode",
