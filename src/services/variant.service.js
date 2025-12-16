@@ -16,12 +16,6 @@ const getSortOption = (sortParam) => {
       case "created_at_desc":
         sortOption = { createdAt: -1 };
         break;
-      case "price_asc":
-        sortOption = { createdAt: 1 }; //  Giá không còn ở variant, sort by createdAt
-        break;
-      case "price_desc":
-        sortOption = { createdAt: -1 }; // Giá không còn ở variant, sort by createdAt
-        break;
       default:
         try {
           sortOption = JSON.parse(sortParam);
@@ -368,6 +362,7 @@ const variantService = {
     let newVariant = null;
     let updatedSizes = [];
     let newSizes = [];
+    let duplicateSizes = [];
     let message = "";
 
     // TH1: Biến thể với màu và giới tính này đã tồn tại
@@ -391,9 +386,26 @@ const variantService = {
             // REMOVED: quantity, isSizeAvailable - Không lưu vào Variant schema
           });
           newSizes.push(sizeId);
+        } else {
+          // Size đã tồn tại - đánh dấu là duplicate
+          duplicateSizes.push(sizeId);
         }
         // REMOVED: Không cập nhật quantity nếu size đã tồn tại
         // Quantity chỉ được cập nhật qua InventoryItem (stockIn/stockOut)
+      }
+
+      // Nếu TẤT CẢ size đều đã tồn tại (không có size mới nào), trả về lỗi
+      if (newSizes.length === 0 && duplicateSizes.length > 0) {
+        // Lấy tên các size đã tồn tại
+        const duplicateSizeNames = sizes
+          .filter((s) => duplicateSizes.includes(s._id.toString()))
+          .map((s) => s.value)
+          .join(", ");
+
+        throw new ApiError(
+          409,
+          `Biến thể với sản phẩm, màu "${color.name}", giới tính "${variantData.gender}" và size ${duplicateSizeNames} đã tồn tại. Vui lòng chọn size khác hoặc chỉnh sửa biến thể hiện có.`
+        );
       }
 
       // Chỉ cập nhật gender (price/costPrice được quản lý bởi InventoryItem)
@@ -411,6 +423,9 @@ const variantService = {
       }
       if (updatedSizes.length > 0) {
         updates.push(`cập nhật ${updatedSizes.length} kích thước đã tồn tại`);
+      }
+      if (duplicateSizes.length > 0) {
+        updates.push(`${duplicateSizes.length} kích thước đã có sẵn`);
       }
 
       message =
