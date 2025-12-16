@@ -402,7 +402,7 @@ const colorService = {
 
     return {
       success: true,
-      message: `Cập nhật màu sắc id: ${updatedColor.id} thành công`,
+      message: `Cập nhật màu sắc ${updatedColor.name} thành công`,
       color: updatedColor,
     };
   },
