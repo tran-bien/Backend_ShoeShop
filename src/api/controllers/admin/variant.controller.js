@@ -91,6 +91,16 @@ const variantController = {
     const result = await variantService.getAdminDeletedVariants(req.query);
     res.json(result);
   }),
+
+  /**
+   * @desc    Kiểm tra ràng buộc của các size trong variant
+   * @route   GET /api/admin/variants/:id/size-constraints
+   * @access  Staff/Admin
+   */
+  checkSizeConstraints: asyncHandler(async (req, res) => {
+    const result = await variantService.checkSizeConstraints(req.params.id);
+    res.json(result);
+  }),
 };
 
 module.exports = variantController;

@@ -99,7 +99,6 @@ router.post(
   variantController.restoreVariant
 );
 
-
 /**
  * @route   PATCH /api/v1/admin/variants/:id/status
  * @desc    Cập nhật trạng thái active của biến thể
@@ -110,6 +109,18 @@ router.patch(
   requireStaffOrAdmin,
   validate(variantValidator.validateStatusUpdate),
   variantController.updateVariantStatus
+);
+
+/**
+ * @route   GET /api/v1/admin/variants/:id/size-constraints
+ * @desc    Kiểm tra ràng buộc của các size trong variant (order, inventory)
+ * @access  Staff/Admin
+ */
+router.get(
+  "/:id/size-constraints",
+  requireStaffOrAdmin,
+  validate(variantValidator.validateVariantId),
+  variantController.checkSizeConstraints
 );
 
 module.exports = router;

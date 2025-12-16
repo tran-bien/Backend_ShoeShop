@@ -46,10 +46,9 @@ const VariantSchema = new mongoose.Schema(
         },
         sku: {
           type: String,
-          required: true,
-          unique: true,
-          // SKU được tạo TỰ ĐỘNG bởi variant/middlewares.js (pre-save hook)
+          // KHÔNG required ở schema - sẽ được tạo TỰ ĐỘNG bởi variant/middlewares.js (pre-save hook)
           // Format: XXX-XXX-X-XXX-XXXX (e.g., NIK-BLA-M-40-A1B2)
+          sparse: true, // Cho phép null/undefined nhưng vẫn unique khi có giá trị
         },
         // sku để tracking và quản lý kho
         // ĐÃ XÓA: quantity, isSizeAvailable
@@ -87,5 +86,8 @@ VariantSchema.index({ product: 1, isActive: 1, deletedAt: 1 });
 
 // Index cho color lookup
 VariantSchema.index({ color: 1 });
+
+// Unique index cho SKU - sparse để cho phép null/undefined
+VariantSchema.index({ "sizes.sku": 1 }, { unique: true, sparse: true });
 
 module.exports = VariantSchema;

@@ -502,8 +502,70 @@ const variantService = {
       }
     }
 
+    // Import InventoryItem để xử lý kho
+    const { InventoryItem } = require("@models");
+
     // Kiểm tra kích thước tồn tại nếu có cập nhật sizes
     if (updateData.sizes && Array.isArray(updateData.sizes)) {
+      // Lấy danh sách sizeId cũ và mới
+      const oldSizeIds = variant.sizes.map((s) => s.size.toString());
+      const newSizeIds = updateData.sizes.map((s) => s.size.toString());
+
+      // Tìm các size bị xóa
+      const removedSizeIds = oldSizeIds.filter(
+        (sId) => !newSizeIds.includes(sId)
+      );
+
+      // Kiểm tra ràng buộc cho các size bị xóa
+      if (removedSizeIds.length > 0) {
+        // 1. Kiểm tra xem có Order nào đang sử dụng các size này không
+        const ordersWithRemovedSizes = await Order.countDocuments({
+          "orderItems.variant": id,
+          "orderItems.size": {
+            $in: removedSizeIds.map((s) => new mongoose.Types.ObjectId(s)),
+          },
+        });
+
+        if (ordersWithRemovedSizes > 0) {
+          // Lấy tên các size bị ràng buộc
+          const constrainedSizes = await Size.find({
+            _id: { $in: removedSizeIds },
+          }).select("value");
+          const sizeNames = constrainedSizes.map((s) => s.value).join(", ");
+
+          throw new ApiError(
+            400,
+            `Không thể xóa size (${sizeNames}) vì đang được sử dụng trong ${ordersWithRemovedSizes} đơn hàng. Hãy vô hiệu hóa biến thể thay vì xóa size.`
+          );
+        }
+
+        // 2. Kiểm tra và xóa inventory của các size bị xóa
+        for (const sizeId of removedSizeIds) {
+          const inventory = await InventoryItem.findOne({
+            variant: id,
+            size: sizeId,
+          });
+
+          if (inventory) {
+            if (inventory.quantity > 0) {
+              // Cảnh báo nếu còn tồn kho
+              const sizeDoc = await Size.findById(sizeId).select("value");
+              throw new ApiError(
+                400,
+                `Size ${sizeDoc?.value || sizeId} còn ${
+                  inventory.quantity
+                } sản phẩm trong kho. Vui lòng xuất kho trước khi xóa size.`
+              );
+            }
+            // Xóa inventory nếu quantity = 0
+            await InventoryItem.deleteOne({ _id: inventory._id });
+            console.log(
+              `✅ Đã xóa InventoryItem cho variant ${id} - size ${sizeId}`
+            );
+          }
+        }
+      }
+
       const sizesData = [];
       for (const sizeData of updateData.sizes) {
         if (!mongoose.Types.ObjectId.isValid(sizeData.size)) {
@@ -813,6 +875,81 @@ const variantService = {
         hasDiscount,
         maxDiscountPercent,
         isSinglePrice: minPrice === maxPrice,
+      },
+    };
+  },
+
+  /**
+   * Kiểm tra ràng buộc của các size trong variant trước khi xóa
+   * @param {String} variantId ID biến thể
+   * @returns {Promise<Object>} Thông tin ràng buộc của từng size
+   */
+  checkSizeConstraints: async (variantId) => {
+    const variant = await Variant.findById(variantId).populate(
+      "sizes.size",
+      "value"
+    );
+    if (!variant) {
+      throw new ApiError(404, `Không tìm thấy biến thể với ID: ${variantId}`);
+    }
+
+    const { InventoryItem } = require("@models");
+    const sizeConstraints = [];
+
+    for (const sizeItem of variant.sizes) {
+      const sizeId = sizeItem.size._id || sizeItem.size;
+      const sizeName = sizeItem.size.value || "Unknown";
+
+      // Kiểm tra Order sử dụng size này
+      const orderCount = await Order.countDocuments({
+        "orderItems.variant": variantId,
+        "orderItems.size": sizeId,
+      });
+
+      // Kiểm tra Inventory của size này
+      const inventory = await InventoryItem.findOne({
+        variant: variantId,
+        size: sizeId,
+      });
+
+      const inventoryQuantity = inventory?.quantity || 0;
+      const hasPendingOrders = orderCount > 0;
+      const hasStock = inventoryQuantity > 0;
+
+      // Xác định có thể xóa không
+      let canRemove = true;
+      let removeWarning = null;
+
+      if (hasPendingOrders) {
+        canRemove = false;
+        removeWarning = `Size đang được sử dụng trong ${orderCount} đơn hàng`;
+      } else if (hasStock) {
+        canRemove = false;
+        removeWarning = `Còn ${inventoryQuantity} sản phẩm trong kho`;
+      }
+
+      sizeConstraints.push({
+        sizeId: sizeId.toString(),
+        sizeName,
+        sku: sizeItem.sku || null,
+        orderCount,
+        inventoryQuantity,
+        hasPendingOrders,
+        hasStock,
+        canRemove,
+        removeWarning,
+      });
+    }
+
+    return {
+      success: true,
+      variantId,
+      sizes: sizeConstraints,
+      // Tóm tắt
+      summary: {
+        totalSizes: sizeConstraints.length,
+        removableSizes: sizeConstraints.filter((s) => s.canRemove).length,
+        constrainedSizes: sizeConstraints.filter((s) => !s.canRemove).length,
       },
     };
   },
