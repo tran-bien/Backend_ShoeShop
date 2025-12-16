@@ -414,6 +414,21 @@ const cartService = {
       // Lưu giỏ hàng
       await cart.save();
 
+      // Populate cart trước khi return để FE có đầy đủ thông tin color/size
+      await cart.populate({
+        path: "cartItems.variant",
+        select: "color product gender imagesvariant isActive deletedAt",
+        populate: [
+          { path: "color", select: "name code type" },
+          { path: "product", select: "_id name slug" },
+        ],
+      });
+
+      await cart.populate({
+        path: "cartItems.size",
+        select: "value description",
+      });
+
       return {
         success: true,
         message: "Đã thêm sản phẩm vào giỏ hàng",
@@ -575,6 +590,21 @@ const cartService = {
 
     // Lưu giỏ hàng
     await cart.save();
+
+    // Populate cart trước khi return để FE có đầy đủ thông tin color/size
+    await cart.populate({
+      path: "cartItems.variant",
+      select: "color product gender imagesvariant isActive deletedAt",
+      populate: [
+        { path: "color", select: "name code type" },
+        { path: "product", select: "_id name slug" },
+      ],
+    });
+
+    await cart.populate({
+      path: "cartItems.size",
+      select: "value description",
+    });
 
     return {
       success: true,
