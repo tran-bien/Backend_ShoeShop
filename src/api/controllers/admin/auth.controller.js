@@ -9,7 +9,11 @@ const authController = {
    */
   getAllSessions: asyncHandler(async (req, res) => {
     const sessions = await authService.getAllSessions();
-    res.json({ success: true, sessions });
+    res.json({
+      success: true,
+      data: { sessions },
+      message: "Lấy danh sách session thành công",
+    });
   }),
 
   /**

@@ -1004,7 +1004,7 @@ const adminReviewService = {
   getAllReviews: async (query = {}) => {
     const {
       page = 1,
-      limit = 90,
+      limit = 10,
       productId,
       userId,
       rating,
@@ -1064,11 +1064,15 @@ const adminReviewService = {
       populate: [
         { path: "user", select: "name email avatar" },
         { path: "deletedBy", select: "name email" },
+        { path: "product", select: "name images slug" },
         {
           path: "orderItem",
           populate: [
-            { path: "product", select: "name" },
-            { path: "variant", populate: { path: "color", select: "name" } },
+            { path: "product", select: "name images slug" },
+            {
+              path: "variant",
+              populate: { path: "color", select: "name code" },
+            },
             { path: "size", select: "value" },
           ],
         },
@@ -1143,11 +1147,15 @@ const adminReviewService = {
       populate: [
         { path: "user", select: "name email avatar" },
         { path: "deletedBy", select: "name email" },
+        { path: "product", select: "name images slug" },
         {
           path: "orderItem",
           populate: [
-            { path: "product", select: "name" },
-            { path: "variant", populate: { path: "color", select: "name" } },
+            { path: "product", select: "name images slug" },
+            {
+              path: "variant",
+              populate: { path: "color", select: "name code" },
+            },
             { path: "size", select: "value" },
           ],
         },
@@ -1180,18 +1188,88 @@ const adminReviewService = {
       .populate([
         { path: "user", select: "name email avatar" },
         { path: "deletedBy", select: "name email" },
-        {
-          path: "orderItem",
-          populate: [
-            { path: "product", select: "name" },
-            { path: "variant", populate: { path: "color", select: "name" } },
-            { path: "size", select: "value" },
-          ],
-        },
-      ]);
+        { path: "product", select: "name images slug" },
+      ])
+      .lean();
 
     if (!review) {
       throw new ApiError(404, "Không tìm thấy đánh giá");
+    }
+
+    // orderItem là subdocument trong Order.orderItems[], không thể populate trực tiếp
+    // Cần query Order để lấy thông tin orderItem với variant/size/color
+    if (review.orderItem) {
+      // Sử dụng aggregate để lấy orderItem và populate variant/size
+      const orderResult = await Order.aggregate([
+        {
+          $match: {
+            "orderItems._id": new mongoose.Types.ObjectId(review.orderItem),
+          },
+        },
+        { $unwind: "$orderItems" },
+        {
+          $match: {
+            "orderItems._id": new mongoose.Types.ObjectId(review.orderItem),
+          },
+        },
+        {
+          $lookup: {
+            from: "variants",
+            localField: "orderItems.variant",
+            foreignField: "_id",
+            as: "variantData",
+          },
+        },
+        {
+          $lookup: {
+            from: "sizes",
+            localField: "orderItems.size",
+            foreignField: "_id",
+            as: "sizeData",
+          },
+        },
+        {
+          $project: {
+            orderItem: "$orderItems",
+            variant: { $arrayElemAt: ["$variantData", 0] },
+            size: { $arrayElemAt: ["$sizeData", 0] },
+          },
+        },
+      ]);
+
+      if (orderResult && orderResult.length > 0) {
+        const { orderItem, variant, size } = orderResult[0];
+
+        // Lookup color từ variant nếu có
+        let colorData = null;
+        if (variant && variant.color) {
+          const Color = mongoose.model("Color");
+          colorData = await Color.findById(variant.color)
+            .select("name code")
+            .lean();
+        }
+
+        // Attach orderItem info to review
+        review.orderItem = {
+          _id: orderItem._id,
+          variant: variant
+            ? {
+                _id: variant._id,
+                color: colorData,
+              }
+            : null,
+          size: size
+            ? {
+                _id: size._id,
+                value: size.value,
+              }
+            : null,
+          productName: orderItem.productName,
+          image: orderItem.image,
+          quantity: orderItem.quantity,
+          price: orderItem.price,
+        };
+      }
     }
 
     return {
