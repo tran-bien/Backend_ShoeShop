@@ -1052,7 +1052,7 @@ const orderService = {
     const { page = 1, limit = 90, status, search } = query;
 
     // Xây dựng điều kiện lọc
-    const filter = {};
+    const filter = { deletedAt: null };
 
     // Lọc theo trạng thái nếu có
     if (status) {
@@ -1062,10 +1062,19 @@ const orderService = {
         filter.status = { $in: ["assigned_to_shipper", "out_for_delivery"] };
       } else if (status === "failed") {
         // "failed" maps to delivery_failed, returning_to_warehouse (delivery issues only)
-        // NOT including cancelled (user cancellation)
         filter.status = {
           $in: ["delivery_failed", "returning_to_warehouse"],
         };
+      } else if (status === "pending_process") {
+        // "pending_process" = pending + confirmed (cần xử lý)
+        filter.status = { $in: ["pending", "confirmed"] };
+      } else if (status === "refunded") {
+        // "refunded" = trả hàng HOẶC đã hoàn tiền
+        // Check: status = returned OR payment.paymentStatus = "refunded"
+        filter.$or = [
+          { status: "returned" },
+          { "payment.paymentStatus": "refunded" },
+        ];
       } else {
         filter.status = status;
       }
@@ -1081,12 +1090,22 @@ const orderService = {
         ],
       }).distinct("_id");
 
-      filter.$or = [
-        { code: { $regex: search, $options: "i" } },
-        { user: { $in: userIds } },
-        { "shippingAddress.name": { $regex: search, $options: "i" } },
-        { "shippingAddress.phone": { $regex: search, $options: "i" } },
-      ];
+      // Nếu đã có filter.$or (từ refunded), cần dùng $and
+      const searchCondition = {
+        $or: [
+          { code: { $regex: search, $options: "i" } },
+          { user: { $in: userIds } },
+          { "shippingAddress.name": { $regex: search, $options: "i" } },
+          { "shippingAddress.phone": { $regex: search, $options: "i" } },
+        ],
+      };
+
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, searchCondition];
+        delete filter.$or;
+      } else {
+        filter.$or = searchCondition.$or;
+      }
     }
 
     // Sử dụng hàm phân trang
@@ -1105,6 +1124,68 @@ const orderService = {
       populate,
     });
 
+    // Thống kê số đơn hàng theo trạng thái - lấy từ DB
+    const orderStatsAgg = await Order.aggregate([
+      { $match: { deletedAt: null } },
+      {
+        $facet: {
+          byStatus: [{ $group: { _id: "$status", count: { $sum: 1 } } }],
+          refundedCount: [
+            { $match: { "payment.paymentStatus": "refunded" } },
+            { $count: "count" },
+          ],
+        },
+      },
+    ]);
+
+    const stats = {
+      pending: 0,
+      confirmed: 0,
+      assigned_to_shipper: 0,
+      out_for_delivery: 0,
+      delivered: 0,
+      delivery_failed: 0,
+      returning_to_warehouse: 0,
+      cancelled: 0,
+      returned: 0,
+      total: 0,
+      // Combined stats
+      pending_process: 0, // pending + confirmed
+      shipping: 0, // assigned_to_shipper + out_for_delivery
+      failed: 0, // delivery_failed + returning_to_warehouse
+      refunded: 0, // returned OR payment.paymentStatus = "refunded"
+    };
+
+    // Xử lý kết quả aggregate
+    const byStatus = orderStatsAgg[0]?.byStatus || [];
+    const refundedCount = orderStatsAgg[0]?.refundedCount[0]?.count || 0;
+
+    byStatus.forEach(({ _id, count }) => {
+      if (_id && _id in stats) {
+        stats[_id] = count;
+      }
+      stats.total += count;
+
+      // Calculate combined stats
+      if (_id === "pending" || _id === "confirmed") {
+        stats.pending_process += count;
+      }
+      if (_id === "assigned_to_shipper" || _id === "out_for_delivery") {
+        stats.shipping += count;
+      }
+      if (_id === "delivery_failed" || _id === "returning_to_warehouse") {
+        stats.failed += count;
+      }
+    });
+
+    // refunded = unique count of (returned OR payment.paymentStatus = "refunded")
+    // Để tránh đếm trùng, cần query riêng
+    const refundedUniqueCount = await Order.countDocuments({
+      deletedAt: null,
+      $or: [{ status: "returned" }, { "payment.paymentStatus": "refunded" }],
+    });
+    stats.refunded = refundedUniqueCount;
+
     return {
       orders: result.data,
       pagination: {
@@ -1113,6 +1194,7 @@ const orderService = {
         total: result.total,
         totalPages: result.totalPages,
       },
+      stats,
     };
   },
 
@@ -1714,25 +1796,6 @@ const orderService = {
     };
 
     await order.save();
-
-    // Gửi notification cho admin
-    try {
-      const notificationService = require("./notification.service");
-      // Tìm admin để gửi notification
-      const admins = await User.find({ role: "admin" }).select("_id");
-      for (const admin of admins) {
-        await notificationService.send(admin._id, "REFUND_REQUEST", {
-          orderCode: order.code,
-          amount: order.refund.amount,
-          customerName: order.shippingAddress?.name || "Khách hàng",
-        });
-      }
-    } catch (error) {
-      console.error(
-        "[submitRefundBankInfo] Lỗi gửi notification:",
-        error.message
-      );
-    }
 
     return {
       success: true,

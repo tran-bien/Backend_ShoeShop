@@ -61,7 +61,9 @@ const validateGetOrders = [
       "returned",
       // Combined filters for FE convenience
       "shipping", // Maps to: assigned_to_shipper, out_for_delivery
-      "failed", // Maps to: delivery_failed, returning_to_warehouse (delivery issues only)
+      "failed", // Maps to: delivery_failed, returning_to_warehouse
+      "pending_process", // Maps to: pending, confirmed
+      "refunded", // Maps to: returned OR payment.paymentStatus = "refunded"
     ])
     .withMessage("Trạng thái không hợp lệ"),
   query("sort").optional().isString().withMessage("Sắp xếp phải là chuỗi"),
@@ -143,17 +145,36 @@ const validateProcessCancelRequest = [
     .withMessage("ID yêu cầu hủy không được để trống")
     .custom(isValidObjectId)
     .withMessage("ID yêu cầu hủy không hợp lệ"),
+  // FIX: Accept cả approved (boolean) hoặc status (string "approved"/"rejected")
   body("approved")
-    .notEmpty()
-    .withMessage("Quyết định duyệt không được để trống")
+    .optional()
     .isBoolean()
     .withMessage("Quyết định duyệt phải là true hoặc false"),
+  body("status")
+    .optional()
+    .isIn(["approved", "rejected"])
+    .withMessage("Trạng thái phải là approved hoặc rejected"),
+  body().custom((value) => {
+    // Phải có ít nhất 1 trong 2 field: approved hoặc status
+    if (value.approved === undefined && !value.status) {
+      throw new Error(
+        "Quyết định duyệt không được để trống (approved hoặc status)"
+      );
+    }
+    return true;
+  }),
   body("note")
     .optional()
     .isString()
     .withMessage("Ghi chú phải là chuỗi")
     .isLength({ max: 500 })
     .withMessage("Ghi chú không được vượt quá 500 ký tự"),
+  body("adminResponse")
+    .optional()
+    .isString()
+    .withMessage("Phản hồi admin phải là chuỗi")
+    .isLength({ max: 500 })
+    .withMessage("Phản hồi admin không được vượt quá 500 ký tự"),
 ];
 
 /**

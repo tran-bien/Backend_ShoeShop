@@ -118,11 +118,15 @@ const getCancelRequests = asyncHandler(async (req, res) => {
  * @flow    order.route.js (admin) → order.controller.js → order.service.js → processCancelRequest()
  */
 const processCancelRequest = asyncHandler(async (req, res) => {
-  const { approved, note } = req.body;
+  const { approved, note, status, adminResponse } = req.body;
+
+  // FIX: Support cả 2 format: approved (boolean) hoặc status (string)
+  const isApproved = approved !== undefined ? approved : status === "approved";
+  const responseNote = note || adminResponse || "";
 
   const result = await orderService.processCancelRequest(
     req.params.id,
-    { approved, note },
+    { approved: isApproved, note: responseNote },
     req.user._id
   );
 

@@ -383,16 +383,6 @@ const assignShipperForReturn = async (id, shipperId, assignedBy) => {
 
   await request.save();
 
-  // Gửi notification cho shipper
-  try {
-    const notificationService = require("./notification.service");
-    await notificationService.send(shipperId, "RETURN_ASSIGNED_TO_SHIPPER", {
-      returnRequestCode: request.code,
-      returnRequestId: request._id,
-    });
-  } catch (error) {
-    console.error("[Return] Lỗi gửi notification shipper:", error.message);
-  }
 
   return await request.populate([
     { path: "order" },
@@ -499,6 +489,39 @@ const shipperConfirmRefundDelivered = async (id, shipperId, note) => {
 
   await request.save();
 
+  // FIX: Cập nhật order.payment.paymentStatus = "refunded"
+  const order = await Order.findById(request.order);
+  if (order) {
+    order.payment.paymentStatus = "refunded";
+    // Cập nhật refund info
+    if (!order.refund || !order.refund.status) {
+      order.refund = {
+        amount: request.refundAmount,
+        method: "cash",
+        status: "completed",
+        transactionId: `REFUND-RETURN-CASH-${request.code}-${Date.now()}`,
+        notes: note || "",
+        processedBy: shipperId,
+        requestedAt: request.createdAt,
+        completedAt: new Date(),
+      };
+    } else {
+      order.refund.status = "completed";
+      order.refund.completedAt = new Date();
+      order.refund.processedBy = shipperId;
+    }
+    // Ghi vào statusHistory
+    order.statusHistory.push({
+      status: order.status,
+      updatedAt: new Date(),
+      updatedBy: shipperId,
+      note: `Đã hoàn tiền mặt ${request.refundAmount?.toLocaleString(
+        "vi-VN"
+      )}đ cho yêu cầu trả hàng #${request.code}`,
+    });
+    await order.save();
+  }
+
   // Gửi notification cho khách
   try {
     const notificationService = require("./notification.service");
@@ -570,6 +593,41 @@ const adminConfirmBankTransfer = async (id, adminId, note) => {
   }
 
   await request.save();
+
+  // FIX: Cập nhật order.payment.paymentStatus = "refunded"
+  const Order = require("../models").Order;
+  const order = await Order.findById(request.order);
+  if (order) {
+    order.payment.paymentStatus = "refunded";
+    // Cập nhật refund info nếu chưa có
+    if (!order.refund || !order.refund.status) {
+      order.refund = {
+        amount: request.refundAmount,
+        method: "bank_transfer",
+        status: "completed",
+        bankInfo: request.bankInfo,
+        transactionId: `REFUND-RETURN-${request.code}-${Date.now()}`,
+        notes: note || "",
+        processedBy: adminId,
+        requestedAt: request.createdAt,
+        completedAt: new Date(),
+      };
+    } else {
+      order.refund.status = "completed";
+      order.refund.completedAt = new Date();
+      order.refund.processedBy = adminId;
+    }
+    // Ghi vào statusHistory
+    order.statusHistory.push({
+      status: order.status,
+      updatedAt: new Date(),
+      updatedBy: adminId,
+      note: `Đã hoàn tiền ${request.refundAmount?.toLocaleString(
+        "vi-VN"
+      )}đ qua chuyển khoản cho yêu cầu trả hàng #${request.code}`,
+    });
+    await order.save();
+  }
 
   // Gửi notification
   try {
