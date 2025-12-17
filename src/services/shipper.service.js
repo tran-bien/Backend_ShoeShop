@@ -338,10 +338,16 @@ const getShipperOrders = async (shipperId, query = {}) => {
       .populate({
         path: "orderItems.variant",
         select: "sku color images",
-        populate: {
-          path: "product",
-          select: "name slug",
-        },
+        populate: [
+          {
+            path: "product",
+            select: "name slug images",
+          },
+          {
+            path: "color",
+            select: "name hexCode",
+          },
+        ],
       })
       .populate("orderItems.size", "value")
       .sort(sort)
