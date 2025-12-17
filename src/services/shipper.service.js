@@ -144,12 +144,12 @@ const assignOrderToShipper = async (orderId, shipperId, assignedBy) => {
   // Cập nhật đơn hàng
   order.assignedShipper = shipperId;
   order.assignmentTime = new Date();
+  // NOTE: Gán shipper = assigned_to_shipper, shipper sẽ confirm "Bắt đầu giao" để chuyển sang out_for_delivery
   order.status = "assigned_to_shipper";
   order.statusHistory.push({
     status: "assigned_to_shipper",
     updatedAt: new Date(),
     updatedBy: assignedBy,
-    // FIX: Dùng updatedShipper.name thay vì shipper.name (shipper undefined)
     note: `Đơn hàng được gán cho shipper ${updatedShipper.name}`,
   });
 
@@ -185,7 +185,7 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
 
   // FIXED Bug #27: Validate allowed status transitions từ current status
   const allowedTransitions = {
-    assigned_to_shipper: ["out_for_delivery"],
+    assigned_to_shipper: ["out_for_delivery"], // Shipper confirm bắt đầu giao
     out_for_delivery: ["delivered", "delivery_failed"],
     delivery_failed: ["out_for_delivery", "delivery_failed"], // Có thể thử giao lại hoặc fail tiếp
   };
@@ -302,7 +302,7 @@ const updateDeliveryStatus = async (orderId, shipperId, data) => {
     status: order.status,
     updatedAt: new Date(),
     updatedBy: shipperId,
-    note: note || `Shipper cập nhật trạng thái: ${status}`,
+    note: note || `Shipper cập nhật trạng thái`,
   });
 
   await order.save();

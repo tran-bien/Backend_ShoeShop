@@ -6,7 +6,7 @@ const orderValidator = require("@validators/order.validator");
 const { protect } = require("@middlewares/auth.middleware");
 
 // Routes không cần xác thực
-/** 
+/**
  * @route   GET /api/v1/orders/vnpay/test-callback
  * @desc    Test callback từ VNPAY
  * @access  Public
@@ -38,28 +38,44 @@ router.use(protect);
  * @desc    Lấy danh sách đơn hàng của người dùng và thống kê theo trạng thái
  * @access  Private
  */
-router.get("/", validate(orderValidator.validateGetOrders), orderController.getOrders);
+router.get(
+  "/",
+  validate(orderValidator.validateGetOrders),
+  orderController.getOrders
+);
 
 /**
  * @route   POST /api/v1/orders
  * @desc    Tạo đơn hàng mới
  * @access  Private
  */
-router.post("/", validate(orderValidator.validateCreateOrder), orderController.createOrder);
+router.post(
+  "/",
+  validate(orderValidator.validateCreateOrder),
+  orderController.createOrder
+);
 
 /**
  * @route   GET /api/v1/orders/user-cancel-requests
  * @desc    Lấy danh sách yêu cầu hủy đơn hàng của người dùng
  * @access  Private
  */
-router.get("/user-cancel-requests", validate(orderValidator.validateGetUserCancelRequests), orderController.getUserCancelRequests);
+router.get(
+  "/user-cancel-requests",
+  validate(orderValidator.validateGetUserCancelRequests),
+  orderController.getUserCancelRequests
+);
 
 /**
  * @route   GET /api/v1/orders/:id
  * @desc    Lấy chi tiết đơn hàng
  * @access  Private
  */
-router.get("/:id", validate(orderValidator.validateGetOrder), orderController.getOrderById);
+router.get(
+  "/:id",
+  validate(orderValidator.validateGetOrder),
+  orderController.getOrderById
+);
 
 /**
  * @route   POST /api/v1/orders/:id/cancel
@@ -78,5 +94,12 @@ router.post(
  * @access  Private
  */
 router.post("/:id/repay", orderController.repayOrder);
+
+/**
+ * @route   POST /api/v1/orders/:id/refund-bank-info
+ * @desc    User gửi thông tin ngân hàng để nhận hoàn tiền (khi đơn returning_to_warehouse + paid)
+ * @access  Private
+ */
+router.post("/:id/refund-bank-info", orderController.submitRefundBankInfo);
 
 module.exports = router;

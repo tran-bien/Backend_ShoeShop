@@ -13,7 +13,14 @@ const returnService = require("@services/return.service");
  * @route   POST /api/v1/returns
  */
 const createReturnRequest = asyncHandler(async (req, res) => {
-  const { orderId, reason, reasonDetail, refundMethod, bankInfo } = req.body;
+  const {
+    orderId,
+    reason,
+    reasonDetail,
+    refundMethod,
+    bankInfo,
+    pickupAddressId,
+  } = req.body;
   const customerId = req.user._id;
 
   const returnRequest = await returnService.createReturnRequest(
@@ -23,6 +30,7 @@ const createReturnRequest = asyncHandler(async (req, res) => {
       reasonDetail,
       refundMethod,
       bankInfo,
+      pickupAddressId, // Thêm địa chỉ lấy hàng trả
     },
     customerId
   );
@@ -80,21 +88,25 @@ const getReturnRequestDetail = asyncHandler(async (req, res) => {
 });
 
 /**
- * HUỶ YÊU CẦU TRẢ HÀNG (CHỈ KHI CÒN PENDING)
+ * YÊU CẦU HỦY TRẢ HÀNG (ĐỔI Ý)
+ * - Cho phép hủy khi: pending, approved, shipping
+ * - Chuyển sang "cancel_pending" chờ admin duyệt
  * @access  Authenticated User (isAuthenticated middleware)
- * @route   DELETE /api/v1/returns/:id
+ * @route   PATCH /api/v1/users/returns/:id/cancel
  */
 const cancelReturnRequest = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  const { reason } = req.body;
 
   const returnRequest = await returnService.cancelReturnRequest(
     id,
-    req.user._id
+    req.user._id,
+    reason
   );
 
   res.status(200).json({
     success: true,
-    message: "Hủy yêu cầu trả hàng thành công",
+    message: "Yêu cầu hủy trả hàng đã được gửi. Chờ admin duyệt.",
     data: returnRequest,
   });
 });

@@ -14,7 +14,14 @@ const RETURN_SHIPPING_FEE = 30000; // 30.000đ
  * - Phí trả hàng: 30.000đ
  */
 const createReturnRequest = async (data, userId) => {
-  const { orderId, reason, reasonDetail, refundMethod, bankInfo } = data;
+  const {
+    orderId,
+    reason,
+    reasonDetail,
+    refundMethod,
+    bankInfo,
+    pickupAddressId,
+  } = data;
 
   // Kiểm tra đơn hàng
   const order = await Order.findOne({
@@ -27,6 +34,14 @@ const createReturnRequest = async (data, userId) => {
     throw new ApiError(
       404,
       "Không tìm thấy đơn hàng hoặc đơn hàng chưa được giao"
+    );
+  }
+
+  // Kiểm tra đã hủy yêu cầu trả hàng trước đó chưa
+  if (order.returnCanceled) {
+    throw new ApiError(
+      400,
+      "Đơn hàng này đã hủy yêu cầu trả hàng trước đó. Không thể trả hàng lại."
     );
   }
 
@@ -66,6 +81,41 @@ const createReturnRequest = async (data, userId) => {
     }
   }
 
+  // Lấy địa chỉ nhận trả hàng từ sổ địa chỉ của user
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(404, "Không tìm thấy người dùng");
+  }
+
+  let pickupAddress;
+  if (pickupAddressId) {
+    // Tìm địa chỉ trong danh sách địa chỉ của user
+    const address = user.addresses.find(
+      (addr) => addr._id.toString() === pickupAddressId
+    );
+    if (!address) {
+      throw new ApiError(404, "Không tìm thấy địa chỉ lấy hàng trả");
+    }
+    pickupAddress = {
+      name: address.name,
+      phone: address.phone,
+      province: address.province,
+      district: address.district,
+      ward: address.ward,
+      detail: address.detail,
+    };
+  } else {
+    // Mặc định sử dụng địa chỉ giao hàng của đơn
+    pickupAddress = {
+      name: order.shippingAddress.name,
+      phone: order.shippingAddress.phone,
+      province: order.shippingAddress.province,
+      district: order.shippingAddress.district,
+      ward: order.shippingAddress.ward,
+      detail: order.shippingAddress.detail,
+    };
+  }
+
   // Tính số tiền hoàn = tổng đơn hàng - phí ship trả hàng 30k
   // totalAfterDiscountAndShipping đã bao gồm giá sản phẩm + ship ban đầu - discount
   const refundAmount =
@@ -85,6 +135,7 @@ const createReturnRequest = async (data, userId) => {
     refundAmount,
     bankInfo: refundMethod === "bank_transfer" ? bankInfo : undefined,
     returnShippingFee: RETURN_SHIPPING_FEE,
+    pickupAddress, // Lưu địa chỉ lấy hàng trả
     status: "pending",
   });
 
@@ -567,9 +618,11 @@ const adminConfirmBankTransfer = async (id, adminId, note) => {
 };
 
 /**
- * Khách hàng tự hủy yêu cầu
+ * Khách hàng yêu cầu hủy trả hàng (đổi ý)
+ * - Cho phép hủy khi: pending, approved, shipping
+ * - Chuyển sang "cancel_pending" chờ admin duyệt
  */
-const cancelReturnRequest = async (id, userId) => {
+const cancelReturnRequest = async (id, userId, reason) => {
   const request = await ReturnRequest.findOne({
     _id: id,
     customer: userId,
@@ -579,17 +632,123 @@ const cancelReturnRequest = async (id, userId) => {
     throw new ApiError(404, "Không tìm thấy yêu cầu");
   }
 
-  if (!["pending", "approved"].includes(request.status)) {
+  if (!["pending", "approved", "shipping"].includes(request.status)) {
     throw new ApiError(
       400,
-      "Chỉ có thể hủy yêu cầu đang chờ xử lý hoặc đã duyệt"
+      "Chỉ có thể hủy yêu cầu đang chờ xử lý, đã duyệt hoặc đang lấy hàng"
     );
   }
 
-  request.status = "canceled";
+  // Chuyển sang trạng thái chờ admin duyệt hủy
+  request.status = "cancel_pending";
+  request.cancelReason = reason || "Khách hàng đổi ý";
+  request.cancelRequestedAt = new Date();
   await request.save();
 
-  return request;
+  return await request.populate([
+    { path: "order" },
+    { path: "customer", select: "name email phone" },
+  ]);
+};
+
+/**
+ * Admin duyệt yêu cầu hủy trả hàng
+ * - Nếu duyệt: Order về "delivered", không cho trả lại nữa
+ * - Shipper được hoàn thành đơn (không cần lấy nữa)
+ */
+const adminApproveCancelReturn = async (id, adminId, approved, note) => {
+  const request = await ReturnRequest.findOne({
+    _id: id,
+    status: "cancel_pending",
+  });
+
+  if (!request) {
+    throw new ApiError(404, "Không tìm thấy yêu cầu hủy hoặc đã được xử lý");
+  }
+
+  if (approved) {
+    // Duyệt hủy - chuyển trạng thái
+    request.status = "canceled";
+    request.cancelApprovedBy = adminId;
+    request.cancelApprovedAt = new Date();
+    if (note) {
+      request.staffNotes = (request.staffNotes || "") + `\nAdmin note: ${note}`;
+    }
+    await request.save();
+
+    // Order trở lại "delivered" - không cho trả lại nữa
+    const order = await Order.findById(request.order);
+    if (order && order.status !== "delivered") {
+      order.status = "delivered";
+      order.returnCanceled = true; // Đánh dấu đã hủy trả - không cho trả lại
+      order.statusHistory.push({
+        status: "delivered",
+        updatedAt: new Date(),
+        updatedBy: adminId,
+        note: `Khách hủy yêu cầu trả hàng. Admin duyệt.`,
+      });
+      await order.save();
+    }
+
+    // Giảm activeOrders của shipper nếu đã gán
+    if (request.assignedShipper) {
+      const shipper = await User.findById(request.assignedShipper);
+      if (shipper && shipper.shipper) {
+        shipper.shipper.activeOrders = Math.max(
+          0,
+          shipper.shipper.activeOrders - 1
+        );
+        await shipper.save();
+      }
+    }
+
+    // Gửi notification cho khách
+    try {
+      const notificationService = require("./notification.service");
+      await notificationService.send(
+        request.customer,
+        "RETURN_CANCEL_APPROVED",
+        {
+          returnRequestCode: request.code,
+          message: "Yêu cầu hủy trả hàng đã được duyệt. Bạn giữ lại đơn hàng.",
+        }
+      );
+    } catch (error) {
+      console.error("[Return] Lỗi gửi notification:", error.message);
+    }
+  } else {
+    // Từ chối hủy - quay lại trạng thái trước đó
+    // Nếu đang shipping thì vẫn shipping, nếu approved thì vẫn approved
+    request.status = request.assignedShipper ? "shipping" : "approved";
+    if (note) {
+      request.staffNotes =
+        (request.staffNotes || "") + `\nAdmin từ chối hủy: ${note}`;
+    }
+    await request.save();
+
+    // Gửi notification cho khách
+    try {
+      const notificationService = require("./notification.service");
+      await notificationService.send(
+        request.customer,
+        "RETURN_CANCEL_REJECTED",
+        {
+          returnRequestCode: request.code,
+          message:
+            "Yêu cầu hủy trả hàng bị từ chối. Vui lòng tiếp tục quy trình trả hàng.",
+          reason: note,
+        }
+      );
+    } catch (error) {
+      console.error("[Return] Lỗi gửi notification:", error.message);
+    }
+  }
+
+  return await request.populate([
+    { path: "order" },
+    { path: "customer", select: "name email phone" },
+    { path: "cancelApprovedBy", select: "name" },
+  ]);
 };
 
 /**
@@ -670,6 +829,7 @@ module.exports = {
   shipperConfirmRefundDelivered,
   adminConfirmBankTransfer,
   cancelReturnRequest,
+  adminApproveCancelReturn,
   getShipperReturnRequests,
   getReturnStats,
   RETURN_SHIPPING_FEE,

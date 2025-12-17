@@ -144,10 +144,9 @@ const OrderSchema = new mongoose.Schema(
           "out_for_delivery",
           "delivered",
           "delivery_failed",
-          "returning_to_warehouse",
-          "cancelled",
-          "returned",
-          "refunded",
+          "returning_to_warehouse", // Đang trả về kho - trả khi shipper giao thất bại và trả hàng
+          "cancelled", // Đã hủy - Huy hàng không cần trả về kho
+          "returned", // Đã trả hàng
         ],
         message: "Trạng thái đơn hàng không hợp lệ",
       },
@@ -163,6 +162,13 @@ const OrderSchema = new mongoose.Schema(
     inventoryRestored: {
       type: Boolean,
       default: false,
+    },
+
+    // Đánh dấu đã hủy yêu cầu trả hàng - không cho trả lại nữa
+    returnCanceled: {
+      type: Boolean,
+      default: false,
+      comment: "Khách đã hủy yêu cầu trả hàng, không cho trả lại",
     },
 
     // Tracking loyalty points
@@ -185,16 +191,15 @@ const OrderSchema = new mongoose.Schema(
           status: {
             type: String,
             enum: [
-              "pending",
-              "confirmed",
-              "assigned_to_shipper",
-              "out_for_delivery",
-              "delivered",
-              "delivery_failed",
-              "returning_to_warehouse",
-              "cancelled",
-              "returned",
-              "refunded",
+              "pending", //đang chờ xử lý
+              "confirmed", // đã xác nhận
+              "assigned_to_shipper", // đã gán shipper
+              "out_for_delivery", // đang giao hàng
+              "delivered", // đã giao hàng
+              "delivery_failed", // giao hàng thất bại
+              "returning_to_warehouse", // đang trả về kho
+              "cancelled", // đã hủy
+              "returned", // đã trả hàng
             ],
           },
           updatedAt: {
@@ -230,7 +235,7 @@ const OrderSchema = new mongoose.Schema(
       paymentStatus: {
         type: String,
         enum: {
-          values: ["pending", "paid", "failed"],
+          values: ["pending", "paid", "failed", "refunded"],
           message: "Trạng thái thanh toán không hợp lệ",
         },
         default: "pending",

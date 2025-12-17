@@ -329,6 +329,30 @@ const getUserCancelRequests = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * USER GỬI THÔNG TIN NGÂN HÀNG ĐỂ NHẬN HOÀN TIỀN
+ *
+ * Business Logic:
+ * - Khi đơn hàng giao thất bại 3 lần → returning_to_warehouse
+ * - Nếu user đã thanh toán (VNPAY) → cần hoàn tiền
+ * - User điền thông tin ngân hàng để admin chuyển khoản hoàn tiền
+ *
+ * @access  Authenticated User
+ * @route   POST /api/user/orders/:id/refund-bank-info
+ * @body    { bankName, accountNumber, accountName }
+ */
+const submitRefundBankInfo = asyncHandler(async (req, res) => {
+  const { bankName, accountNumber, accountName } = req.body;
+
+  const result = await orderService.submitRefundBankInfo(
+    req.params.id,
+    req.user._id,
+    { bankName, accountNumber, accountName }
+  );
+
+  res.status(200).json(result);
+});
+
 module.exports = {
   getOrders,
   getOrderById,
@@ -339,4 +363,5 @@ module.exports = {
   vnpayIpn,
   testVnpayCallback,
   getUserCancelRequests,
+  submitRefundBankInfo,
 };

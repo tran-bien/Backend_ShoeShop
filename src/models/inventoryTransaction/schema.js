@@ -71,7 +71,9 @@ const inventoryTransactionSchema = new mongoose.Schema(
         "restock", // Nhập hàng thường
         "manual", // Xuất/Nhập thủ công
         "sale", // Bán hàng (qua order)
-        "return", // Trả hàng
+        "return", // Trả hàng (khách trả)
+        "delivery_failed", // Giao thất bại, hàng trả về kho
+        "cancelled", // Đơn hủy, hàng trả về kho
         "exchange", // Đổi hàng
         "damage", // Hàng hư hỏng
         "lost", // Hàng mất

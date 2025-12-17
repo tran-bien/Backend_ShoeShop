@@ -36,11 +36,24 @@ const calculatePrice = (
   targetProfitPercent,
   percentDiscount = 0
 ) => {
+  // FIX: Handle costPrice = 0 để tránh NaN cho margin/markup
+  if (!costPrice || costPrice === 0) {
+    return {
+      calculatedPrice: 0,
+      calculatedPriceFinal: 0,
+      profitPerItem: 0,
+      margin: 0,
+      markup: 0,
+    };
+  }
+
   const basePrice = costPrice * (1 + targetProfitPercent / 100);
   const finalPrice = basePrice * (1 - percentDiscount / 100);
   const profitPerItem = finalPrice - costPrice;
-  const margin = (profitPerItem / finalPrice) * 100;
-  const markup = (profitPerItem / costPrice) * 100;
+
+  // FIX: Handle division by zero
+  const margin = finalPrice > 0 ? (profitPerItem / finalPrice) * 100 : 0;
+  const markup = costPrice > 0 ? (profitPerItem / costPrice) * 100 : 0;
 
   return {
     calculatedPrice: Math.round(basePrice),

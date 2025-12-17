@@ -168,28 +168,47 @@ const confirmReturn = asyncHandler(async (req, res) => {
 });
 
 /**
- * FORCE CONFIRM PAYMENT (ADMIN/STAFF)
+ * LẤY DANH SÁCH ĐƠN HÀNG CẦN HOÀN TIỀN
  *
  * Business Logic:
- * - FIXED Bug #11: Admin force-confirm payment cho VNPAY failed callbacks
- * - Use case: VNPAY callback failed (network issue, signature error) nhưng admin verify payment thành công qua VNPAY portal
- * - Chỉ áp dụng cho: VNPAY + pending payment + pending status
- * - Auto confirm order sau khi force-confirm payment
- * - Yêu cầu admin nhập transactionId và notes để track
+ * - Lấy các đơn hàng có refund.status = "pending"
+ * - User đã gửi thông tin ngân hàng chờ admin xác nhận chuyển khoản
  *
  * @access  Staff/Admin
- * @route   POST /api/admin/orders/:id/force-confirm-payment
- * @params  { id: orderId }
- * @body    { transactionId, notes }
- * @flow    order.route.js (admin) → order.controller.js → order.service.js → forceConfirmPayment()
+ * @route   GET /api/admin/orders/pending-refunds
  */
-const forceConfirmPayment = asyncHandler(async (req, res) => {
-  const { transactionId, notes } = req.body;
+const getPendingRefunds = asyncHandler(async (req, res) => {
+  const result = await orderService.getPendingRefunds(req.query);
 
-  const result = await orderService.forceConfirmPayment(
+  res.status(200).json({
+    success: true,
+    message: "Lấy danh sách đơn hàng cần hoàn tiền thành công",
+    ...result,
+  });
+});
+
+/**
+ * ADMIN XÁC NHẬN ĐÃ HOÀN TIỀN CHO ĐƠN HÀNG
+ *
+ * Business Logic:
+ * - Chỉ Admin mới có quyền xác nhận
+ * - Kiểm tra: refund.status = "pending"
+ * - Kiểm tra: returnConfirmed = true (chỉ khi inventoryDeducted = true)
+ * - Cập nhật: refund.status = "completed", payment.paymentStatus = "refunded"
+ * - Gửi notification cho user
+ * - NOTE: order.status giữ nguyên (cancelled hoặc returned)
+ *
+ * @access  Admin Only
+ * @route   POST /api/admin/orders/:id/confirm-refund
+ * @body    { notes: string (optional - mã giao dịch, ghi chú) }
+ */
+const confirmRefund = asyncHandler(async (req, res) => {
+  const { notes } = req.body;
+
+  const result = await orderService.confirmRefund(
     req.params.id,
     req.user._id,
-    { transactionId, notes }
+    notes
   );
 
   res.status(200).json(result);
@@ -202,5 +221,6 @@ module.exports = {
   getCancelRequests,
   processCancelRequest,
   confirmReturn,
-  forceConfirmPayment,
+  getPendingRefunds,
+  confirmRefund,
 };

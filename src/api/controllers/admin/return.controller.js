@@ -157,6 +157,35 @@ const getReturnStats = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * DUYỆT YÊU CẦU HỦY TRẢ HÀNG
+ * - Nếu duyệt: Order về "delivered", không cho trả lại nữa
+ * - Shipper được hoàn thành đơn (không cần lấy nữa)
+ * @access  Staff/Admin (requireStaffOrAdmin middleware)
+ * @route   PATCH /api/v1/admin/returns/:id/approve-cancel
+ */
+const approveCancelReturn = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { approved, note } = req.body;
+
+  const result = await returnService.adminApproveCancelReturn(
+    id,
+    req.user._id,
+    approved,
+    note
+  );
+
+  const message = approved
+    ? "Duyệt hủy trả hàng thành công. Đơn hàng về trạng thái đã giao."
+    : "Từ chối hủy trả hàng. Tiếp tục quy trình trả hàng.";
+
+  res.status(200).json({
+    success: true,
+    message,
+    data: result,
+  });
+});
+
 module.exports = {
   getReturnRequests,
   getReturnRequestDetail,
@@ -165,4 +194,5 @@ module.exports = {
   assignShipperForReturn,
   confirmBankTransfer,
   getReturnStats,
+  approveCancelReturn,
 };

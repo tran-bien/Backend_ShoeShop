@@ -59,7 +59,9 @@ const validateGetOrders = [
       "returning_to_warehouse",
       "cancelled",
       "returned",
-      "refunded",
+      // Combined filters for FE convenience
+      "shipping", // Maps to: assigned_to_shipper, out_for_delivery
+      "failed", // Maps to: delivery_failed, returning_to_warehouse (delivery issues only)
     ])
     .withMessage("Trạng thái không hợp lệ"),
   query("sort").optional().isString().withMessage("Sắp xếp phải là chuỗi"),
@@ -119,10 +121,10 @@ const validateUpdateOrderStatus = [
       "confirmed",
       "out_for_delivery", // FIXED Bug #11: Thay 'shipping' thành 'out_for_delivery' để match Order schema
       "delivered",
-      "refunded", // Admin có thể hoàn tiền
+      // NOTE: 'refunded' không còn trong status enum - hoàn tiền xử lý qua API riêng (confirmRefund)
     ])
     .withMessage(
-      "Trạng thái không hợp lệ (chỉ chấp nhận confirmed, out_for_delivery, delivered, refunded)"
+      "Trạng thái không hợp lệ (chỉ chấp nhận confirmed, out_for_delivery, delivered)"
     ),
   body("note")
     .optional()
@@ -168,8 +170,12 @@ const validateGetCancelRequests = [
     .withMessage("Giới hạn phải là số nguyên và từ 1-50"),
   query("status")
     .optional()
-    .isIn(["pending", "approved", "rejected"])
-    .withMessage("Trạng thái không hợp lệ"),
+    .custom((value) => {
+      // Cho phép empty string hoặc các giá trị hợp lệ
+      if (value === "" || value === undefined) return true;
+      if (["pending", "approved", "rejected"].includes(value)) return true;
+      throw new Error("Trạng thái không hợp lệ");
+    }),
   query("sort").optional().isString().withMessage("Sắp xếp phải là chuỗi"),
 ];
 
@@ -187,8 +193,12 @@ const validateGetUserCancelRequests = [
     .withMessage("Giới hạn phải là số nguyên và từ 1-50"),
   query("status")
     .optional()
-    .isIn(["pending", "approved", "rejected"])
-    .withMessage("Trạng thái không hợp lệ"),
+    .custom((value) => {
+      // Cho phép empty string hoặc các giá trị hợp lệ
+      if (value === "" || value === undefined) return true;
+      if (["pending", "approved", "rejected"].includes(value)) return true;
+      throw new Error("Trạng thái không hợp lệ");
+    }),
   query("sort").optional().isString().withMessage("Sắp xếp phải là chuỗi"),
 ];
 

@@ -41,6 +41,17 @@ router.get(
 );
 
 /**
+ * @route   GET /api/v1/admin/orders/pending-refunds
+ * @desc    Lấy danh sách đơn hàng cần hoàn tiền
+ * @access  Staff/Admin
+ */
+router.get(
+  "/pending-refunds",
+  requireStaffReadOnly,
+  orderController.getPendingRefunds
+);
+
+/**
  * @route   PATCH /api/v1/admin/orders/cancel-requests/:id
  * @desc    Xử lý yêu cầu hủy đơn hàng
  * @access  Staff, Admin
@@ -88,14 +99,14 @@ router.post(
 );
 
 /**
- * @route   POST /api/v1/admin/orders/:id/force-confirm-payment
- * @desc    FIXED Bug #11: Force confirm payment cho VNPAY failed callbacks
- * @access  Admin only
+ * @route   POST /api/v1/admin/orders/:id/confirm-refund
+ * @desc    Admin xác nhận đã hoàn tiền cho đơn hàng
+ * @access  Admin Only
  */
 router.post(
-  "/:id/force-confirm-payment",
-  requireAdminOnly, // FIXED Bug #34: Chỉ Admin mới được force confirm payment
-  orderController.forceConfirmPayment
+  "/:id/confirm-refund",
+  requireAdminOnly,
+  orderController.confirmRefund
 );
 
 module.exports = router;

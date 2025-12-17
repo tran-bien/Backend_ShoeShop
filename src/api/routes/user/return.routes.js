@@ -51,12 +51,12 @@ router.get(
 );
 
 /**
- * @route   DELETE /api/v1/users/returns/:id
- * @desc    Hủy yêu cầu trả hàng (chỉ khi còn pending)
+ * @route   PATCH /api/v1/users/returns/:id/cancel
+ * @desc    Yêu cầu hủy trả hàng (đổi ý) - chờ admin duyệt
  * @access  Authenticated User
  */
-router.delete(
-  "/:id",
+router.patch(
+  "/:id/cancel",
   validate(validateReturnId),
   returnController.cancelReturnRequest
 );

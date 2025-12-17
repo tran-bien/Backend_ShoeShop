@@ -382,11 +382,12 @@ const applyMiddlewares = (schema) => {
         // XỬ LÝ TỒN KHO KHI ĐƠN HÀNG THAY ĐỔI TRẠNG THÁI
         // ============================================================
 
-        // CASE 1: ĐƠN HÀNG BỊ HỦY (cancelled, refunded)
+        // CASE 1: ĐƠN HÀNG BỊ HỦY (cancelled)
         // → NHẬP KHO NGAY, không cần returnConfirmed
         // FIXED Bug #1-2-3-5: Correct params, populate product, add rollback
+        // NOTE: 'refunded' không còn trong status enum, chỉ ở payment.paymentStatus
         if (
-          (currentStatus === "cancelled" || currentStatus === "refunded") &&
+          currentStatus === "cancelled" &&
           this.inventoryDeducted &&
           !this.inventoryRestored
         ) {

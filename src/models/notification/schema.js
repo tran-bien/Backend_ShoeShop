@@ -30,6 +30,8 @@ const NotificationSchema = new mongoose.Schema(
         "CANCEL_APPROVED", // Đã hủy đơn hàng
         "PROMOTION", // Khuyến mãi
         "SYSTEM", // Thông báo hệ thống
+        "REFUND_REQUEST", // Yêu cầu hoàn tiền
+        "REFUND_COMPLETED", // Hoàn tiền thành công
       ],
       required: true,
     },

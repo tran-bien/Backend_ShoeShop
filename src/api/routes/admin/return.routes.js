@@ -97,4 +97,15 @@ router.patch(
   returnController.confirmBankTransfer
 );
 
+/**
+ * @route   PATCH /api/v1/admin/returns/:id/approve-cancel
+ * @desc    Duyệt/từ chối yêu cầu hủy trả hàng từ khách
+ * @access  Staff/Admin
+ */
+router.patch(
+  "/:id/approve-cancel",
+  validate(validateReturnId),
+  returnController.approveCancelReturn
+);
+
 module.exports = router;

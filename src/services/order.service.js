@@ -22,7 +22,23 @@ const orderService = {
 
     // Xây dựng điều kiện lọc
     const filter = { user: userId };
-    if (status) filter.status = status;
+
+    // Handle combined status filters for FE convenience
+    if (status) {
+      if (status === "shipping") {
+        // "shipping" maps to both assigned_to_shipper and out_for_delivery
+        filter.status = { $in: ["assigned_to_shipper", "out_for_delivery"] };
+      } else if (status === "failed") {
+        // "failed" maps to delivery_failed, returning_to_warehouse (giao thất bại)
+        // NOT including cancelled (hủy đơn)
+        filter.status = {
+          $in: ["delivery_failed", "returning_to_warehouse"],
+        };
+      } else {
+        filter.status = status;
+      }
+    }
+
     if (search) {
       filter.$or = [
         { code: { $regex: search, $options: "i" } },
@@ -75,6 +91,9 @@ const orderService = {
       returned: 0,
       refunded: 0,
       total: 0,
+      // Combined stats for FE convenience
+      shipping: 0, // assigned_to_shipper + out_for_delivery
+      failed: 0, // delivery_failed + returning_to_warehouse + cancelled
     };
 
     orderStatsAgg.forEach(({ _id, count }) => {
@@ -82,12 +101,23 @@ const orderService = {
         stats[_id] = count;
       }
       stats.total += count;
+
+      // Calculate combined stats
+      if (_id === "assigned_to_shipper" || _id === "out_for_delivery") {
+        stats.shipping += count;
+      }
+      // "failed" only includes delivery issues, NOT cancelled orders
+      if (_id === "delivery_failed" || _id === "returning_to_warehouse") {
+        stats.failed += count;
+      }
     });
 
     // FIXED: Lookup return request status for delivered orders
+    // Only block new return requests if there's an ACTIVE (non-cancelled) return request
     const orderIds = result.data.map((o) => o._id);
     const returnRequests = await ReturnRequest.find({
       order: { $in: orderIds },
+      status: { $ne: "canceled" }, // Exclude cancelled return requests
     }).select("order status");
 
     // Create a map of orderId -> return request status
@@ -102,7 +132,7 @@ const orderService = {
       const returnStatus = returnRequestMap[orderObj._id.toString()];
       return {
         ...orderObj,
-        hasReturnRequest: !!returnStatus,
+        hasReturnRequest: !!returnStatus, // Only true if there's an active (non-cancelled) return request
         returnRequestStatus: returnStatus || null,
       };
     });
@@ -159,13 +189,15 @@ const orderService = {
     }
 
     // FIXED: Lookup return request status for this order
+    // Only block new return requests if there's an ACTIVE (non-cancelled) return request
     const returnRequest = await ReturnRequest.findOne({
       order: orderId,
+      status: { $ne: "canceled" }, // Exclude cancelled return requests
     }).select("status");
 
     return {
       ...order,
-      hasReturnRequest: !!returnRequest,
+      hasReturnRequest: !!returnRequest, // Only true if there's an active (non-cancelled) return request
       returnRequestStatus: returnRequest?.status || null,
     };
   },
@@ -1024,7 +1056,19 @@ const orderService = {
 
     // Lọc theo trạng thái nếu có
     if (status) {
-      filter.status = status;
+      // Handle combined status filters for FE convenience
+      if (status === "shipping") {
+        // "shipping" maps to both assigned_to_shipper and out_for_delivery
+        filter.status = { $in: ["assigned_to_shipper", "out_for_delivery"] };
+      } else if (status === "failed") {
+        // "failed" maps to delivery_failed, returning_to_warehouse (delivery issues only)
+        // NOT including cancelled (user cancellation)
+        filter.status = {
+          $in: ["delivery_failed", "returning_to_warehouse"],
+        };
+      } else {
+        filter.status = status;
+      }
     }
 
     // Tìm kiếm theo mã đơn hàng hoặc thông tin người dùng
@@ -1048,6 +1092,7 @@ const orderService = {
     // Sử dụng hàm phân trang
     const populate = [
       { path: "user", select: "name email phone" },
+      { path: "assignedShipper", select: "name email phone avatar" },
       {
         path: "cancelRequestId",
         select: "reason status createdAt resolvedAt adminResponse",
@@ -1080,6 +1125,7 @@ const orderService = {
     // Kiểm tra đơn hàng có tồn tại không
     const order = await Order.findById(orderId)
       .populate("user", "name email phone avatar")
+      .populate("assignedShipper", "name email phone avatar")
       .populate({
         path: "orderItems.variant",
         select: "color gender imagesvariant", // FIXED: Removed 'price' - không còn trong Variant schema
@@ -1125,7 +1171,8 @@ const orderService = {
 
     // FIXED Bug #11: Kiểm tra các trạng thái chuyển đổi hợp lệ - khớp với Order schema status enum
     // Order schema statuses: pending, confirmed, assigned_to_shipper, out_for_delivery, delivered,
-    //                       delivery_failed, returning_to_warehouse, cancelled, returned, refunded
+    //                       delivery_failed, returning_to_warehouse, cancelled, returned
+    // NOTE: 'refunded' không còn trong status enum, chỉ ở payment.paymentStatus
     const validStatusTransitions = {
       pending: ["confirmed"],
       confirmed: ["assigned_to_shipper", "out_for_delivery"], // Admin có thể chuyển thẳng hoặc qua shipper
@@ -1134,9 +1181,8 @@ const orderService = {
       delivered: [],
       delivery_failed: ["out_for_delivery", "returning_to_warehouse"], // Giao lại hoặc trả về kho
       returning_to_warehouse: ["cancelled"], // Hàng về kho -> hủy đơn
-      cancelled: ["refunded"], // Admin có thể hoàn tiền sau khi hủy
-      returned: ["refunded"], // Admin có thể hoàn tiền sau khi nhận hàng trả
-      refunded: [],
+      cancelled: [], // Hoàn tiền xử lý qua API riêng (confirmRefund)
+      returned: [], // Hoàn tiền xử lý qua API riêng (confirmRefund)
     };
 
     // Xử lý riêng trường hợp chuyển sang trạng thái "cancelled"
@@ -1447,7 +1493,7 @@ const orderService = {
       status: order.status,
       updatedAt: new Date(),
       updatedBy: confirmedBy,
-      note: `[Xác nhận nhận hàng trả về] ${
+      note: `Xác nhận nhận hàng trả về ${
         notes || "Đã nhận hàng về kho và hoàn tồn kho"
       }`,
     });
@@ -1502,8 +1548,11 @@ const orderService = {
       );
     }
 
-    // Kiểm tra đơn đã hoàn tiền chưa
-    if (order.status === "refunded") {
+    // Kiểm tra đơn đã hoàn tiền chưa - check payment.paymentStatus hoặc refund.status
+    if (
+      order.payment?.paymentStatus === "refunded" ||
+      order.refund?.status === "completed"
+    ) {
       throw new ApiError(400, "Đơn hàng đã được hoàn tiền trước đó");
     }
 
@@ -1560,13 +1609,13 @@ const orderService = {
       completedAt: new Date(),
     };
 
-    // Chuyển status sang refunded
-    const previousStatus = order.status;
-    order.status = "refunded";
+    // Cập nhật payment.paymentStatus = "refunded"
+    // KHÔNG thay đổi order.status vì schema không có 'refunded' trong status enum
+    order.payment.paymentStatus = "refunded";
 
-    // Thêm vào status history
+    // Thêm vào status history - giữ nguyên status hiện tại
     order.statusHistory.push({
-      status: "refunded",
+      status: order.status, // Giữ nguyên status hiện tại (cancelled hoặc returned)
       updatedAt: new Date(),
       updatedBy: processedBy,
       note: `Hoàn tiền ${amount.toLocaleString("vi-VN")}đ qua ${method}. ${
@@ -1590,90 +1639,225 @@ const orderService = {
       data: {
         order,
         refund: order.refund,
-        previousStatus,
       },
     };
   },
 
   /**
-   * FIXED Bug #11: Admin force-confirm payment for VNPAY failed callbacks
-   * Use case: VNPAY callback failed (network issue, signature error) nhưng admin verify payment thành công
+   * User gửi thông tin ngân hàng để nhận hoàn tiền
+   * Áp dụng khi: đơn hàng đang returning_to_warehouse + đã thanh toán VNPAY
    * @param {String} orderId - ID đơn hàng
-   * @param {String} adminId - ID admin xác nhận
-   * @param {Object} data - { transactionId, notes }
+   * @param {String} userId - ID user (để verify ownership)
+   * @param {Object} bankInfo - { bankName, accountNumber, accountName }
    * @returns {Object}
    */
-  forceConfirmPayment: async (orderId, adminId, data = {}) => {
-    const { transactionId, notes } = data;
+  submitRefundBankInfo: async (orderId, userId, bankInfo) => {
+    const { bankName, accountNumber, accountName } = bankInfo;
 
+    // Validate bank info
+    if (!bankName || !accountNumber || !accountName) {
+      throw new ApiError(
+        400,
+        "Vui lòng cung cấp đầy đủ thông tin ngân hàng (tên ngân hàng, số tài khoản, tên chủ tài khoản)"
+      );
+    }
+
+    // Kiểm tra đơn hàng
     const order = await Order.findById(orderId);
-
     if (!order) {
       throw new ApiError(404, "Không tìm thấy đơn hàng");
     }
 
-    // Validate: Chỉ cho phép force-confirm VNPAY pending
-    if (order.payment.method !== "VNPAY") {
-      throw new ApiError(400, "Chỉ có thể force-confirm cho đơn hàng VNPAY");
+    // Kiểm tra ownership
+    const orderUserId = order.user._id
+      ? order.user._id.toString()
+      : order.user.toString();
+    if (orderUserId !== userId.toString()) {
+      throw new ApiError(403, "Bạn không có quyền thao tác đơn hàng này");
     }
 
-    if (order.payment.paymentStatus === "paid") {
-      throw new ApiError(400, "Đơn hàng đã được thanh toán trước đó");
-    }
-
-    if (order.status !== "pending") {
+    // Kiểm tra trạng thái - chỉ cho phép khi returning_to_warehouse hoặc cancelled (chưa refund)
+    if (!["returning_to_warehouse", "cancelled"].includes(order.status)) {
       throw new ApiError(
         400,
-        `Đơn hàng đang ở trạng thái "${order.status}", không thể force-confirm`
+        "Chỉ có thể gửi thông tin hoàn tiền cho đơn hàng đang trả về kho hoặc đã hủy"
       );
     }
 
-    // Update payment status
-    order.payment.paymentStatus = "paid";
-    order.payment.paidAt = new Date();
-    order.payment.transactionId = transactionId || `FORCE-${Date.now()}`;
-    order.payment.forceConfirmedBy = adminId;
-    order.payment.forceConfirmedAt = new Date();
+    // Kiểm tra đã thanh toán chưa (chỉ hoàn tiền cho đơn đã paid)
+    if (order.payment?.paymentStatus !== "paid") {
+      throw new ApiError(
+        400,
+        "Đơn hàng chưa thanh toán nên không cần hoàn tiền"
+      );
+    }
 
-    // Auto confirm order
-    order.status = "confirmed";
-    order.confirmedAt = new Date();
+    // Kiểm tra đã submit bank info chưa
+    if (order.refund?.bankInfo?.accountNumber) {
+      throw new ApiError(
+        400,
+        "Bạn đã gửi thông tin ngân hàng trước đó. Vui lòng liên hệ hỗ trợ nếu cần thay đổi."
+      );
+    }
 
-    // Add to payment history
-    order.paymentHistory.push({
-      status: "paid",
-      transactionId: order.payment.transactionId,
+    // Cập nhật refund info với status = pending
+    order.refund = {
       amount: order.totalAfterDiscountAndShipping,
-      method: "VNPAY",
-      updatedAt: new Date(),
-      responseData: {
-        forceConfirmed: true,
-        adminId,
-        notes: notes || "Admin xác nhận thanh toán thủ công",
+      method: "bank_transfer",
+      status: "pending",
+      bankInfo: {
+        bankName: bankName.trim(),
+        accountNumber: accountNumber.trim(),
+        accountName: accountName.trim().toUpperCase(),
       },
-    });
+      requestedAt: new Date(),
+    };
 
-    // Add to status history
+    await order.save();
+
+    // Gửi notification cho admin
+    try {
+      const notificationService = require("./notification.service");
+      // Tìm admin để gửi notification
+      const admins = await User.find({ role: "admin" }).select("_id");
+      for (const admin of admins) {
+        await notificationService.send(admin._id, "REFUND_REQUEST", {
+          orderCode: order.code,
+          amount: order.refund.amount,
+          customerName: order.shippingAddress?.name || "Khách hàng",
+        });
+      }
+    } catch (error) {
+      console.error(
+        "[submitRefundBankInfo] Lỗi gửi notification:",
+        error.message
+      );
+    }
+
+    return {
+      success: true,
+      message:
+        "Đã gửi thông tin ngân hàng. Chúng tôi sẽ hoàn tiền trong 1-3 ngày làm việc.",
+      data: {
+        orderId: order._id,
+        orderCode: order.code,
+        refundAmount: order.refund.amount,
+        refundStatus: order.refund.status,
+      },
+    };
+  },
+
+  /**
+   * Admin xác nhận đã hoàn tiền cho đơn hàng
+   * @param {String} orderId - ID đơn hàng
+   * @param {String} adminId - ID admin xác nhận
+   * @param {String} notes - Ghi chú (mã giao dịch, etc.)
+   * @returns {Object}
+   */
+  confirmRefund: async (orderId, adminId, notes = "") => {
+    const order = await Order.findById(orderId);
+    if (!order) {
+      throw new ApiError(404, "Không tìm thấy đơn hàng");
+    }
+
+    // Kiểm tra có refund request chưa
+    if (!order.refund || order.refund.status !== "pending") {
+      throw new ApiError(
+        400,
+        "Đơn hàng không có yêu cầu hoàn tiền hoặc đã được xử lý"
+      );
+    }
+
+    // Kiểm tra đã nhận hàng về kho chưa (returnConfirmed = true)
+    // CHỈ YÊU CẦU khi inventoryDeducted = true (hàng đã xuất kho)
+    // Nếu đơn hàng bị hủy trước khi giao (inventoryDeducted = false) thì không cần confirm nhận về kho
+    if (order.inventoryDeducted && !order.returnConfirmed) {
+      throw new ApiError(
+        400,
+        "Vui lòng xác nhận nhận hàng về kho trước khi hoàn tiền"
+      );
+    }
+
+    // Cập nhật refund status
+    order.refund.status = "completed";
+    order.refund.processedBy = adminId;
+    order.refund.completedAt = new Date();
+    order.refund.transactionId = `REFUND-${order.code}-${Date.now()}`;
+    if (notes) {
+      order.refund.notes = notes;
+    }
+
+    // Cập nhật trạng thái thanh toán thành refunded
+    // KHÔNG thay đổi order.status vì schema không có 'refunded' trong status enum
+    // Giữ nguyên status hiện tại (cancelled hoặc returned)
+    order.payment.paymentStatus = "refunded";
+
+    // Ghi nhận vào statusHistory (không thay đổi status, chỉ ghi note)
     order.statusHistory.push({
-      status: "confirmed",
+      status: order.status, // Giữ nguyên status hiện tại
       updatedAt: new Date(),
       updatedBy: adminId,
-      note: `[Force Confirm] ${
-        notes || "Admin xác nhận thanh toán VNPAY thủ công"
-      }`,
+      note: `Đã hoàn tiền ${order.refund.amount.toLocaleString(
+        "vi-VN"
+      )}đ qua chuyển khoản. ${notes || ""}`,
     });
 
     await order.save();
 
+    // Gửi notification cho user
+    try {
+      const notificationService = require("./notification.service");
+      await notificationService.send(order.user, "REFUND_COMPLETED", {
+        orderCode: order.code,
+        amount: order.refund.amount,
+      });
+    } catch (error) {
+      console.error("[confirmRefund] Lỗi gửi notification:", error.message);
+    }
+
+    // Populate để trả về
     await order.populate([
       { path: "user", select: "name email phone" },
-      { path: "payment.forceConfirmedBy", select: "name email role" },
+      { path: "refund.processedBy", select: "name email role" },
     ]);
 
     return {
       success: true,
-      message: "Đã xác nhận thanh toán VNPAY thủ công thành công",
+      message: `Đã xác nhận hoàn tiền ${order.refund.amount.toLocaleString(
+        "vi-VN"
+      )}đ cho đơn hàng ${order.code}`,
       data: order,
+    };
+  },
+
+  /**
+   * Lấy danh sách đơn hàng cần hoàn tiền (cho admin)
+   * @param {Object} query - { page, limit }
+   * @returns {Object}
+   */
+  getPendingRefunds: async (query = {}) => {
+    const { page = 1, limit = 20 } = query;
+
+    const filter = {
+      "refund.status": "pending",
+      "payment.paymentStatus": "paid",
+    };
+
+    const result = await paginate(Order, filter, {
+      page,
+      limit,
+      sort: { "refund.requestedAt": 1 }, // FIFO - yêu cầu sớm xử lý trước
+      populate: [{ path: "user", select: "name email phone" }],
+    });
+
+    return {
+      orders: result.data,
+      pagination: {
+        page: result.currentPage,
+        limit: parseInt(limit),
+        total: result.total,
+        totalPages: result.totalPages,
+      },
     };
   },
 };

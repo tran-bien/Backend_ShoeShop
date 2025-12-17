@@ -98,6 +98,7 @@ const returnRequestSchema = new mongoose.Schema(
         "refunded", // Đã hoàn tiền
         "completed", // Hoàn tất
         "rejected", // Từ chối
+        "cancel_pending", // Khách yêu cầu hủy - chờ admin duyệt
         "canceled", // Khách hủy
       ],
       default: "pending",
@@ -116,6 +117,25 @@ const returnRequestSchema = new mongoose.Schema(
       ref: "User",
     },
     assignedAt: Date,
+
+    // Địa chỉ lấy hàng trả (user chọn từ sổ địa chỉ)
+    pickupAddress: {
+      name: String,
+      phone: String,
+      province: String,
+      district: String,
+      ward: String,
+      detail: String,
+    },
+
+    // Khi khách yêu cầu hủy trả hàng (đổi ý)
+    cancelReason: String,
+    cancelRequestedAt: Date,
+    cancelApprovedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    cancelApprovedAt: Date,
 
     // Khi shipper lấy được hàng về kho
     receivedBy: {
