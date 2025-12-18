@@ -2,7 +2,7 @@ const ChatService = require("@services/chat.service");
 
 /**
  * Socket.IO Chat Handler
- * Xử lý real-time chat events
+ * SIMPLIFIED - Không có status open/close
  */
 module.exports = (io, socket) => {
   const userId = socket.userId;
@@ -10,18 +10,24 @@ module.exports = (io, socket) => {
 
   console.log(`[CHAT] User connected: ${userId} (${userRole})`);
 
-  // Join user's personal room
+  // Join user's personal room - để nhận notifications
   socket.join(`user:${userId}`);
+  console.log(`[CHAT] User ${userId} joined personal room user:${userId}`);
 
   /**
    * Join conversation room
    */
   socket.on("chat:join", async (conversationId, callback) => {
     try {
-      // SECURITY: Verify user is a participant before joining
+      console.log(
+        `[CHAT] User ${userId} trying to join conversation: ${conversationId}`
+      );
+
+      // Verify user is a participant
       const conversation = await ChatService.getConversation(conversationId);
       if (!conversation) {
-        return callback({
+        console.log(`[CHAT] Conversation not found: ${conversationId}`);
+        return callback?.({
           success: false,
           error: "Conversation không tồn tại",
         });
@@ -32,49 +38,56 @@ module.exports = (io, socket) => {
       );
 
       if (!isParticipant) {
-        return callback({
+        console.log(`[CHAT] User ${userId} is NOT a participant`);
+        return callback?.({
           success: false,
           error: "Bạn không có quyền truy cập conversation này",
         });
       }
 
+      // Join the room
       socket.join(`conversation:${conversationId}`);
+      console.log(
+        `[CHAT] User ${userId} JOINED room conversation:${conversationId}`
+      );
 
       // Mark messages as read
       await ChatService.markAsRead(conversationId, userId);
 
-      // Emit to other participants
+      // Notify others
       socket.to(`conversation:${conversationId}`).emit("chat:userJoined", {
         userId,
         conversationId,
       });
 
-      callback({ success: true });
+      callback?.({ success: true });
     } catch (error) {
       console.error("[CHAT] Join error:", error);
-      callback({ success: false, error: error.message });
+      callback?.({ success: false, error: error.message });
     }
   });
 
   /**
-   * Send message
+   * Send message - SIMPLIFIED
    */
   socket.on("chat:sendMessage", async (data, callback) => {
     try {
-      const { conversationId, type, text, images } = data;
+      const { conversationId, text } = data;
+      console.log(
+        `[CHAT] User ${userId} sending message to conversation: ${conversationId}`
+      );
 
-      // Validate conversationId
       if (!conversationId) {
-        return callback({
+        return callback?.({
           success: false,
           error: "conversationId là bắt buộc",
         });
       }
 
-      // Verify user is participant before sending
+      // Verify user is participant
       const conversation = await ChatService.getConversation(conversationId);
       if (!conversation) {
-        return callback({
+        return callback?.({
           success: false,
           error: "Conversation không tồn tại",
         });
@@ -85,71 +98,56 @@ module.exports = (io, socket) => {
       );
 
       if (!isParticipant) {
-        return callback({
+        return callback?.({
           success: false,
           error: "Bạn không có quyền gửi tin nhắn trong conversation này",
         });
       }
 
-      // FIXED: Kiểm tra conversation status - không cho gửi nếu đã đóng
-      if (conversation.status === "closed") {
-        return callback({
+      // Validate text
+      if (!text || !text.trim()) {
+        return callback?.({
           success: false,
-          error: "Cuộc hội thoại đã đóng. Vui lòng tạo cuộc hội thoại mới.",
+          error: "Tin nhắn không được để trống",
         });
-      }
-
-      // Validate message content - cần có text hoặc images
-      const hasText = text && text.trim().length > 0;
-      const hasImages = images && images.length > 0;
-
-      if (!hasText && !hasImages) {
-        return callback({
-          success: false,
-          error: "Tin nhắn phải có nội dung text hoặc hình ảnh",
-        });
-      }
-
-      // Xác định type - service sẽ handle chi tiết
-      let messageType = "text";
-      if (hasImages && hasText) {
-        messageType = "mixed";
-      } else if (hasImages) {
-        messageType = "image";
       }
 
       // Save message to DB
       const message = await ChatService.sendMessage({
         conversationId,
         senderId: userId,
-        type: messageType,
         text,
-        images,
       });
 
-      // Broadcast to conversation room
+      console.log(`[CHAT] Message saved: ${message._id}`);
+
+      // 1. Broadcast to conversation room (những người đã join room)
       io.to(`conversation:${conversationId}`).emit("chat:newMessage", {
         message,
         conversationId,
       });
+      console.log(`[CHAT] Broadcasted to room conversation:${conversationId}`);
 
-      // Notify other participants (push notification)
-      // Reuse conversation đã query ở trên
+      // 2. ALSO send notification to ALL participants' personal rooms
+      // Điều này đảm bảo admin/staff nhận được ngay cả khi chưa join conversation room
       conversation.participants.forEach((p) => {
         const participantId = p.userId._id.toString();
         if (participantId !== userId.toString()) {
+          // Gửi đến personal room của participant
           io.to(`user:${participantId}`).emit("chat:notification", {
             conversationId,
-            message: text || "[Hình ảnh]",
+            message: text,
             sender: message.senderId,
+            fullMessage: message,
           });
+          console.log(`[CHAT] Sent notification to user:${participantId}`);
         }
       });
 
-      callback({ success: true, message });
+      callback?.({ success: true, message });
     } catch (error) {
       console.error("[CHAT] Send message error:", error);
-      callback({ success: false, error: error.message });
+      callback?.({ success: false, error: error.message });
     }
   });
 
@@ -178,6 +176,9 @@ module.exports = (io, socket) => {
    */
   socket.on("chat:leave", (conversationId) => {
     socket.leave(`conversation:${conversationId}`);
+    console.log(
+      `[CHAT] User ${userId} left room conversation:${conversationId}`
+    );
     socket.to(`conversation:${conversationId}`).emit("chat:userLeft", {
       userId,
       conversationId,

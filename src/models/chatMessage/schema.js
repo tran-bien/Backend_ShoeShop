@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 
 /**
- * Chat Message - Simple version
- * Support: Text và Image only
+ * Chat Message - Text only version
+ * Simplified: Only text messages, no images
  */
 const ChatMessageSchema = new mongoose.Schema(
   {
@@ -20,33 +20,21 @@ const ChatMessageSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Loại tin nhắn
+    // Loại tin nhắn - chỉ còn text
     type: {
       type: String,
-      enum: ["text", "image"],
+      enum: ["text"],
       required: true,
       default: "text",
     },
 
-    // Nội dung
+    // Nội dung tin nhắn
     text: {
       type: String,
+      required: true,
       maxLength: 2000,
+      trim: true,
     },
-
-    // Hình ảnh (nếu có) - từ Cloudinary
-    images: [
-      {
-        url: {
-          type: String,
-          required: true,
-        },
-        public_id: {
-          type: String,
-          required: true,
-        },
-      },
-    ],
 
     // Đã đọc chưa
     readBy: [

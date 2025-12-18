@@ -4,14 +4,13 @@ const ChatService = require("@services/chat.service");
 const chatController = {
   /**
    * @route GET /api/v1/user/chat/conversations
-   * @desc Lấy danh sách conversations
+   * @desc Lấy danh sách TẤT CẢ conversations (không filter status)
    */
   getConversations: asyncHandler(async (req, res) => {
     const userId = req.user._id;
-    const { status = "active", page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 50 } = req.query;
 
     const result = await ChatService.getUserConversations(userId, {
-      status,
       page: parseInt(page),
       limit: parseInt(limit),
     });
@@ -24,7 +23,7 @@ const chatController = {
 
   /**
    * @route POST /api/v1/user/chat/conversations
-   * @desc Tạo conversation mới
+   * @desc Tạo conversation mới hoặc lấy conversation đã tồn tại
    */
   createConversation: asyncHandler(async (req, res) => {
     const userId = req.user._id;
@@ -48,7 +47,6 @@ const chatController = {
       await ChatService.sendMessage({
         conversationId: conversation._id,
         senderId: userId,
-        type: "text",
         text: messageText,
       });
     }

@@ -50,13 +50,6 @@ const ChatConversationSchema = new mongoose.Schema(
       default: {},
       // Format: { "userId1": 3, "userId2": 0 }
     },
-
-    // Trạng thái
-    status: {
-      type: String,
-      enum: ["active", "closed"],
-      default: "active",
-    },
   },
   {
     timestamps: true,
@@ -64,8 +57,9 @@ const ChatConversationSchema = new mongoose.Schema(
 );
 
 // INDEXES
-ChatConversationSchema.index({ "participants.userId": 1, status: 1 });
+ChatConversationSchema.index({ "participants.userId": 1 });
 ChatConversationSchema.index({ "lastMessage.sentAt": -1 });
+ChatConversationSchema.index({ updatedAt: -1 });
 ChatConversationSchema.index({ orderId: 1 });
 
 module.exports = mongoose.model("ChatConversation", ChatConversationSchema);
