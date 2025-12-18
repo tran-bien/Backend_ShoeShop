@@ -377,22 +377,19 @@ const getShipperStats = async (shipperId) => {
     throw new ApiError(404, "Không tìm thấy shipper");
   }
 
-  const [totalOrders, completedOrders, failedOrders, activeOrders] =
-    await Promise.all([
-      Order.countDocuments({ assignedShipper: shipperId }),
-      Order.countDocuments({
-        assignedShipper: shipperId,
-        status: "delivered",
-      }),
-      Order.countDocuments({
-        assignedShipper: shipperId,
-        status: "delivery_failed",
-      }),
-      Order.countDocuments({
-        assignedShipper: shipperId,
-        status: { $in: ["assigned_to_shipper", "out_for_delivery"] },
-      }),
-    ]);
+  // Query activeOrders from database for real-time accuracy
+  const activeOrders = await Order.countDocuments({
+    assignedShipper: shipperId,
+    status: { $in: ["assigned_to_shipper", "out_for_delivery"] },
+  });
+
+  // Use deliveryStats from User document (updated by updateDeliveryStatus)
+  // This is more accurate than querying orders because:
+  // - Failed orders may have transitioned to "returning_to_warehouse" status
+  // - The stats are incremented at the time of delivery/failure
+  const totalOrders = shipper.shipper.deliveryStats.total || 0;
+  const completedOrders = shipper.shipper.deliveryStats.successful || 0;
+  const failedOrders = shipper.shipper.deliveryStats.failed || 0;
 
   return {
     shipper: {

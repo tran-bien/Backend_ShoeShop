@@ -69,6 +69,22 @@ const updateAvailability = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Lấy thống kê của shipper (chính mình)
+ * @access  Shipper (requireShipper middleware)
+ * @route   GET /api/v1/shipper/stats
+ */
+const getMyStats = asyncHandler(async (req, res) => {
+  const shipperId = req.user._id;
+
+  const stats = await shipperService.getShipperStats(shipperId);
+
+  res.status(200).json({
+    success: true,
+    data: stats,
+  });
+});
+
 // ==================== RETURN HANDLING ====================
 
 /**
@@ -174,6 +190,7 @@ module.exports = {
   updateDeliveryStatus,
   getShipperOrders,
   updateAvailability,
+  getMyStats,
   // Return handling
   getShipperReturns,
   getReturnDetail,

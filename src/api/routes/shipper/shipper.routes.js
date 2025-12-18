@@ -57,6 +57,13 @@ router.patch(
   shipperController.updateAvailability
 );
 
+/**
+ * @route   GET /api/v1/shipper/stats
+ * @desc    Lấy thống kê của shipper (chính mình)
+ * @access  Shipper
+ */
+router.get("/stats", shipperController.getMyStats);
+
 // ==================== RETURN HANDLING ====================
 
 /**
