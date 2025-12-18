@@ -133,17 +133,7 @@ const emailService = {
         );
         subject = `Chúc mừng! Bạn đã lên hạng ${notification.data.tierName}`;
         break;
-
-      case "POINTS_EXPIRE_SOON":
-        htmlContent = emailTemplates.pointsExpireSoonEmailTemplate(
-          user.name,
-          notification.data.points,
-          notification.data.expiryDate,
-          process.env.FRONTEND_URL
-        );
-        subject = `${notification.data.points} điểm sắp hết hạn`;
-        break;
-
+        
       default:
         // Fallback: Log lỗi nếu type không hợp lệ
         console.error(

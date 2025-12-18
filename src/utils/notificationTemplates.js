@@ -101,14 +101,6 @@ const templates = {
     actionText: "Xem ưu đãi",
     actionUrl: "/loyalty/dashboard",
   },
-
-  POINTS_EXPIRE_SOON: {
-    title: "{{points}} điểm sắp hết hạn",
-    message:
-      "{{points}} điểm của bạn sẽ hết hạn vào {{expiryDate}}. Sử dụng ngay!",
-    actionText: "Đổi điểm",
-    actionUrl: "/loyalty/dashboard",
-  },
 };
 
 /**

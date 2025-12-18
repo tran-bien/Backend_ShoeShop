@@ -19,7 +19,6 @@ const NotificationSchema = new mongoose.Schema(
         "RETURN_REJECTED",
         "RETURN_COMPLETED",
         "LOYALTY_TIER_UP",
-        "POINTS_EXPIRE_SOON",
         "REVIEW_REPLY",
         // FIX: Thêm các notification types còn thiếu
         "COUPON_EXPIRING", // Coupon sắp hết hạn

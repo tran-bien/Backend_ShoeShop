@@ -18,7 +18,6 @@ require("dotenv").config();
  * ✅ RETURN_REJECTED      → returnRejectedEmailTemplate (Template 3I)
  * ✅ RETURN_COMPLETED     → returnCompletedEmailTemplate (Template 3J)
  * ✅ LOYALTY_TIER_UP      → loyaltyTierUpEmailTemplate (Template 3E)
- * ✅ POINTS_EXPIRE_SOON   → pointsExpireSoonEmailTemplate (Template 3G)
  *
  * OTHER EMAIL TYPES:
  * ✅ Verification OTP     → verificationEmailTemplate (Template 1)
@@ -362,42 +361,6 @@ exports.loyaltyTierUpEmailTemplate = (userName, tierInfo, frontendUrl) => {
         <a href="${frontendUrl}/loyalty" style="${
     baseStyles.button
   }">Xem ưu đãi</a>
-      </div>
-    </div>
-  `;
-  return createEmailWrapper(content);
-};
-
-
-/**
- * Template 3G: Email cảnh báo điểm sắp hết hạn (POINTS_EXPIRE_SOON)
- */
-exports.pointsExpireSoonEmailTemplate = (
-  userName,
-  points,
-  expiryDate,
-  frontendUrl
-) => {
-  const content = `
-    <div style="${baseStyles.content}">
-      <h2 style="${baseStyles.title}">⚠️ Điểm của bạn sắp hết hạn</h2>
-      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
-      <p style="${baseStyles.text}">
-        Bạn có <strong>${points} điểm</strong> sắp hết hạn vào ngày <strong>${expiryDate}</strong>.
-      </p>
-      
-      <div style="background-color: #FFF3CD; border-left: 4px solid #FFC107; padding: 20px; margin: 25px 0;">
-        <p style="margin: 0; color: #856404; font-size: 14px; font-weight: 600;">
-          ⏰ Hãy sử dụng điểm trước khi hết hạn để không bị mất!
-        </p>
-      </div>
-      
-      <p style="${baseStyles.text}">
-        Sử dụng ngay điểm của bạn để mua sắm tại Shoe Shop.
-      </p>
-      
-      <div style="${baseStyles.buttonWrapper}">
-        <a href="${frontendUrl}/products" style="${baseStyles.button}">Mua sắm ngay</a>
       </div>
     </div>
   `;

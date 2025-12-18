@@ -99,55 +99,6 @@ const loyaltyService = {
   },
 
   /**
-   * FIX THIẾU #4: Check và gửi cảnh báo điểm sắp hết hạn
-   * Gọi function này trong getUserLoyaltyStats để tự động check
-   */
-  checkAndNotifyExpiringPoints: async (userId) => {
-    try {
-      const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-      // Tìm các transactions sắp hết hạn trong 30 ngày tới
-      const expiringTransactions = await LoyaltyTransaction.find({
-        user: userId,
-        type: "EARN",
-        isExpired: false,
-        expiresAt: { $lte: thirtyDaysFromNow, $gt: new Date() },
-      });
-
-      if (expiringTransactions.length > 0) {
-        const totalExpiringPoints = expiringTransactions.reduce(
-          (sum, tx) => sum + tx.points,
-          0
-        );
-
-        // Lấy ngày hết hạn sớm nhất
-        const earliestExpiry = expiringTransactions.reduce(
-          (earliest, tx) => (tx.expiresAt < earliest ? tx.expiresAt : earliest),
-          expiringTransactions[0].expiresAt
-        );
-
-        // Gửi notification POINTS_EXPIRE_SOON
-        const notificationService = require("./notification.service");
-        await notificationService.send(
-          userId,
-          "POINTS_EXPIRE_SOON",
-          {
-            points: totalExpiringPoints,
-            expiryDate: earliestExpiry.toLocaleDateString("vi-VN"),
-          },
-          { channels: { inApp: true, email: true } }
-        );
-
-        console.log(
-          `[LOYALTY] Đã gửi cảnh báo ${totalExpiringPoints} điểm sắp hết hạn cho user ${userId}`
-        );
-      }
-    } catch (error) {
-      console.error("[LOYALTY] Lỗi check expiring points:", error.message);
-    }
-  },
-
-  /**
    * Thêm điểm cho user
    */
   addPoints: async (userId, points, options = {}) => {
@@ -551,14 +502,6 @@ const loyaltyService = {
       (sum, tx) => sum + tx.points,
       0
     );
-
-    // FIX THIẾU #4: Tự động gửi notification nếu có điểm sắp hết hạn
-    if (expiringPoints > 0) {
-      // Chạy async, không block response
-      loyaltyService.checkAndNotifyExpiringPoints(userId).catch((err) => {
-        console.error("[LOYALTY] Error notifying expiring points:", err);
-      });
-    }
 
     // Lấy tier tiếp theo
     const nextTier = await LoyaltyTier.findOne({
