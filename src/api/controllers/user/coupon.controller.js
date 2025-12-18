@@ -7,7 +7,8 @@ const couponService = require("@services/coupon.service");
  * @access  Private - User
  */
 const getPublicCoupons = asyncHandler(async (req, res) => {
-  const result = await couponService.getPublicCoupons(req.query);
+  // Truyền userId để filter coupon đã đổi/hết lượt cho user cụ thể
+  const result = await couponService.getPublicCoupons(req.query, req.user._id);
   return res.status(200).json({
     success: true,
     ...result,

@@ -7,9 +7,10 @@ const couponService = {
   /**
    * Lấy danh sách coupon công khai đang hoạt động
    * @param {Object} query - Các tham số truy vấn
+   * @param {String} userId - ID của người dùng (optional, dùng để filter coupon đã đổi/hết lượt)
    * @returns {Object} - Danh sách coupon phân trang
    */
-  getPublicCoupons: async (query = {}) => {
+  getPublicCoupons: async (query = {}, userId = null) => {
     const {
       page = 1,
       limit = 10,
@@ -17,9 +18,8 @@ const couponService = {
       isRedeemable,
     } = query;
 
-    // Xây dựng điều kiện lọc - chỉ lấy coupon công khai và còn hoạt động
+    // Xây dựng điều kiện lọc - coupon đang hoạt động
     const filter = {
-      isPublic: true,
       status: "active",
       startDate: { $lte: new Date() },
       endDate: { $gte: new Date() },
@@ -28,6 +28,64 @@ const couponService = {
     // Filter by isRedeemable (for loyalty redeem page)
     if (isRedeemable !== undefined) {
       filter.isRedeemable = isRedeemable === "true" || isRedeemable === true;
+      // Nếu là coupon đổi điểm, không cần filter isPublic
+      // vì coupon đổi điểm thường không public (chỉ dành cho loyalty program)
+    } else {
+      // Nếu không filter isRedeemable, chỉ lấy coupon công khai
+      filter.isPublic = true;
+    }
+
+    // Nếu có userId, filter coupon đã hết lượt hoặc user đã đổi đủ số lần
+    if (userId) {
+      const userObjectId = new mongoose.Types.ObjectId(userId);
+      filter.$expr = {
+        $and: [
+          // Nếu có maxUses, chỉ lấy coupon chưa hết lượt sử dụng
+          {
+            $or: [
+              { $eq: ["$maxUses", null] },
+              { $gt: ["$maxUses", "$currentUses"] },
+            ],
+          },
+          // Nếu có maxRedeemPerUser, chỉ lấy coupon user chưa đổi đủ số lần
+          {
+            $or: [
+              { $eq: ["$maxRedeemPerUser", null] },
+              {
+                $lt: [
+                  {
+                    $ifNull: [
+                      {
+                        $let: {
+                          vars: {
+                            usage: {
+                              $arrayElemAt: [
+                                {
+                                  $filter: {
+                                    input: "$userUsage",
+                                    as: "u",
+                                    cond: {
+                                      $eq: ["$$u.user", userObjectId],
+                                    },
+                                  },
+                                },
+                                0,
+                              ],
+                            },
+                          },
+                          in: "$$usage.usageCount",
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                  "$maxRedeemPerUser",
+                ],
+              },
+            ],
+          },
+        ],
+      };
     }
 
     // FIXED Bug #32: Dùng aggregate với priorityValue mapping để sort đúng
@@ -139,6 +197,57 @@ const couponService = {
         filter.status = status;
       }
     }
+
+    // Bổ sung lọc coupon đã hết lượt sử dụng tổng (maxUses) và user đã dùng đủ số lần (maxUsagePerUser)
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+    filter.$expr = {
+      $and: [
+        // Nếu có maxUses, chỉ lấy coupon chưa hết lượt sử dụng
+        {
+          $or: [
+            { $eq: ["$maxUses", null] },
+            { $gt: ["$maxUses", "$currentUses"] },
+          ],
+        },
+        // Nếu có maxUsagePerUser, chỉ lấy coupon user chưa dùng đủ số lần
+        {
+          $or: [
+            { $eq: ["$conditions.maxUsagePerUser", null] },
+            {
+              $lt: [
+                {
+                  $ifNull: [
+                    {
+                      $let: {
+                        vars: {
+                          usage: {
+                            $arrayElemAt: [
+                              {
+                                $filter: {
+                                  input: "$userUsage",
+                                  as: "u",
+                                  cond: {
+                                    $eq: ["$$u.user", userObjectId],
+                                  },
+                                },
+                              },
+                              0,
+                            ],
+                          },
+                        },
+                        in: "$$usage.usageCount",
+                      },
+                    },
+                    0,
+                  ],
+                },
+                "$conditions.maxUsagePerUser",
+              ],
+            },
+          ],
+        },
+      ],
+    };
 
     // FIXED Bug #32: Dùng aggregate với priorityValue mapping
     const pageNum = parseInt(page);
@@ -356,14 +465,16 @@ const couponService = {
         updatedCoupon.users.length === previousUserCount;
 
       if (wasAlreadyCollected) {
-        await session.abortTransaction();
         throw new ApiError(422, "Bạn đã thu thập mã giảm giá này rồi");
       }
 
       await session.commitTransaction();
       coupon.users = updatedCoupon.users; // Update local object
     } catch (error) {
-      await session.abortTransaction();
+      // Chỉ abort transaction nếu transaction đang active
+      if (session.inTransaction()) {
+        await session.abortTransaction();
+      }
       throw error;
     } finally {
       session.endSession();
