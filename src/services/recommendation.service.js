@@ -468,7 +468,7 @@ const recommendationService = {
       deletedAt: null,
     })
       .populate("color", "name code type colors")
-      .populate("sizes.size", "value description")
+      .populate("sizes.size", "value type description")
       .lean();
 
     // Gom variants theo productId

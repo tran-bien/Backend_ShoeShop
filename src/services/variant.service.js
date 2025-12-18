@@ -256,7 +256,7 @@ const variantService = {
       sort: getSortOption(sort),
       populate: [
         { path: "color", select: "name code type colors" },
-        { path: "sizes.size", select: "value description" },
+        { path: "sizes.size", select: "value type description" },
         {
           path: "product",
           select: "name category brand",

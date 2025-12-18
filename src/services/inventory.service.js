@@ -207,18 +207,26 @@ const stockIn = async (data, performedBy) => {
 
   const totalCost = actualCostPrice * quantity;
   const previousTotalCost = inventoryItem.averageCostPrice * quantityBefore;
+  const avgCostBefore = quantityBefore > 0 ? inventoryItem.averageCostPrice : 0;
   const newAverageCostPrice =
-    quantityAfter > 0 ? (previousTotalCost + totalCost) / quantityAfter : 0;
+    quantityAfter > 0
+      ? (previousTotalCost + totalCost) / quantityAfter
+      : actualCostPrice;
+
+  // ===== FIX: Dùng giá vốn trung bình (weighted average) để tính giá bán =====
+  // Điều này đảm bảo giá bán phản ánh chi phí thực tế của toàn bộ tồn kho
+  const pricingBaseCost =
+    newAverageCostPrice > 0 ? newAverageCostPrice : actualCostPrice;
 
   const priceCalculation = calculatePrice(
-    actualCostPrice,
+    pricingBaseCost, // Dùng giá vốn trung bình thay vì giá lô mới
     targetProfitPercent,
     percentDiscount
   );
 
   inventoryItem.quantity = quantityAfter;
-  inventoryItem.costPrice = actualCostPrice;
-  inventoryItem.averageCostPrice = newAverageCostPrice;
+  inventoryItem.costPrice = actualCostPrice; // Giữ giá lô cuối để reference
+  inventoryItem.averageCostPrice = newAverageCostPrice; // Giá vốn TB mới
   inventoryItem.sellingPrice = priceCalculation.calculatedPrice;
   inventoryItem.discountPercent = percentDiscount;
   inventoryItem.finalPrice = priceCalculation.calculatedPriceFinal;
@@ -231,7 +239,9 @@ const stockIn = async (data, performedBy) => {
     quantityBefore,
     quantityChange: quantity,
     quantityAfter,
-    costPrice: actualCostPrice,
+    costPrice: actualCostPrice, // Giá của lô nhập này
+    averageCostPriceBefore: avgCostBefore, // Tracking giá vốn TB trước
+    averageCostPriceAfter: newAverageCostPrice, // Tracking giá vốn TB sau
     totalCost,
     targetProfitPercent,
     percentDiscount,
@@ -688,32 +698,16 @@ const getVariantSizePricing = async (variantId, sizeId) => {
     return null;
   }
 
-  const latestTransaction = await InventoryTransaction.findOne({
-    inventoryItem: inventoryItem._id,
-    type: "IN",
-  }).sort({ createdAt: -1 });
-
-  if (!latestTransaction) {
-    return {
-      quantity: inventoryItem.quantity,
-      costPrice: inventoryItem.costPrice,
-      averageCostPrice: inventoryItem.averageCostPrice,
-      price: null,
-      priceFinal: null,
-      percentDiscount: 0,
-    };
-  }
-
+  // FIX: Đọc giá trực tiếp từ InventoryItem (giá đã được tính từ weighted average cost)
+  // Thay vì từ transaction để đảm bảo nhất quán
   return {
     quantity: inventoryItem.quantity,
     costPrice: inventoryItem.costPrice,
     averageCostPrice: inventoryItem.averageCostPrice,
-    price: latestTransaction.calculatedPrice,
-    priceFinal: latestTransaction.calculatedPriceFinal,
-    percentDiscount: latestTransaction.percentDiscount,
-    profitPerItem: latestTransaction.profitPerItem,
-    margin: latestTransaction.margin,
-    markup: latestTransaction.markup,
+    price: inventoryItem.sellingPrice || null,
+    priceFinal: inventoryItem.finalPrice || null,
+    percentDiscount: inventoryItem.discountPercent || 0,
+    // Note: profitPerItem, margin, markup có thể tính lại từ averageCostPrice nếu cần
   };
 };
 
@@ -740,16 +734,10 @@ const getProductPricing = async (productId) => {
     };
   }
 
-  const pricePromises = inventoryItems.map(async (item) => {
-    const latestTransaction = await InventoryTransaction.findOne({
-      inventoryItem: item._id,
-      type: "IN",
-    }).sort({ createdAt: -1 });
-
-    return latestTransaction?.calculatedPriceFinal || 0;
-  });
-
-  const prices = (await Promise.all(pricePromises)).filter((p) => p > 0);
+  // FIX: Đọc giá trực tiếp từ InventoryItem (giá đã được tính từ weighted average cost)
+  const prices = inventoryItems
+    .map((item) => item.finalPrice || 0)
+    .filter((p) => p > 0);
 
   if (prices.length === 0) {
     return {
@@ -1160,6 +1148,11 @@ const getVariantPricing = async (variantId) => {
     isLowStock: item.isLowStock,
     isOutOfStock: item.isOutOfStock,
     sku: item.sku || "",
+    // Per-size pricing info from InventoryItem
+    sellingPrice: item.sellingPrice || 0,
+    finalPrice: item.finalPrice || 0,
+    discountPercent: item.discountPercent || 0,
+    costPrice: item.averageCostPrice || item.costPrice || 0,
   }));
 
   return {

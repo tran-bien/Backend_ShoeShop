@@ -186,7 +186,7 @@ const compareService = {
           deletedAt: null,
         })
           .populate("color", "name code type colors")
-          .populate("sizes.size", "value description")
+          .populate("sizes.size", "value type description")
           .lean();
 
         // Tính tổng hợp thông tin từ tất cả variants

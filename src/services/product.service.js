@@ -782,7 +782,7 @@ const productService = {
           deletedAt: null,
         })
           .populate("color", "name code type colors")
-          .populate("sizes.size", "value")
+          .populate("sizes.size", "value type")
           .lean();
 
         productObj.variants = variants;
@@ -1051,7 +1051,7 @@ const productService = {
         // Query Variant collection bao gồm cả variants đã xóa
         const variants = await Variant.find({ product: product._id })
           .populate("color", "name code type colors")
-          .populate("sizes.size", "value")
+          .populate("sizes.size", "value type description")
           .setOptions({ includeDeleted: true })
           .lean();
 
@@ -1903,7 +1903,7 @@ const productService = {
       deletedAt: null,
     })
       .populate("color", "name code type colors")
-      .populate("sizes.size", "value description");
+      .populate("sizes.size", "value type description");
 
     // Populate category, brand, tags
     const product = await Product.findOne({
@@ -1993,20 +1993,32 @@ const productService = {
 
         const key = `${gender}-${colorId}`;
 
-        // Chuẩn bị thông tin sizes với số lượng
-        const sizesWithQuantity = variant.sizes.map((size) => ({
-          sizeId: size.size?._id?.toString(),
-          sizeValue: size.size?.value,
-          sizeDescription: size.size?.description,
-          quantity: size.quantity,
-          sku: size.sku,
-          isAvailable: size.isAvailable,
-          isLowStock: size.isLowStock,
-          isOutOfStock: size.isOutOfStock,
-          price: variant.price || 0,
-          finalPrice: variant.priceFinal || 0,
-          discountPercent: variant.percentDiscount || 0,
-        }));
+        // Chuẩn bị thông tin sizes với số lượng và giá riêng từng size
+        const sizesWithQuantity = variant.sizes.map((size) => {
+          // Tìm inventory data cho size này
+          const sizeInventory = inventoryData
+            .find((inv) => inv.variantId === variant._id.toString())
+            ?.quantities?.find(
+              (q) => q.sizeId.toString() === size.size?._id?.toString()
+            );
+
+          return {
+            sizeId: size.size?._id?.toString(),
+            sizeValue: size.size?.value,
+            sizeType: size.size?.type,
+            sizeDescription: size.size?.description,
+            quantity: size.quantity,
+            sku: size.sku,
+            isAvailable: size.isAvailable,
+            isLowStock: size.isLowStock,
+            isOutOfStock: size.isOutOfStock,
+            // Per-size pricing from InventoryItem
+            price: sizeInventory?.sellingPrice || variant.price || 0,
+            finalPrice: sizeInventory?.finalPrice || variant.priceFinal || 0,
+            discountPercent:
+              sizeInventory?.discountPercent || variant.percentDiscount || 0,
+          };
+        });
 
         // Lưu thông tin biến thể với sizes đầy đủ
         variantsInfo[key] = {
@@ -2143,7 +2155,7 @@ const productService = {
       deletedAt: null,
     })
       .populate("color", "name code type colors")
-      .populate("sizes.size", "value description")
+      .populate("sizes.size", "value type description")
       .lean();
 
     // Gom variants theo productId
@@ -2255,7 +2267,7 @@ const productService = {
       deletedAt: null,
     })
       .populate("color", "name code type colors")
-      .populate("sizes.size", "value description")
+      .populate("sizes.size", "value type description")
       .lean();
 
     // Gom variants theo productId
@@ -2423,7 +2435,7 @@ const productService = {
         deletedAt: null,
       })
         .populate("color", "name code type colors")
-        .populate("sizes.size", "value description")
+        .populate("sizes.size", "value type description")
         .lean();
 
       // Gom variants theo productId
@@ -2542,7 +2554,7 @@ const productService = {
       deletedAt: null,
     })
       .populate("color", "name code type colors")
-      .populate("sizes.size", "value description")
+      .populate("sizes.size", "value type description")
       .lean();
 
     // Gom variants theo productId

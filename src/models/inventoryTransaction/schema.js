@@ -30,6 +30,20 @@ const inventoryTransactionSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0,
+      comment: "Giá vốn của lô hàng này",
+    },
+    // Tracking giá vốn trung bình (Weighted Average Cost)
+    averageCostPriceBefore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: "Giá vốn trung bình TRƯỚC giao dịch",
+    },
+    averageCostPriceAfter: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: "Giá vốn trung bình SAU giao dịch",
     },
     totalCost: {
       type: Number,
