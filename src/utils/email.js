@@ -460,10 +460,6 @@ exports.returnApprovedEmailTemplate = (userName, returnInfo, frontendUrl) => {
       <p style="${baseStyles.text}">
         Chúng tôi sẽ liên hệ với bạn để hướng dẫn các bước tiếp theo.
       </p>
-      
-      <div style="${baseStyles.buttonWrapper}">
-        <a href="${frontendUrl}/account/return-requests/${returnInfo.returnRequestId}" style="${baseStyles.button}">Xem chi tiết</a>
-      </div>
     </div>
   `;
   return createEmailWrapper(content);
@@ -503,12 +499,6 @@ exports.returnRejectedEmailTemplate = (userName, returnInfo, frontendUrl) => {
       <p style="${baseStyles.text}">
         Nếu có thắc mắc, vui lòng liên hệ bộ phận chăm sóc khách hàng.
       </p>
-      
-      <div style="${baseStyles.buttonWrapper}">
-        <a href="${frontendUrl}/account/return-requests/${
-    returnInfo.returnRequestId
-  }" style="${baseStyles.button}">Xem chi tiết</a>
-      </div>
     </div>
   `;
   return createEmailWrapper(content);
@@ -756,12 +746,6 @@ exports.returnRequestEmailTemplate = (userName, returnRequest, frontendUrl) => {
       `
           : ""
       }
-      
-      <div style="${baseStyles.buttonWrapper}">
-        <a href="${frontendUrl}/account/return-requests/${
-    returnRequest._id
-  }" style="${baseStyles.button}">Xem chi tiết</a>
-      </div>
       
       <p style="color: #2C2C2C; font-size: 13px; line-height: 1.6; margin: 30px 0 0 0;">
         Nếu có thắc mắc, vui lòng liên hệ bộ phận chăm sóc khách hàng.

@@ -39,7 +39,7 @@ const templates = {
     message:
       "Yêu cầu {{type}} cho đơn {{orderCode}} đã được duyệt. Vui lòng làm theo hướng dẫn.",
     actionText: "Xem chi tiết",
-    actionUrl: "/account/return-requests/{{returnRequestId}}",
+    actionUrl: "/user-manage-order",
   },
 
   RETURN_REQUEST_APPROVED: {
@@ -47,7 +47,7 @@ const templates = {
     message:
       "Yêu cầu trả hàng/hoàn tiền #{{returnRequestCode}} đã được chấp nhận. Vui lòng làm theo hướng dẫn.",
     actionText: "Xem chi tiết",
-    actionUrl: "/account/return-requests/{{returnRequestId}}",
+    actionUrl: "/user-manage-order",
   },
 
   RETURN_REQUEST_PROCESSING: {
@@ -55,28 +55,28 @@ const templates = {
     message:
       "Chúng tôi đang xử lý yêu cầu #{{returnRequestCode}}. Vui lòng đợi thêm thông tin.",
     actionText: "Xem chi tiết",
-    actionUrl: "/account/return-requests/{{returnRequestId}}",
+    actionUrl: "/user-manage-order",
   },
 
   RETURN_REQUEST_COMPLETED: {
     title: "Hoàn tất {{type}}",
     message: "Yêu cầu #{{returnRequestCode}} đã được xử lý thành công.",
     actionText: "Xem chi tiết",
-    actionUrl: "/account/return-requests/{{returnRequestId}}",
+    actionUrl: "/user-manage-order",
   },
 
   RETURN_REQUEST_REJECTED: {
     title: "Yêu cầu {{type}} bị từ chối",
     message: "Rất tiếc, yêu cầu #{{returnRequestCode}} không được chấp nhận.",
     actionText: "Xem chi tiết",
-    actionUrl: "/account/return-requests/{{returnRequestId}}",
+    actionUrl: "/user-manage-order",
   },
 
   RETURN_REQUEST_CANCELED: {
     title: "Yêu cầu {{type}} đã bị hủy",
     message: "Yêu cầu #{{returnRequestCode}} đã bị hủy.",
     actionText: "Xem chi tiết",
-    actionUrl: "/account/return-requests/{{returnRequestId}}",
+    actionUrl: "/user-manage-order",
   },
 
   RETURN_REJECTED: {
@@ -84,7 +84,7 @@ const templates = {
     message:
       "Yêu cầu trả hàng/hoàn tiền cho đơn {{orderCode}} bị từ chối. Lý do: {{reason}}",
     actionText: "Xem chi tiết",
-    actionUrl: "/returns/{{returnRequestId}}",
+    actionUrl: "/user-manage-order",
   },
 
   RETURN_COMPLETED: {
@@ -97,8 +97,7 @@ const templates = {
 
   LOYALTY_TIER_UP: {
     title: "Chúc mừng! Bạn đã lên hạng {{tierName}}",
-    message:
-      "Bạn nhận được ưu đãi: giảm giá và tích điểm x{{multiplier}}",
+    message: "Bạn nhận được ưu đãi: giảm giá và tích điểm x{{multiplier}}",
     actionText: "Xem ưu đãi",
     actionUrl: "/loyalty/dashboard",
   },
