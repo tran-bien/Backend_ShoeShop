@@ -85,6 +85,11 @@ const returnRequestSchema = new mongoose.Schema(
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
+      amount: {
+        type: Number,
+        min: 0,
+        comment: "Số tiền hoàn shipper giao cho khách",
+      },
       note: String,
     },
 

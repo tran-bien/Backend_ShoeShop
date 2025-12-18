@@ -208,6 +208,7 @@ const getReturnRequests = async (filter = {}, options = {}) => {
       .populate("customer", "name email phone")
       .populate("approvedBy", "name")
       .populate("assignedShipper", "name phone")
+      .populate("refundCollectedByShipper.shipperId", "name phone") // <-- ADD THIS
       .sort(sort)
       .skip(skip)
       .limit(limit),
@@ -253,7 +254,8 @@ const getReturnRequestById = async (id, userId, isAdmin = false) => {
     .populate("approvedBy", "name")
     .populate("assignedShipper", "name phone shipper")
     .populate("receivedBy", "name")
-    .populate("completedBy", "name");
+    .populate("completedBy", "name")
+    .populate("refundCollectedByShipper.shipperId", "name phone"); // <-- ADD THIS
 
   if (!request) {
     throw new ApiError(404, "Không tìm thấy yêu cầu trả hàng");
@@ -480,6 +482,7 @@ const shipperConfirmRefundDelivered = async (id, shipperId, note) => {
     collected: true,
     collectedAt: new Date(),
     shipperId: shipperId,
+    amount: request.refundAmount, // Thêm dòng này để lưu số tiền
     note: note || "",
   };
   request.status = "completed";
