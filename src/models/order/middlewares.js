@@ -280,6 +280,7 @@ const applyMiddlewares = (schema) => {
                 {
                   orderCode: populatedOrder.code,
                   orderId: populatedOrder._id.toString(),
+                  shippingAddress: populatedOrder.shippingAddress,
                 },
                 { channels: { inApp: true, email: emailEnabled } }
               );

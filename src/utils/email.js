@@ -215,11 +215,21 @@ exports.orderShippingEmailTemplate = (userName, order, frontendUrl) => {
       
       <div style="background-color: #F5F5F5; border-left: 4px solid #000000; padding: 20px; margin: 25px 0;">
         <p style="margin: 0 0 10px 0; color: #000000; font-size: 14px; font-weight: 600;">Thông tin giao hàng</p>
-        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Địa chỉ: ${
-          order.shippingAddress?.detail || "N/A"
-        }</p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">
+          Địa chỉ: ${order?.shippingAddress?.detail || "N/A"}${
+    order?.shippingAddress?.ward ? ", " + order.shippingAddress.ward : ""
+  }${
+    order?.shippingAddress?.district
+      ? ", " + order.shippingAddress.district
+      : ""
+  }${
+    order?.shippingAddress?.province
+      ? ", " + order.shippingAddress.province
+      : ""
+  }
+        </p>
         <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">SĐT: ${
-          order.shippingAddress?.phone || "N/A"
+          order?.shippingAddress?.phone || "N/A"
         }</p>
       </div>
       

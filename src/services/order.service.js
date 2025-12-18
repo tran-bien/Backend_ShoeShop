@@ -160,10 +160,11 @@ const orderService = {
   getOrderById: async (orderId, userId) => {
     // Kiểm tra đơn hàng có tồn tại không
     const order = await Order.findById(orderId)
+      .select("+shippingAddress")
       .populate("user", "name email avatar")
       .populate({
         path: "orderItems.variant",
-        select: "color gender imagesvariant", // FIXED: Removed 'price' - không còn trong Variant schema
+        select: "color gender imagesvariant",
         populate: [
           { path: "color", select: "name code" },
           { path: "product", select: "name slug images price description" },
@@ -1206,11 +1207,12 @@ const orderService = {
   getOrderDetail: async (orderId) => {
     // Kiểm tra đơn hàng có tồn tại không
     const order = await Order.findById(orderId)
+      .select("+shippingAddress")
       .populate("user", "name email phone avatar")
       .populate("assignedShipper", "name email phone avatar")
       .populate({
         path: "orderItems.variant",
-        select: "color gender imagesvariant", // FIXED: Removed 'price' - không còn trong Variant schema
+        select: "color gender imagesvariant",
         populate: [
           { path: "color", select: "name code" },
           { path: "product", select: "name slug images description" },
@@ -1242,6 +1244,7 @@ const orderService = {
 
     // Kiểm tra đơn hàng có tồn tại không
     const order = await Order.findById(orderId).populate("cancelRequestId");
+
     if (!order) {
       throw new ApiError(404, "Không tìm thấy đơn hàng");
     }
@@ -1382,12 +1385,14 @@ const orderService = {
         // Gửi notification
         try {
           const notificationService = require("./notification.service");
+
           await notificationService.send(
             order.user._id || order.user,
             "ORDER_SHIPPING",
             {
               orderCode: order.code,
               orderId: order._id,
+              _id: order._id,
               shippingAddress: order.shippingAddress, // Fix: Add shipping address for email template
             },
             { channels: { inApp: true, email: true } }
