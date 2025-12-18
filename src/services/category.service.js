@@ -217,8 +217,17 @@ const categoryService = {
 
     const category = new Category(categoryData);
 
-    // Lỗi unique key sẽ được xử lý bởi error handler
-    await category.save();
+    // Lưu category — bắt lỗi duplicate key để trả về thông báo thân thiện
+    try {
+      await category.save();
+    } catch (err) {
+      // Mongo duplicate key error
+      if (err && (err.code === 11000 || err.name === "MongoServerError")) {
+        throw new ApiError(409, `Tên danh mục ${categoryData.name} đã tồn tại`);
+      }
+      throw err;
+    }
+
     return {
       success: true,
       message: "Tạo danh mục thành công",
@@ -287,8 +296,16 @@ const categoryService = {
     if (categoryData.isActive !== undefined)
       category.isActive = categoryData.isActive;
 
-    // Lưu danh mục
-    await category.save();
+    // Lưu danh mục — bắt lỗi duplicate key để trả về thông báo thân thiện
+    try {
+      await category.save();
+    } catch (err) {
+      if (err && (err.code === 11000 || err.name === "MongoServerError")) {
+        throw new ApiError(409, `Tên danh mục ${categoryData.name} đã tồn tại`);
+      }
+      throw err;
+    }
+
     return {
       success: true,
       message: `Cập nhật danh mục ${category.name} thành công`,
@@ -326,7 +343,7 @@ const categoryService = {
 
     return {
       success: true,
-      message: `Xóa danh mục id: ${category.id} thành công`,
+      message: `Xóa danh mục ${category.name} thành công`,
       isDeleted: true,
     };
   },
