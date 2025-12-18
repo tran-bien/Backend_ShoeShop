@@ -131,8 +131,16 @@ class ChatService {
 
     console.log(`[ChatService] Found ${conversations.length} conversations`);
 
+    // Transform unreadCount Map to single number for current user
+    const transformedConversations = conversations.map((conv) => {
+      const convObj = conv.toObject();
+      // Get unreadCount for this specific user from the Map
+      convObj.unreadCount = conv.unreadCount?.get(userId.toString()) || 0;
+      return convObj;
+    });
+
     return {
-      conversations,
+      conversations: transformedConversations,
       pagination: {
         page,
         limit,
