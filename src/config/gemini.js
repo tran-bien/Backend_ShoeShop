@@ -45,7 +45,7 @@ User: "Chính sách đổi trả?"
 Bot (có thông tin trong NGỮ CẢNH): "✨ Shop hỗ trợ đổi trả trong 7 ngày nếu sản phẩm chưa qua sử dụng, còn nguyên tem mác. Bạn cần hỗ trợ đổi sản phẩm nào không?"
 `;
 
-// Model configuration
+// Model configuration - TRAINED mode (có system instruction)
 const chatModel = genAI.getGenerativeModel({
   model: "gemini-2.5-flash", // Model mới nhất, quota riêng với 2.0
   systemInstruction: SYSTEM_INSTRUCTION,
@@ -76,4 +76,35 @@ const chatModel = genAI.getGenerativeModel({
   ],
 });
 
-module.exports = { chatModel, genAI };
+// Model configuration - UNTRAINED mode (không có system instruction, trả lời tự do)
+const freeModel = genAI.getGenerativeModel({
+  model: "gemini-2.5-flash",
+  // KHÔNG có systemInstruction → AI trả lời tự do
+  generationConfig: {
+    temperature: 0.7,
+    topP: 0.95,
+    topK: 40,
+    maxOutputTokens: 1024,
+    candidateCount: 1,
+  },
+  safetySettings: [
+    {
+      category: "HARM_CATEGORY_HARASSMENT",
+      threshold: "BLOCK_MEDIUM_AND_ABOVE",
+    },
+    {
+      category: "HARM_CATEGORY_HATE_SPEECH",
+      threshold: "BLOCK_MEDIUM_AND_ABOVE",
+    },
+    {
+      category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+      threshold: "BLOCK_MEDIUM_AND_ABOVE",
+    },
+    {
+      category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+      threshold: "BLOCK_MEDIUM_AND_ABOVE",
+    },
+  ],
+});
+
+module.exports = { chatModel, freeModel, genAI };

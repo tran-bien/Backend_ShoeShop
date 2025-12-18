@@ -313,7 +313,7 @@ const knowledgeService = {
         deleted: result.deletedCount,
       },
       message: `Đã xóa ${result.deletedCount} documents`,
-      warning: "⚠️ AI bây giờ sẽ không có kiến thức để trả lời!",
+      warning: "AI bây giờ sẽ không có kiến thức để trả lời!",
     };
   },
 

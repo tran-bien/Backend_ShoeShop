@@ -1,4 +1,4 @@
-const { chatModel } = require("@config/gemini");
+const { chatModel, freeModel } = require("@config/gemini");
 const { KnowledgeDocument } = require("@models");
 const NodeCache = require("node-cache");
 const SessionManager = require("@utils/sessionManager");
@@ -165,8 +165,11 @@ class GeminiService {
         parts: [{ text: msg.text }],
       }));
 
-      // 6. Create chat session
-      const chat = chatModel.startChat({
+      // 6. Chọn model dựa trên trạng thái KB
+      // - hasKB = true: Dùng chatModel (có system instruction, giới hạn scope)
+      // - hasKB = false: Dùng freeModel (không system instruction, trả lời tự do)
+      const model = hasKB ? chatModel : freeModel;
+      const chat = model.startChat({
         history: chatHistory,
       });
 
