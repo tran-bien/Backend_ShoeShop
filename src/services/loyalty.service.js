@@ -680,7 +680,7 @@ const adminLoyaltyTierService = {
     if (existingMinSpending) {
       throw new ApiError(
         400,
-        "Doanh số tối thiểu này đã được sử dụng bởi tier khác"
+        "Doanh số tối thiểu này đã được sử dụng bởi Hạng khác"
       );
     }
 
@@ -710,7 +710,7 @@ const adminLoyaltyTierService = {
       if (hasOverlap) {
         throw new ApiError(
           400,
-          `Tier mới overlap với tier "${tier.name}" (${tierMin.toLocaleString(
+          `Hạng mới trùng với hạng "${tier.name}" (${tierMin.toLocaleString(
             "vi-VN"
           )}-${tierMax === Infinity ? "∞" : tierMax.toLocaleString("vi-VN")}đ)`
         );
@@ -813,7 +813,7 @@ const adminLoyaltyTierService = {
       if (hasOverlap) {
         throw new ApiError(
           400,
-          `Tier mới overlap với tier "${
+          `Hạng mới trùng với hạng "${otherTier.name}" (${tierMin.toLocaleString("vi-VN")}-${
             otherTier.name
           }" (${tierMin.toLocaleString("vi-VN")}-${
             tierMax === Infinity ? "∞" : tierMax.toLocaleString("vi-VN")
