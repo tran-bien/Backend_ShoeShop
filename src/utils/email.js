@@ -18,7 +18,6 @@ require("dotenv").config();
  * ✅ RETURN_REJECTED      → returnRejectedEmailTemplate (Template 3I)
  * ✅ RETURN_COMPLETED     → returnCompletedEmailTemplate (Template 3J)
  * ✅ LOYALTY_TIER_UP      → loyaltyTierUpEmailTemplate (Template 3E)
- * ✅ POINTS_EARNED        → pointsEarnedEmailTemplate (Template 3F)
  * ✅ POINTS_EXPIRE_SOON   → pointsExpireSoonEmailTemplate (Template 3G)
  *
  * OTHER EMAIL TYPES:
@@ -369,38 +368,6 @@ exports.loyaltyTierUpEmailTemplate = (userName, tierInfo, frontendUrl) => {
   return createEmailWrapper(content);
 };
 
-/**
- * Template 3F: Email thông báo nhận điểm (POINTS_EARNED)
- */
-exports.pointsEarnedEmailTemplate = (
-  userName,
-  points,
-  description,
-  balance,
-  frontendUrl
-) => {
-  const content = `
-    <div style="${baseStyles.content}">
-      <h2 style="${baseStyles.title}">🎁 Bạn đã nhận ${points} điểm!</h2>
-      <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
-      
-      <div style="background-color: #F5F5F5; border: 2px solid #000000; padding: 30px; text-align: center; margin: 25px 0;">
-        <p style="margin: 0 0 15px 0; color: #2C2C2C; font-size: 14px;">${description}</p>
-        <p style="margin: 0; color: #000000; font-size: 48px; font-weight: 700;">+${points}</p>
-        <p style="margin: 15px 0 0 0; color: #2C2C2C; font-size: 14px;">điểm đã được cộng vào tài khoản</p>
-      </div>
-      
-      <p style="${baseStyles.text}">
-        Tổng điểm hiện tại: <strong>${balance} điểm</strong>
-      </p>
-      
-      <div style="${baseStyles.buttonWrapper}">
-        <a href="${frontendUrl}/loyalty" style="${baseStyles.button}">Xem điểm thưởng</a>
-      </div>
-    </div>
-  `;
-  return createEmailWrapper(content);
-};
 
 /**
  * Template 3G: Email cảnh báo điểm sắp hết hạn (POINTS_EXPIRE_SOON)

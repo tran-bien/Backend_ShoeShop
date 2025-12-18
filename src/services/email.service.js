@@ -134,17 +134,6 @@ const emailService = {
         subject = `Chúc mừng! Bạn đã lên hạng ${notification.data.tierName}`;
         break;
 
-      case "POINTS_EARNED":
-        htmlContent = emailTemplates.pointsEarnedEmailTemplate(
-          user.name,
-          notification.data.points,
-          notification.data.description,
-          notification.data.balance || 0,
-          process.env.FRONTEND_URL
-        );
-        subject = `Bạn đã nhận ${notification.data.points} điểm!`;
-        break;
-
       case "POINTS_EXPIRE_SOON":
         htmlContent = emailTemplates.pointsExpireSoonEmailTemplate(
           user.name,

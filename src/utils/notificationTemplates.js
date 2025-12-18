@@ -102,13 +102,6 @@ const templates = {
     actionUrl: "/loyalty/dashboard",
   },
 
-  POINTS_EARNED: {
-    title: "Bạn nhận được {{points}} điểm",
-    message: "{{points}} điểm đã được cộng vào tài khoản. {{description}}",
-    actionText: "Xem điểm",
-    actionUrl: "/loyalty/dashboard",
-  },
-
   POINTS_EXPIRE_SOON: {
     title: "{{points}} điểm sắp hết hạn",
     message:
