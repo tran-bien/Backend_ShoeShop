@@ -278,7 +278,7 @@ exports.orderDeliveredEmailTemplate = (
       </p>
       
       <div style="${baseStyles.buttonWrapper}">
-        <a href="${frontendUrl}/user-order/${order._id}" style="${
+        <a href="${frontendUrl}/user-reviews" style="${
     baseStyles.button
   }">Đánh giá ngay</a>
       </div>

@@ -8,7 +8,7 @@ const templates = {
     message:
       "Đơn hàng của bạn đang được chuẩn bị. Cảm ơn bạn đã mua hàng tại Shop!",
     actionText: "Xem đơn hàng",
-    actionUrl: "/orders/{{orderId}}",
+    actionUrl: "/user-order/{{orderId}}",
   },
 
   ORDER_SHIPPING: {
@@ -16,7 +16,7 @@ const templates = {
     message:
       "Shipper đang trên đường giao hàng đến bạn. Vui lòng chú ý điện thoại!",
     actionText: "Theo dõi đơn hàng",
-    actionUrl: "/orders/{{orderId}}",
+    actionUrl: "/user-order/{{orderId}}",
   },
 
   ORDER_DELIVERED: {
@@ -24,14 +24,14 @@ const templates = {
     message:
       "Cảm ơn bạn đã mua hàng! Đừng quên đánh giá sản phẩm để nhận thêm điểm.",
     actionText: "Đánh giá ngay",
-    actionUrl: "/orders/{{orderId}}",
+    actionUrl: "/user-order/{{orderId}}",
   },
 
   ORDER_CANCELLED: {
     title: "Đơn hàng {{orderCode}} đã bị hủy",
     message: "Đơn hàng của bạn đã bị hủy. Lý do: {{reason}}",
     actionText: "Xem chi tiết",
-    actionUrl: "/orders/{{orderId}}",
+    actionUrl: "/user-order/{{orderId}}",
   },
 
   RETURN_APPROVED: {
@@ -98,16 +98,16 @@ const templates = {
   LOYALTY_TIER_UP: {
     title: "Chúc mừng! Bạn đã lên hạng {{tierName}}",
     message:
-      "Bạn nhận được ưu đãi: giảm {{discount}}%, tích điểm x{{multiplier}}",
+      "Bạn nhận được ưu đãi: giảm giá và tích điểm x{{multiplier}}",
     actionText: "Xem ưu đãi",
-    actionUrl: "/loyalty",
+    actionUrl: "/loyalty/dashboard",
   },
 
   POINTS_EARNED: {
     title: "Bạn nhận được {{points}} điểm",
     message: "{{points}} điểm đã được cộng vào tài khoản. {{description}}",
     actionText: "Xem điểm",
-    actionUrl: "/loyalty",
+    actionUrl: "/loyalty/dashboard",
   },
 
   POINTS_EXPIRE_SOON: {
@@ -115,7 +115,7 @@ const templates = {
     message:
       "{{points}} điểm của bạn sẽ hết hạn vào {{expiryDate}}. Sử dụng ngay!",
     actionText: "Đổi điểm",
-    actionUrl: "/loyalty",
+    actionUrl: "/loyalty/dashboard",
   },
 };
 
