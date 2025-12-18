@@ -102,7 +102,14 @@ const viewHistoryService = {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit))
-        .populate("product", "name slug images isActive")
+        .populate({
+          path: "product",
+          select: "name slug images isActive stockStatus brand totalQuantity",
+          populate: {
+            path: "brand",
+            select: "name",
+          },
+        })
         .populate("variant", "color"),
       ViewHistory.countDocuments({ user: userId }),
     ]);
@@ -116,12 +123,79 @@ const viewHistoryService = {
       `[ViewHistory] Valid items after filter: ${validHistory.length}`
     );
 
+    // Enrich products with pricing from InventoryItem
+    const { InventoryItem } = require("@models");
+    const enrichedHistory = await Promise.all(
+      validHistory.map(async (item) => {
+        const historyObj = item.toObject ? item.toObject() : { ...item };
+
+        // Get pricing from InventoryItem for this product
+        const inventoryItems = await InventoryItem.find({
+          product: historyObj.product._id,
+          quantity: { $gt: 0 },
+        }).select("finalPrice sellingPrice discountPercent");
+
+        let minPrice = 0;
+        let maxPrice = 0;
+        let hasDiscount = false;
+        let maxDiscountPercent = 0;
+
+        if (inventoryItems.length > 0) {
+          const prices = inventoryItems
+            .map((inv) => inv.finalPrice || inv.sellingPrice || 0)
+            .filter((p) => p > 0);
+
+          if (prices.length > 0) {
+            minPrice = Math.min(...prices);
+            maxPrice = Math.max(...prices);
+          }
+
+          inventoryItems.forEach((inv) => {
+            if (inv.discountPercent && inv.discountPercent > 0) {
+              hasDiscount = true;
+              if (inv.discountPercent > maxDiscountPercent) {
+                maxDiscountPercent = inv.discountPercent;
+              }
+            }
+          });
+        }
+
+        // Get main image
+        let mainImage = "";
+        if (historyObj.product.images && historyObj.product.images.length > 0) {
+          const main =
+            historyObj.product.images.find((img) => img.isMain) ||
+            historyObj.product.images[0];
+          mainImage = main?.url || "";
+        }
+
+        // Enrich product with pricing
+        historyObj.product = {
+          ...historyObj.product,
+          price: minPrice,
+          originalPrice: maxPrice > minPrice ? maxPrice : null,
+          priceRange: {
+            min: minPrice,
+            max: maxPrice,
+            isSinglePrice: minPrice === maxPrice,
+          },
+          hasDiscount,
+          salePercentage: maxDiscountPercent,
+          mainImage,
+          averageRating: 0,
+          reviewCount: 0,
+        };
+
+        return historyObj;
+      })
+    );
+
     const totalPages = Math.ceil(total / parseInt(limit));
     const currentPage = parseInt(page);
 
     return {
       success: true,
-      history: validHistory,
+      history: enrichedHistory,
       pagination: {
         page: currentPage,
         limit: parseInt(limit),
