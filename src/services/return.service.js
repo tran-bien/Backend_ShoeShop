@@ -343,6 +343,7 @@ const rejectReturnRequest = async (id, approvedBy, rejectionReason) => {
       returnRequestId: request._id,
       returnRequestCode: request.code,
       rejectionReason: rejectionReason,
+      reason: rejectionReason,
     });
   } catch (error) {
     console.error("[Return] Lỗi gửi notification rejected:", error.message);
