@@ -94,13 +94,13 @@ const createEmailWrapper = (content) => `
   <div style="${baseStyles.container}">
     <div style="${baseStyles.header}">
       <h1 style="${baseStyles.headerTitle}">SHOE SHOP</h1>
-      <p style="${baseStyles.headerSubtitle}">Premium Footwear</p>
+      <p style="${baseStyles.headerSubtitle}">Premium Sneakers</p>
     </div>
     ${content}
     <div style="${baseStyles.footer}">
       <p style="${
         baseStyles.footerText
-      }"><strong>SHOE SHOP</strong><br>Premium Footwear Collection</p>
+      }"><strong>SHOE SHOP</strong><br>Premium Sneakers Collection</p>
       <p style="${
         baseStyles.footerText
       }">© ${new Date().getFullYear()} Shoe Shop. All rights reserved.</p>
@@ -197,7 +197,7 @@ exports.orderConfirmedEmailTemplate = (userName, order, frontendUrl) => {
       }">Chúng tôi sẽ thông báo cho bạn khi đơn hàng được giao.</p>
       
       <div style="${baseStyles.buttonWrapper}">
-        <a href="${frontendUrl}/orders/${order._id}" style="${
+        <a href="${frontendUrl}/user-order/${order._id}" style="${
     baseStyles.button
   }">Xem đơn hàng</a>
       </div>
@@ -234,7 +234,7 @@ exports.orderShippingEmailTemplate = (userName, order, frontendUrl) => {
       <p style="${baseStyles.text}">Vui lòng chú ý điện thoại để nhận hàng!</p>
       
       <div style="${baseStyles.buttonWrapper}">
-        <a href="${frontendUrl}/orders/${order._id}" style="${
+        <a href="${frontendUrl}/user-order/${order._id}" style="${
     baseStyles.button
   }">Theo dõi đơn hàng</a>
       </div>
@@ -278,7 +278,7 @@ exports.orderDeliveredEmailTemplate = (
       </p>
       
       <div style="${baseStyles.buttonWrapper}">
-        <a href="${frontendUrl}/orders/${order._id}" style="${
+        <a href="${frontendUrl}/user-order/${order._id}" style="${
     baseStyles.button
   }">Đánh giá ngay</a>
       </div>
@@ -651,7 +651,7 @@ exports.orderConfirmationEmailTemplate = (userName, order, frontendUrl) => {
       </div>
       
       <div style="${baseStyles.buttonWrapper}">
-        <a href="${frontendUrl}/orders/${order._id}" style="${
+        <a href="${frontendUrl}/user-order/${order._id}" style="${
     baseStyles.button
   }">Xem đơn hàng</a>
       </div>
@@ -670,14 +670,14 @@ exports.orderConfirmationEmailTemplate = (userName, order, frontendUrl) => {
       <hr style="margin: 20px 0; border: none; border-top: 1px solid #E0E0E0;">
       <p style="${
         baseStyles.footerText
-      }"><strong>SHOE SHOP</strong><br>Premium Footwear Collection</p>
+      }"><strong>SHOE SHOP</strong><br>Premium Sneakers Collection</p>
       <p style="${
         baseStyles.footerText
       }">© ${new Date().getFullYear()} Shoe Shop. All rights reserved.</p>
     </div>
   `;
 
-  return `<div style="${baseStyles.container}"><div style="${baseStyles.header}"><h1 style="${baseStyles.headerTitle}">SHOE SHOP</h1><p style="${baseStyles.headerSubtitle}">Premium Footwear</p></div>${content}${footer}</div>`;
+  return `<div style="${baseStyles.container}"><div style="${baseStyles.header}"><h1 style="${baseStyles.headerTitle}">SHOE SHOP</h1><p style="${baseStyles.headerSubtitle}">Premium Sneakers</p></div>${content}${footer}</div>`;
 };
 
 /**
@@ -785,14 +785,14 @@ exports.returnRequestEmailTemplate = (userName, returnRequest, frontendUrl) => {
       <hr style="margin: 20px 0; border: none; border-top: 1px solid #E0E0E0;">
       <p style="${
         baseStyles.footerText
-      }"><strong>SHOE SHOP</strong><br>Premium Footwear Collection</p>
+      }"><strong>SHOE SHOP</strong><br>Premium Sneakers Collection</p>
       <p style="${
         baseStyles.footerText
       }">© ${new Date().getFullYear()} Shoe Shop. All rights reserved.</p>
     </div>
   `;
 
-  return `<div style="${baseStyles.container}"><div style="${baseStyles.header}"><h1 style="${baseStyles.headerTitle}">SHOE SHOP</h1><p style="${baseStyles.headerSubtitle}">Premium Footwear</p></div>${content}${footer}</div>`;
+  return `<div style="${baseStyles.container}"><div style="${baseStyles.header}"><h1 style="${baseStyles.headerTitle}">SHOE SHOP</h1><p style="${baseStyles.headerSubtitle}">Premium Sneakers</p></div>${content}${footer}</div>`;
 };
 
 /**
