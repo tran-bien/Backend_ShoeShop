@@ -407,6 +407,17 @@ const couponService = {
     }
 
     // ============================================================
+    // CHECK USER ĐÃ COLLECT COUPON CHƯA - PHẢI CHECK TRƯỚC KHI TRỪ ĐIỂM
+    // ============================================================
+    // FIXED: Di chuyển logic check user đã collect lên trước khi trừ điểm
+    const alreadyCollected = coupon.users.some(
+      (u) => u.toString() === userId.toString()
+    );
+    if (alreadyCollected) {
+      throw new ApiError(422, "Bạn đã thu thập mã giảm giá này rồi");
+    }
+
+    // ============================================================
     // XỬ LÝ ĐỔI ĐIỂM (NẾU COUPON CÓ THỂ REDEEM) VỚI TRANSACTION
     // ============================================================
     let pointsUsed = 0;
@@ -441,7 +452,7 @@ const couponService = {
           }
         }
 
-        // Trừ điểm (trong transaction)
+        // Trừ điểm (trong transaction) - CHỈ KHI ĐÃ CHECK USER CHƯA COLLECT
         const loyaltyService = require("@services/loyalty.service");
         await loyaltyService.deductPoints(userId, coupon.pointCost, {
           type: "REDEEM",
@@ -458,16 +469,6 @@ const couponService = {
         { $addToSet: { users: userId } },
         { new: true, session }
       );
-
-      // FIXED Bug #33: Kiểm tra xem user có thực sự được thêm không
-      // So sánh số lượng users trước và sau $addToSet để biết có thêm mới hay không
-      const previousUserCount = coupon.users.length;
-      const wasAlreadyCollected =
-        updatedCoupon.users.length === previousUserCount;
-
-      if (wasAlreadyCollected) {
-        throw new ApiError(422, "Bạn đã thu thập mã giảm giá này rồi");
-      }
 
       await session.commitTransaction();
       coupon.users = updatedCoupon.users; // Update local object
