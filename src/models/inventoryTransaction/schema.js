@@ -88,7 +88,6 @@ const inventoryTransactionSchema = new mongoose.Schema(
         "return", // Trả hàng (khách trả)
         "delivery_failed", // Giao thất bại, hàng trả về kho
         "cancelled", // Đơn hủy, hàng trả về kho
-        "exchange", // Đổi hàng
         "damage", // Hàng hư hỏng
         "lost", // Hàng mất
         "adjustment", // Điều chỉnh kiểm kê

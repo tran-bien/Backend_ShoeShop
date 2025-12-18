@@ -54,38 +54,6 @@ const OrderSchema = new mongoose.Schema(
           type: String,
           default: "",
         },
-        // EXCHANGE TRACKING - Theo dõi lịch sử đổi hàng
-        hasBeenExchanged: {
-          type: Boolean,
-          default: false,
-        },
-        exchangeHistory: [
-          {
-            returnRequestId: {
-              type: mongoose.Schema.Types.ObjectId,
-              ref: "ReturnRequest",
-            },
-            exchangedAt: {
-              type: Date,
-            },
-            fromVariant: {
-              type: mongoose.Schema.Types.ObjectId,
-              ref: "Variant",
-            },
-            fromSize: {
-              type: mongoose.Schema.Types.ObjectId,
-              ref: "Size",
-            },
-            toVariant: {
-              type: mongoose.Schema.Types.ObjectId,
-              ref: "Variant",
-            },
-            toSize: {
-              type: mongoose.Schema.Types.ObjectId,
-              ref: "Size",
-            },
-          },
-        ],
       },
     ],
 
