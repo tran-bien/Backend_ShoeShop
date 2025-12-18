@@ -65,24 +65,36 @@ const dashboardService = {
             preserveNullAndEmptyArrays: true,
           },
         },
+        // Tính cost per item trước
+        {
+          $addFields: {
+            itemCost: {
+              $multiply: [
+                {
+                  $ifNull: [
+                    "$orderItems.costPrice", // Ưu tiên costPrice đã lưu
+                    { $ifNull: ["$inventoryInfo.averageCostPrice", 0] }, // Fallback
+                  ],
+                },
+                "$orderItems.quantity",
+              ],
+            },
+          },
+        },
+        // Group theo orderId trước để tính tổng cost của mỗi order
+        {
+          $group: {
+            _id: "$_id", // Group theo orderId
+            orderTotal: { $first: "$totalAfterDiscountAndShipping" }, // Chỉ lấy 1 lần per order
+            orderCost: { $sum: "$itemCost" }, // Sum cost của tất cả items trong order
+          },
+        },
+        // Group final để tính tổng
         {
           $group: {
             _id: null,
-            totalRevenue: { $sum: "$totalAfterDiscountAndShipping" },
-            // FIX Bug #57: Ưu tiên costPrice từ OrderItem, fallback sang InventoryItem
-            totalCost: {
-              $sum: {
-                $multiply: [
-                  {
-                    $ifNull: [
-                      "$orderItems.costPrice", // Ưu tiên costPrice đã lưu
-                      { $ifNull: ["$inventoryInfo.averageCostPrice", 0] }, // Fallback
-                    ],
-                  },
-                  "$orderItems.quantity",
-                ],
-              },
-            },
+            totalRevenue: { $sum: "$orderTotal" }, // Sum revenue của tất cả orders
+            totalCost: { $sum: "$orderCost" }, // Sum cost của tất cả orders
           },
         },
         {
@@ -207,18 +219,37 @@ const dashboardService = {
           $addFields: {
             itemCost: {
               $multiply: [
-                { $ifNull: ["$inventoryInfo.averageCostPrice", 0] },
+                {
+                  $ifNull: [
+                    "$orderItems.costPrice", // Ưu tiên costPrice đã lưu trong order
+                    { $ifNull: ["$inventoryInfo.averageCostPrice", 0] }, // Fallback
+                  ],
+                },
                 "$orderItems.quantity",
               ],
             },
           },
         },
+        // FIX: Group theo orderId + date trước để tránh duplicate revenue
         {
           $group: {
-            _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-            revenue: { $sum: "$totalAfterDiscountAndShipping" },
-            cost: { $sum: "$itemCost" },
-            orderCount: { $addToSet: "$_id" },
+            _id: {
+              orderId: "$_id",
+              date: {
+                $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+              },
+            },
+            orderTotal: { $first: "$totalAfterDiscountAndShipping" }, // Chỉ lấy 1 lần per order
+            orderCost: { $sum: "$itemCost" }, // Sum cost của tất cả items trong order
+          },
+        },
+        // Group theo date để tính tổng theo ngày
+        {
+          $group: {
+            _id: "$_id.date",
+            revenue: { $sum: "$orderTotal" }, // Sum revenue của tất cả orders trong ngày
+            cost: { $sum: "$orderCost" }, // Sum cost của tất cả orders trong ngày
+            orderCount: { $sum: 1 }, // Đếm số orders
           },
         },
         {
@@ -228,7 +259,7 @@ const dashboardService = {
             revenue: 1,
             cost: 1,
             profit: { $subtract: ["$revenue", "$cost"] },
-            count: { $size: "$orderCount" },
+            count: "$orderCount", // Đã là số lượng, không cần $size
           },
         },
         {
@@ -374,18 +405,35 @@ const dashboardService = {
           $addFields: {
             itemCost: {
               $multiply: [
-                { $ifNull: ["$inventoryInfo.averageCostPrice", 0] },
+                {
+                  $ifNull: [
+                    "$orderItems.costPrice", // Ưu tiên costPrice đã lưu trong order
+                    { $ifNull: ["$inventoryInfo.averageCostPrice", 0] }, // Fallback
+                  ],
+                },
                 "$orderItems.quantity",
               ],
             },
           },
         },
+        // FIX: Group theo orderId + month trước để tránh duplicate revenue
         {
           $group: {
-            _id: { $month: "$createdAt" },
-            revenue: { $sum: "$totalAfterDiscountAndShipping" },
-            cost: { $sum: "$itemCost" },
-            orderCount: { $addToSet: "$_id" },
+            _id: {
+              orderId: "$_id",
+              month: { $month: "$createdAt" },
+            },
+            orderTotal: { $first: "$totalAfterDiscountAndShipping" }, // Chỉ lấy 1 lần per order
+            orderCost: { $sum: "$itemCost" }, // Sum cost của tất cả items trong order
+          },
+        },
+        // Group theo month để tính tổng theo tháng
+        {
+          $group: {
+            _id: "$_id.month",
+            revenue: { $sum: "$orderTotal" }, // Sum revenue của tất cả orders trong tháng
+            cost: { $sum: "$orderCost" }, // Sum cost của tất cả orders trong tháng
+            orderCount: { $sum: 1 }, // Đếm số orders
           },
         },
         {
@@ -395,7 +443,7 @@ const dashboardService = {
             revenue: 1,
             cost: 1,
             profit: { $subtract: ["$revenue", "$cost"] },
-            count: { $size: "$orderCount" },
+            count: "$orderCount", // Đã là số lượng, không cần $size
           },
         },
         {
