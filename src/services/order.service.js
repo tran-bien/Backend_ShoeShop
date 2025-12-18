@@ -1388,6 +1388,7 @@ const orderService = {
             {
               orderCode: order.code,
               orderId: order._id,
+              shippingAddress: order.shippingAddress, // Fix: Add shipping address for email template
             },
             { channels: { inApp: true, email: true } }
           );
