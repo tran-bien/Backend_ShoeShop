@@ -831,10 +831,12 @@ const cartService = {
     // Lưu giỏ hàng
     await cart.save();
 
+    // Lấy lại giỏ hàng đã populate đủ thông tin
+    const populatedCart = await cartService.getCartByUser(userId);
     return {
       success: true,
       message: `Đã xóa ${itemsToRemove.length} sản phẩm đã chọn khỏi giỏ hàng`,
-      cart,
+      ...populatedCart,
     };
   },
 
