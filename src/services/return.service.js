@@ -383,7 +383,6 @@ const assignShipperForReturn = async (id, shipperId, assignedBy) => {
 
   await request.save();
 
-
   return await request.populate([
     { path: "order" },
     { path: "customer", select: "name email phone" },
@@ -824,7 +823,22 @@ const getShipperReturnRequests = async (shipperId, options = {}) => {
 
   const [requests, total] = await Promise.all([
     ReturnRequest.find(query)
-      .populate("order")
+      .populate({
+        path: "order",
+        populate: [
+          {
+            path: "orderItems.variant",
+            populate: [
+              { path: "product", select: "name images slug" },
+              { path: "color", select: "name code" },
+            ],
+          },
+          {
+            path: "orderItems.size",
+            select: "value",
+          },
+        ],
+      })
       .populate("customer", "name phone")
       .sort({ assignedAt: -1 })
       .skip(skip)
