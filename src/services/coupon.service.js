@@ -322,8 +322,9 @@ const couponService = {
       throw new ApiError(404, "Không tìm thấy mã giảm giá");
     }
 
-    // Kiểm tra coupon có công khai không và còn hoạt động không
-    if (!coupon.isPublic) {
+    // Kiểm tra coupon có công khai HOẶC có thể đổi bằng điểm
+    // Coupon đổi điểm (isRedeemable=true) không cần phải public
+    if (!coupon.isPublic && !coupon.isRedeemable) {
       throw new ApiError(403, "Mã giảm giá không công khai");
     }
 
