@@ -168,6 +168,7 @@ exports.resetPasswordEmailTemplate = (name, resetUrl) => {
  */
 exports.orderConfirmedEmailTemplate = (userName, order, frontendUrl) => {
   const safeUserName = escapeHtml(userName);
+  const orderCode = escapeHtml(order?.orderCode || order?.code || "N/A");
   const content = `
     <div style="${baseStyles.content}">
       <h2 style="${baseStyles.title}">✅ Đơn hàng đã được xác nhận</h2>
@@ -175,18 +176,12 @@ exports.orderConfirmedEmailTemplate = (userName, order, frontendUrl) => {
         baseStyles.text
       }">Xin chào <strong>${safeUserName}</strong>,</p>
       <p style="${baseStyles.text}">
-        Đơn hàng <strong>${escapeHtml(
-          order?.code
-        )}</strong> của bạn đã được xác nhận và đang được chuẩn bị.
-          order.code
-        }</strong> của bạn đã được xác nhận và đang được chuẩn bị.
+        Đơn hàng <strong>${orderCode}</strong> của bạn đã được xác nhận và đang được chuẩn bị.
       </p>
       
       <div style="background-color: #F5F5F5; border-left: 4px solid #000000; padding: 20px; margin: 25px 0;">
         <p style="margin: 0 0 10px 0; color: #000000; font-size: 14px; font-weight: 600;">Thông tin đơn hàng</p>
-        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Mã đơn: <strong>${
-          order.code
-        }</strong></p>
+        <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Mã đơn: <strong>${orderCode}</strong></p>
         <p style="margin: 5px 0; color: #2C2C2C; font-size: 14px;">Tổng tiền: <strong>${
           order.totalAfterDiscountAndShipping?.toLocaleString("vi-VN") || "N/A"
         }đ</strong></p>
@@ -210,14 +205,13 @@ exports.orderConfirmedEmailTemplate = (userName, order, frontendUrl) => {
  * Template 3B: Email đơn hàng đang giao (ORDER_SHIPPING)
  */
 exports.orderShippingEmailTemplate = (userName, order, frontendUrl) => {
+  const orderCode = escapeHtml(order?.orderCode || order?.code || "N/A");
   const content = `
     <div style="${baseStyles.content}">
       <h2 style="${baseStyles.title}">🚚 Đơn hàng đang được giao</h2>
       <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
       <p style="${baseStyles.text}">
-        Đơn hàng <strong>${
-          order.code
-        }</strong> của bạn đang trên đường giao đến. 
+        Đơn hàng <strong>${orderCode}</strong> của bạn đang trên đường giao đến. 
         Shipper sẽ liên hệ bạn trong thời gian sớm nhất.
       </p>
       
@@ -252,12 +246,13 @@ exports.orderDeliveredEmailTemplate = (
   pointsEarned,
   frontendUrl
 ) => {
+  const orderCode = escapeHtml(order?.orderCode || order?.code || "N/A");
   const content = `
     <div style="${baseStyles.content}">
       <h2 style="${baseStyles.title}">✅ Đơn hàng đã giao thành công</h2>
       <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
       <p style="${baseStyles.text}">
-        Đơn hàng <strong>${order.code}</strong> đã được giao thành công. 
+        Đơn hàng <strong>${orderCode}</strong> đã được giao thành công. 
         Cảm ơn bạn đã mua hàng tại Shoe Shop!
       </p>
       
@@ -296,12 +291,13 @@ exports.orderCancelledEmailTemplate = (
   reason,
   frontendUrl
 ) => {
+  const orderCode = escapeHtml(order?.orderCode || order?.code || "N/A");
   const content = `
     <div style="${baseStyles.content}">
       <h2 style="${baseStyles.title}">❌ Đơn hàng đã bị hủy</h2>
       <p style="${baseStyles.text}">Xin chào <strong>${userName}</strong>,</p>
       <p style="${baseStyles.text}">
-        Rất tiếc, đơn hàng <strong>${order.code}</strong> đã bị hủy.
+        Rất tiếc, đơn hàng <strong>${orderCode}</strong> đã bị hủy.
       </p>
       
       ${
