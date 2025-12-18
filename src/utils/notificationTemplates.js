@@ -92,7 +92,7 @@ const templates = {
     message:
       "Yêu cầu trả hàng/hoàn tiền cho đơn {{orderCode}} đã được xử lý xong.",
     actionText: "Xem chi tiết",
-    actionUrl: "/returns/{{returnRequestId}}",
+    actionUrl: "/user-manage-order",
   },
 
   LOYALTY_TIER_UP: {

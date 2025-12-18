@@ -524,8 +524,12 @@ const shipperConfirmRefundDelivered = async (id, shipperId, note) => {
   // Gửi notification cho khách
   try {
     const notificationService = require("./notification.service");
+    const populatedRequest = await ReturnRequest.findById(request._id).populate(
+      "order"
+    );
     await notificationService.send(request.customer, "RETURN_COMPLETED", {
       type: "trả hàng",
+      orderCode: populatedRequest.order?.code || "",
       returnRequestCode: request.code,
       refundAmount: request.refundAmount,
     });
@@ -631,8 +635,12 @@ const adminConfirmBankTransfer = async (id, adminId, note) => {
   // Gửi notification
   try {
     const notificationService = require("./notification.service");
+    const populatedRequest = await ReturnRequest.findById(request._id).populate(
+      "order"
+    );
     await notificationService.send(request.customer, "RETURN_COMPLETED", {
       type: "trả hàng",
+      orderCode: populatedRequest.order?.code || "",
       returnRequestCode: request.code,
       refundAmount: request.refundAmount,
     });
