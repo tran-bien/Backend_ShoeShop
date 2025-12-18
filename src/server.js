@@ -24,6 +24,10 @@ const app = express();
 const server = http.createServer(app);
 const io = initializeSocket(server);
 
+// Make io accessible globally for emitting events from controllers
+app.set("io", io);
+global.io = io;
+
 // Các middleware
 app.use(
   cors({

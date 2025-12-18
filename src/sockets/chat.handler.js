@@ -14,6 +14,12 @@ module.exports = (io, socket) => {
   socket.join(`user:${userId}`);
   console.log(`[CHAT] User ${userId} joined personal room user:${userId}`);
 
+  // Admin/Staff join special room to receive ALL chat notifications
+  if (userRole === "admin" || userRole === "staff") {
+    socket.join("admin:chat");
+    console.log(`[CHAT] Admin/Staff ${userId} joined admin:chat room`);
+  }
+
   /**
    * Join conversation room
    */
@@ -143,6 +149,26 @@ module.exports = (io, socket) => {
           console.log(`[CHAT] Sent notification to user:${participantId}`);
         }
       });
+
+      // 3. Broadcast to admin:chat room so all admin/staff can see new messages
+      // This ensures real-time updates on admin chat page
+      io.to("admin:chat").emit("chat:adminNotification", {
+        conversationId,
+        message: text,
+        sender: message.senderId,
+        fullMessage: message,
+        conversation: {
+          _id: conversation._id,
+          participants: conversation.participants,
+          lastMessage: {
+            text: text,
+            type: "text",
+            createdAt: message.createdAt,
+            senderId: userId,
+          },
+        },
+      });
+      console.log(`[CHAT] Broadcasted to admin:chat room`);
 
       callback?.({ success: true, message });
     } catch (error) {

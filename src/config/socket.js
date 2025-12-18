@@ -1,5 +1,6 @@
 const socketIO = require("socket.io");
 const jwt = require("jsonwebtoken");
+const { User } = require("@models");
 
 /**
  * Initialize Socket.IO with JWT authentication
@@ -25,9 +26,15 @@ const initializeSocket = (server) => {
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+      // Fetch user from database to get role (since JWT doesn't include role)
+      const user = await User.findById(decoded.id).select("role").lean();
+      if (!user) {
+        return next(new Error("User not found"));
+      }
+
       // Attach user info to socket
       socket.userId = decoded.id;
-      socket.userRole = decoded.role;
+      socket.userRole = user.role;
 
       next();
     } catch (err) {
