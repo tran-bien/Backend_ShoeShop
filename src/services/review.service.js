@@ -1009,6 +1009,8 @@ const adminReviewService = {
       userId,
       rating,
       isActive,
+      hasReply,
+      search,
       sort = "createdAt_desc",
     } = query;
 
@@ -1047,6 +1049,68 @@ const adminReviewService = {
 
     if (isActive !== undefined) {
       filter.isActive = isActive === "true" || isActive === true;
+    }
+
+    // Filter by hasReply (có phản hồi hay chưa)
+    if (hasReply !== undefined) {
+      const hasReplyBool = hasReply === "true" || hasReply === true;
+      if (hasReplyBool) {
+        // Đã phản hồi: reply.content tồn tại và không rỗng
+        filter["reply.content"] = { $exists: true, $ne: null, $ne: "" };
+      } else {
+        // Chưa phản hồi: reply.content không tồn tại hoặc rỗng
+        filter.$or = [
+          { "reply.content": { $exists: false } },
+          { "reply.content": null },
+          { "reply.content": "" },
+        ];
+      }
+    }
+
+    // Search by product name or user name
+    if (search && search.trim()) {
+      const searchRegex = { $regex: search.trim(), $options: "i" };
+
+      // Tìm users matching search
+      const users = await User.find({
+        name: searchRegex,
+      }).select("_id");
+      const userIds = users.map((u) => u._id);
+
+      // Tìm products matching search
+      const products = await Product.find({
+        name: searchRegex,
+      }).select("_id");
+
+      if (products.length > 0) {
+        // Tìm variants của products này
+        const variants = await Variant.find({
+          product: { $in: products.map((p) => p._id) },
+        }).select("_id");
+        const variantIds = variants.map((v) => v._id);
+
+        // Tìm orderItems
+        const orderItemsInfo = await Order.aggregate([
+          { $unwind: "$orderItems" },
+          {
+            $match: {
+              "orderItems.variant": {
+                $in: variantIds.map((id) => new mongoose.Types.ObjectId(id)),
+              },
+            },
+          },
+          { $project: { orderItemId: "$orderItems._id" } },
+        ]);
+        const orderItemIds = orderItemsInfo.map((item) => item.orderItemId);
+
+        // Add search filter
+        filter.$or = [
+          { user: { $in: userIds } },
+          { orderItem: { $in: orderItemIds } },
+        ];
+      } else if (userIds.length > 0) {
+        filter.user = { $in: userIds };
+      }
     }
 
     // Xây dựng thông tin sắp xếp
