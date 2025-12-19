@@ -703,7 +703,7 @@ const adminLoyaltyTierService = {
         throw new ApiError(400, "Tên tier đã tồn tại");
       }
       // Update slug
-      tierData.slug = slugify(tierData.name);
+      tierData.slug = createSlug(tierData.name);
     }
 
     // Nếu thay đổi minSpending, kiểm tra trùng lặp
@@ -756,7 +756,9 @@ const adminLoyaltyTierService = {
       if (hasOverlap) {
         throw new ApiError(
           400,
-          `Hạng mới trùng với hạng "${otherTier.name}" (${tierMin.toLocaleString("vi-VN")}-${
+          `Hạng mới trùng với hạng "${
+            otherTier.name
+          }" (${tierMin.toLocaleString("vi-VN")}-${
             otherTier.name
           }" (${tierMin.toLocaleString("vi-VN")}-${
             tierMax === Infinity ? "∞" : tierMax.toLocaleString("vi-VN")
