@@ -15,17 +15,20 @@ const returnService = require("@services/return.service");
 const getReturnRequests = asyncHandler(async (req, res) => {
   const { page, limit, status, customerId } = req.query;
 
-  const filters = {
+  const options = {
     page: parseInt(page) || 1,
     limit: parseInt(limit) || 20,
-    status,
   };
 
-  if (customerId) {
-    filters.customerId = customerId;
+  if (status) {
+    options.status = status;
   }
 
-  const result = await returnService.getReturnRequests(filters);
+  if (customerId) {
+    options.customerId = customerId;
+  }
+
+  const result = await returnService.getReturnRequests({}, options);
 
   res.status(200).json({
     success: true,
