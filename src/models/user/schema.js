@@ -173,7 +173,7 @@ const UserSchema = new mongoose.Schema(
           type: Boolean,
           default: true,
           comment:
-            "Nhận email khi đơn hàng có thay đổi (xác nhận, đang giao, đã giao, hủy, đổi hàng, trả hàng)",
+            "Nhận email khi đơn hàng có thay đổi (xác nhận, đang giao, đã giao, hủy, trả hàng)",
         },
       },
       inAppNotifications: {
