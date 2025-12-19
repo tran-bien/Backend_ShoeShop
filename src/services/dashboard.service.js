@@ -19,6 +19,72 @@ const dashboardService = {
       // Đếm tổng đơn hàng
       const totalOrders = await Order.countDocuments({ deletedAt: null });
 
+      // THÊM: Thống kê chi tiết theo trạng thái đơn hàng
+      const ordersByStatus = await Order.aggregate([
+        { $match: { deletedAt: null } },
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      // Chuyển đổi thành object để dễ truy cập
+      const statusCounts = {
+        pending: 0,
+        confirmed: 0,
+        assigned_to_shipper: 0,
+        out_for_delivery: 0,
+        delivered: 0,
+        delivery_failed: 0,
+        returning_to_warehouse: 0,
+        cancelled: 0,
+        returned: 0,
+      };
+
+      ordersByStatus.forEach((item) => {
+        if (statusCounts.hasOwnProperty(item._id)) {
+          statusCounts[item._id] = item.count;
+        }
+      });
+
+      // ✨ THÊM: Thống kê theo phương thức thanh toán
+      const ordersByPaymentMethod = await Order.aggregate([
+        { $match: { deletedAt: null } },
+        {
+          $group: {
+            _id: "$payment.method",
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      const paymentMethodCounts = {};
+      ordersByPaymentMethod.forEach((item) => {
+        paymentMethodCounts[item._id || "unknown"] = item.count;
+      });
+
+      // ✨ THÊM: Thống kê theo trạng thái thanh toán
+      const ordersByPaymentStatus = await Order.aggregate([
+        { $match: { deletedAt: null } },
+        {
+          $group: {
+            _id: "$payment.paymentStatus",
+            count: { $sum: 1 },
+            totalAmount: { $sum: "$totalAfterDiscountAndShipping" },
+          },
+        },
+      ]);
+
+      const paymentStatusStats = {};
+      ordersByPaymentStatus.forEach((item) => {
+        paymentStatusStats[item._id || "unknown"] = {
+          count: item.count,
+          totalAmount: item.totalAmount,
+        };
+      });
+
       // FIX Bug #57: Ưu tiên dùng costPrice đã lưu trong OrderItem (chính xác nhất)
       // Fallback: Lookup InventoryItem.averageCostPrice cho đơn hàng cũ chưa có costPrice
       const financialResults = await Order.aggregate([
@@ -129,6 +195,10 @@ const dashboardService = {
             totalRevenue > 0
               ? Math.round((totalProfit / totalRevenue) * 100)
               : 0,
+          // ✨ THÊM: Chi tiết thống kê
+          ordersByStatus: statusCounts,
+          ordersByPaymentMethod: paymentMethodCounts,
+          ordersByPaymentStatus: paymentStatusStats,
         },
       };
     } catch (error) {
@@ -545,11 +615,12 @@ const dashboardService = {
 
       // FIXED: Tính sản phẩm bán chạy với cost từ InventoryItem
       // FIXED Bug #13: Thay 'shipping' thành 'out_for_delivery' để match Order schema
+      // FIXED: Chỉ tính các đơn hàng đã giao thành công
       const topProducts = await Order.aggregate([
         {
           $match: {
             createdAt: { $gte: startDate, $lte: now },
-            status: { $in: ["delivered", "out_for_delivery", "confirmed"] },
+            status: "delivered", // Chỉ tính đơn đã giao thành công
             deletedAt: null,
           },
         },
