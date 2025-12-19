@@ -561,6 +561,7 @@ const adminUserService = {
       role,
       isActive,
       isVerified,
+      isBlock,
     } = query;
 
     // Xây dựng điều kiện lọc
@@ -578,7 +579,15 @@ const adminUserService = {
       filter.role = role;
     }
 
-    if (isActive !== undefined) {
+    // Xử lý filter trạng thái block
+    if (isBlock !== undefined) {
+      if (isBlock === "true" || isBlock === true) {
+        filter.blockedAt = { $ne: null };
+      } else if (isBlock === "false" || isBlock === false) {
+        filter.blockedAt = null;
+      }
+    } else if (isActive !== undefined) {
+      // Nếu không gửi isBlock mà gửi isActive thì vẫn filter như cũ
       filter.isActive = isActive === "true" || isActive === true;
     }
 
