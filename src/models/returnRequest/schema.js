@@ -43,6 +43,17 @@ const returnRequestSchema = new mongoose.Schema(
       comment: "Chi tiết lý do (tùy chọn)",
     },
 
+    // Ảnh minh chứng lý do trả hàng (1-5 ảnh, bắt buộc ít nhất 1 ảnh)
+    returnReasonImages: {
+      type: [
+        {
+          url: { type: String, required: true },
+          public_id: { type: String, required: true },
+        },
+      ],
+      required: [true, "Vui lòng tải lên ít nhất 1 ảnh minh chứng"],
+    },
+
     // Phương thức hoàn tiền
     refundMethod: {
       type: String,

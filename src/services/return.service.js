@@ -12,8 +12,9 @@ const RETURN_SHIPPING_FEE = 30000; // 30.000đ
  * Tạo yêu cầu trả hàng/hoàn tiền
  * - Trả TOÀN BỘ đơn hàng
  * - Phí trả hàng: 30.000đ
+ * - Bắt buộc có 1-5 ảnh minh chứng
  */
-const createReturnRequest = async (data, userId) => {
+const createReturnRequest = async (data, userId, imageFiles) => {
   const {
     orderId,
     reason,
@@ -22,6 +23,18 @@ const createReturnRequest = async (data, userId) => {
     bankInfo,
     pickupAddressId,
   } = data;
+
+  // Validate images - bắt buộc phải có ít nhất 1 ảnh
+  if (!imageFiles || imageFiles.length === 0) {
+    throw new ApiError(
+      400,
+      "Vui lòng tải lên ít nhất 1 ảnh minh chứng lý do trả hàng"
+    );
+  }
+
+  if (imageFiles.length > 5) {
+    throw new ApiError(400, "Chỉ được tải lên tối đa 5 ảnh");
+  }
 
   // Kiểm tra đơn hàng
   const order = await Order.findOne({
@@ -125,12 +138,26 @@ const createReturnRequest = async (data, userId) => {
     throw new ApiError(400, "Số tiền hoàn không hợp lệ");
   }
 
+  // Upload images to Cloudinary
+  const imageService = require("./image.service");
+  let uploadedImages;
+  try {
+    uploadedImages = await imageService.uploadReturnReasonImages(imageFiles);
+  } catch (error) {
+    console.error("Error uploading return reason images:", error);
+    throw new ApiError(
+      400,
+      error.message || "Không thể tải ảnh lên. Vui lòng thử lại"
+    );
+  }
+
   // Tạo yêu cầu
   const returnRequest = await ReturnRequest.create({
     order: orderId,
     customer: userId,
     reason,
     reasonDetail: reasonDetail || "",
+    returnReasonImages: uploadedImages, // Lưu thông tin ảnh
     refundMethod,
     refundAmount,
     bankInfo: refundMethod === "bank_transfer" ? bankInfo : undefined,

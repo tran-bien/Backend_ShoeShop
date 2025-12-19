@@ -23,6 +23,21 @@ const createReturnRequest = asyncHandler(async (req, res) => {
   } = req.body;
   const customerId = req.user._id;
 
+  // Validate images - bắt buộc phải có từ 1-5 ảnh
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Vui lòng tải lên ít nhất 1 ảnh minh chứng lý do trả hàng",
+    });
+  }
+
+  if (req.files.length > 5) {
+    return res.status(400).json({
+      success: false,
+      message: "Chỉ được tải lên tối đa 5 ảnh",
+    });
+  }
+
   const returnRequest = await returnService.createReturnRequest(
     {
       orderId,
@@ -32,7 +47,8 @@ const createReturnRequest = asyncHandler(async (req, res) => {
       bankInfo,
       pickupAddressId, // Thêm địa chỉ lấy hàng trả
     },
-    customerId
+    customerId,
+    req.files // Truyền files từ multer
   );
 
   res.status(201).json({

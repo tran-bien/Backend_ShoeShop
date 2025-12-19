@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const returnController = require("@controllers/user/return.controller");
 const { protect } = require("@middlewares/auth.middleware");
+const uploadMiddleware = require("@middlewares/upload.middleware");
 const validate = require("@utils/validatehelper");
 const {
   validateCreateReturnRequest,
@@ -30,11 +31,12 @@ router.get(
 
 /**
  * @route   POST /api/v1/users/returns
- * @desc    Tạo yêu cầu trả hàng
+ * @desc    Tạo yêu cầu trả hàng (bắt buộc upload 1-5 ảnh minh chứng)
  * @access  Authenticated User
  */
 router.post(
   "/",
+  uploadMiddleware.uploadReturnReasonImages, // Upload 1-5 ảnh
   validate(validateCreateReturnRequest),
   returnController.createReturnRequest
 );

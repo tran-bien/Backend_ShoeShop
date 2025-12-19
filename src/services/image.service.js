@@ -1079,6 +1079,90 @@ const imageService = {
       message: "Đã xóa ảnh featured image",
     };
   },
+
+  /**
+   * Upload multiple images for return request reason
+   * @param {Array} imageBuffers - Array of file buffers from multer
+   * @returns {Promise<Array>} - Array of uploaded image objects { url, public_id }
+   */
+  uploadReturnReasonImages: async (imageBuffers) => {
+    if (!imageBuffers || imageBuffers.length === 0) {
+      throw new ApiError(400, "Vui lòng tải lên ít nhất 1 ảnh minh chứng");
+    }
+
+    if (imageBuffers.length > 5) {
+      throw new ApiError(400, "Chỉ được tải lên tối đa 5 ảnh");
+    }
+
+    const cloudinary = require("@config/cloudinary");
+    const { Readable } = require("stream");
+
+    // Upload all images to Cloudinary
+    const uploadPromises = imageBuffers.map((file) => {
+      return new Promise((resolve, reject) => {
+        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+        const nameWithoutExt =
+          file.originalname.substring(0, file.originalname.lastIndexOf(".")) ||
+          file.originalname;
+        const filename = nameWithoutExt
+          .replace(/\s+/g, "-")
+          .replace(/[^a-zA-Z0-9-_]/g, "")
+          .substring(0, 100);
+        const public_id = filename
+          ? `${filename}-${uniqueSuffix}`
+          : `return-reason-${uniqueSuffix}`;
+
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            folder: "returns/reasons",
+            public_id: public_id,
+            resource_type: "image",
+            allowed_formats: ["jpg", "jpeg", "png", "webp"],
+            transformation: [{ quality: "auto", width: 1200, crop: "limit" }],
+          },
+          (error, result) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve({
+                url: result.secure_url,
+                public_id: result.public_id,
+              });
+            }
+          }
+        );
+
+        const readableStream = Readable.from(file.buffer);
+        readableStream.pipe(uploadStream);
+      });
+    });
+
+    try {
+      const uploadedImages = await Promise.all(uploadPromises);
+      return uploadedImages;
+    } catch (error) {
+      console.error("Error uploading return reason images:", error);
+      throw new ApiError(500, "Không thể tải ảnh lên. Vui lòng thử lại");
+    }
+  },
+
+  /**
+   * Delete return reason images from Cloudinary
+   * @param {Array} images - Array of image objects { url, public_id }
+   * @returns {Promise<void>}
+   */
+  deleteReturnReasonImages: async (images) => {
+    if (!images || images.length === 0) return;
+
+    const cloudinary = require("@config/cloudinary");
+    const deletePromises = images.map((image) =>
+      cloudinary.uploader.destroy(image.public_id).catch((err) => {
+        console.error(`Failed to delete image ${image.public_id}:`, err);
+      })
+    );
+
+    await Promise.all(deletePromises);
+  },
 };
 
 module.exports = imageService;

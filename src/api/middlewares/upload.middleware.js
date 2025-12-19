@@ -325,6 +325,29 @@ const uploadMiddleware = {
   },
 
   /**
+   * Middleware upload multiple images for return request (1-5 images)
+   */
+  uploadReturnReasonImages: (req, res, next) => {
+    const storage = createStorage();
+    const upload = multer({
+      storage,
+      limits: {
+        fileSize: MAX_FILE_SIZE,
+        files: 5, // Tối đa 5 ảnh
+        fields: 20,
+      },
+      fileFilter,
+    }).array("images", 5); // Field name là 'images', max 5 files
+
+    upload(req, res, (err) => {
+      if (err) {
+        return next(err);
+      }
+      next();
+    });
+  },
+
+  /**
    * Middleware xử lý lỗi upload
    * @param {Error} err - Lỗi từ multer
    * @param {Object} req - Request object
