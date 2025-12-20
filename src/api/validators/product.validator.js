@@ -275,8 +275,8 @@ const productValidator = {
 
     query("gender")
       .optional()
-      .isIn(["male", "female"])
-      .withMessage("Giới tính phải là male hoặc female"),
+      .isIn(["male", "female", "unisex"])
+      .withMessage("Giới tính phải là male, female hoặc unisex"),
 
     query("sort")
       .optional()

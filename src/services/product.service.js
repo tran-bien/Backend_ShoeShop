@@ -1553,7 +1553,7 @@ const productService = {
       }
 
       // Lọc theo gender
-      if (gender && ["male", "female"].includes(gender)) {
+      if (gender && ["male", "female", "unisex"].includes(gender)) {
         variantMatch.$and.push({ gender: gender });
       }
 
