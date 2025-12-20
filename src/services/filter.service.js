@@ -84,6 +84,7 @@ const filterService = {
     const genders = [
       { id: "male", name: "Nam" },
       { id: "female", name: "Nữ" },
+      { id: "unisex", name: "Unisex" },
     ];
 
     // Chuyển đổi màu sắc để dễ sử dụng cho frontend
