@@ -25,8 +25,8 @@ const sizeValidator = {
       .isString()
       .withMessage("Loại kích thước phải là chuỗi")
       .toUpperCase()
-      .isIn(["EU", "US", "UK", "VN", "CM", "INCHES"])
-      .withMessage("Loại kích thước phải là: EU, US, UK, VN, CM hoặc INCHES"),
+      .isIn(["EU", "US", "UK", "VN"])
+      .withMessage("Loại kích thước phải là: EU, US, UK, VN"),
 
     body("description")
       .notEmpty()
@@ -57,8 +57,8 @@ const sizeValidator = {
       .isString()
       .withMessage("Loại kích thước phải là chuỗi")
       .toUpperCase()
-      .isIn(["EU", "US", "UK", "VN", "CM", "INCHES"])
-      .withMessage("Loại kích thước phải là: EU, US, UK, VN, CM hoặc INCHES"),
+      .isIn(["EU", "US", "UK", "VN"])
+      .withMessage("Loại kích thước phải là: EU, US, UK, VN"),
 
     body("description")
       .optional()
@@ -92,8 +92,8 @@ const sizeValidator = {
       .isString()
       .withMessage("Loại kích thước phải là chuỗi")
       .toUpperCase()
-      .isIn(["EU", "US", "UK", "VN", "CM", "INCHES"])
-      .withMessage("Loại kích thước phải là: EU, US, UK, VN, CM hoặc INCHES"),
+      .isIn(["EU", "US", "UK", "VN"])
+      .withMessage("Loại kích thước phải là: EU, US, UK, VN"),
 
     query("sort")
       .optional()

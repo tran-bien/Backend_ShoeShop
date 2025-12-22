@@ -9,7 +9,7 @@ const SizeSchema = new mongoose.Schema(
     type: {
       type: String,
       required: true,
-      enum: ["EU", "US", "UK", "VN", "CM", "INCHES"],
+      enum: ["EU", "US", "UK", "VN"],
       default: "EU",
       uppercase: true, // Tự động chuyển thành chữ hoa
     },
