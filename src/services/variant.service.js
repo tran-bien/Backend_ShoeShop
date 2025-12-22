@@ -604,7 +604,8 @@ const variantService = {
           size: sizeData.size,
           // REMOVED: quantity - không lưu vào Variant schema
           // Quantity được quản lý bởi InventoryItem
-          sku: existingSize ? existingSize.sku : undefined,
+          // GIỮI LẠI SKU cũ: ƯU TIÊN SKU từ sizeData (FE gửi), nếu không thì lấy từ existingSize
+          sku: sizeData.sku || (existingSize ? existingSize.sku : undefined),
           // REMOVED: isSizeAvailable - không có trong schema
         });
       }
@@ -627,12 +628,13 @@ const variantService = {
       }
     }
 
-    // Cập nhật biến thể - middleware sẽ tự động tính lại các trường phụ thuộc
-    const updatedVariant = await Variant.findByIdAndUpdate(
-      id,
-      { $set: updateFields },
-      { new: true, runValidators: true }
-    )
+    // THAY ĐỔI: Dùng .save() thay vì findByIdAndUpdate để trigger middleware pre-save (tạo SKU)
+    // findByIdAndUpdate không trigger pre('save') middleware
+    Object.assign(variant, updateFields);
+    await variant.save(); // Trigger pre-save middleware để tạo SKU tự động
+
+    // Populate để trả về đầy đủ thông tin
+    const updatedVariant = await Variant.findById(id)
       .populate("color", "name code type colors")
       .populate("sizes.size", "value type description")
       .populate({
