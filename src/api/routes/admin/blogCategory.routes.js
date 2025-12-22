@@ -14,21 +14,21 @@ router.use(requireStaffOrAdmin);
 /**
  * @route GET /api/v1/admin/blogs/categories
  * @desc [ADMIN] Lấy tất cả categories (kể cả inactive)
- * @access Admin
+ * @access Admin/Staff
  */
 router.get("/", blogCategoryController.getAdminCategories);
 
 /**
  * @route GET /api/v1/admin/blogs/categories/:id
  * @desc [ADMIN] Lấy chi tiết category
- * @access Admin
+ * @access Admin/Staff
  */
 router.get("/:id", blogCategoryController.getCategoryById);
 
 /**
  * @route POST /api/v1/admin/blogs/categories
  * @desc [ADMIN] Tạo category mới
- * @access Admin
+ * @access Admin/Staff
  */
 router.post(
   "/",
@@ -39,7 +39,7 @@ router.post(
 /**
  * @route PUT /api/v1/admin/blogs/categories/:id
  * @desc [ADMIN] Cập nhật category
- * @access Admin
+ * @access Admin/Staff
  */
 router.put(
   "/:id",
@@ -53,7 +53,7 @@ router.put(
 /**
  * @route DELETE /api/v1/admin/blogs/categories/:id
  * @desc [ADMIN] Xóa category (soft delete)
- * @access Admin
+ * @access Admin/Staff
  */
 router.delete("/:id", blogCategoryController.deleteCategory);
 

@@ -68,11 +68,11 @@ router.post(
 /**
  * @route   POST /api/v1/admin/knowledge-base/excel/import
  * @desc    Import knowledge base from Excel file
- * @access  Admin Only
+ * @access  Admin/Staff
  */
 router.post(
   "/excel/import",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   uploadExcelFile,
   validateExcelImport,
   validateRequest,
@@ -82,22 +82,22 @@ router.post(
 /**
  * @route   DELETE /api/v1/admin/knowledge-base/excel/clear-training
  * @desc    Clear all Excel training data (for demo)
- * @access  Admin Only
+ * @access  Admin/staff
  */
 router.delete(
   "/excel/clear-training",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   knowledgeController.clearExcelTraining
 );
 
 /**
  * @route   DELETE /api/v1/admin/knowledge-base/clear-all
  * @desc    Clear ALL knowledge documents (DANGEROUS - Admin Only)
- * @access  Admin Only
+ * @access  Admin/staff
  */
 router.delete(
   "/clear-all",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   knowledgeController.clearAllDocuments
 );
 
@@ -160,11 +160,11 @@ router.put(
 /**
  * @route   DELETE /api/v1/admin/knowledge-base/:id
  * @desc    Xóa knowledge document
- * @access  Admin Only
+ * @access  Admin/Staff
  */
 router.delete(
   "/:id",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   validateDeleteDocument,
   validateRequest,
   knowledgeController.deleteDocument

@@ -39,11 +39,12 @@ module.exports = (io, socket) => {
         });
       }
 
+      // Admin/Staff có thể join mọi conversation
       const isParticipant = conversation.participants.some(
         (p) => p.userId._id.toString() === userId.toString()
       );
 
-      if (!isParticipant) {
+      if (!isParticipant && userRole !== "admin" && userRole !== "staff") {
         console.log(`[CHAT] User ${userId} is NOT a participant`);
         return callback?.({
           success: false,
@@ -99,11 +100,12 @@ module.exports = (io, socket) => {
         });
       }
 
+      // Admin/Staff có thể gửi tin nhắn trong mọi conversation
       const isParticipant = conversation.participants.some(
         (p) => p.userId._id.toString() === userId.toString()
       );
 
-      if (!isParticipant) {
+      if (!isParticipant && userRole !== "admin" && userRole !== "staff") {
         return callback?.({
           success: false,
           error: "Bạn không có quyền gửi tin nhắn trong conversation này",

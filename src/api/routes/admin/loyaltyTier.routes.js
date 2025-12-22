@@ -4,7 +4,6 @@ const loyaltyTierController = require("@controllers/admin/loyaltyTier.controller
 const {
   protect,
   requireStaffOrAdmin,
-  requireStaffReadOnly,
 } = require("@middlewares/auth.middleware");
 const loyaltyTierValidator = require("@validators/loyaltyTier.validator");
 const validate = require("@utils/validatehelper");
@@ -19,7 +18,7 @@ router.use(protect);
  */
 router.get(
   "/",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(loyaltyTierValidator.validateGetTiers),
   loyaltyTierController.getAllTiers
 );
@@ -31,7 +30,7 @@ router.get(
  */
 router.get(
   "/:id",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(loyaltyTierValidator.validateTierId),
   loyaltyTierController.getTierById
 );

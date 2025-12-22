@@ -45,6 +45,16 @@ class ChatService {
       throw new ApiError(404, "Không tìm thấy conversation");
     }
 
+    // Check if user is admin/staff - they can access ALL conversations
+    const user = await User.findById(userId);
+    if (user && (user.role === "admin" || user.role === "staff")) {
+      console.log(
+        `[ChatService] ${user.role} accessing conversation ${conversationId}`
+      );
+      return conversation;
+    }
+
+    // For regular users/shippers, check if they are participant
     const isParticipant = conversation.participants.some(
       (p) => p.userId._id.toString() === userId.toString()
     );
@@ -116,26 +126,57 @@ class ChatService {
 
     console.log(`[ChatService] getUserConversations for userId: ${userId}`);
 
-    const conversations = await ChatConversation.find({
-      "participants.userId": userId,
-    })
+    // Check if user is admin/staff
+    const user = await User.findById(userId);
+    let matchCondition = {};
+
+    if (user && (user.role === "admin" || user.role === "staff")) {
+      // Admin/Staff có thể xem TẤT CẢ conversations
+      console.log(
+        `[ChatService] User is ${user.role}, showing ALL conversations`
+      );
+      matchCondition = {}; // Không filter gì cả
+    } else {
+      // User/Shipper chỉ xem conversations của mình
+      matchCondition = { "participants.userId": userId };
+    }
+
+    const conversations = await ChatConversation.find(matchCondition)
       .populate("participants.userId", "name avatar role email")
       .populate("lastMessage.sentBy", "name")
       .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(limit);
 
-    const total = await ChatConversation.countDocuments({
-      "participants.userId": userId,
-    });
+    const total = await ChatConversation.countDocuments(matchCondition);
 
     console.log(`[ChatService] Found ${conversations.length} conversations`);
 
     // Transform unreadCount Map to single number for current user
     const transformedConversations = conversations.map((conv) => {
       const convObj = conv.toObject();
-      // Get unreadCount for this specific user from the Map
-      convObj.unreadCount = conv.unreadCount?.get(userId.toString()) || 0;
+
+      if (user && (user.role === "admin" || user.role === "staff")) {
+        // Admin/Staff: Lấy unreadCount của bất kỳ admin/staff nào (vì chúng giống nhau)
+        // Chỉ đếm tin nhắn từ user/shipper chưa được admin/staff nào reply
+        let unreadCount = 0;
+        for (const p of conv.participants) {
+          const participantRole = p.userId?.role || p.role;
+          if (participantRole === "admin" || participantRole === "staff") {
+            const participantId =
+              p.userId?._id?.toString() || p.userId?.toString();
+            if (participantId) {
+              unreadCount = conv.unreadCount?.get(participantId) || 0;
+              break; // Chỉ cần lấy 1 admin/staff, vì chúng giống nhau
+            }
+          }
+        }
+        convObj.unreadCount = unreadCount;
+      } else {
+        // User/Shipper: Chỉ lấy unread count của mình
+        convObj.unreadCount = conv.unreadCount?.get(userId.toString()) || 0;
+      }
+
       return convObj;
     });
 
@@ -181,35 +222,76 @@ class ChatService {
     });
 
     // Update conversation
-    const conversation = await ChatConversation.findById(conversationId);
+    const conversation = await ChatConversation.findById(
+      conversationId
+    ).populate("participants.userId", "role");
     if (!conversation) {
       throw new ApiError(404, "Không tìm thấy conversation");
     }
 
-    // Build unreadCount increments
+    // Get sender role
+    const sender = await User.findById(senderId);
+    const senderRole = sender?.role;
+
+    // Build unreadCount increments and resets
     const unreadIncrements = {};
-    conversation.participants.forEach((p) => {
-      const participantId = p.userId.toString();
-      if (participantId !== senderId.toString()) {
-        unreadIncrements[`unreadCount.${participantId}`] = 1;
-      }
-    });
+    const unreadResets = {};
+
+    // Nếu sender là admin/staff → Đây là reply cho user/shipper
+    if (senderRole === "admin" || senderRole === "staff") {
+      // Tìm TẤT CẢ admin/staff trong hệ thống (không chỉ trong participants)
+      // Vì khi 1 admin/staff reply, TẤT CẢ admin/staff khác không cần thấy unread nữa
+      const allAdminStaff = await User.find({
+        role: { $in: ["admin", "staff"] },
+        isActive: true,
+      }).select("_id");
+
+      // RESET unreadCount = 0 cho TẤT CẢ admin/staff
+      allAdminStaff.forEach((adminStaff) => {
+        unreadResets[`unreadCount.${adminStaff._id.toString()}`] = 0;
+      });
+
+      // Tăng unreadCount cho user/shipper trong conversation
+      conversation.participants.forEach((p) => {
+        const participantRole = p.userId?.role || p.role;
+        const participantId = p.userId?._id?.toString() || p.userId?.toString();
+
+        if (participantRole === "user" || participantRole === "shipper") {
+          unreadIncrements[`unreadCount.${participantId}`] = 1;
+        }
+      });
+    } else {
+      // Sender là user/shipper → Tin nhắn mới từ user/shipper
+      conversation.participants.forEach((p) => {
+        const participantId = p.userId?._id?.toString() || p.userId?.toString();
+
+        if (participantId !== senderId.toString()) {
+          // Tăng cho tất cả participants khác (bao gồm admin/staff)
+          unreadIncrements[`unreadCount.${participantId}`] = 1;
+        }
+      });
+    }
+
+    // Build update query
+    const updateQuery = {
+      $set: {
+        lastMessage: {
+          text: text.trim(),
+          sentBy: senderId,
+          sentAt: new Date(),
+        },
+        ...unreadResets, // Set = 0 cho admin/staff khi admin/staff reply
+      },
+    };
+
+    if (Object.keys(unreadIncrements).length > 0) {
+      updateQuery.$inc = unreadIncrements;
+    }
 
     // Atomic update
-    await ChatConversation.findByIdAndUpdate(
-      conversationId,
-      {
-        $set: {
-          lastMessage: {
-            text: text.trim(),
-            sentBy: senderId,
-            sentAt: new Date(),
-          },
-        },
-        $inc: unreadIncrements,
-      },
-      { new: true }
-    );
+    await ChatConversation.findByIdAndUpdate(conversationId, updateQuery, {
+      new: true,
+    });
 
     const populatedMessage = await message.populate(
       "senderId",
@@ -249,9 +331,34 @@ class ChatService {
    * Đánh dấu đã đọc
    */
   async markAsRead(conversationId, userId) {
-    const conversation = await ChatConversation.findById(conversationId);
+    const conversation = await ChatConversation.findById(
+      conversationId
+    ).populate("participants.userId", "role");
+
     if (conversation) {
-      conversation.unreadCount.set(userId.toString(), 0);
+      // Check if current user is admin/staff
+      const currentUser = await User.findById(userId);
+
+      if (
+        currentUser &&
+        (currentUser.role === "admin" || currentUser.role === "staff")
+      ) {
+        // Set unreadCount = 0 cho TẤT CẢ admin/staff participants
+        conversation.participants.forEach((p) => {
+          const participantRole = p.userId?.role || p.role;
+          if (participantRole === "admin" || participantRole === "staff") {
+            const participantId =
+              p.userId?._id?.toString() || p.userId?.toString();
+            if (participantId) {
+              conversation.unreadCount.set(participantId, 0);
+            }
+          }
+        });
+      } else {
+        // User/Shipper: Chỉ set cho mình
+        conversation.unreadCount.set(userId.toString(), 0);
+      }
+
       await conversation.save();
     }
 

@@ -6,10 +6,7 @@ const orderValidator = require("@validators/order.validator");
 const validate = require("@utils/validatehelper");
 const {
   protect,
-  requireStaff,
   requireStaffOrAdmin,
-  requireStaffReadOnly,
-  requireAdminOnly,
 } = require("@middlewares/auth.middleware");
 
 // Áp dụng middleware xác thực cho tất cả các routes
@@ -35,7 +32,7 @@ router.get(
  */
 router.get(
   "/cancel-requests",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(orderValidator.validateGetCancelRequests),
   orderController.getCancelRequests
 );
@@ -47,7 +44,7 @@ router.get(
  */
 router.get(
   "/pending-refunds",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   orderController.getPendingRefunds
 );
 
@@ -58,8 +55,7 @@ router.get(
  */
 router.patch(
   "/cancel-requests/:id",
-  requireStaff,
-  validate(orderValidator.validateProcessCancelRequest),
+  requireStaffOrAdmin,
   orderController.processCancelRequest
 );
 
@@ -70,7 +66,7 @@ router.patch(
  */
 router.get(
   "/:id",
-  requireStaffReadOnly,
+  requireStaffOrAdmin,
   validate(orderValidator.validateGetOrder),
   orderController.getOrderById
 );
@@ -82,7 +78,7 @@ router.get(
  */
 router.patch(
   "/:id/status",
-  requireStaff,
+  requireStaffOrAdmin,
   validate(orderValidator.validateUpdateOrderStatus),
   orderController.updateOrderStatus
 );
@@ -105,7 +101,7 @@ router.post(
  */
 router.post(
   "/:id/confirm-refund",
-  requireAdminOnly,
+  requireStaffOrAdmin,
   orderController.confirmRefund
 );
 
