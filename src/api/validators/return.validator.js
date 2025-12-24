@@ -46,29 +46,47 @@ exports.validateCreateReturnRequest = [
 
   // Validate bankInfo nếu refundMethod = bank_transfer
   body("bankInfo")
-    .if(body("refundMethod").equals("bank_transfer"))
-    .notEmpty()
-    .withMessage("Thông tin ngân hàng không được để trống khi chuyển khoản")
-    .isObject()
-    .withMessage("Thông tin ngân hàng phải là object"),
-
-  body("bankInfo.bankName")
-    .if(body("refundMethod").equals("bank_transfer"))
-    .notEmpty()
-    .withMessage("Tên ngân hàng không được để trống")
-    .isString(),
-
-  body("bankInfo.accountNumber")
-    .if(body("refundMethod").equals("bank_transfer"))
-    .notEmpty()
-    .withMessage("Số tài khoản không được để trống")
-    .isString(),
-
-  body("bankInfo.accountName")
-    .if(body("refundMethod").equals("bank_transfer"))
-    .notEmpty()
-    .withMessage("Tên chủ tài khoản không được để trống")
-    .isString(),
+    .optional()
+    .customSanitizer((value) => {
+      // Parse JSON string if needed
+      if (typeof value === "string") {
+        try {
+          return JSON.parse(value);
+        } catch (e) {
+          return value;
+        }
+      }
+      return value;
+    })
+    .custom((value, { req }) => {
+      // Only validate if refundMethod is bank_transfer
+      if (req.body.refundMethod === "bank_transfer") {
+        if (!value) {
+          throw new Error(
+            "Thông tin ngân hàng không được để trống khi chuyển khoản"
+          );
+        }
+        if (
+          typeof value !== "object" ||
+          value === null ||
+          Array.isArray(value)
+        ) {
+          throw new Error("Thông tin ngân hàng phải là object");
+        }
+        if (!value.bankName || typeof value.bankName !== "string") {
+          throw new Error("Tên ngân hàng không được để trống và phải là chuỗi");
+        }
+        if (!value.accountNumber || typeof value.accountNumber !== "string") {
+          throw new Error("Số tài khoản không được để trống và phải là chuỗi");
+        }
+        if (!value.accountName || typeof value.accountName !== "string") {
+          throw new Error(
+            "Tên chủ tài khoản không được để trống và phải là chuỗi"
+          );
+        }
+      }
+      return true;
+    }),
 ];
 
 /**
