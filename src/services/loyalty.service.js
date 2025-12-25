@@ -186,6 +186,17 @@ const loyaltyService = {
     // Cập nhật user
     user.loyalty.points = balanceAfter;
     user.loyalty.totalRedeemed = (user.loyalty.totalRedeemed || 0) + points;
+
+    // FIXED: Trừ cả totalEarned khi trả hàng (source = "RETURN")
+    // Để phản ánh đúng tổng điểm tích lũy từ trước đến nay
+    if (source === "RETURN") {
+      const currentTotalEarned = user.loyalty.totalEarned || 0;
+      user.loyalty.totalEarned = Math.max(0, currentTotalEarned - points);
+      console.log(
+        `[LOYALTY] Trừ totalEarned: ${currentTotalEarned} -> ${user.loyalty.totalEarned} (trừ ${points} điểm do trả hàng)`
+      );
+    }
+
     await user.save();
 
     // Auto update tier

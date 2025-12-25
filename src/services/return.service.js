@@ -878,7 +878,7 @@ const getShipperReturnRequests = async (shipperId, options = {}) => {
           },
         ],
       })
-      .populate("customer", "name phone")
+      .populate("customer", "name email phone")
       .sort({ assignedAt: -1 })
       .skip(skip)
       .limit(limit),
