@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 /**
  * Knowledge Base Document
- * Lưu trữ tài liệu training cho Gemini AI
+ * Lưu trữ dữ liệu training cho Gemini AI
  */
 const KnowledgeDocumentSchema = new mongoose.Schema(
   {

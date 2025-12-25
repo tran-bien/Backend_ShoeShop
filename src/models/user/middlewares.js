@@ -37,7 +37,7 @@ const applyMiddlewares = (schema) => {
 
       // 3. Xử lý khi thêm địa chỉ mới
       if (update && update.$push && update.$push.addresses) {
-        // Lấy tài liệu hiện tại để kiểm tra
+        // Lấy dữ liệu hiện tại để kiểm tra
         const doc = await this.model.findOne(this.getQuery());
         if (doc) {
           // Nếu thêm địa chỉ đầu tiên, đặt làm mặc định
