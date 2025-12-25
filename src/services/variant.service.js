@@ -78,7 +78,7 @@ const variantService = {
     }
 
     // Lọc theo giới tính
-    if (gender && ["male", "female"].includes(gender)) {
+    if (gender && ["male", "female", "unisex"].includes(gender)) {
       filter.gender = gender;
     }
 
