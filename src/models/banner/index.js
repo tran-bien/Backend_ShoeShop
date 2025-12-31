@@ -3,8 +3,6 @@ const BannerSchema = require("./schema");
 const { applyMiddlewares } = require("./middlewares");
 const softDeletePlugin = require("@plugins/softDelete");
 
-// Áp dụng plugin xóa mềm
-BannerSchema.plugin(softDeletePlugin);
 
 // Áp dụng middlewares
 applyMiddlewares(BannerSchema);

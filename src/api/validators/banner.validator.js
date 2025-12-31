@@ -39,8 +39,8 @@ const commonValidators = {
   validateDisplayOrder: body("displayOrder")
     .notEmpty()
     .withMessage("Vui lòng chọn vị trí hiển thị")
-    .isInt({ min: 1, max: 5 })
-    .withMessage("Vị trí hiển thị phải từ 1 đến 5")
+    .isInt({ min: 1 })
+    .withMessage("Vị trí hiển thị phải > 0")
     .toInt(),
 
   /**
@@ -91,8 +91,8 @@ const bannerValidator = {
 
     body("displayOrder")
       .optional()
-      .isInt({ min: 1, max: 5 })
-      .withMessage("Vị trí hiển thị phải từ 1 đến 5")
+      .isInt({ min: 1 })
+      .withMessage("Vị trí hiển thị phải lớn hơn 0")
       .toInt(),
 
     commonValidators.validateLink,
@@ -103,26 +103,6 @@ const bannerValidator = {
    * Validation cho ID banner
    */
   validateBannerId: commonValidators.validateBannerId,
-
-  /**
-   * Validation cho reorder banners
-   */
-  validateReorderBanners: [
-    body("bannerOrders")
-      .isArray()
-      .withMessage("Dữ liệu sắp xếp phải là danh sách")
-      .isLength({ min: 1, max: 5 })
-      .withMessage("Danh sách sắp xếp phải có từ 1 đến 5 phần tử"),
-
-    body("bannerOrders.*.bannerId")
-      .custom(isValidObjectId)
-      .withMessage("ID banner trong danh sách sắp xếp không hợp lệ"),
-
-    body("bannerOrders.*.newOrder")
-      .isInt({ min: 1, max: 5 })
-      .withMessage("Vị trí mới phải từ 1 đến 5")
-      .toInt(),
-  ],
 
   /**
    * Validation cho query parameters

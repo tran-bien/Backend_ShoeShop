@@ -258,17 +258,6 @@ const imageController = {
     res.json(result);
   }),
 
-  /**
-   * @desc    Sắp xếp banners
-   * @route   PUT /api/admin/images/banner/reorder
-   * @access  Staff/Admin
-   */
-  reorderBanners: asyncHandler(async (req, res) => {
-    const { bannerOrders } = req.body;
-    const result = await imageService.reorderBanners(bannerOrders);
-    res.json(result);
-  }),
-
   // ======================== BLOG IMAGE OPERATIONS ========================
 
   /**

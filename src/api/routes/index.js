@@ -10,7 +10,6 @@ const publicTagRoutes = require("@routes/public/tag.routes");
 const userProductRoutes = require("@routes/public/product.routes");
 const publicReviewRoutes = require("@routes/public/reviews.routes");
 const filterRoutes = require("@routes/public/filter.routes");
-const publicCouponRoutes = require("@routes/public/coupon.routes");
 const publicBannerRoutes = require("@routes/public/banner.routes");
 const publicBlogRoutes = require("@routes/public/blog.routes");
 const publicBlogCategoryRoutes = require("@routes/public/blogCategory.routes");
@@ -74,7 +73,6 @@ router.use("/products", userProductRoutes);
 router.use("/products", publicSizeGuideRoutes);
 router.use("/reviews", publicReviewRoutes);
 router.use("/filters", filterRoutes);
-router.use("/coupons", publicCouponRoutes);
 router.use("/banners", publicBannerRoutes);
 // Blog categories MUST come before /blogs to avoid :slug matching "categories"
 router.use("/blogs/categories", publicBlogCategoryRoutes);

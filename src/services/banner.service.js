@@ -122,26 +122,9 @@ const bannerService = {
    * Tạo banner mới
    */
   createBanner: async (bannerData) => {
-    // Kiểm tra số lượng banner hiện tại (tối đa 5 banners)
-    const activeBannerCount = await Banner.countDocuments({
-      deletedAt: null,
-    });
-
-    if (activeBannerCount >= 5) {
-      throw new ApiError(
-        400,
-        "Hệ thống chỉ cho phép tối đa 5 banner. Vui lòng xóa banner cũ trước khi thêm mới."
-      );
-    }
-
     // Đảm bảo isActive mặc định là true nếu không được cung cấp
     if (bannerData.isActive === undefined) {
       bannerData.isActive = true;
-    }
-
-    // Kiểm tra displayOrder có hợp lệ không (1-5)
-    if (bannerData.displayOrder < 1 || bannerData.displayOrder > 5) {
-      throw new ApiError(400, "Vị trí hiển thị phải từ 1 đến 5");
     }
 
     // Kiểm tra xem vị trí đã được sử dụng chưa (nếu banner là active)
@@ -182,8 +165,8 @@ const bannerService = {
 
     // Kiểm tra displayOrder nếu có thay đổi
     if (updateData.displayOrder !== undefined) {
-      if (updateData.displayOrder < 1 || updateData.displayOrder > 5) {
-        throw new ApiError(400, "Vị trí hiển thị phải từ 1 đến 5");
+      if (updateData.displayOrder < 1) {
+        throw new ApiError(400, "Vị trí hiển thị phải lớn hơn 0");
       }
 
       // Chỉ kiểm tra xung đột nếu vị trí THỰC SỰ thay đổi
@@ -229,7 +212,7 @@ const bannerService = {
   },
 
   /**
-   * Xóa mềm banner
+   * Xóa cứng banner
    */
   deleteBanner: async (bannerId, userId) => {
     const banner = await Banner.findById(bannerId);
@@ -239,13 +222,10 @@ const bannerService = {
     }
 
     const displayOrder = banner.displayOrder;
+    const bannerTitle = banner.title;
 
-    // Xóa mềm
-    banner.deletedAt = new Date();
-    banner.deletedBy = userId;
-    banner.isActive = false;
-
-    await banner.save();
+    // Xóa cứng
+    await Banner.findByIdAndDelete(bannerId);
 
     // Điều chỉnh displayOrder của các banner khác
     await Banner.updateMany(
@@ -259,68 +239,7 @@ const bannerService = {
 
     return {
       success: true,
-      message: `Xóa banner ${banner.title} thành công`,
-    };
-  },
-
-  /**
-   * Khôi phục banner đã xóa
-   */
-  restoreBanner: async (bannerId, newDisplayOrder = null) => {
-    const banner = await Banner.findById(bannerId);
-
-    if (!banner) {
-      throw new ApiError(404, `Không tìm thấy banner id: ${bannerId}`);
-    }
-
-    if (!banner.deletedAt) {
-      throw new ApiError(400, "Banner này chưa bị xóa");
-    }
-
-    // Xác định vị trí mới
-    let targetOrder = newDisplayOrder;
-    if (!targetOrder) {
-      // Tìm vị trí trống đầu tiên
-      const occupiedOrders = await Banner.find({
-        isActive: true,
-        deletedAt: null,
-      }).distinct("displayOrder");
-
-      for (let i = 1; i <= 4; i++) {
-        if (!occupiedOrders.includes(i)) {
-          targetOrder = i;
-          break;
-        }
-      }
-
-      if (!targetOrder) {
-        throw new ApiError(400, "Không còn vị trí trống để khôi phục banner");
-      }
-    }
-
-    // Kiểm tra vị trí có bị trùng không
-    const existingBanner = await Banner.findOne({
-      displayOrder: targetOrder,
-      isActive: true,
-      deletedAt: null,
-    });
-
-    if (existingBanner) {
-      throw new ApiError(409, `Vị trí ${targetOrder} đã được sử dụng`);
-    }
-
-    // Khôi phục banner
-    banner.deletedAt = null;
-    banner.deletedBy = null;
-    banner.isActive = true;
-    banner.displayOrder = targetOrder;
-
-    await banner.save();
-
-    return {
-      success: true,
-      message: `Khôi phục banner ${banner.title} thành công`,
-      banner,
+      message: `Xóa banner ${bannerTitle} thành công`,
     };
   },
 

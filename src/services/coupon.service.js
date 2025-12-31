@@ -35,22 +35,27 @@ const couponService = {
       filter.isPublic = true;
     }
 
+    // FIXED: Sửa logic $expr để xử lý đúng maxUses=0 và maxRedeemPerUser=0 (nghĩa là không giới hạn)
     // Nếu có userId, filter coupon đã hết lượt hoặc user đã đổi đủ số lần
     if (userId) {
       const userObjectId = new mongoose.Types.ObjectId(userId);
       filter.$expr = {
         $and: [
-          // Nếu có maxUses, chỉ lấy coupon chưa hết lượt sử dụng
+          // FIXED: Nếu có maxUses > 0, chỉ lấy coupon chưa hết lượt sử dụng
+          // maxUses = null hoặc maxUses = 0 => không giới hạn
           {
             $or: [
               { $eq: ["$maxUses", null] },
+              { $eq: ["$maxUses", 0] },
               { $gt: ["$maxUses", "$currentUses"] },
             ],
           },
-          // Nếu có maxRedeemPerUser, chỉ lấy coupon user chưa đổi đủ số lần
+          // FIXED: Nếu có maxRedeemPerUser > 0, chỉ lấy coupon user chưa đổi đủ số lần
+          // maxRedeemPerUser = null hoặc maxRedeemPerUser = 0 => không giới hạn
           {
             $or: [
               { $eq: ["$maxRedeemPerUser", null] },
+              { $eq: ["$maxRedeemPerUser", 0] },
               {
                 $lt: [
                   {

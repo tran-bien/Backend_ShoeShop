@@ -216,17 +216,6 @@ router.post(
 );
 
 /**
- * @route   PUT /api/v1/admin/images/banner/reorder
- * @desc    Sắp xếp thứ tự banner
- * @access  Staff/Admin
- */
-router.put(
-  "/banner/reorder",
-  validate(uploadValidator.validateBannerReorder),
-  imageController.reorderBanners
-);
-
-/**
  * @route   PUT /api/v1/admin/images/banner/:bannerId
  * @desc    Cập nhật ảnh banner
  * @access  Staff/Admin

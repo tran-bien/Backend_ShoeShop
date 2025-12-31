@@ -562,11 +562,6 @@ const imageService = {
   uploadBannerImage: async (imageData, bannerData) => {
     const { Banner } = require("@models");
 
-    // Kiểm tra displayOrder có hợp lệ không
-    if (bannerData.displayOrder < 1 || bannerData.displayOrder > 5) {
-      throw new ApiError(400, "Vị trí hiển thị phải từ 1 đến 5");
-    }
-
     // Kiểm tra xem vị trí đã được sử dụng chưa
     const existingBanner = await Banner.findOne({
       displayOrder: bannerData.displayOrder,
@@ -684,50 +679,6 @@ const imageService = {
     return {
       success: true,
       message: "Xóa banner thành công",
-    };
-  },
-
-  /**
-   * Sắp xếp lại thứ tự banner
-   * @param {Array} bannerOrders - Mảng { bannerId, newOrder }
-   * @returns {Promise<Object>} - Kết quả sắp xếp
-   */
-  reorderBanners: async (bannerOrders) => {
-    const { Banner } = require("@models");
-
-    // Validate dữ liệu đầu vào
-    if (!Array.isArray(bannerOrders) || bannerOrders.length === 0) {
-      throw new ApiError(400, "Dữ liệu sắp xếp không hợp lệ");
-    }
-
-    // Kiểm tra tất cả orders phải từ 1-5 và không trùng lặp
-    const orders = bannerOrders.map((item) => item.newOrder);
-    const uniqueOrders = [...new Set(orders)];
-
-    if (uniqueOrders.length !== bannerOrders.length) {
-      throw new ApiError(400, "Vị trí hiển thị không được trùng lặp");
-    }
-
-    if (orders.some((order) => order < 1 || order > 5)) {
-      throw new ApiError(400, "Vị trí hiển thị phải từ 1 đến 5");
-    }
-
-    // Cập nhật từng banner
-    const updatePromises = bannerOrders.map(async ({ bannerId, newOrder }) => {
-      const banner = await Banner.findById(bannerId);
-      if (!banner) {
-        throw new ApiError(404, `Không tìm thấy banner ${bannerId}`);
-      }
-
-      banner.displayOrder = newOrder;
-      return await banner.save();
-    });
-
-    await Promise.all(updatePromises);
-
-    return {
-      success: true,
-      message: "Sắp xếp banner thành công",
     };
   },
 
