@@ -1667,7 +1667,80 @@ const productService = {
       pipeline.push({ $match: priceMatch });
     }
 
-    // Stage 7: Project để giữ các trường cần thiết
+    // Stage 7: Lookup variants để lấy variantIds cho việc tính rating
+    pipeline.push({
+      $lookup: {
+        from: "variants",
+        localField: "_id",
+        foreignField: "product",
+        as: "allVariants",
+      },
+    });
+
+    // Stage 7.1: Lookup orders để lấy orderItems có variant của product
+    pipeline.push({
+      $lookup: {
+        from: "orders",
+        let: { variantIds: "$allVariants._id" },
+        pipeline: [
+          { $unwind: "$orderItems" },
+          {
+            $match: {
+              $expr: { $in: ["$orderItems.variant", "$$variantIds"] },
+            },
+          },
+          { $project: { orderItemId: "$orderItems._id" } },
+        ],
+        as: "orderItemsData",
+      },
+    });
+
+    // Stage 7.2: Lookup reviews và tính avgRating, numReviews
+    pipeline.push({
+      $lookup: {
+        from: "reviews",
+        let: {
+          orderItemIds: {
+            $map: {
+              input: "$orderItemsData",
+              as: "oi",
+              in: "$$oi.orderItemId",
+            },
+          },
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $in: ["$orderItem", "$$orderItemIds"] },
+              isActive: true,
+              deletedAt: null,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              avgRating: { $avg: "$rating" },
+              numReviews: { $sum: 1 },
+            },
+          },
+        ],
+        as: "reviewStats",
+      },
+    });
+
+    // Stage 7.3: Thêm fields avgRating và numReviews
+    pipeline.push({
+      $addFields: {
+        avgRating: {
+          $ifNull: [{ $arrayElemAt: ["$reviewStats.avgRating", 0] }, 0],
+        },
+        numReviews: {
+          $ifNull: [{ $arrayElemAt: ["$reviewStats.numReviews", 0] }, 0],
+        },
+      },
+    });
+
+    // Stage 8: Project để giữ các trường cần thiết
     pipeline.push({
       $project: {
         _id: 1,
@@ -1685,10 +1758,12 @@ const productService = {
         filteredVariants: 1,
         minPrice: 1,
         maxPrice: 1,
+        avgRating: 1,
+        numReviews: 1,
       },
     });
 
-    // Stage 8: Sắp xếp
+    // Stage 9: Sắp xếp
     let sortOption = { createdAt: -1 }; // Mặc định theo mới nhất
     switch (sort) {
       case "price-asc":
@@ -1698,11 +1773,12 @@ const productService = {
         sortOption = { maxPrice: -1, _id: 1 };
         break;
       case "popular":
-        sortOption = { totalQuantity: -1, _id: 1 };
+        // Sắp xếp theo số lượng đánh giá (nhiều reviews = popular)
+        sortOption = { numReviews: -1, avgRating: -1, _id: 1 };
         break;
       case "rating":
-        // Rating field không tồn tại, sort by totalQuantity thay thế
-        sortOption = { totalQuantity: -1, _id: 1 };
+        // FIX: Sắp xếp theo rating thực từ reviews
+        sortOption = { avgRating: -1, numReviews: -1, _id: 1 };
         break;
       default:
         sortOption = { createdAt: -1, _id: 1 };
