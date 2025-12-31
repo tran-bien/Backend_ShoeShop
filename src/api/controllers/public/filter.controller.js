@@ -18,11 +18,17 @@ const filterController = {
    * @access  Public
    */
   getFilterAttributesBySearch: asyncHandler(async (req, res) => {
-    const { name, category, brand } = req.query;
+    const { name, category, brand, colors, sizes, gender, minPrice, maxPrice } =
+      req.query;
     const result = await filterService.getFilterAttributesBySearch({
       name,
       category,
       brand,
+      colors,
+      sizes,
+      gender,
+      minPrice,
+      maxPrice,
     });
     res.json(result);
   }),

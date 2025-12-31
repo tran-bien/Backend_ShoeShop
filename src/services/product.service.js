@@ -1484,14 +1484,41 @@ const productService = {
     // Bắt đầu xây dựng pipeline aggregation
     const pipeline = [];
 
+    // Stage 0: Lookup category và brand để tìm kiếm theo tên
+    pipeline.push(
+      {
+        $lookup: {
+          from: "categories",
+          localField: "category",
+          foreignField: "_id",
+          as: "categoryInfo",
+        },
+      },
+      { $unwind: { path: "$categoryInfo", preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: "brands",
+          localField: "brand",
+          foreignField: "_id",
+          as: "brandInfo",
+        },
+      },
+      { $unwind: { path: "$brandInfo", preserveNullAndEmptyArrays: true } }
+    );
+
     // Stage 1: Lọc sản phẩm cơ bản
     const matchStage = {
       isActive: true,
       deletedAt: null,
     };
 
+    // Tìm kiếm theo từ khóa: khớp với tên sản phẩm HOẶC tên danh mục HOẶC tên thương hiệu
     if (name) {
-      matchStage.name = { $regex: name, $options: "i" };
+      matchStage.$or = [
+        { name: { $regex: name, $options: "i" } },
+        { "categoryInfo.name": { $regex: name, $options: "i" } },
+        { "brandInfo.name": { $regex: name, $options: "i" } },
+      ];
     }
 
     if (category && mongoose.Types.ObjectId.isValid(category)) {

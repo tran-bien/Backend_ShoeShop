@@ -249,6 +249,7 @@ const filterService = {
   /**
    * Lấy thuộc tính lọc động dựa trên các sản phẩm đã được lọc/tìm kiếm
    * Trả về chỉ những thuộc tính có trong kết quả tìm kiếm
+   * Logic: Khi chọn 1 filter, hiển thị các options của filter khác có thể kết hợp được
    * @param {Object} query - Các tham số tìm kiếm (name, category, brand, colors, sizes, gender, minPrice, maxPrice)
    */
   getFilterAttributesBySearch: async (query = {}) => {
@@ -271,14 +272,48 @@ const filterService = {
 
     const mongoose = require("mongoose");
 
+    // Nếu có name param, tìm category và brand IDs khớp với tên
+    let matchingCategoryIds = [];
+    let matchingBrandIds = [];
+
+    if (name) {
+      // Tìm category có tên khớp với từ khóa
+      const matchingCategories = await Category.find({
+        name: { $regex: name, $options: "i" },
+        isActive: true,
+        deletedAt: null,
+      })
+        .select("_id")
+        .lean();
+      matchingCategoryIds = matchingCategories.map((c) => c._id);
+
+      // Tìm brand có tên khớp với từ khóa
+      const matchingBrands = await Brand.find({
+        name: { $regex: name, $options: "i" },
+        isActive: true,
+        deletedAt: null,
+      })
+        .select("_id")
+        .lean();
+      matchingBrandIds = matchingBrands.map((b) => b._id);
+    }
+
     // Xây dựng filter cơ bản cho sản phẩm
     const productFilter = {
       isActive: true,
       deletedAt: null,
     };
 
+    // Tìm kiếm theo từ khóa: khớp với tên sản phẩm HOẶC thuộc danh mục/thương hiệu có tên khớp
     if (name) {
-      productFilter.name = { $regex: name, $options: "i" };
+      const orConditions = [{ name: { $regex: name, $options: "i" } }];
+      if (matchingCategoryIds.length > 0) {
+        orConditions.push({ category: { $in: matchingCategoryIds } });
+      }
+      if (matchingBrandIds.length > 0) {
+        orConditions.push({ brand: { $in: matchingBrandIds } });
+      }
+      productFilter.$or = orConditions;
     }
 
     // Xử lý category (có thể là array hoặc string)
@@ -303,7 +338,7 @@ const filterService = {
       }
     }
 
-    // Tìm các product IDs phù hợp với filter sản phẩm
+    // Tìm các product IDs phù hợp với filter sản phẩm (category, brand, name)
     let matchedProducts = await Product.find(productFilter)
       .select("_id category brand")
       .lean();
@@ -328,64 +363,103 @@ const filterService = {
 
     let productIds = matchedProducts.map((p) => p._id);
 
-    // Xây dựng filter cho variants
-    const variantFilter = {
+    // Xây dựng filter cho variants - CHỈ filter theo product IDs từ bước trước
+    const baseVariantFilter = {
       product: { $in: productIds },
       isActive: true,
       deletedAt: null,
     };
 
-    // Xử lý colors filter
-    if (colors) {
-      const colorIds = colors
-        .split(",")
-        .filter((id) => mongoose.Types.ObjectId.isValid(id))
-        .map((id) => new mongoose.Types.ObjectId(String(id)));
-      if (colorIds.length > 0) {
-        variantFilter.color = { $in: colorIds };
-      }
-    }
-
-    // Xử lý gender filter - Quan trọng: khi lọc Nam hoặc Nữ, cũng lấy cả Unisex
-    if (gender) {
-      const genderValues = gender.split(",");
-      const expandedGenders = new Set(genderValues);
-
-      // Nếu chọn male hoặc female, thêm unisex vào
-      if (genderValues.includes("male") || genderValues.includes("female")) {
-        expandedGenders.add("unisex");
-      }
-
-      variantFilter.gender = { $in: Array.from(expandedGenders) };
-    }
-
-    // Lấy variants phù hợp với filter
-    let matchedVariants = await Variant.find(variantFilter)
+    // Lấy TẤT CẢ variants của các products phù hợp (không filter theo color/size/gender)
+    // để thu thập các options có thể chọn
+    const allVariantsOfProducts = await Variant.find(baseVariantFilter)
       .select("product color sizes gender")
       .lean();
 
-    // Xử lý sizes filter - lọc variants có size phù hợp
-    if (sizes) {
-      const sizeIds = sizes
+    // Parse color IDs nếu có
+    let selectedColorIds = [];
+    if (colors) {
+      selectedColorIds = colors
         .split(",")
-        .filter((id) => mongoose.Types.ObjectId.isValid(id))
-        .map((id) => id);
+        .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    }
 
-      matchedVariants = matchedVariants.filter((v) =>
-        (v.sizes || []).some((s) => sizeIds.includes(s.size?.toString()))
+    // Parse size IDs nếu có
+    let selectedSizeIds = [];
+    if (sizes) {
+      selectedSizeIds = sizes
+        .split(",")
+        .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    }
+
+    // Parse gender values nếu có
+    let selectedGenders = [];
+    if (gender) {
+      const genderValues = gender.split(",");
+      selectedGenders = [...genderValues];
+      // Nếu chọn male hoặc female, thêm unisex vào
+      if (genderValues.includes("male") || genderValues.includes("female")) {
+        if (!selectedGenders.includes("unisex")) {
+          selectedGenders.push("unisex");
+        }
+      }
+    }
+
+    // Lọc variants theo các điều kiện đã chọn để tìm sản phẩm phù hợp
+    let filteredVariants = allVariantsOfProducts;
+
+    if (selectedColorIds.length > 0) {
+      filteredVariants = filteredVariants.filter((v) =>
+        selectedColorIds.includes(v.color?.toString())
+      );
+    }
+
+    if (selectedGenders.length > 0) {
+      filteredVariants = filteredVariants.filter((v) =>
+        selectedGenders.includes(v.gender)
+      );
+    }
+
+    if (selectedSizeIds.length > 0) {
+      filteredVariants = filteredVariants.filter((v) =>
+        (v.sizes || []).some((s) =>
+          selectedSizeIds.includes(s.size?.toString())
+        )
       );
     }
 
     // Lấy variant IDs để filter inventory
-    const variantIds = matchedVariants.map((v) => v._id);
+    const variantIds = filteredVariants.map((v) => v._id);
+
+    if (variantIds.length === 0) {
+      return {
+        success: true,
+        filters: {
+          categories: [],
+          brands: [],
+          colors: [],
+          sizes: [],
+          tags: [],
+          priceRange: { min: 0, max: 0 },
+          genders: [],
+        },
+        isFiltered: true,
+        matchedProductCount: 0,
+      };
+    }
 
     // Xử lý price filter thông qua InventoryItem
-    let inventoryFilter = {
-      variant: { $in: variantIds },
-      quantity: { $gt: 0 },
-    };
+    // CHỈ filter inventory khi có price filter
+    let validVariantIdsFromInventory = new Set();
+    let hasInventoryFilter = false;
 
     if (minPrice || maxPrice) {
+      hasInventoryFilter = true;
+      let inventoryFilter = {
+        variant: { $in: variantIds },
+        quantity: { $gt: 0 },
+      };
+
       inventoryFilter.finalPrice = {};
       if (minPrice) {
         inventoryFilter.finalPrice.$gte = Number(minPrice);
@@ -393,24 +467,42 @@ const filterService = {
       if (maxPrice) {
         inventoryFilter.finalPrice.$lte = Number(maxPrice);
       }
+
+      // Lấy inventory items phù hợp với price filter
+      const matchedInventory = await InventoryItem.find(inventoryFilter)
+        .select("variant product")
+        .lean();
+
+      validVariantIdsFromInventory = new Set(
+        matchedInventory.map((inv) => inv.variant.toString())
+      );
+
+      // Cập nhật lại filteredVariants dựa trên inventory có sẵn
+      filteredVariants = filteredVariants.filter((v) =>
+        validVariantIdsFromInventory.has(v._id.toString())
+      );
+
+      if (filteredVariants.length === 0) {
+        return {
+          success: true,
+          filters: {
+            categories: [],
+            brands: [],
+            colors: [],
+            sizes: [],
+            tags: [],
+            priceRange: { min: 0, max: 0 },
+            genders: [],
+          },
+          isFiltered: true,
+          matchedProductCount: 0,
+        };
+      }
     }
-
-    // Lấy inventory items phù hợp
-    const matchedInventory = await InventoryItem.find(inventoryFilter)
-      .select("variant product")
-      .lean();
-
-    // Cập nhật lại matchedVariants dựa trên inventory có sẵn
-    const validVariantIds = new Set(
-      matchedInventory.map((inv) => inv.variant.toString())
-    );
-    matchedVariants = matchedVariants.filter((v) =>
-      validVariantIds.has(v._id.toString())
-    );
 
     // Cập nhật lại productIds dựa trên variants hợp lệ
     const validProductIds = new Set(
-      matchedVariants.map((v) => v.product.toString())
+      filteredVariants.map((v) => v.product.toString())
     );
     matchedProducts = matchedProducts.filter((p) =>
       validProductIds.has(p._id.toString())
@@ -434,7 +526,13 @@ const filterService = {
       };
     }
 
-    // Thu thập các IDs duy nhất từ kết quả đã lọc
+    // ===== THU THẬP CÁC OPTIONS CÓ THỂ KẾT HỢP =====
+    // Lấy lại variants của các products phù hợp để tính toán options
+    const variantsOfValidProducts = allVariantsOfProducts.filter((v) =>
+      validProductIds.has(v.product.toString())
+    );
+
+    // Thu thập categories và brands từ products phù hợp
     const categoryIds = [
       ...new Set(
         matchedProducts.map((p) => p.category?.toString()).filter(Boolean)
@@ -445,20 +543,23 @@ const filterService = {
         matchedProducts.map((p) => p.brand?.toString()).filter(Boolean)
       ),
     ];
+
+    // Thu thập colors, sizes, genders từ variants của products phù hợp
+    // (không chỉ từ variants đã filter, mà từ TẤT CẢ variants của products đó)
     const colorIds = [
       ...new Set(
-        matchedVariants.map((v) => v.color?.toString()).filter(Boolean)
+        variantsOfValidProducts.map((v) => v.color?.toString()).filter(Boolean)
       ),
     ];
     const sizeIds = [
       ...new Set(
-        matchedVariants.flatMap((v) =>
+        variantsOfValidProducts.flatMap((v) =>
           (v.sizes || []).map((s) => s.size?.toString()).filter(Boolean)
         )
       ),
     ];
     const genderSet = new Set(
-      matchedVariants.map((v) => v.gender).filter(Boolean)
+      variantsOfValidProducts.map((v) => v.gender).filter(Boolean)
     );
 
     // Lấy thông tin chi tiết các danh mục
@@ -495,11 +596,14 @@ const filterService = {
       .select("value type description _id")
       .sort({ value: 1 });
 
-    // Tính khoảng giá từ InventoryItem của các sản phẩm phù hợp (không filter theo price)
+    // Tính khoảng giá từ InventoryItem của TẤT CẢ variants của products phù hợp
+    const allVariantIdsOfValidProducts = variantsOfValidProducts.map(
+      (v) => v._id
+    );
     const priceRange = await InventoryItem.aggregate([
       {
         $match: {
-          variant: { $in: variantIds },
+          variant: { $in: allVariantIdsOfValidProducts },
           quantity: { $gt: 0 },
         },
       },
