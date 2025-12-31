@@ -1705,7 +1705,7 @@ const productService = {
       pipeline.push({ $match: priceMatch });
     }
 
-    // Stage 7: Lookup variants để lấy variantIds cho việc tính rating
+    // Stage 7: Lookup variants để lấy variantIds cho việc tính rating và totalSold
     pipeline.push({
       $lookup: {
         from: "variants",
@@ -1715,21 +1715,40 @@ const productService = {
       },
     });
 
-    // Stage 7.1: Lookup orders để lấy orderItems có variant của product
+    // Stage 7.1: Lookup orders đã delivered để tính totalSold và lấy orderItems cho reviews
     pipeline.push({
       $lookup: {
         from: "orders",
         let: { variantIds: "$allVariants._id" },
         pipeline: [
+          {
+            $match: {
+              status: "delivered", // Chỉ tính đơn hàng đã giao thành công
+            },
+          },
           { $unwind: "$orderItems" },
           {
             $match: {
               $expr: { $in: ["$orderItems.variant", "$$variantIds"] },
             },
           },
-          { $project: { orderItemId: "$orderItems._id" } },
+          {
+            $project: {
+              orderItemId: "$orderItems._id",
+              quantity: "$orderItems.quantity",
+            },
+          },
         ],
         as: "orderItemsData",
+      },
+    });
+
+    // Stage 7.1.5: Tính totalSold (tổng số lượng đã bán từ đơn hàng delivered)
+    pipeline.push({
+      $addFields: {
+        totalSold: {
+          $sum: "$orderItemsData.quantity",
+        },
       },
     });
 
@@ -1798,6 +1817,7 @@ const productService = {
         maxPrice: 1,
         avgRating: 1,
         numReviews: 1,
+        totalSold: 1, // Tổng số lượng đã bán
       },
     });
 
@@ -1811,11 +1831,11 @@ const productService = {
         sortOption = { maxPrice: -1, _id: 1 };
         break;
       case "popular":
-        // Sắp xếp theo số lượng đánh giá (nhiều reviews = popular)
-        sortOption = { numReviews: -1, avgRating: -1, _id: 1 };
+        // FIX: Sắp xếp theo số lượng đã bán (nhiều mua = popular)
+        sortOption = { totalSold: -1, avgRating: -1, _id: 1 };
         break;
       case "rating":
-        // FIX: Sắp xếp theo rating thực từ reviews
+        // Sắp xếp theo rating thực từ reviews
         sortOption = { avgRating: -1, numReviews: -1, _id: 1 };
         break;
       default:
