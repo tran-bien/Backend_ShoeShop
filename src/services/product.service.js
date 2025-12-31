@@ -1552,9 +1552,14 @@ const productService = {
         }
       }
 
-      // Lọc theo gender
+      // Lọc theo gender - khi chọn male hoặc female thì cũng lấy cả unisex
       if (gender && ["male", "female", "unisex"].includes(gender)) {
-        variantMatch.$and.push({ gender: gender });
+        if (gender === "unisex") {
+          variantMatch.$and.push({ gender: "unisex" });
+        } else {
+          // male hoặc female: lấy cả unisex
+          variantMatch.$and.push({ gender: { $in: [gender, "unisex"] } });
+        }
       }
 
       // Thêm pipeline lọc biến thể
@@ -1590,6 +1595,12 @@ const productService = {
                               },
                               0,
                             ],
+                          };
+                        } else if (key === "gender" && value.$in) {
+                          // Gender với $in (male/female + unisex)
+                          result = {
+                            ...result,
+                            $in: ["$$variant.gender", value.$in],
                           };
                         } else {
                           result = {
