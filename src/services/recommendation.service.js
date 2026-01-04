@@ -9,10 +9,10 @@ const recommendationService = {
    * 1. Collaborative Filtering - "Người mua X cũng mua Y"
    */
   getCollaborativeRecommendations: async (userId) => {
-    // Lấy các sản phẩm user đã mua
+    // Lấy các sản phẩm user đã mua (bao gồm đơn đang giao)
     const userOrders = await Order.find({
       user: userId,
-      status: "delivered",
+      status: { $in: ["delivered", "out_for_delivery", "confirmed"] },
     }).populate({
       path: "orderItems.variant",
       select: "product",
@@ -36,7 +36,7 @@ const recommendationService = {
       {
         $match: {
           user: { $ne: new mongoose.Types.ObjectId(userId) },
-          status: "delivered",
+          status: { $in: ["delivered", "out_for_delivery", "confirmed"] },
           deletedAt: null,
         },
       },
@@ -79,7 +79,7 @@ const recommendationService = {
       {
         $match: {
           user: { $in: similarUserIds },
-          status: "delivered",
+          status: { $in: ["delivered", "out_for_delivery", "confirmed"] },
           deletedAt: null,
         },
       },
@@ -377,21 +377,94 @@ const recommendationService = {
       case "COLLABORATIVE":
         recommendations =
           await recommendationService.getCollaborativeRecommendations(userId);
-        // Fallback: nếu không có kết quả collaborative (user chưa mua hàng), dùng trending
+        // FIX: Fallback riêng - Featured Products (khác với TRENDING)
         if (recommendations.length === 0) {
-          recommendations = await recommendationService.getTrendingProducts();
+          const productService = require("@services/product.service");
+          try {
+            const featuredResult = await productService.getFeaturedProducts(10);
+            recommendations = (featuredResult.products || []).map((p, i) => ({
+              product: p._id || p,
+              score: 10 - i,
+            }));
+          } catch {
+            // Fallback cuối cùng: sản phẩm mới nhất
+            const newestProducts = await Product.find({
+              isActive: true,
+              deletedAt: null,
+            })
+              .sort({ createdAt: -1 })
+              .limit(10)
+              .select("_id");
+            recommendations = newestProducts.map((p, i) => ({
+              product: p._id,
+              score: 10 - i,
+            }));
+          }
         }
         break;
       case "CONTENT_BASED":
         recommendations =
           await recommendationService.getContentBasedRecommendations(userId);
-        // Fallback: nếu không có kết quả content-based, dùng trending
+        // FIX: Fallback riêng - New Arrivals (khác với TRENDING)
         if (recommendations.length === 0) {
-          recommendations = await recommendationService.getTrendingProducts();
+          const newArrivals = await Product.find({
+            isActive: true,
+            deletedAt: null,
+          })
+            .sort({ createdAt: -1 })
+            .limit(10)
+            .select("_id");
+          recommendations = newArrivals.map((p, i) => ({
+            product: p._id,
+            score: 10 - i,
+          }));
         }
         break;
       case "TRENDING":
         recommendations = await recommendationService.getTrendingProducts();
+        // FIX: Fallback cho TRENDING - Best selling all time (không giới hạn 7 ngày)
+        if (recommendations.length === 0) {
+          const bestSelling = await Order.aggregate([
+            { $match: { status: "delivered", deletedAt: null } },
+            { $unwind: "$orderItems" },
+            {
+              $lookup: {
+                from: "variants",
+                localField: "orderItems.variant",
+                foreignField: "_id",
+                as: "variantData",
+              },
+            },
+            { $unwind: "$variantData" },
+            {
+              $group: {
+                _id: "$variantData.product",
+                soldCount: { $sum: "$orderItems.quantity" },
+              },
+            },
+            { $sort: { soldCount: -1 } },
+            { $limit: 10 },
+          ]);
+          if (bestSelling.length > 0) {
+            recommendations = bestSelling.map((t, i) => ({
+              product: t._id,
+              score: 10 - i,
+            }));
+          } else {
+            // Fallback cuối cùng: sản phẩm mới nhất
+            const newestProducts = await Product.find({
+              isActive: true,
+              deletedAt: null,
+            })
+              .sort({ createdAt: -1 })
+              .limit(10)
+              .select("_id");
+            recommendations = newestProducts.map((p, i) => ({
+              product: p._id,
+              score: 10 - i,
+            }));
+          }
+        }
         break;
       default:
         recommendations = await recommendationService.getHybridRecommendations(

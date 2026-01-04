@@ -1,4 +1,5 @@
 const UserBehavior = require("../models/userBehavior");
+const RecommendationCache = require("../models/recommendationCache");
 const { Order, Product } = require("@models");
 
 const userBehaviorService = {
@@ -101,6 +102,16 @@ const userBehaviorService = {
       behavior.lastUpdated = new Date();
       await behavior.save();
 
+      // FIX: Invalidate recommendation cache để regenerate với data mới
+      try {
+        await RecommendationCache.deleteMany({ user: userId });
+      } catch (cacheError) {
+        console.warn(
+          "[UserBehavior] Failed to invalidate cache:",
+          cacheError.message
+        );
+      }
+
       return behavior;
     } catch (error) {
       // FIX Issue #19: Thêm error tracking thay vì chỉ log silent
@@ -192,6 +203,16 @@ const userBehaviorService = {
 
       behavior.lastUpdated = new Date();
       await behavior.save();
+
+      // FIX: Invalidate recommendation cache để regenerate với data mới
+      try {
+        await RecommendationCache.deleteMany({ user: userId });
+      } catch (cacheError) {
+        console.warn(
+          "[UserBehavior] Failed to invalidate cache:",
+          cacheError.message
+        );
+      }
 
       return behavior;
     } catch (error) {
