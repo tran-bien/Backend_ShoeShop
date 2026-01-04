@@ -36,10 +36,6 @@ const recommendationController = {
       type: type || "personalized",
     }));
 
-    console.log(
-      `[RECOMMENDATION CONTROLLER] User ${req.user._id}, algorithm: ${finalAlgorithm}, products count: ${recommendations.length}`
-    );
-
     // Return in format that FE expects (both formats for compatibility)
     return res.json({
       success: true,

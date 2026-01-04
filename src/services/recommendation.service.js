@@ -128,37 +128,59 @@ const recommendationService = {
   getContentBasedRecommendations: async (userId) => {
     const behavior = await UserBehavior.findOne({ user: userId });
 
-    // FIX BUG #5: Fallback sang TRENDING nếu chưa có behavior
+    // FIX BUG #5: Trả về mảng rỗng nếu chưa có behavior
+    // để HYBRID tự xử lý fallback (tránh gọi TRENDING 2 lần)
     if (!behavior) {
-      console.log(
-        `[RECOMMENDATION] User ${userId} chưa có behavior, fallback sang TRENDING`
-      );
-      return await recommendationService.getTrendingProducts();
+      return [];
     }
 
+    // FIX: Kiểm tra xem có dữ liệu favorites không
+    const hasCategories =
+      behavior.favoriteCategories && behavior.favoriteCategories.length > 0;
+    const hasBrands =
+      behavior.favoriteBrands && behavior.favoriteBrands.length > 0;
+
+    // Nếu không có dữ liệu nào, trả về rỗng
+    if (!hasCategories && !hasBrands) {
+      return [];
+    }
+
+    // FIX: Sử dụng $or thay vì $and khi có cả categories và brands
+    // để không filter quá chặt
     const query = {
       isActive: true,
       deletedAt: null,
     };
 
+    // Build conditions array cho $or
+    const orConditions = [];
+
     // Filter theo favorite categories (top 3)
-    if (behavior.favoriteCategories && behavior.favoriteCategories.length > 0) {
+    if (hasCategories) {
       const topCategories = behavior.favoriteCategories
         .sort((a, b) => b.score - a.score)
         .slice(0, 3)
         .map((c) => c.category);
 
-      query.category = { $in: topCategories };
+      orConditions.push({ category: { $in: topCategories } });
     }
 
     // Filter theo favorite brands (top 3)
-    if (behavior.favoriteBrands && behavior.favoriteBrands.length > 0) {
+    if (hasBrands) {
       const topBrands = behavior.favoriteBrands
         .sort((a, b) => b.score - a.score)
         .slice(0, 3)
         .map((b) => b.brand);
 
-      query.brand = { $in: topBrands };
+      orConditions.push({ brand: { $in: topBrands } });
+    }
+
+    // Áp dụng $or nếu có nhiều điều kiện
+    if (orConditions.length > 1) {
+      query.$or = orConditions;
+    } else if (orConditions.length === 1) {
+      // Chỉ có 1 điều kiện, merge trực tiếp
+      Object.assign(query, orConditions[0]);
     }
 
     // Lấy products
@@ -268,10 +290,6 @@ const recommendationService = {
         recommendationService.getTrendingProducts().catch(() => []),
       ]);
 
-      console.log(
-        `[HYBRID] collaborative: ${collaborative.length}, contentBased: ${contentBased.length}, trending: ${trending.length}`
-      );
-
       // Merge với trọng số
       const scores = {};
 
@@ -301,9 +319,6 @@ const recommendationService = {
 
       // FALLBACK: Nếu không có recommendations, lấy sản phẩm mới nhất
       if (recommendations.length === 0) {
-        console.log(
-          `[HYBRID] No recommendations found, falling back to newest products`
-        );
         const newestProducts = await Product.find({
           isActive: true,
           deletedAt: null,
@@ -336,8 +351,6 @@ const recommendationService = {
     });
 
     if (cached && cached.products.length > 0) {
-      console.log(`[RECOMMENDATION CACHE HIT] User ${userId}, ${algorithm}`);
-
       // FIX: Enrich products từ cache (cache chỉ lưu ObjectIds)
       const products = await recommendationService._enrichProducts(
         cached.products
@@ -345,9 +358,6 @@ const recommendationService = {
 
       // FIX: Nếu cache có products nhưng không tìm thấy active products, regenerate
       if (products.length === 0) {
-        console.log(
-          `[RECOMMENDATION] Cache products không còn active, regenerating...`
-        );
         // Xóa cache cũ
         await RecommendationCache.deleteOne({ user: userId, algorithm });
         // Fall through để regenerate
@@ -360,8 +370,6 @@ const recommendationService = {
       }
     }
 
-    console.log(`[RECOMMENDATION CACHE MISS] User ${userId}, ${algorithm}`);
-
     // Generate new recommendations
     let recommendations = [];
 
@@ -371,9 +379,6 @@ const recommendationService = {
           await recommendationService.getCollaborativeRecommendations(userId);
         // Fallback: nếu không có kết quả collaborative (user chưa mua hàng), dùng trending
         if (recommendations.length === 0) {
-          console.log(
-            `[RECOMMENDATION] COLLABORATIVE empty, falling back to TRENDING`
-          );
           recommendations = await recommendationService.getTrendingProducts();
         }
         break;
@@ -382,9 +387,6 @@ const recommendationService = {
           await recommendationService.getContentBasedRecommendations(userId);
         // Fallback: nếu không có kết quả content-based, dùng trending
         if (recommendations.length === 0) {
-          console.log(
-            `[RECOMMENDATION] CONTENT_BASED empty, falling back to TRENDING`
-          );
           recommendations = await recommendationService.getTrendingProducts();
         }
         break;
@@ -422,9 +424,6 @@ const recommendationService = {
 
     // FALLBACK: Nếu enrichProducts trả về rỗng (do products không có variants), fallback
     if (products.length === 0 && productIds.length > 0) {
-      console.log(
-        `[RECOMMENDATION] Enriched products empty, falling back to featured products`
-      );
       const productService = require("@services/product.service");
       const featuredResult = await productService.getFeaturedProducts(10);
       products = featuredResult.products || [];

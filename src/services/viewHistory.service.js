@@ -17,12 +17,6 @@ const viewHistoryService = {
       deviceInfo,
     } = data;
 
-    console.log(`[ViewHistory] trackView called:`, {
-      productId,
-      userId,
-      sessionId,
-    });
-
     // Validate
     if (!productId) {
       throw new ApiError(400, "Product ID là bắt buộc");
@@ -63,12 +57,6 @@ const viewHistoryService = {
       deviceInfo: deviceInfo || "",
     });
 
-    console.log(`[ViewHistory] Created view history:`, {
-      id: viewHistory._id,
-      user: viewHistory.user,
-      product: viewHistory.product,
-    });
-
     // Cập nhật user behavior nếu có userId
     if (userId) {
       try {
@@ -93,10 +81,6 @@ const viewHistoryService = {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    console.log(
-      `[ViewHistory] Getting history for user: ${userId}, page: ${page}, limit: ${limit}`
-    );
-
     const [history, total] = await Promise.all([
       ViewHistory.find({ user: userId })
         .sort({ createdAt: -1 })
@@ -114,14 +98,8 @@ const viewHistoryService = {
       ViewHistory.countDocuments({ user: userId }),
     ]);
 
-    console.log(`[ViewHistory] Found ${history.length} items, total: ${total}`);
-
     // Filter out deleted products
     const validHistory = history.filter((h) => h.product && h.product.isActive);
-
-    console.log(
-      `[ViewHistory] Valid items after filter: ${validHistory.length}`
-    );
 
     // Enrich products with pricing from InventoryItem
     const { InventoryItem } = require("@models");
@@ -266,10 +244,6 @@ const viewHistoryService = {
 
     // Xóa anonymous history sau khi merge thành công
     await ViewHistory.deleteMany({ sessionId });
-
-    console.log(
-      `[VIEW HISTORY] Merged ${mergedCount} anonymous views for user ${userId}`
-    );
 
     return {
       success: true,

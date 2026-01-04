@@ -101,7 +101,6 @@ const userBehaviorService = {
       behavior.lastUpdated = new Date();
       await behavior.save();
 
-      console.log(`[UserBehavior] Updated behavior for user ${userId}`);
       return behavior;
     } catch (error) {
       // FIX Issue #19: Thêm error tracking thay vì chỉ log silent
@@ -147,6 +146,48 @@ const userBehaviorService = {
       if (behavior.viewedProducts.length > 50) {
         behavior.viewedProducts.sort((a, b) => b.viewCount - a.viewCount);
         behavior.viewedProducts = behavior.viewedProducts.slice(0, 50);
+      }
+
+      // FIX: Cập nhật favoriteCategories và favoriteBrands từ view
+      // để Content-based recommendation hoạt động
+      const product = await Product.findById(productId)
+        .populate("category", "_id")
+        .populate("brand", "_id")
+        .select("category brand");
+
+      if (product) {
+        // Update category score (+1 per view)
+        if (product.category) {
+          const catId = product.category._id.toString();
+          const existingCat = behavior.favoriteCategories.find(
+            (c) => c.category.toString() === catId
+          );
+          if (existingCat) {
+            existingCat.score += 1;
+          } else {
+            behavior.favoriteCategories.push({ category: catId, score: 1 });
+          }
+        }
+
+        // Update brand score (+1 per view)
+        if (product.brand) {
+          const brandId = product.brand._id.toString();
+          const existingBrand = behavior.favoriteBrands.find(
+            (b) => b.brand.toString() === brandId
+          );
+          if (existingBrand) {
+            existingBrand.score += 1;
+          } else {
+            behavior.favoriteBrands.push({ brand: brandId, score: 1 });
+          }
+        }
+
+        // Sort and keep top 10
+        behavior.favoriteCategories.sort((a, b) => b.score - a.score);
+        behavior.favoriteCategories = behavior.favoriteCategories.slice(0, 10);
+
+        behavior.favoriteBrands.sort((a, b) => b.score - a.score);
+        behavior.favoriteBrands = behavior.favoriteBrands.slice(0, 10);
       }
 
       behavior.lastUpdated = new Date();
