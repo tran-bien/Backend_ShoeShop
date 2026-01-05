@@ -26,13 +26,6 @@ const ChatConversationSchema = new mongoose.Schema(
       },
     ],
 
-    // Context (optional - liên kết với order nếu cần)
-    orderId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Order",
-      comment: "Nếu chat liên quan đến đơn hàng cụ thể",
-    },
-
     // Tin nhắn cuối (denormalized để query nhanh)
     lastMessage: {
       text: String,
@@ -60,6 +53,5 @@ const ChatConversationSchema = new mongoose.Schema(
 ChatConversationSchema.index({ "participants.userId": 1 });
 ChatConversationSchema.index({ "lastMessage.sentAt": -1 });
 ChatConversationSchema.index({ updatedAt: -1 });
-ChatConversationSchema.index({ orderId: 1 });
 
 module.exports = mongoose.model("ChatConversation", ChatConversationSchema);

@@ -70,13 +70,7 @@ class ChatService {
    * Tạo hoặc lấy conversation giữa 2 users
    * CHỈ 1 CONVERSATION DUY NHẤT giữa 2 users (không có status)
    */
-  async getOrCreateConversation(
-    userId1,
-    role1,
-    userId2,
-    role2,
-    orderId = null
-  ) {
+  async getOrCreateConversation(userId1, role1, userId2, role2) {
     console.log(
       `[ChatService] getOrCreateConversation: user1=${userId1}, user2=${userId2}`
     );
@@ -105,7 +99,6 @@ class ChatService {
         { userId: userId1, role: role1, joinedAt: new Date() },
         { userId: userId2, role: role2, joinedAt: new Date() },
       ],
-      orderId,
       unreadCount: {
         [userId1]: 0,
         [userId2]: 0,
