@@ -26,8 +26,27 @@ const viewHistoryService = {
       throw new ApiError(400, "Cần userId hoặc sessionId");
     }
 
+    const mongoose = require("mongoose");
+
+    // Convert to ObjectId for proper filtering
+    const productObjectId = mongoose.Types.ObjectId.isValid(productId)
+      ? new mongoose.Types.ObjectId(productId)
+      : productId;
+
+    const userObjectId =
+      userId && mongoose.Types.ObjectId.isValid(userId)
+        ? new mongoose.Types.ObjectId(userId)
+        : userId;
+
     // Lấy thông tin sản phẩm để denormalize
-    const product = await Product.findById(productId).select("name images");
+    const product = await Product.findById(productObjectId).select(
+      "name images"
+    );
+
+    if (!product) {
+      throw new ApiError(404, "Không tìm thấy sản phẩm");
+    }
+
     const variant = variantId
       ? await Variant.findById(variantId).select("imagesvariant")
       : null;
@@ -38,24 +57,38 @@ const viewHistoryService = {
     // Lấy giá từ InventoryItem (simplified - có thể optimize sau)
     const InventoryItem = require("@models").InventoryItem;
     const inventoryItem = await InventoryItem.findOne({
-      product: productId,
+      product: productObjectId,
     }).sort({ finalPrice: 1 });
 
     const productPrice = inventoryItem?.finalPrice || 0;
 
-    // Tạo view history
-    const viewHistory = await ViewHistory.create({
-      user: userId || null,
-      sessionId: sessionId || null,
-      product: productId,
-      variant: variantId || null,
-      productName: product?.name || "",
-      productImage,
-      productPrice,
-      viewDuration: viewDuration || 0,
-      source: source || "DIRECT",
-      deviceInfo: deviceInfo || "",
-    });
+    // Upsert view history: Nếu user đã xem product này, chỉ update createdAt và variant
+    // Mỗi user chỉ có 1 record cho mỗi product (record gần nhất)
+    const filter = userObjectId
+      ? { user: userObjectId, product: productObjectId }
+      : { sessionId: sessionId, product: productObjectId };
+
+    const viewHistory = await ViewHistory.findOneAndUpdate(
+      filter,
+      {
+        $set: {
+          variant: variantId || null,
+          productName: product?.name || "",
+          productImage,
+          productPrice,
+          viewDuration: viewDuration || 0,
+          source: source || "DIRECT",
+          deviceInfo: deviceInfo || "",
+          createdAt: new Date(), // Cập nhật thời gian xem mới nhất
+        },
+        $setOnInsert: {
+          user: userObjectId || null,
+          sessionId: sessionId || null,
+          product: productObjectId,
+        },
+      },
+      { upsert: true, new: true }
+    );
 
     // Cập nhật user behavior nếu có userId
     if (userId) {
@@ -74,32 +107,64 @@ const viewHistoryService = {
   },
 
   /**
-   * Lấy lịch sử xem của user
+   * Lấy lịch sử xem của user (mỗi product chỉ 1 lần - lần xem gần nhất)
    */
   getUserViewHistory: async (userId, query = {}) => {
     const { page = 1, limit = 20 } = query;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const [history, total] = await Promise.all([
-      ViewHistory.find({ user: userId })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
-        .populate({
-          path: "product",
-          select: "name slug images isActive stockStatus brand totalQuantity",
-          populate: {
-            path: "brand",
-            select: "name",
-          },
-        })
-        .populate("variant", "color"),
-      ViewHistory.countDocuments({ user: userId }),
+    const mongoose = require("mongoose");
+    const userObjectId = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
+    // Vì đã upsert theo user+product, mỗi product chỉ có 1 record (gần nhất)
+    // Nhưng để chắc chắn, dùng aggregate để group nếu có duplicate cũ
+    const pipeline = [
+      { $match: { user: userObjectId } },
+      { $sort: { createdAt: -1 } },
+      // Group theo product, lấy record mới nhất
+      {
+        $group: {
+          _id: "$product",
+          doc: { $first: "$$ROOT" }, // Lấy document đầu tiên (mới nhất)
+        },
+      },
+      { $replaceRoot: { newRoot: "$doc" } },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: parseInt(limit) },
+    ];
+
+    const [history, totalDocs] = await Promise.all([
+      ViewHistory.aggregate(pipeline),
+      ViewHistory.aggregate([
+        { $match: { user: userObjectId } },
+        { $group: { _id: "$product" } }, // Đếm unique products
+        { $count: "total" },
+      ]),
+    ]);
+
+    const total = totalDocs[0]?.total || 0;
+
+    // Populate products
+    const populatedHistory = await ViewHistory.populate(history, [
+      {
+        path: "product",
+        select: "name slug images isActive stockStatus brand totalQuantity",
+        populate: {
+          path: "brand",
+          select: "name",
+        },
+      },
+      { path: "variant", select: "color" },
     ]);
 
     // Filter out deleted products
-    const validHistory = history.filter((h) => h.product && h.product.isActive);
+    const validHistory = populatedHistory.filter(
+      (h) => h.product && h.product.isActive
+    );
 
     // Enrich products with pricing from InventoryItem
     const { InventoryItem } = require("@models");
@@ -107,9 +172,14 @@ const viewHistoryService = {
       validHistory.map(async (item) => {
         const historyObj = item.toObject ? item.toObject() : { ...item };
 
+        // CRITICAL: Convert product to plain object if it's a mongoose document
+        const productObj = historyObj.product?.toObject
+          ? historyObj.product.toObject()
+          : historyObj.product;
+
         // Get pricing from InventoryItem for this product
         const inventoryItems = await InventoryItem.find({
-          product: historyObj.product._id,
+          product: productObj._id,
           quantity: { $gt: 0 },
         }).select("finalPrice sellingPrice discountPercent");
 
@@ -140,16 +210,15 @@ const viewHistoryService = {
 
         // Get main image
         let mainImage = "";
-        if (historyObj.product.images && historyObj.product.images.length > 0) {
+        if (productObj.images && productObj.images.length > 0) {
           const main =
-            historyObj.product.images.find((img) => img.isMain) ||
-            historyObj.product.images[0];
+            productObj.images.find((img) => img.isMain) || productObj.images[0];
           mainImage = main?.url || "";
         }
 
-        // Enrich product with pricing
+        // Enrich product with pricing (use productObj plain object)
         historyObj.product = {
-          ...historyObj.product,
+          ...productObj,
           price: minPrice,
           originalPrice: maxPrice > minPrice ? maxPrice : null,
           priceRange: {

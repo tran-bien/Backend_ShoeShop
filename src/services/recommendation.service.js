@@ -1,366 +1,381 @@
-const { Product, Order, Variant, InventoryItem } = require("@models");
+const { Product, Order, Variant, Cart } = require("@models");
 const ViewHistory = require("../models/viewHistory");
 const UserBehavior = require("../models/userBehavior");
 const RecommendationCache = require("../models/recommendationCache");
 const mongoose = require("mongoose");
 
+/**
+ * Recommendation Service - Thuật toán gợi ý cá nhân hóa
+ * Kết hợp: Sở thích + Sản phẩm đã xem + Sản phẩm đã mua + Giỏ hàng
+ */
 const recommendationService = {
   /**
-   * 1. Collaborative Filtering - "Người mua X cũng mua Y"
+   * Lấy gợi ý cá nhân hóa - KẾT HỢP TẤT CẢ YẾU TỐ
+   * @param {string} userId - ID của user
+   * @param {number} limit - Số lượng sản phẩm gợi ý (mặc định: 12)
+   * @returns {Array} Danh sách sản phẩm gợi ý với score
    */
-  getCollaborativeRecommendations: async (userId) => {
-    // Lấy các sản phẩm user đã mua (bao gồm đơn đang giao)
-    const userOrders = await Order.find({
-      user: userId,
-      status: { $in: ["delivered", "out_for_delivery", "confirmed"] },
-    }).populate({
-      path: "orderItems.variant",
-      select: "product",
-    });
+  getPersonalizedRecommendations: async (userId, limit = 12) => {
+    try {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    const userProductIds = new Set();
-    userOrders.forEach((order) => {
-      order.orderItems.forEach((item) => {
-        if (item.variant?.product) {
-          userProductIds.add(item.variant.product.toString());
+      // ============================================
+      // 1. THU THẬP DỮ LIỆU TỪ CÁC NGUỒN
+      // ============================================
+
+      const [behavior, viewHistory, orders, cart] = await Promise.all([
+        // Sở thích người dùng
+        UserBehavior.findOne({ user: userId }).lean(),
+
+        // Lịch sử xem sản phẩm (30 ngày)
+        ViewHistory.find({
+          user: userId,
+          createdAt: { $gte: thirtyDaysAgo },
+        })
+          .sort({ createdAt: -1 })
+          .limit(50)
+          .populate({
+            path: "product",
+            select: "category brand tags",
+          })
+          .lean(),
+
+        // Đơn hàng đã đặt
+        Order.find({
+          user: userId,
+          status: {
+            $in: ["delivered", "out_for_delivery", "confirmed", "pending"],
+          },
+        })
+          .populate({
+            path: "orderItems.variant",
+            select: "product",
+            populate: {
+              path: "product",
+              select: "category brand tags",
+            },
+          })
+          .lean(),
+
+        // Giỏ hàng hiện tại
+        Cart.findOne({ user: userId })
+          .populate({
+            path: "cartItems.variant",
+            select: "product",
+            populate: {
+              path: "product",
+              select: "category brand tags",
+            },
+          })
+          .lean(),
+      ]);
+
+      // ============================================
+      // 2. PHÂN TÍCH VÀ TÍNH ĐIỂM CHO CÁC TIÊU CHÍ
+      // ============================================
+
+      const categoryScores = {};
+      const brandScores = {};
+      const tagScores = {};
+      const excludeProductIds = new Set(); // Sản phẩm cần loại trừ
+
+      // --- 2.1 Điểm từ SỞ THÍCH (UserBehavior) - Weight: 30% ---
+      if (behavior) {
+        // Favorite categories
+        if (behavior.favoriteCategories?.length > 0) {
+          behavior.favoriteCategories.forEach((fc) => {
+            if (fc.category) {
+              const catId = fc.category.toString();
+              categoryScores[catId] =
+                (categoryScores[catId] || 0) + fc.score * 3;
+            }
+          });
         }
+
+        // Favorite brands
+        if (behavior.favoriteBrands?.length > 0) {
+          behavior.favoriteBrands.forEach((fb) => {
+            if (fb.brand) {
+              const brandId = fb.brand.toString();
+              brandScores[brandId] = (brandScores[brandId] || 0) + fb.score * 3;
+            }
+          });
+        }
+      }
+
+      // --- 2.2 Điểm từ LỊCH SỬ XEM - Weight: 15% ---
+      if (viewHistory?.length > 0) {
+        viewHistory.forEach((view, index) => {
+          if (!view.product) return;
+
+          // Recency bonus: xem gần đây được điểm cao hơn
+          const recencyBonus = Math.max(1, 10 - index * 0.2);
+
+          if (view.product.category) {
+            const catId = view.product.category.toString();
+            categoryScores[catId] =
+              (categoryScores[catId] || 0) + 1.5 * recencyBonus;
+          }
+
+          if (view.product.brand) {
+            const brandId = view.product.brand.toString();
+            brandScores[brandId] =
+              (brandScores[brandId] || 0) + 1.2 * recencyBonus;
+          }
+
+          if (view.product.tags?.length > 0) {
+            view.product.tags.forEach((tag) => {
+              const tagId =
+                typeof tag === "object" ? tag._id?.toString() : tag?.toString();
+              if (tagId) {
+                tagScores[tagId] = (tagScores[tagId] || 0) + 1 * recencyBonus;
+              }
+            });
+          }
+        });
+      }
+
+      // --- 2.3 Điểm từ ĐƠN HÀNG ĐÃ MUA - Weight: 30% ---
+      if (orders?.length > 0) {
+        orders.forEach((order) => {
+          order.orderItems?.forEach((item) => {
+            const product = item.variant?.product;
+            if (!product) return;
+
+            // Thêm vào danh sách loại trừ (đã mua rồi)
+            const productId =
+              typeof product === "object"
+                ? product._id?.toString()
+                : product?.toString();
+            if (productId) {
+              excludeProductIds.add(productId);
+            }
+
+            // Tính điểm cho category/brand/tags của sản phẩm đã mua
+            if (typeof product === "object") {
+              if (product.category) {
+                const catId = product.category.toString();
+                categoryScores[catId] = (categoryScores[catId] || 0) + 4;
+              }
+
+              if (product.brand) {
+                const brandId = product.brand.toString();
+                brandScores[brandId] = (brandScores[brandId] || 0) + 3;
+              }
+
+              if (product.tags?.length > 0) {
+                product.tags.forEach((tag) => {
+                  const tagId =
+                    typeof tag === "object"
+                      ? tag._id?.toString()
+                      : tag?.toString();
+                  if (tagId) {
+                    tagScores[tagId] = (tagScores[tagId] || 0) + 1.5;
+                  }
+                });
+              }
+            }
+          });
+        });
+      }
+
+      // --- 2.4 Điểm từ GIỎ HÀNG - Weight: 25% (quan tâm hiện tại) ---
+      if (cart?.cartItems?.length > 0) {
+        cart.cartItems.forEach((item) => {
+          const product = item.variant?.product;
+          if (!product) return;
+
+          // Loại trừ sản phẩm đã có trong giỏ
+          const productId =
+            typeof product === "object"
+              ? product._id?.toString()
+              : product?.toString();
+          if (productId) {
+            excludeProductIds.add(productId);
+          }
+
+          // Điểm cao cho các tiêu chí từ giỏ hàng (đang quan tâm)
+          if (typeof product === "object") {
+            if (product.category) {
+              const catId = product.category.toString();
+              categoryScores[catId] = (categoryScores[catId] || 0) + 7;
+            }
+
+            if (product.brand) {
+              const brandId = product.brand.toString();
+              brandScores[brandId] = (brandScores[brandId] || 0) + 6;
+            }
+
+            if (product.tags?.length > 0) {
+              product.tags.forEach((tag) => {
+                const tagId =
+                  typeof tag === "object"
+                    ? tag._id?.toString()
+                    : tag?.toString();
+                if (tagId) {
+                  tagScores[tagId] = (tagScores[tagId] || 0) + 3;
+                }
+              });
+            }
+          }
+        });
+      }
+
+      // ============================================
+      // 3. TÌM SẢN PHẨM PHÙ HỢP
+      // ============================================
+
+      // Lấy top categories và brands
+      const topCategories = Object.entries(categoryScores)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([id]) => new mongoose.Types.ObjectId(id));
+
+      const topBrands = Object.entries(brandScores)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([id]) => new mongoose.Types.ObjectId(id));
+
+      const topTags = Object.entries(tagScores)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([id]) => new mongoose.Types.ObjectId(id));
+
+      // Build query để tìm sản phẩm
+      const excludeIds = Array.from(excludeProductIds).map(
+        (id) => new mongoose.Types.ObjectId(id)
+      );
+
+      const query = {
+        _id: { $nin: excludeIds },
+        isActive: true,
+        deletedAt: null,
+      };
+
+      // Thêm điều kiện $or nếu có dữ liệu
+      const orConditions = [];
+      if (topCategories.length > 0) {
+        orConditions.push({ category: { $in: topCategories } });
+      }
+      if (topBrands.length > 0) {
+        orConditions.push({ brand: { $in: topBrands } });
+      }
+      if (topTags.length > 0) {
+        orConditions.push({ tags: { $in: topTags } });
+      }
+
+      if (orConditions.length > 0) {
+        query.$or = orConditions;
+      }
+
+      // Lấy danh sách sản phẩm tiềm năng
+      const candidateProducts = await Product.find(query)
+        .select("_id category brand tags")
+        .limit(100)
+        .lean();
+
+      // ============================================
+      // 4. TÍNH ĐIỂM CHO TỪNG SẢN PHẨM
+      // ============================================
+
+      const productScores = candidateProducts.map((product) => {
+        let score = 0;
+
+        // Điểm từ category match
+        if (product.category) {
+          const catId = product.category.toString();
+          score += categoryScores[catId] || 0;
+        }
+
+        // Điểm từ brand match
+        if (product.brand) {
+          const brandId = product.brand.toString();
+          score += brandScores[brandId] || 0;
+        }
+
+        // Điểm từ tags match
+        if (product.tags?.length > 0) {
+          product.tags.forEach((tag) => {
+            const tagId = tag.toString();
+            score += tagScores[tagId] || 0;
+          });
+        }
+
+        return {
+          product: product._id,
+          score,
+        };
       });
-    });
 
-    if (userProductIds.size === 0) {
-      return [];
-    }
+      // Sắp xếp và lấy top N (theo limit)
+      const recommendations = productScores
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
 
-    // Tìm users khác cũng mua những sản phẩm này
-    const similarOrders = await Order.aggregate([
-      {
-        $match: {
-          user: { $ne: new mongoose.Types.ObjectId(userId) },
-          status: { $in: ["delivered", "out_for_delivery", "confirmed"] },
-          deletedAt: null,
-        },
-      },
-      { $unwind: "$orderItems" },
-      {
-        $lookup: {
-          from: "variants",
-          localField: "orderItems.variant",
-          foreignField: "_id",
-          as: "variantData",
-        },
-      },
-      { $unwind: "$variantData" },
-      {
-        $match: {
-          "variantData.product": {
-            $in: Array.from(userProductIds).map(
+      // ============================================
+      // 5. FALLBACK - Nếu không có đủ gợi ý
+      // ============================================
+
+      if (recommendations.length < 8) {
+        // Bổ sung sản phẩm mới nhất
+        const existingIds = new Set([
+          ...excludeProductIds,
+          ...recommendations.map((r) => r.product.toString()),
+        ]);
+
+        const newestProducts = await Product.find({
+          _id: {
+            $nin: Array.from(existingIds).map(
               (id) => new mongoose.Types.ObjectId(id)
             ),
           },
-        },
-      },
-      {
-        $group: {
-          _id: "$user",
-          commonProducts: { $addToSet: "$variantData.product" },
-          orders: { $push: "$orderItems" },
-        },
-      },
-      { $sort: { commonProducts: -1 } },
-      { $limit: 10 },
-    ]);
-
-    // Đếm frequency của products mà similar users mua
-    const productFreq = {};
-
-    // Tối ưu: Dùng aggregate thay vì loop N+1 query
-    const similarUserIds = similarOrders.map((u) => u._id);
-    const allSimilarUserOrders = await Order.aggregate([
-      {
-        $match: {
-          user: { $in: similarUserIds },
-          status: { $in: ["delivered", "out_for_delivery", "confirmed"] },
-          deletedAt: null,
-        },
-      },
-      { $unwind: "$orderItems" },
-      {
-        $lookup: {
-          from: "variants",
-          localField: "orderItems.variant",
-          foreignField: "_id",
-          as: "variantData",
-        },
-      },
-      { $unwind: "$variantData" },
-      {
-        $group: {
-          _id: "$variantData.product",
-          count: { $sum: "$orderItems.quantity" },
-        },
-      },
-      { $sort: { count: -1 } },
-    ]);
-
-    // Filter out products user already bought
-    allSimilarUserOrders.forEach((item) => {
-      const pid = item._id.toString();
-      if (!userProductIds.has(pid)) {
-        productFreq[pid] = item.count;
-      }
-    });
-
-    // Sort và trả về top 10
-    const recommendations = Object.entries(productFreq)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([productId, score]) => ({
-        product: productId,
-        score,
-      }));
-
-    return recommendations;
-  },
-
-  /**
-   * 2. Content-based - Dựa trên sở thích
-   */
-  getContentBasedRecommendations: async (userId) => {
-    const behavior = await UserBehavior.findOne({ user: userId });
-
-    // FIX BUG #5: Trả về mảng rỗng nếu chưa có behavior
-    // để HYBRID tự xử lý fallback (tránh gọi TRENDING 2 lần)
-    if (!behavior) {
-      return [];
-    }
-
-    // FIX: Kiểm tra xem có dữ liệu favorites không
-    const hasCategories =
-      behavior.favoriteCategories && behavior.favoriteCategories.length > 0;
-    const hasBrands =
-      behavior.favoriteBrands && behavior.favoriteBrands.length > 0;
-
-    // Nếu không có dữ liệu nào, trả về rỗng
-    if (!hasCategories && !hasBrands) {
-      return [];
-    }
-
-    // FIX: Sử dụng $or thay vì $and khi có cả categories và brands
-    // để không filter quá chặt
-    const query = {
-      isActive: true,
-      deletedAt: null,
-    };
-
-    // Build conditions array cho $or
-    const orConditions = [];
-
-    // Filter theo favorite categories (top 3)
-    if (hasCategories) {
-      const topCategories = behavior.favoriteCategories
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 3)
-        .map((c) => c.category);
-
-      orConditions.push({ category: { $in: topCategories } });
-    }
-
-    // Filter theo favorite brands (top 3)
-    if (hasBrands) {
-      const topBrands = behavior.favoriteBrands
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 3)
-        .map((b) => b.brand);
-
-      orConditions.push({ brand: { $in: topBrands } });
-    }
-
-    // Áp dụng $or nếu có nhiều điều kiện
-    if (orConditions.length > 1) {
-      query.$or = orConditions;
-    } else if (orConditions.length === 1) {
-      // Chỉ có 1 điều kiện, merge trực tiếp
-      Object.assign(query, orConditions[0]);
-    }
-
-    // Lấy products
-    let products = await Product.find(query).limit(20).select("_id");
-
-    // Filter theo price range
-    if (behavior.avgPriceRange && products.length > 0) {
-      const productIds = products.map((p) => p._id);
-
-      const inventoryItems = await InventoryItem.find({
-        product: { $in: productIds },
-        finalPrice: {
-          $gte: behavior.avgPriceRange.min * 0.8,
-          $lte: behavior.avgPriceRange.max * 1.2,
-        },
-      }).distinct("product");
-
-      products = products.filter((p) =>
-        inventoryItems.some((inv) => inv.toString() === p._id.toString())
-      );
-    }
-
-    // Loại bỏ products user đã mua gần đây
-    const recentOrders = await Order.find({
-      user: userId,
-      status: "delivered",
-      createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
-    }).populate({
-      path: "orderItems.variant",
-      select: "product",
-    });
-
-    const recentProductIds = new Set();
-    recentOrders.forEach((order) => {
-      order.orderItems.forEach((item) => {
-        if (item.variant?.product) {
-          recentProductIds.add(item.variant.product.toString());
-        }
-      });
-    });
-
-    products = products.filter((p) => !recentProductIds.has(p._id.toString()));
-
-    return products
-      .slice(0, 10)
-      .map((p, i) => ({ product: p._id, score: 10 - i }));
-  },
-
-  /**
-   * 3. Trending Products - Sản phẩm hot 7 ngày qua
-   */
-  getTrendingProducts: async () => {
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-    const trending = await Order.aggregate([
-      {
-        $match: {
-          status: "delivered",
-          createdAt: { $gte: sevenDaysAgo },
-          deletedAt: null,
-        },
-      },
-      { $unwind: "$orderItems" },
-      {
-        $lookup: {
-          from: "variants",
-          localField: "orderItems.variant",
-          foreignField: "_id",
-          as: "variantData",
-        },
-      },
-      { $unwind: "$variantData" },
-      {
-        $group: {
-          _id: "$variantData.product",
-          soldCount: { $sum: "$orderItems.quantity" },
-          revenue: {
-            $sum: {
-              $multiply: ["$orderItems.price", "$orderItems.quantity"],
-            },
-          },
-        },
-      },
-      { $sort: { soldCount: -1 } },
-      { $limit: 10 },
-    ]);
-
-    return trending.map((t, i) => ({
-      product: t._id,
-      score: 10 - i,
-      soldCount: t.soldCount,
-    }));
-  },
-
-  /**
-   * 4. Hybrid - Kết hợp tất cả algorithms
-   */
-  getHybridRecommendations: async (userId) => {
-    try {
-      const [collaborative, contentBased, trending] = await Promise.all([
-        recommendationService
-          .getCollaborativeRecommendations(userId)
-          .catch(() => []),
-        recommendationService
-          .getContentBasedRecommendations(userId)
-          .catch(() => []),
-        recommendationService.getTrendingProducts().catch(() => []),
-      ]);
-
-      // Merge với trọng số
-      const scores = {};
-
-      // Collaborative: 40%
-      collaborative.forEach((r) => {
-        scores[r.product] = (scores[r.product] || 0) + r.score * 0.4;
-      });
-
-      // Content-based: 40%
-      contentBased.forEach((r) => {
-        scores[r.product] = (scores[r.product] || 0) + r.score * 0.4;
-      });
-
-      // Trending: 20%
-      trending.forEach((r) => {
-        scores[r.product] = (scores[r.product] || 0) + r.score * 0.2;
-      });
-
-      // Sort và lấy top 10
-      let recommendations = Object.entries(scores)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([productId, score]) => ({
-          product: productId,
-          score,
-        }));
-
-      // FALLBACK: Nếu không có recommendations, lấy sản phẩm mới nhất
-      if (recommendations.length === 0) {
-        const newestProducts = await Product.find({
           isActive: true,
           deletedAt: null,
         })
           .sort({ createdAt: -1 })
-          .limit(10)
-          .select("_id");
+          .limit(12 - recommendations.length)
+          .select("_id")
+          .lean();
 
-        recommendations = newestProducts.map((p, i) => ({
-          product: p._id.toString(),
-          score: 10 - i,
-        }));
+        newestProducts.forEach((p, i) => {
+          recommendations.push({
+            product: p._id,
+            score: 5 - i * 0.5, // Điểm thấp hơn sản phẩm match
+          });
+        });
       }
 
       return recommendations;
     } catch (error) {
-      console.error("Lỗi hybrid recommendations:", error);
+      console.error("Lỗi getPersonalizedRecommendations:", error);
       return [];
     }
   },
 
   /**
    * Get recommendations với cache
+   * @param {string} userId - ID của user
+   * @param {number} limit - Số lượng sản phẩm gợi ý (mặc định: 12)
+   * @returns {Object} { success, products, fromCache }
    */
-  getRecommendations: async (userId, algorithm = "HYBRID") => {
-    // Check cache
+  getRecommendations: async (userId, limit = 12) => {
+    // Check cache (24h)
     const cached = await RecommendationCache.findOne({
       user: userId,
-      algorithm,
+      algorithm: "PERSONALIZED",
     });
 
     if (cached && cached.products.length > 0) {
-      // FIX: Enrich products từ cache (cache chỉ lưu ObjectIds)
       const products = await recommendationService._enrichProducts(
         cached.products
       );
 
-      // FIX: Nếu cache có products nhưng không tìm thấy active products, regenerate
+      // Nếu cache có products nhưng không tìm thấy active products, regenerate
       if (products.length === 0) {
-        // Xóa cache cũ
-        await RecommendationCache.deleteOne({ user: userId, algorithm });
-        // Fall through để regenerate
+        await RecommendationCache.deleteOne({
+          user: userId,
+          algorithm: "PERSONALIZED",
+        });
       } else {
         return {
           success: true,
@@ -371,134 +386,53 @@ const recommendationService = {
     }
 
     // Generate new recommendations
-    let recommendations = [];
+    const recommendations =
+      await recommendationService.getPersonalizedRecommendations(userId, limit);
 
-    switch (algorithm) {
-      case "COLLABORATIVE":
-        recommendations =
-          await recommendationService.getCollaborativeRecommendations(userId);
-        // FIX: Fallback riêng - Featured Products (khác với TRENDING)
-        if (recommendations.length === 0) {
-          const productService = require("@services/product.service");
-          try {
-            const featuredResult = await productService.getFeaturedProducts(10);
-            recommendations = (featuredResult.products || []).map((p, i) => ({
-              product: p._id || p,
-              score: 10 - i,
-            }));
-          } catch {
-            // Fallback cuối cùng: sản phẩm mới nhất
-            const newestProducts = await Product.find({
-              isActive: true,
-              deletedAt: null,
-            })
-              .sort({ createdAt: -1 })
-              .limit(10)
-              .select("_id");
-            recommendations = newestProducts.map((p, i) => ({
-              product: p._id,
-              score: 10 - i,
-            }));
-          }
-        }
-        break;
-      case "CONTENT_BASED":
-        recommendations =
-          await recommendationService.getContentBasedRecommendations(userId);
-        // FIX: Fallback riêng - New Arrivals (khác với TRENDING)
-        if (recommendations.length === 0) {
-          const newArrivals = await Product.find({
-            isActive: true,
-            deletedAt: null,
-          })
-            .sort({ createdAt: -1 })
-            .limit(10)
-            .select("_id");
-          recommendations = newArrivals.map((p, i) => ({
-            product: p._id,
-            score: 10 - i,
-          }));
-        }
-        break;
-      case "TRENDING":
-        recommendations = await recommendationService.getTrendingProducts();
-        // FIX: Fallback cho TRENDING - Best selling all time (không giới hạn 7 ngày)
-        if (recommendations.length === 0) {
-          const bestSelling = await Order.aggregate([
-            { $match: { status: "delivered", deletedAt: null } },
-            { $unwind: "$orderItems" },
-            {
-              $lookup: {
-                from: "variants",
-                localField: "orderItems.variant",
-                foreignField: "_id",
-                as: "variantData",
-              },
-            },
-            { $unwind: "$variantData" },
-            {
-              $group: {
-                _id: "$variantData.product",
-                soldCount: { $sum: "$orderItems.quantity" },
-              },
-            },
-            { $sort: { soldCount: -1 } },
-            { $limit: 10 },
-          ]);
-          if (bestSelling.length > 0) {
-            recommendations = bestSelling.map((t, i) => ({
-              product: t._id,
-              score: 10 - i,
-            }));
-          } else {
-            // Fallback cuối cùng: sản phẩm mới nhất
-            const newestProducts = await Product.find({
-              isActive: true,
-              deletedAt: null,
-            })
-              .sort({ createdAt: -1 })
-              .limit(10)
-              .select("_id");
-            recommendations = newestProducts.map((p, i) => ({
-              product: p._id,
-              score: 10 - i,
-            }));
-          }
-        }
-        break;
-      default:
-        recommendations = await recommendationService.getHybridRecommendations(
-          userId
-        );
+    // Fallback cuối cùng: sản phẩm mới nhất
+    if (recommendations.length === 0) {
+      const newestProducts = await Product.find({
+        isActive: true,
+        deletedAt: null,
+      })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .select("_id");
+
+      recommendations.push(
+        ...newestProducts.map((p, i) => ({
+          product: p._id,
+          score: 10 - i,
+        }))
+      );
     }
 
-    // Cache for 24h (TTL handled by generatedAt index)
-    // FIX BUG #13: Use upsert to prevent duplicate cache entries
+    // Cache for 24h
     await RecommendationCache.findOneAndUpdate(
-      { user: userId, algorithm },
+      { user: userId, algorithm: "PERSONALIZED" },
       {
         $set: {
           products: recommendations.map((r) =>
-            typeof r.product === "string" ? r.product : r.product._id
+            typeof r.product === "string" ? r.product : r.product
           ),
           scores: recommendations.map((r) => r.score || 0),
-          generatedAt: new Date(), // Reset TTL
+          generatedAt: new Date(),
         },
       },
       { upsert: true, new: true }
     );
 
-    // Populate product details
+    // Enrich products với details
     const productIds = recommendations.map((r) =>
-      typeof r.product === "string" ? r.product : r.product._id
+      typeof r.product === "string" ? r.product : r.product
     );
 
     let products = await recommendationService._enrichProducts(productIds);
 
-    // FALLBACK: Nếu enrichProducts trả về rỗng (do products không có variants), fallback
+    // Fallback nếu enrichProducts trả về rỗng trả về sản phẩm nổi bật
     if (products.length === 0 && productIds.length > 0) {
       const productService = require("@services/product.service");
-      const featuredResult = await productService.getFeaturedProducts(10);
+      const featuredResult = await productService.getFeaturedProducts(limit);
       products = featuredResult.products || [];
     }
 
@@ -510,8 +444,18 @@ const recommendationService = {
   },
 
   /**
+   * Xóa cache khi có hành vi mới (gọi khi user xem sản phẩm, thêm giỏ hàng, đặt hàng)
+   */
+  invalidateCache: async (userId) => {
+    try {
+      await RecommendationCache.deleteMany({ user: userId });
+    } catch (error) {
+      console.error("Lỗi invalidateCache:", error);
+    }
+  },
+
+  /**
    * Helper: Enrich products với variants, inventory, rating info
-   * Giống như getFeaturedProducts trong product.service.js
    */
   _enrichProducts: async (productIds) => {
     const inventoryService = require("@services/inventory.service");
@@ -613,7 +557,7 @@ const recommendationService = {
   },
 
   /**
-   * Helper: Transform product for public list (copy từ product.service.js)
+   * Helper: Transform product for public list
    */
   _transformProductForPublicList: (product) => {
     const productObj = { ...product };

@@ -41,7 +41,7 @@ const viewHistoryController = {
       success: true,
       message: "Lấy lịch sử xem thành công",
       data: {
-        viewHistory: result.history,
+        history: result.history,
         pagination: result.pagination,
       },
     });
@@ -60,4 +60,3 @@ const viewHistoryController = {
 };
 
 module.exports = viewHistoryController;
-

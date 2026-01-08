@@ -10,8 +10,8 @@ const RecommendationCacheSchema = new mongoose.Schema(
 
     algorithm: {
       type: String,
-      enum: ["COLLABORATIVE", "CONTENT_BASED", "TRENDING", "HYBRID"],
-      required: true,
+      enum: ["PERSONALIZED"],
+      default: "PERSONALIZED",
     },
 
     products: [

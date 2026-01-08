@@ -4,36 +4,23 @@ const recommendationService = require("@services/recommendation.service");
 const recommendationController = {
   /**
    * @route GET /api/users/recommendations
-   * @desc Lấy sản phẩm đề xuất
+   * @desc Lấy sản phẩm gợi ý cá nhân hóa
    * @access Private
    */
   getRecommendations: asyncHandler(async (req, res) => {
-    // Support cả 'algorithm' và 'type' params để tương thích FE
-    const { algorithm, type } = req.query;
-
-    // Map type -> algorithm nếu FE gửi type
-    let finalAlgorithm = algorithm || "HYBRID";
-    if (type && !algorithm) {
-      const typeToAlgorithm = {
-        personalized: "HYBRID",
-        trending: "TRENDING",
-        similar: "CONTENT_BASED",
-        collaborative: "COLLABORATIVE",
-      };
-      finalAlgorithm = typeToAlgorithm[type] || "HYBRID";
-    }
-
+    // Chỉ có một thuật toán PERSONALIZED duy nhất
+    const limit = parseInt(req.query.limit) || 12; // Mặc định 12 sản phẩm
     const result = await recommendationService.getRecommendations(
       req.user._id,
-      finalAlgorithm
+      limit
     );
 
     // Transform products to Recommendation format for FE
     const recommendations = (result.products || []).map((product, index) => ({
       product,
       score: 10 - index,
-      reason: getReasonText(finalAlgorithm, product),
-      type: type || "personalized",
+      reason: "Dành riêng cho bạn",
+      type: "personalized",
     }));
 
     // Return in format that FE expects (both formats for compatibility)
@@ -48,21 +35,5 @@ const recommendationController = {
     });
   }),
 };
-
-// Helper function to generate recommendation reason text
-function getReasonText(algorithm, product) {
-  switch (algorithm) {
-    case "COLLABORATIVE":
-      return "Khách hàng tương tự đã mua";
-    case "CONTENT_BASED":
-      return `Dựa trên sở thích của bạn`;
-    case "TRENDING":
-      return "Đang được yêu thích";
-    default:
-      return product.brand?.name
-        ? `Sản phẩm ${product.brand.name} dành cho bạn`
-        : "Được đề xuất cho bạn";
-  }
-}
 
 module.exports = recommendationController;
