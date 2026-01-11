@@ -22,9 +22,9 @@ const viewHistoryService = {
       throw new ApiError(400, "Product ID là bắt buộc");
     }
 
-    if (!userId && !sessionId) {
-      throw new ApiError(400, "Cần userId hoặc sessionId");
-    }
+    // if (!userId && !sessionId) {
+    //   throw new ApiError(400, "Cần userId hoặc sessionId");
+    // }
 
     const mongoose = require("mongoose");
 
