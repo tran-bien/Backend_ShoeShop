@@ -79,7 +79,9 @@ const viewHistoryService = {
           viewDuration: viewDuration || 0,
           source: source || "DIRECT",
           deviceInfo: deviceInfo || "",
-          createdAt: new Date(), // Cập nhật thời gian xem mới nhất
+        },
+        $currentDate: {
+          lastViewedAt: true, // Cập nhật thời gian xem mới nhất
         },
         $setOnInsert: {
           user: userObjectId || null,
@@ -123,7 +125,7 @@ const viewHistoryService = {
     // Nhưng để chắc chắn, dùng aggregate để group nếu có duplicate cũ
     const pipeline = [
       { $match: { user: userObjectId } },
-      { $sort: { createdAt: -1 } },
+      { $sort: { lastViewedAt: -1 } },
       // Group theo product, lấy record mới nhất
       {
         $group: {
@@ -132,7 +134,7 @@ const viewHistoryService = {
         },
       },
       { $replaceRoot: { newRoot: "$doc" } },
-      { $sort: { createdAt: -1 } },
+      { $sort: { lastViewedAt: -1 } },
       { $skip: skip },
       { $limit: parseInt(limit) },
     ];
@@ -277,7 +279,7 @@ const viewHistoryService = {
           filter: {
             user: userId,
             product: view.product,
-            createdAt: { $lt: oneDayAgo }, // Chỉ update nếu view cũ > 1 ngày
+            lastViewedAt: { $lt: oneDayAgo }, // Chỉ update nếu view cũ > 1 ngày
           },
           update: {
             $setOnInsert: {
@@ -291,6 +293,7 @@ const viewHistoryService = {
               source: view.source,
               deviceInfo: view.deviceInfo,
               createdAt: view.createdAt || new Date(),
+              lastViewedAt: view.lastViewedAt || new Date(),
             },
           },
           upsert: true,

@@ -44,6 +44,12 @@ const ViewHistorySchema = new mongoose.Schema(
       type: String,
       comment: "Browser/device info",
     },
+
+    lastViewedAt: {
+      type: Date,
+      default: Date.now,
+      comment: "Thời gian xem gần nhất",
+    },
   },
   {
     timestamps: { createdAt: true, updatedAt: false },
@@ -51,8 +57,9 @@ const ViewHistorySchema = new mongoose.Schema(
 );
 
 // Compound indexes for query performance
-ViewHistorySchema.index({ user: 1, product: 1, createdAt: -1 });
-ViewHistorySchema.index({ sessionId: 1, createdAt: -1 });
+ViewHistorySchema.index({ user: 1, product: 1, lastViewedAt: -1 });
+ViewHistorySchema.index({ sessionId: 1, lastViewedAt: -1 });
+ViewHistorySchema.index({ lastViewedAt: -1 }); // Index cho sorting theo lastViewedAt
 
 // FIX BUG #7: Proper TTL index - auto delete after 30 days
 ViewHistorySchema.index(

@@ -30,9 +30,9 @@ const recommendationService = {
         // Lịch sử xem sản phẩm (30 ngày)
         ViewHistory.find({
           user: userId,
-          createdAt: { $gte: thirtyDaysAgo },
+          lastViewedAt: { $gte: thirtyDaysAgo },
         })
-          .sort({ createdAt: -1 })
+          .sort({ lastViewedAt: -1 })
           .limit(50)
           .populate({
             path: "product",
