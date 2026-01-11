@@ -7,7 +7,7 @@
 
 ## 📋 Mô tả dự án
 
-Đây là phần Backend của website thương mại điện tử chuyên kinh doanh sản phẩm giày, được xây dựng với Node.js, Express và MongoDB. Hệ thống cung cấp các tính năng quản lý sản phẩm, đơn hàng, người dùng, thanh toán, chat trực tuyến và nhiều tính năng hiện đại khác.
+Đây là phần Backend của website thương mại điện tử chuyên kinh doanh sản phẩm giày, được xây dựng với Node.js, Express và MongoDB. Hệ thống cung cấp các tính năng quản lý sản phẩm, đơn hàng, người dùng, thanh toán, Blog, chat trực tuyến và các tính năng khác.
 
 ## 🚀 Công nghệ sử dụng
 
